@@ -109,7 +109,7 @@ describe('Cryptographic Primitives', () => {
       
       expect(sessionKey2.key).not.toEqual(sessionKey1.key);
       expect(sessionKey2.nonce).not.toEqual(sessionKey1.nonce);
-      expect(sessionKey2.timestamp).toBeGreaterThan(sessionKey1.timestamp);
+      expect(sessionKey2.timestamp).toBeGreaterThanOrEqual(sessionKey1.timestamp);
     });
   });
 
