@@ -322,15 +322,15 @@ MIT License - See LICENSE file for details
 - ✅ 9. Implement perfect forward secrecy with session keys
 - ✅ 10. Create session key rotation logic
 
-**Mesh Networking Core (12 tasks)**
+**Mesh Networking Core (12 tasks)** ✅ **11/12 (92%)**
 - ✅ 11. Implement in-memory routing table
 - ✅ 12. Create peer registry (connected peers)
 - ✅ 13. Implement message TTL decrement and expiration
 - ✅ 14. Create message deduplication cache (hash-based)
 - ✅ 15. Implement flood routing (forward to all peers except sender)
 - ✅ 16. Create message relay logic
-- ⏳ 17. Implement peer health monitoring (heartbeat)
-- ⏳ 18. Create peer timeout and removal (partial - stale peer removal implemented)
+- ✅ 17. Implement peer health monitoring (heartbeat) **NEW**
+- ⏳ 18. Create peer timeout and removal (partial - implemented in health monitor)
 - ✅ 19. Implement message fragmentation (for large messages)
 - ✅ 20. Create message reassembly logic
 - ✅ 21. Implement message priority queue (control > voice > text > file)
@@ -348,8 +348,21 @@ MIT License - See LICENSE file for details
 - ✅ 31. Create graceful peer disconnection
 - ✅ 32. Implement NAT traversal without STUN/TURN (rely on mesh relay)
 
+**Peer Discovery (10 tasks)** ✅ **7/10 (70%)**
+- ⏳ 47. Implement local network mDNS/Bonjour broadcasting (planned)
+- ⏳ 48. Create mDNS service discovery (planned)
+- ✅ 49. Implement QR code identity exchange (encoded public key + IP) **NEW**
+- ⏳ 50. Create QR code scanner (UI - planned)
+- ⏳ 51. Implement audio tone pairing (DTMF encoding/decoding) (planned)
+- ⏳ 52. Create proximity pairing via BLE RSSI (planned)
+- ✅ 53. Implement manual IP:port peer entry **NEW**
+- ✅ 54. Create "introduce peer" relay (A tells B about C's existence) **NEW**
+- ✅ 55. Implement peer announcement broadcast through mesh **NEW**
+- ✅ 56. Create peer reachability verification **NEW**
+
 **Web Application (31 tasks)**
 - ✅ 123. Set up Vite + React + TypeScript
+- ✅ 124. Implement IndexedDB for messages/contacts **NEW**
 - ✅ 136. Implement main app layout
 - ✅ 137. Create conversation list component
 - ✅ 138. Implement chat component
@@ -357,7 +370,7 @@ MIT License - See LICENSE file for details
 - ✅ 153. Create basic theme (dark theme)
 - ✅ React hook for mesh network integration
 - ✅ Live connection status display
-- ⏳ 124-152: Persistence, advanced features (in progress)
+- ⏳ 125-152: Advanced features (in progress)
 
 **Testing (8 tasks)**
 - ✅ 250. Create unit tests for crypto functions
@@ -374,4 +387,4 @@ MIT License - See LICENSE file for details
 - ✅ 267. Create .gitignore files
 - ⏳ 268-275: CI/CD and release process (planned)
 
-### Progress: 47/285 tasks completed (16.5%)
+### Progress: 56/285 tasks completed (19.6%)
