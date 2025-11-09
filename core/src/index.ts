@@ -13,9 +13,13 @@ export * from './crypto/storage';
 export * from './mesh/routing';
 export * from './mesh/relay';
 export * from './mesh/network';
+export * from './mesh/health';
 
 // Transport
 export * from './transport/webrtc';
+
+// Discovery
+export * from './discovery/peer';
 
 // Version
 export const VERSION = '0.1.0';
