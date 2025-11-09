@@ -1,21 +1,12 @@
-import { useState, useEffect } from 'react';
 import './ConnectionStatus.css';
 
 interface ConnectionStatusProps {
   className?: string;
+  status?: 'online' | 'offline' | 'connecting';
+  peerCount?: number;
 }
 
-function ConnectionStatus({ className = '' }: ConnectionStatusProps) {
-  const [peerCount, setPeerCount] = useState(0);
-  const [status, setStatus] = useState<'online' | 'offline' | 'connecting'>('offline');
-
-  useEffect(() => {
-    // This will be connected to the actual mesh network
-    // For now, show offline status
-    setStatus('offline');
-    setPeerCount(0);
-  }, []);
-
+function ConnectionStatus({ className = '', status = 'offline', peerCount = 0 }: ConnectionStatusProps) {
   const statusText = {
     online: 'Connected',
     offline: 'Offline',

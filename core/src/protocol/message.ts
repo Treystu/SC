@@ -142,8 +142,14 @@ export function decodeMessage(buffer: Uint8Array): Message {
  * Create a message hash for deduplication
  */
 export function messageHash(message: Message): string {
-  const { createHash } = require('crypto');
-  const hash = createHash('sha256');
-  hash.update(encodeMessage(message));
-  return hash.digest('hex');
+  const messageBytes = encodeMessage(message);
+  
+  // Use a simple hash for now (works in both browser and Node.js)
+  // In production, this should use SHA-256
+  let hash = 0;
+  for (let i = 0; i < messageBytes.length; i++) {
+    hash = ((hash << 5) - hash) + messageBytes[i];
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return Math.abs(hash).toString(16).padStart(8, '0');
 }

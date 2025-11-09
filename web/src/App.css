@@ -95,6 +95,24 @@
   font-size: 0.9rem;
 }
 
+.peer-info {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background-color: var(--bg-secondary);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  max-width: 600px;
+}
+
+.peer-info p {
+  margin: 0.5rem 0;
+  color: var(--text-secondary);
+}
+
+.peer-info strong {
+  color: var(--text-primary);
+}
+
 @media (max-width: 768px) {
   .sidebar {
     width: 100%;

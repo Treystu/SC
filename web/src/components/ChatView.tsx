@@ -11,12 +11,27 @@ interface Message {
 
 interface ChatViewProps {
   conversationId: string;
+  messages?: Array<{
+    id: string;
+    from: string;
+    content: string;
+    timestamp: number;
+  }>;
+  onSendMessage?: (content: string) => void;
 }
 
-function ChatView({ conversationId: _conversationId }: ChatViewProps) {
-  const [messages, setMessages] = useState<Message[]>([]);
+function ChatView({ conversationId: _conversationId, messages: receivedMessages = [], onSendMessage }: ChatViewProps) {
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Convert received messages to display format
+  const messages: Message[] = receivedMessages.map(msg => ({
+    id: msg.id,
+    content: msg.content,
+    timestamp: msg.timestamp,
+    isSent: msg.from === 'me',
+    status: 'sent' as const,
+  }));
 
   useEffect(() => {
     // Scroll to bottom when messages change
@@ -26,18 +41,11 @@ function ChatView({ conversationId: _conversationId }: ChatViewProps) {
   const handleSend = () => {
     if (!inputValue.trim()) return;
 
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      content: inputValue,
-      timestamp: Date.now(),
-      isSent: true,
-      status: 'pending',
-    };
-
-    setMessages([...messages, newMessage]);
+    if (onSendMessage) {
+      onSendMessage(inputValue);
+    }
+    
     setInputValue('');
-
-    // TODO: Actually send message through mesh network
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {

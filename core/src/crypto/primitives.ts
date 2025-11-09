@@ -116,7 +116,7 @@ export function generateFingerprint(publicKey: Uint8Array): string {
   const hash = sha256(publicKey);
   // Format as groups of 4 hex chars
   const hex = Array.from(hash)
-    .map(b => b.toString(16).padStart(2, '0'))
+    .map((b: number) => b.toString(16).padStart(2, '0'))
     .join('');
   return hex.match(/.{1,4}/g)?.join(' ') || hex;
 }

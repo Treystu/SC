@@ -2,6 +2,7 @@
   "name": "@sc/core",
   "version": "0.1.0",
   "description": "Core cryptography and protocol implementation for Sovereign Communications",
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
@@ -10,9 +11,10 @@
     "dev": "tsc --watch"
   },
   "dependencies": {
-    "@noble/ciphers": "^0.4.0",
-    "@noble/curves": "^1.3.0",
-    "@noble/hashes": "^1.3.3"
+    "@noble/ciphers": "^0.4.1",
+    "@noble/curves": "^1.9.7",
+    "@noble/hashes": "^1.8.0",
+    "@types/node": "^24.10.0"
   },
   "devDependencies": {
     "@types/jest": "^29.5.0",
