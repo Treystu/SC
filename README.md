@@ -327,8 +327,26 @@ MIT License - See LICENSE file for details
 - ✅ 12. Create peer registry (connected peers)
 - ✅ 13. Implement message TTL decrement and expiration
 - ✅ 14. Create message deduplication cache (hash-based)
+- ✅ 15. Implement flood routing (forward to all peers except sender)
+- ✅ 16. Create message relay logic
+- ⏳ 17. Implement peer health monitoring (heartbeat)
+- ⏳ 18. Create peer timeout and removal (partial - stale peer removal implemented)
+- ✅ 19. Implement message fragmentation (for large messages)
+- ✅ 20. Create message reassembly logic
 - ✅ 21. Implement message priority queue (control > voice > text > file)
-- ⏳ 15-20, 22: Additional routing features (in progress)
+- ⏳ 22. Create bandwidth-aware message scheduling (planned)
+
+**WebRTC Peer-to-Peer (10 tasks)** ✅ **COMPLETE**
+- ✅ 23. Initialize WebRTC PeerConnection
+- ✅ 24. Implement data channel creation (unreliable for real-time, reliable for messages)
+- ✅ 25. Create SDP offer/answer exchange via existing peer (mesh signaling)
+- ✅ 26. Implement ICE candidate exchange via mesh
+- ✅ 27. Create signaling through already-connected peers
+- ✅ 28. Implement data channel message handlers
+- ✅ 29. Create WebRTC connection state monitoring
+- ✅ 30. Implement automatic reconnection on failure
+- ✅ 31. Create graceful peer disconnection
+- ✅ 32. Implement NAT traversal without STUN/TURN (rely on mesh relay)
 
 **Web Application (31 tasks)**
 - ✅ 123. Set up Vite + React + TypeScript
@@ -336,8 +354,10 @@ MIT License - See LICENSE file for details
 - ✅ 137. Create conversation list component
 - ✅ 138. Implement chat component
 - ✅ 139. Create message input component
-- ✅ 153. Create basic theme (light/dark)
-- ⏳ 124-152: Persistence, WebRTC, and advanced features (in progress)
+- ✅ 153. Create basic theme (dark theme)
+- ✅ React hook for mesh network integration
+- ✅ Live connection status display
+- ⏳ 124-152: Persistence, advanced features (in progress)
 
 **Testing (8 tasks)**
 - ✅ 250. Create unit tests for crypto functions
@@ -354,4 +374,4 @@ MIT License - See LICENSE file for details
 - ✅ 267. Create .gitignore files
 - ⏳ 268-275: CI/CD and release process (planned)
 
-### Progress: 28/285 tasks completed (9.8%)
+### Progress: 47/285 tasks completed (16.5%)
