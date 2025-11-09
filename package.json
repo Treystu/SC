@@ -1,0 +1,19 @@
+{
+  "name": "sovereign-communications",
+  "version": "0.1.0",
+  "description": "Decentralized P2P messaging app with E2E encryption",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces",
+    "lint": "npm run lint --workspaces"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.3"
+  }
+}
