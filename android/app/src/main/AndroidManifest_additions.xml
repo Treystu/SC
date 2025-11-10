@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- Notification receivers -->
+        <receiver
+            android:name=".util.NotificationReplyReceiver"
+            android:exported="false" />
+        
+        <receiver
+            android:name=".util.NotificationActionReceiver"
+            android:exported="false" />
+    </application>
+</manifest>
