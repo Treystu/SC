@@ -21,5 +21,8 @@ export * from './transport/webrtc';
 // Discovery
 export * from './discovery/peer';
 
+// File transfer
+export * from './transfer/file';
+
 // Version
 export const VERSION = '0.1.0';
