@@ -38,10 +38,15 @@ ios/SovereignCommunications/
 ├── Views/
 │   ├── MainView.swift               # TabView navigation
 │   ├── ConversationListView.swift   # Conversations screen
+│   ├── ChatView.swift               # Chat interface with message bubbles
 │   ├── ContactListView.swift        # Contacts screen
 │   └── SettingsView.swift           # Settings screen
-└── Components/
-    └── ConnectionStatusBadge.swift   # Connection indicator
+├── Components/
+│   └── ConnectionStatusBadge.swift   # Connection indicator
+├── Notifications/
+│   └── NotificationManager.swift     # Push notification management
+└── QR/
+    └── QRCodeScannerView.swift       # QR code scanner and display
 ```
 
 ## Build Instructions
@@ -69,8 +74,11 @@ open SovereignCommunications.xcworkspace
 
 ### UI Screens
 - **Conversations**: List of active chats with empty states
+- **Chat**: Full chat interface with message bubbles and delivery status
 - **Contacts**: Contact list with verification badges
 - **Settings**: Identity, network, and app configuration
+- **QR Scanner**: Real-time QR code scanning for peer discovery
+- **QR Display**: Generate and share peer identity QR codes
 
 ### Background Capabilities
 - VoIP for persistent connectivity
@@ -94,14 +102,28 @@ open SovereignCommunications.xcworkspace
 - unreadCount, isPinned
 - Relationships to messages and contact
 
+### Notifications
+- Local push notifications for new messages
+- Inline reply action from notifications
+- Mark as read action
+- Notification badge management
+- Background notification handling
+
+### QR Code System
+- Real-time camera-based QR scanning (AVFoundation)
+- QR code generation for peer identity
+- Share functionality for peer info
+- JSON-encoded peer data format
+
 ## Next Steps
 
-1. Implement chat view with message bubbles
-2. Add notification system
-3. Integrate WebRTC iOS SDK
-4. Implement CoreBluetooth for BLE mesh
-5. Add QR code scanner
+1. ✅ ~~Implement chat view with message bubbles~~ **COMPLETE**
+2. ✅ ~~Add notification system~~ **COMPLETE**
+3. ✅ ~~Add QR code scanner~~ **COMPLETE**
+4. Integrate WebRTC iOS SDK
+5. Implement CoreBluetooth for BLE mesh
 6. Identity backup/restore
+7. Voice message support
 
 ## License
 
