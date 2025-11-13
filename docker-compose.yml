@@ -1,0 +1,82 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      target: ${BUILD_TARGET:-production}
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - VITE_API_URL=${API_URL:-http://localhost:3000}
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+    networks:
+      - sovereign-network
+    restart: unless-stopped
+
+  android-build:
+    image: mingc/android-build-box:latest
+    volumes:
+      - ./android:/project
+      - gradle-cache:/root/.gradle
+    working_dir: /project
+    command: ./gradlew assembleRelease
+    networks:
+      - sovereign-network
+
+  monitoring:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - sovereign-network
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+    networks:
+      - sovereign-network
+    depends_on:
+      - monitoring
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    networks:
+      - sovereign-network
+    depends_on:
+      - web
+    restart: unless-stopped
+
+volumes:
+  gradle-cache:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  sovereign-network:
+    driver: bridge
