@@ -153,7 +153,7 @@ export class IdentityManager {
     const signature = await crypto.subtle.sign(
       { name: 'Ed25519' } as any,
       this.identity.privateKey,
-      data
+      data.buffer as ArrayBuffer
     );
 
     return new Uint8Array(signature);
@@ -165,8 +165,8 @@ export class IdentityManager {
       return await crypto.subtle.verify(
         { name: 'Ed25519' } as any,
         publicKey,
-        signature,
-        data
+        signature.buffer as ArrayBuffer,
+        data.buffer as ArrayBuffer
       );
     } catch {
       return false;

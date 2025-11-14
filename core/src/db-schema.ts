@@ -110,39 +110,39 @@ export const STORE_CONFIGS = {
   messages: {
     keyPath: 'id',
     indexes: [
-      { name: 'conversationId', keyPath: 'conversationId' },
-      { name: 'timestamp', keyPath: 'timestamp' },
-      { name: 'senderId', keyPath: 'senderId' },
-      { name: 'status', keyPath: 'status' }
+      { name: 'conversationId', keyPath: 'conversationId', unique: false },
+      { name: 'timestamp', keyPath: 'timestamp', unique: false },
+      { name: 'senderId', keyPath: 'senderId', unique: false },
+      { name: 'status', keyPath: 'status', unique: false }
     ]
   },
   contacts: {
     keyPath: 'id',
     indexes: [
       { name: 'publicKey', keyPath: 'publicKey', unique: true },
-      { name: 'addedAt', keyPath: 'addedAt' }
+      { name: 'addedAt', keyPath: 'addedAt', unique: false }
     ]
   },
   conversations: {
     keyPath: 'id',
     indexes: [
-      { name: 'lastMessageTime', keyPath: 'lastMessageTime' },
-      { name: 'type', keyPath: 'type' }
+      { name: 'lastMessageTime', keyPath: 'lastMessageTime', unique: false },
+      { name: 'type', keyPath: 'type', unique: false }
     ]
   },
   peers: {
     keyPath: 'id',
     indexes: [
       { name: 'publicKey', keyPath: 'publicKey', unique: true },
-      { name: 'lastSeen', keyPath: 'lastSeen' },
-      { name: 'connected', keyPath: 'connected' }
+      { name: 'lastSeen', keyPath: 'lastSeen', unique: false },
+      { name: 'connected', keyPath: 'connected', unique: false }
     ]
   },
   files: {
     keyPath: 'id',
     indexes: [
-      { name: 'messageId', keyPath: 'messageId' },
-      { name: 'hash', keyPath: 'hash' }
+      { name: 'messageId', keyPath: 'messageId', unique: false },
+      { name: 'hash', keyPath: 'hash', unique: false }
     ]
   },
   settings: {

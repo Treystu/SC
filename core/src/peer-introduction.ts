@@ -59,7 +59,7 @@ export class PeerIntroductionManager {
     const signature = await crypto.subtle.sign(
       { name: 'ECDSA', hash: 'SHA-256' },
       signingKey,
-      dataToSign
+      dataToSign.buffer as ArrayBuffer
     );
     introduction.introducerSignature = new Uint8Array(signature);
 
@@ -254,7 +254,7 @@ export class PeerIntroductionManager {
     try {
       const cryptoKey = await crypto.subtle.importKey(
         'raw',
-        publicKey,
+        publicKey.buffer as ArrayBuffer,
         { name: 'ECDSA', namedCurve: 'P-256' },
         false,
         ['verify']
@@ -265,8 +265,8 @@ export class PeerIntroductionManager {
       return await crypto.subtle.verify(
         { name: 'ECDSA', hash: 'SHA-256' },
         cryptoKey,
-        introduction.introducerSignature,
-        dataToVerify
+        introduction.introducerSignature.buffer as ArrayBuffer,
+        dataToVerify.buffer as ArrayBuffer
       );
     } catch (error) {
       console.error('Introduction verification failed:', error);

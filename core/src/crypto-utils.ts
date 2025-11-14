@@ -15,7 +15,7 @@ export class CryptoUtils {
    * Hash data using SHA-256
    */
   static async sha256(data: Uint8Array): Promise<Uint8Array> {
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data.buffer as ArrayBuffer);
     return new Uint8Array(hashBuffer);
   }
 
@@ -39,7 +39,7 @@ export class CryptoUtils {
     return crypto.subtle.deriveKey(
       {
         name: 'PBKDF2',
-        salt,
+        salt: salt.buffer as ArrayBuffer,
         iterations,
         hash: 'SHA-256'
       },
@@ -59,9 +59,9 @@ export class CryptoUtils {
   ): Promise<{ ciphertext: Uint8Array; iv: Uint8Array }> {
     const iv = await this.generateRandomKey(12);
     const ciphertext = await crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv },
+      { name: 'AES-GCM', iv: iv.buffer as ArrayBuffer },
       key,
-      data
+      data.buffer as ArrayBuffer
     );
 
     return {
@@ -79,9 +79,9 @@ export class CryptoUtils {
     iv: Uint8Array
   ): Promise<Uint8Array> {
     const plaintext = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv },
+      { name: 'AES-GCM', iv: iv.buffer as ArrayBuffer },
       key,
-      ciphertext
+      ciphertext.buffer as ArrayBuffer
     );
 
     return new Uint8Array(plaintext);
