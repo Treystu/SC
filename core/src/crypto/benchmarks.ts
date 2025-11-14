@@ -124,7 +124,8 @@ export function runCryptoBenchmarks(): BenchmarkResult[] {
     publicKey: identity.publicKey,
   }));
   items.forEach(item => {
-    item.signature = signMessage(item.message, identity.privateKey);
+    const sig = signMessage(item.message, identity.privateKey);
+    item.signature = new Uint8Array(sig); // Create a copy to avoid type issues
   });
   
   results.push(
