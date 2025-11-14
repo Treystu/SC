@@ -47,6 +47,17 @@ yarn-error.log*
 coverage/
 .nyc_output/
 
+# Test results
+test-results/
+playwright-report/
+screenshots/
+visual-diff/
+performance-results/
+reports/
+
+# Stryker mutation testing
+.stryker-tmp/
+
 # Temporary files
 tmp/
 temp/
