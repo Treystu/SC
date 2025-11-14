@@ -17,6 +17,17 @@ export * from './mesh/health';
 
 // Transport
 export * from './transport/webrtc';
+export { 
+  WebRTCPeerEnhanced, 
+  WebRTCConnectionPool,
+  WebRTCConfig,
+  DataChannelType,
+  ConnectionMetrics,
+  NATType,
+  ICEServerConfig,
+  SignalingMessage,
+  SignalingMessageType,
+} from './transport/webrtc-enhanced';
 
 // Discovery
 export * from './discovery/peer';
