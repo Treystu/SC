@@ -7,8 +7,8 @@ test.describe('Application Load', () => {
   test('should load the application', async ({ page }) => {
     await page.goto('/');
     
-    // Check that the page loaded successfully
-    await expect(page.locator('body')).toBeVisible();
+    // Check that the page has the correct title
+    await expect(page).toHaveTitle(/Sovereign Communications/i);
   });
 
   test('should have responsive layout', async ({ page }) => {
@@ -22,7 +22,7 @@ test.describe('Application Load', () => {
     await expect(page.locator('body')).toBeVisible();
   });
 
-  test('should load without console errors', async ({ page }) => {
+  test('should load without critical console errors', async ({ page }) => {
     const errors: string[] = [];
     page.on('console', (msg) => {
       if (msg.type() === 'error') {
@@ -33,13 +33,134 @@ test.describe('Application Load', () => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
     
-    // Allow for expected errors during development
-    // expect(errors).toHaveLength(0);
+    // Filter out expected/non-critical errors
+    const criticalErrors = errors.filter(e => 
+      !e.includes('favicon') && 
+      !e.includes('manifest') &&
+      !e.includes('404')
+    );
+    expect(criticalErrors).toHaveLength(0);
+  });
+
+  test('should display app header with title', async ({ page }) => {
+    await page.goto('/');
+    
+    const header = page.locator('.app-header h1');
+    await expect(header).toBeVisible();
+    await expect(header).toHaveText(/Sovereign Communications/i);
   });
 });
 
-test.describe.skip('Identity Management', () => {
-  test('should generate new identity on first load', async ({ page }) => {
+test.describe('Identity Management', () => {
+  test('should display peer information', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    
+    // Check if peer info is displayed
+    const peerInfo = page.locator('.peer-info');
+    if (await peerInfo.count() > 0) {
+      await expect(peerInfo).toBeVisible();
+      
+      // Should show peer ID
+      const peerIdText = await peerInfo.textContent();
+      expect(peerIdText).toContain('Your Peer ID');
+    }
+  });
+
+  test('should show connection status', async ({ page }) => {
+    await page.goto('/');
+    
+    // ConnectionStatus component should be visible
+    const connectionStatus = page.locator('.app-header').getByText(/connected|offline/i);
+    await expect(connectionStatus).toBeVisible();
+  });
+});
+
+test.describe('User Interface', () => {
+  test('should show welcome message when no conversation selected', async ({ page }) => {
+    await page.goto('/');
+    
+    const emptyState = page.locator('.empty-state');
+    await expect(emptyState).toBeVisible();
+    await expect(emptyState).toContainText(/Welcome to Sovereign Communications/i);
+  });
+
+  test('should display feature highlights', async ({ page }) => {
+    await page.goto('/');
+    
+    // Check for feature sections
+    const features = page.locator('.features .feature');
+    await expect(features.first()).toBeVisible();
+    
+    // Should mention encryption
+    const featuresText = await page.locator('.features').textContent();
+    expect(featuresText).toMatch(/encrypted|encryption/i);
+  });
+
+  test('should have sidebar for conversations', async ({ page }) => {
+    await page.goto('/');
+    
+    const sidebar = page.locator('.sidebar');
+    await expect(sidebar).toBeVisible();
+  });
+
+  test('should have main content area', async ({ page }) => {
+    await page.goto('/');
+    
+    const mainContent = page.locator('.main-content');
+    await expect(mainContent).toBeVisible();
+  });
+});
+
+test.describe('Accessibility', () => {
+  test('should have skip to main content link', async ({ page }) => {
+    await page.goto('/');
+    
+    const skipLink = page.locator('.skip-link');
+    await expect(skipLink).toBeVisible();
+    await expect(skipLink).toHaveText(/Skip to main content/i);
+  });
+
+  test('should have proper ARIA labels', async ({ page }) => {
+    await page.goto('/');
+    
+    // Check for application role
+    const app = page.locator('[role="application"]');
+    await expect(app).toBeVisible();
+    
+    // Check for main content role
+    const main = page.locator('[role="main"]');
+    await expect(main).toBeVisible();
+  });
+});
+
+test.describe('Performance', () => {
+  test('should load within acceptable time', async ({ page }) => {
+    const startTime = Date.now();
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    const loadTime = Date.now() - startTime;
+    
+    // Should load within 5 seconds
+    expect(loadTime).toBeLessThan(5000);
+  });
+
+  test('should have acceptable performance metrics', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    
+    const metrics = await page.evaluate(() => {
+      const perf = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
+      return {
+        domContentLoaded: perf.domContentLoadedEventEnd - perf.domContentLoadedEventStart,
+        loadComplete: perf.loadEventEnd - perf.loadEventStart,
+      };
+    });
+    
+    // DOM content should load quickly
+    expect(metrics.domContentLoaded).toBeLessThan(2000);
+  });
+});
     // Clear storage
     await page.goto('/');
     await page.evaluate(() => {
@@ -79,55 +200,32 @@ test.describe.skip('Identity Management', () => {
     expect(identity1).toBe(identity2);
   });
 
-  test('should display public key fingerprint', async ({ page }) => {
+test.describe('Identity Management', () => {
+  test('should display peer information', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
     
-    const fingerprint = await page.locator('[data-testid="public-key-fingerprint"]');
-    if (await fingerprint.count() > 0) {
-      await expect(fingerprint).toBeVisible();
-      const text = await fingerprint.textContent();
-      expect(text).toMatch(/[0-9A-F]{4}( [0-9A-F]{4})+/i); // Fingerprint format
-    }
-  });
-});
-
-test.describe.skip('Peer Discovery', () => {
-  test('should show peer count', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
-    
-    const peerCount = await page.locator('[data-testid="peer-count"]');
-    if (await peerCount.count() > 0) {
-      await expect(peerCount).toBeVisible();
-    }
-  });
-
-  test('should allow manual peer addition', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
-    
-    // Look for add peer button
-    const addButton = page.locator('[data-testid="add-peer-btn"]');
-    if (await addButton.count() > 0) {
-      await addButton.click();
+    // Check if peer info is displayed
+    const peerInfo = page.locator('.peer-info');
+    if (await peerInfo.count() > 0) {
+      await expect(peerInfo).toBeVisible();
       
-      // Fill in peer details
-      const peerIdInput = page.locator('[data-testid="peer-id-input"]');
-      if (await peerIdInput.count() > 0) {
-        await peerIdInput.fill('test-peer');
-        
-        const publicKeyInput = page.locator('[data-testid="peer-publickey-input"]');
-        await publicKeyInput.fill('A'.repeat(64)); // Dummy public key
-        
-        const saveButton = page.locator('[data-testid="save-peer-btn"]');
-        await saveButton.click();
-      }
+      // Should show peer ID
+      const peerIdText = await peerInfo.textContent();
+      expect(peerIdText).toContain('Your Peer ID');
     }
+  });
+
+  test('should show connection status', async ({ page }) => {
+    await page.goto('/');
+    
+    // ConnectionStatus component should be visible
+    const connectionStatus = page.locator('.app-header').getByText(/connected|offline/i);
+    await expect(connectionStatus).toBeVisible();
   });
 });
 
-test.describe.skip('Offline Functionality', () => {
+test.describe('Offline Functionality', () => {
   test('should work offline', async ({ page, context }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
@@ -135,41 +233,14 @@ test.describe.skip('Offline Functionality', () => {
     // Go offline
     await context.setOffline(true);
     
-    // App should still be functional
+    // App should still be functional (it's a PWA)
     await expect(page.locator('body')).toBeVisible();
-    
-    // Go back online
-    await context.setOffline(false);
-  });
-
-  test('should queue messages when offline', async ({ page, context }) => {
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
-    
-    // Go offline
-    await context.setOffline(true);
-    
-    // Try to send a message
-    const messageInput = page.locator('[data-testid="message-input"]');
-    if (await messageInput.count() > 0) {
-      await messageInput.fill('Offline test message');
-      
-      const sendButton = page.locator('[data-testid="send-message-btn"]');
-      await sendButton.click();
-      
-      // Message should be queued
-      const queuedIndicator = page.locator('[data-testid="message-queued"]');
-      if (await queuedIndicator.count() > 0) {
-        await expect(queuedIndicator).toBeVisible();
-      }
-    }
+    await expect(page.locator('.app-header')).toBeVisible();
     
     // Go back online
     await context.setOffline(false);
   });
 });
-
-test.describe.skip('Performance', () => {
   test('should load within acceptable time', async ({ page }) => {
     const startTime = Date.now();
     await page.goto('/');

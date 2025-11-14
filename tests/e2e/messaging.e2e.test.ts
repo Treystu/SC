@@ -3,7 +3,105 @@
  */
 import { test, expect } from '@playwright/test';
 
-test.describe.skip('Messaging', () => {
+test.describe('Messaging Interface', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+  });
+
+  test('should show conversations section', async ({ page }) => {
+    const conversationList = page.locator('.conversation-list');
+    await expect(conversationList).toBeVisible();
+    
+    const header = conversationList.locator('h2');
+    await expect(header).toHaveText('Conversations');
+  });
+
+  test('should have add contact button', async ({ page }) => {
+    const addButton = page.locator('.conversation-list .add-button');
+    await expect(addButton).toBeVisible();
+    await expect(addButton).toHaveAttribute('title', 'Add Contact');
+  });
+
+  test('should show empty state when no conversations', async ({ page }) => {
+    const emptyList = page.locator('.conversation-list .empty-list');
+    await expect(emptyList).toBeVisible();
+    await expect(emptyList).toContainText(/No conversations yet/i);
+  });
+
+  test('should show chat view area', async ({ page }) => {
+    const mainContent = page.locator('.main-content');
+    await expect(mainContent).toBeVisible();
+  });
+
+  test('should display welcome message with features', async ({ page }) => {
+    const emptyState = page.locator('.empty-state');
+    await expect(emptyState).toBeVisible();
+    await expect(emptyState).toContainText(/Welcome to Sovereign Communications/i);
+    
+    // Check for feature highlights
+    const features = page.locator('.features .feature');
+    expect(await features.count()).toBeGreaterThan(0);
+    
+    // Should mention encryption
+    await expect(page.locator('.features')).toContainText(/encrypted/i);
+    await expect(page.locator('.features')).toContainText(/mesh/i);
+  });
+});
+
+test.describe('Connection Status', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+  });
+
+  test('should display peer information', async ({ page }) => {
+    const peerInfo = page.locator('.peer-info');
+    
+    // Wait for peer info to appear
+    if (await peerInfo.count() > 0) {
+      await expect(peerInfo).toBeVisible();
+      await expect(peerInfo).toContainText(/Your Peer ID/i);
+      await expect(peerInfo).toContainText(/Connected Peers/i);
+    }
+  });
+
+  test('should show connection status in header', async ({ page }) => {
+    const header = page.locator('.app-header');
+    await expect(header).toBeVisible();
+    
+    // ConnectionStatus component should be present
+    // It shows either online/offline or peer count
+  });
+});
+
+test.describe('Conversation List', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+  });
+
+  test('should have conversations header', async ({ page }) => {
+    const header = page.locator('.list-header h2');
+    await expect(header).toBeVisible();
+    await expect(header).toHaveText('Conversations');
+  });
+
+  test('should show hint to add contacts when empty', async ({ page }) => {
+    const hint = page.locator('.conversation-list .hint');
+    if (await hint.count() > 0) {
+      await expect(hint).toContainText(/Add a contact/i);
+    }
+  });
+
+  test('should be in sidebar', async ({ page }) => {
+    const sidebar = page.locator('.sidebar');
+    await expect(sidebar).toBeVisible();
+    
+    const conversationList = sidebar.locator('.conversation-list');
+    await expect(conversationList).toBeVisible();
+  });
+});
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');

@@ -3,7 +3,7 @@
  */
 import { test, expect } from '@playwright/test';
 
-test.describe.skip('Visual Regression', () => {
+test.describe('Visual Regression', () => {
   test('home page layout', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
@@ -26,77 +26,68 @@ test.describe.skip('Visual Regression', () => {
     });
   });
 
-  test('dark mode (if supported)', async ({ page }) => {
+  test('conversation list component', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
     
-    // Try to enable dark mode
-    const darkModeToggle = page.locator('[data-testid="dark-mode-toggle"]');
-    if (await darkModeToggle.count() > 0) {
-      await darkModeToggle.click();
-      await page.waitForTimeout(500);
-      
-      await expect(page).toHaveScreenshot('home-page-dark.png', {
-        fullPage: true,
-        animations: 'disabled',
-      });
-    }
+    const conversationList = page.locator('.conversation-list');
+    await expect(conversationList).toHaveScreenshot('conversation-list.png', {
+      animations: 'disabled',
+    });
   });
 
-  test('chat interface', async ({ page }) => {
+  test('empty state', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
     
-    const chatArea = page.locator('[data-testid="chat-area"]');
-    if (await chatArea.count() > 0) {
-      await expect(chatArea).toHaveScreenshot('chat-interface.png', {
-        animations: 'disabled',
-      });
-    }
+    const emptyState = page.locator('.empty-state');
+    await expect(emptyState).toHaveScreenshot('empty-state.png', {
+      animations: 'disabled',
+    });
   });
 
-  test('peer list', async ({ page }) => {
+  test('app header', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
     
-    const peerList = page.locator('[data-testid="peer-list"]');
-    if (await peerList.count() > 0) {
-      await expect(peerList).toHaveScreenshot('peer-list.png', {
-        animations: 'disabled',
-      });
-    }
-  });
-
-  test('settings panel', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
-    
-    const settingsBtn = page.locator('[data-testid="settings-btn"]');
-    if (await settingsBtn.count() > 0) {
-      await settingsBtn.click();
-      await page.waitForTimeout(300);
-      
-      const settingsPanel = page.locator('[data-testid="settings-panel"]');
-      await expect(settingsPanel).toHaveScreenshot('settings-panel.png', {
-        animations: 'disabled',
-      });
-    }
-  });
-
-  test('contact card', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
-    
-    const firstContact = page.locator('[data-testid^="contact-"]').first();
-    if (await firstContact.count() > 0) {
-      await expect(firstContact).toHaveScreenshot('contact-card.png', {
-        animations: 'disabled',
-      });
-    }
+    const header = page.locator('.app-header');
+    await expect(header).toHaveScreenshot('app-header.png', {
+      animations: 'disabled',
+    });
   });
 });
 
-test.describe.skip('Component Visual Tests', () => {
+test.describe('Component Visual Tests', () => {
+  test('sidebar layout', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    
+    const sidebar = page.locator('.sidebar');
+    await expect(sidebar).toHaveScreenshot('sidebar.png', {
+      animations: 'disabled',
+    });
+  });
+
+  test('main content area', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    
+    const mainContent = page.locator('.main-content');
+    await expect(mainContent).toHaveScreenshot('main-content.png', {
+      animations: 'disabled',
+    });
+  });
+
+  test('feature highlights', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    
+    const features = page.locator('.features');
+    await expect(features).toHaveScreenshot('features.png', {
+      animations: 'disabled',
+    });
+  });
+
   test('button states', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
@@ -111,23 +102,5 @@ test.describe.skip('Component Visual Tests', () => {
       await expect(button).toHaveScreenshot('button-hover.png');
     }
   });
-
-  test('form inputs', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
-    
-    const input = page.locator('input[type="text"]').first();
-    if (await input.count() > 0) {
-      // Empty state
-      await expect(input).toHaveScreenshot('input-empty.png');
-      
-      // Filled state
-      await input.fill('Test input');
-      await expect(input).toHaveScreenshot('input-filled.png');
-      
-      // Focus state
-      await input.focus();
-      await expect(input).toHaveScreenshot('input-focused.png');
-    }
-  });
 });
+
