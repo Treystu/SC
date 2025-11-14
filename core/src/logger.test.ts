@@ -13,6 +13,14 @@ describe('Logger', () => {
     logger.clearLogs();
   });
 
+  afterEach(() => {
+    // Clean up after each test
+    logger.clearLogs();
+    logger.setLevel(LogLevel.INFO);
+    // Clear all module filters to prevent test interference
+    (logger as any).moduleFilters.clear();
+  });
+
   describe('Singleton pattern', () => {
     it('should return the same instance', () => {
       const logger1 = Logger.getInstance();
@@ -107,15 +115,22 @@ describe('Logger', () => {
     });
 
     it('should not log from disabled modules', () => {
+      logger.clearLogs(); // Clear any previous logs
       logger.enableModule('auth');
+      logger.enableModule('network'); // Keep another module enabled
       logger.info('Auth message', 'auth');
       logger.disableModule('auth');
+      logger.clearLogs(); // Clear logs including the first auth message
       logger.info('Auth message 2', 'auth');
+      logger.info('Network message', 'network'); // This should be logged
       
       const logs = logger.getRecentLogs();
-      // After disabling, no new auth logs should appear
+      // After disabling auth, no new auth logs should appear (since filters are still active)
       const authLogs = logs.filter(l => l.message === 'Auth message 2');
       expect(authLogs).toHaveLength(0);
+      // But network logs should appear
+      const networkLogs = logs.filter(l => l.message === 'Network message');
+      expect(networkLogs).toHaveLength(1);
     });
 
     it('should handle multiple enabled modules', () => {

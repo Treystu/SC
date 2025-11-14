@@ -6,10 +6,11 @@ import {
   generateIdentity,
   signMessage,
   verifySignature,
-  deriveSharedSecret,
+  performKeyExchange,
   encryptMessage,
   decryptMessage,
 } from './primitives';
+import { randomBytes } from '@noble/hashes/utils';
 
 describe('Crypto Property-Based Tests', () => {
   describe('Identity generation', () => {
@@ -116,15 +117,16 @@ describe('Crypto Property-Based Tests', () => {
             const receiver = await generateIdentity();
             
             // Derive shared secret
-            const senderSecret = await deriveSharedSecret(receiver.publicKey, sender.privateKey);
-            const receiverSecret = await deriveSharedSecret(sender.publicKey, receiver.privateKey);
+            const senderSecret = await performKeyExchange(sender.privateKey, receiver.publicKey);
+            const receiverSecret = await performKeyExchange(receiver.privateKey, sender.publicKey);
             
             // Secrets should match
             expect(Buffer.from(senderSecret).equals(Buffer.from(receiverSecret))).toBe(true);
             
             // Encrypt and decrypt
-            const encrypted = await encryptMessage(plaintext, senderSecret);
-            const decrypted = await decryptMessage(encrypted, receiverSecret);
+            const nonce = randomBytes(24);
+            const encrypted = await encryptMessage(plaintext, senderSecret, nonce);
+            const decrypted = await decryptMessage(encrypted, receiverSecret, nonce);
             
             expect(Buffer.from(decrypted).equals(Buffer.from(plaintext))).toBe(true);
           }
@@ -142,14 +144,15 @@ describe('Crypto Property-Based Tests', () => {
             const receiver = await generateIdentity();
             const attacker = await generateIdentity();
             
-            const senderSecret = await deriveSharedSecret(receiver.publicKey, sender.privateKey);
-            const attackerSecret = await deriveSharedSecret(sender.publicKey, attacker.privateKey);
+            const senderSecret = await performKeyExchange(sender.privateKey, receiver.publicKey);
+            const attackerSecret = await performKeyExchange(attacker.privateKey, sender.publicKey);
             
-            const encrypted = await encryptMessage(plaintext, senderSecret);
+            const nonce = randomBytes(24);
+            const encrypted = await encryptMessage(plaintext, senderSecret, nonce);
             
             // Should fail to decrypt with attacker's key
             await expect(
-              decryptMessage(encrypted, attackerSecret)
+              decryptMessage(encrypted, attackerSecret, nonce)
             ).rejects.toThrow();
           }
         ),
@@ -165,8 +168,8 @@ describe('Crypto Property-Based Tests', () => {
           const alice = await generateIdentity();
           const bob = await generateIdentity();
           
-          const aliceShared = await deriveSharedSecret(bob.publicKey, alice.privateKey);
-          const bobShared = await deriveSharedSecret(alice.publicKey, bob.privateKey);
+          const aliceShared = await performKeyExchange(alice.privateKey, bob.publicKey);
+          const bobShared = await performKeyExchange(bob.privateKey, alice.publicKey);
           
           expect(Buffer.from(aliceShared).equals(Buffer.from(bobShared))).toBe(true);
         }),
@@ -181,8 +184,8 @@ describe('Crypto Property-Based Tests', () => {
           const bob = await generateIdentity();
           const charlie = await generateIdentity();
           
-          const aliceBobSecret = await deriveSharedSecret(bob.publicKey, alice.privateKey);
-          const aliceCharlieSecret = await deriveSharedSecret(charlie.publicKey, alice.privateKey);
+          const aliceBobSecret = await performKeyExchange(alice.privateKey, bob.publicKey);
+          const aliceCharlieSecret = await performKeyExchange(alice.privateKey, charlie.publicKey);
           
           expect(Buffer.from(aliceBobSecret).equals(Buffer.from(aliceCharlieSecret))).toBe(false);
         }),
