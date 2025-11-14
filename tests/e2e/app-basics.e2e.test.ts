@@ -74,6 +74,46 @@ test.describe('Identity Management', () => {
     const connectionStatus = page.locator('.app-header').getByText(/connected|offline/i);
     await expect(connectionStatus).toBeVisible();
   });
+
+  test('should generate identity on first load', async ({ page }) => {
+    // Clear storage
+    await page.goto('/');
+    await page.evaluate(() => {
+      localStorage.clear();
+      indexedDB.deleteDatabase('sovereign-communications');
+    });
+    
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+    
+    // Check that identity was generated
+    const hasIdentity = await page.evaluate(() => {
+      return localStorage.getItem('identity') !== null;
+    });
+    
+    expect(hasIdentity).toBe(true);
+  });
+
+  test('should persist identity across page reloads', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    
+    // Get identity
+    const identity1 = await page.evaluate(() => {
+      return localStorage.getItem('identity');
+    });
+    
+    // Reload page
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+    
+    // Get identity again
+    const identity2 = await page.evaluate(() => {
+      return localStorage.getItem('identity');
+    });
+    
+    expect(identity1).toBe(identity2);
+  });
 });
 
 test.describe('User Interface', () => {
@@ -161,69 +201,6 @@ test.describe('Performance', () => {
     expect(metrics.domContentLoaded).toBeLessThan(2000);
   });
 });
-    // Clear storage
-    await page.goto('/');
-    await page.evaluate(() => {
-      localStorage.clear();
-      indexedDB.deleteDatabase('sovereign-communications');
-    });
-    
-    await page.reload();
-    await page.waitForLoadState('networkidle');
-    
-    // Check that identity was generated
-    const hasIdentity = await page.evaluate(() => {
-      return localStorage.getItem('identity') !== null;
-    });
-    
-    expect(hasIdentity).toBe(true);
-  });
-
-  test('should persist identity across page reloads', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
-    
-    // Get identity
-    const identity1 = await page.evaluate(() => {
-      return localStorage.getItem('identity');
-    });
-    
-    // Reload page
-    await page.reload();
-    await page.waitForLoadState('networkidle');
-    
-    // Get identity again
-    const identity2 = await page.evaluate(() => {
-      return localStorage.getItem('identity');
-    });
-    
-    expect(identity1).toBe(identity2);
-  });
-
-test.describe('Identity Management', () => {
-  test('should display peer information', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
-    
-    // Check if peer info is displayed
-    const peerInfo = page.locator('.peer-info');
-    if (await peerInfo.count() > 0) {
-      await expect(peerInfo).toBeVisible();
-      
-      // Should show peer ID
-      const peerIdText = await peerInfo.textContent();
-      expect(peerIdText).toContain('Your Peer ID');
-    }
-  });
-
-  test('should show connection status', async ({ page }) => {
-    await page.goto('/');
-    
-    // ConnectionStatus component should be visible
-    const connectionStatus = page.locator('.app-header').getByText(/connected|offline/i);
-    await expect(connectionStatus).toBeVisible();
-  });
-});
 
 test.describe('Offline Functionality', () => {
   test('should work offline', async ({ page, context }) => {
@@ -239,31 +216,5 @@ test.describe('Offline Functionality', () => {
     
     // Go back online
     await context.setOffline(false);
-  });
-});
-  test('should load within acceptable time', async ({ page }) => {
-    const startTime = Date.now();
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
-    const loadTime = Date.now() - startTime;
-    
-    // Should load within 5 seconds
-    expect(loadTime).toBeLessThan(5000);
-  });
-
-  test('should have acceptable performance metrics', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
-    
-    const metrics = await page.evaluate(() => {
-      const perf = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
-      return {
-        domContentLoaded: perf.domContentLoadedEventEnd - perf.domContentLoadedEventStart,
-        loadComplete: perf.loadEventEnd - perf.loadEventStart,
-      };
-    });
-    
-    // DOM content should load quickly
-    expect(metrics.domContentLoaded).toBeLessThan(2000);
   });
 });

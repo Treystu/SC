@@ -178,7 +178,7 @@ export class WebKeyStorage implements KeyStorage {
       const metaStore = transaction.objectStore(this.metadataStore);
       const request = keyStore.get(keyId);
 
-      request.onsuccess = () => {
+      request.onsuccess = async () => {
         const storedKey: StoredKey | undefined = request.result;
         if (!storedKey) {
           resolve(null);

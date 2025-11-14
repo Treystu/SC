@@ -102,6 +102,8 @@ test.describe('Conversation List', () => {
     await expect(conversationList).toBeVisible();
   });
 });
+
+test.describe('Message Sending', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
