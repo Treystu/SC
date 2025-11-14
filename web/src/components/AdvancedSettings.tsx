@@ -222,7 +222,7 @@ export const AdvancedSettings: React.FC = () => {
         </button>
       </div>
 
-      <style jsx>{`
+      <style>{`
         .advanced-settings {
           max-width: 800px;
           margin: 0 auto;

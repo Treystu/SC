@@ -1,7 +1,7 @@
 /**
  * Real-time network diagnostics panel
  */
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 
 interface NetworkStats {
   connectedPeers: number;
@@ -22,14 +22,6 @@ interface NetworkStats {
   webrtcConnections: number;
 }
 
-interface PeerInfo {
-  id: string;
-  latency: number;
-  connectionType: 'BLE' | 'WebRTC' | 'Relay';
-  signalStrength?: number;
-  lastSeen: number;
-}
-
 export const NetworkDiagnostics: React.FC = () => {
   const [stats, setStats] = useState<NetworkStats>({
     connectedPeers: 0,
@@ -43,7 +35,6 @@ export const NetworkDiagnostics: React.FC = () => {
     webrtcConnections: 0
   });
 
-  const [peers, setPeers] = useState<PeerInfo[]>([]);
   const [refreshInterval, setRefreshInterval] = useState(1000);
 
   useEffect(() => {

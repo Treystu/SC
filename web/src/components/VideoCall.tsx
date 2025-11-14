@@ -124,7 +124,7 @@ export const VideoCall: React.FC<VideoCallProps> = ({
         </button>
       </div>
 
-      <style jsx>{`
+      <style>{`
         .video-call-container {
           position: fixed;
           top: 0;

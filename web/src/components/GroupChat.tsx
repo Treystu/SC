@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 
 interface GroupMember {
   id: string;
@@ -15,67 +15,7 @@ interface Group {
 }
 
 export function GroupChat() {
-  const [groups, setGroups] = useState<Group[]>([]);
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
-
-  const createGroup = (name: string, memberIds: string[]) => {
-    const newGroup: Group = {
-      id: crypto.randomUUID(),
-      name,
-      members: memberIds.map(id => ({
-        id,
-        name: `User ${id}`,
-        isAdmin: false
-      })),
-      createdBy: 'current-user',
-      createdAt: Date.now()
-    };
-
-    setGroups([...groups, newGroup]);
-    setShowCreateDialog(false);
-  };
-
-  const addMember = (groupId: string, userId: string) => {
-    setGroups(groups.map(group => {
-      if (group.id === groupId) {
-        return {
-          ...group,
-          members: [...group.members, {
-            id: userId,
-            name: `User ${userId}`,
-            isAdmin: false
-          }]
-        };
-      }
-      return group;
-    }));
-  };
-
-  const removeMember = (groupId: string, userId: string) => {
-    setGroups(groups.map(group => {
-      if (group.id === groupId) {
-        return {
-          ...group,
-          members: group.members.filter(m => m.id !== userId)
-        };
-      }
-      return group;
-    }));
-  };
-
-  const promoteToAdmin = (groupId: string, userId: string) => {
-    setGroups(groups.map(group => {
-      if (group.id === groupId) {
-        return {
-          ...group,
-          members: group.members.map(m =>
-            m.id === userId ? { ...m, isAdmin: true } : m
-          )
-        };
-      }
-      return group;
-    }));
-  };
+  const [groups] = useState<Group[]>([]);
 
   return (
     <div className="group-chat">
@@ -96,7 +36,7 @@ export function GroupChat() {
         ))}
       </div>
 
-      <button onClick={() => setShowCreateDialog(true)}>
+      <button onClick={() => alert('Create group functionality coming soon')}>
         Create Group
       </button>
     </div>

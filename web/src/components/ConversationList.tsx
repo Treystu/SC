@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback, memo } from 'react';
 import './ConversationList.css';
 
 interface Conversation {
@@ -14,9 +14,57 @@ interface ConversationListProps {
   onSelect: (id: string) => void;
 }
 
+// Memoized conversation item component
+const ConversationItem = memo(({ 
+  conv, 
+  isSelected, 
+  onSelect 
+}: { 
+  conv: Conversation; 
+  isSelected: boolean; 
+  onSelect: (id: string) => void;
+}) => (
+  <div
+    className={`conversation-item ${isSelected ? 'selected' : ''}`}
+    onClick={() => onSelect(conv.id)}
+  >
+    <div className="conversation-avatar">
+      {conv.name.charAt(0).toUpperCase()}
+    </div>
+    <div className="conversation-info">
+      <div className="conversation-header">
+        <span className="conversation-name">{conv.name}</span>
+        {conv.timestamp && (
+          <span className="conversation-time">
+            {new Date(conv.timestamp).toLocaleTimeString([], { 
+              hour: '2-digit', 
+              minute: '2-digit' 
+            })}
+          </span>
+        )}
+      </div>
+      {conv.lastMessage && (
+        <div className="conversation-preview">
+          {conv.lastMessage}
+        </div>
+      )}
+    </div>
+    {conv.unreadCount > 0 && (
+      <div className="unread-badge">{conv.unreadCount}</div>
+    )}
+  </div>
+));
+
+ConversationItem.displayName = 'ConversationItem';
+
 function ConversationList({ selectedId, onSelect }: ConversationListProps) {
   // Mock data - will be replaced with actual state management
   const [conversations] = useState<Conversation[]>([]);
+
+  // Memoized select handler
+  const handleSelect = useCallback((id: string) => {
+    onSelect(id);
+  }, [onSelect]);
 
   return (
     <div className="conversation-list">
@@ -33,36 +81,12 @@ function ConversationList({ selectedId, onSelect }: ConversationListProps) {
           </div>
         ) : (
           conversations.map(conv => (
-            <div
+            <ConversationItem
               key={conv.id}
-              className={`conversation-item ${selectedId === conv.id ? 'selected' : ''}`}
-              onClick={() => onSelect(conv.id)}
-            >
-              <div className="conversation-avatar">
-                {conv.name.charAt(0).toUpperCase()}
-              </div>
-              <div className="conversation-info">
-                <div className="conversation-header">
-                  <span className="conversation-name">{conv.name}</span>
-                  {conv.timestamp && (
-                    <span className="conversation-time">
-                      {new Date(conv.timestamp).toLocaleTimeString([], { 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
-                      })}
-                    </span>
-                  )}
-                </div>
-                {conv.lastMessage && (
-                  <div className="conversation-preview">
-                    {conv.lastMessage}
-                  </div>
-                )}
-              </div>
-              {conv.unreadCount > 0 && (
-                <div className="unread-badge">{conv.unreadCount}</div>
-              )}
-            </div>
+              conv={conv}
+              isSelected={selectedId === conv.id}
+              onSelect={handleSelect}
+            />
           ))
         )}
       </div>
@@ -70,4 +94,4 @@ function ConversationList({ selectedId, onSelect }: ConversationListProps) {
   );
 }
 
-export default ConversationList;
+export default memo(ConversationList);

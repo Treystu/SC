@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 
 interface Message {
   id: string;
@@ -7,15 +7,6 @@ interface Message {
   senderId: string;
   senderName?: string;
   type: 'text' | 'file' | 'voice';
-}
-
-interface ExportOptions {
-  format: 'json' | 'csv' | 'txt' | 'html';
-  includeMetadata: boolean;
-  dateRange?: {
-    start: Date;
-    end: Date;
-  };
 }
 
 export const MessageExport: React.FC<{

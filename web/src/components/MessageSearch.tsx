@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 
 interface Message {
   id: string;
@@ -36,7 +36,12 @@ export const MessageSearch: React.FC = () => {
       const db = await openDatabase();
       const tx = db.transaction(['messages'], 'readonly');
       const store = tx.objectStore('messages');
-      const allMessages = await store.getAll();
+      const request = store.getAll();
+      
+      const allMessages: Message[] = await new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result as Message[]);
+        request.onerror = () => reject(request.error);
+      });
 
       const lowerQuery = searchQuery.toLowerCase();
       const searchResults: SearchResult[] = [];

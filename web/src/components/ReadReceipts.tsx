@@ -1,5 +1,3 @@
-import React from 'react';
-
 export enum ReceiptStatus {
   SENT = 'sent',
   DELIVERED = 'delivered',

@@ -1,5 +1,4 @@
 // Backup and restore manager for user data and identity
-import { webcrypto } from 'crypto';
 
 export interface BackupData {
   version: string;
@@ -104,11 +103,9 @@ export class BackupManager {
 
   // Import identity
   private async importIdentity(identity: { publicKey: string; privateKey: string }, password?: string): Promise<void> {
-    let privateKey = identity.privateKey;
-
     if (password) {
       // Decrypt private key
-      privateKey = await this.decryptWithPassword(identity.privateKey, password);
+      await this.decryptWithPassword(identity.privateKey, password);
     }
 
     // Store in secure storage
@@ -122,11 +119,9 @@ export class BackupManager {
   }
 
   // Import contacts
-  private async importContacts(contacts: any[]): Promise<void> {
+  private async importContacts(_contacts: any[]): Promise<void> {
     // Save to local database
-    for (const contact of contacts) {
-      // Validate and save
-    }
+    // Validate and save
   }
 
   // Export messages
@@ -141,8 +136,8 @@ export class BackupManager {
     // Save to local database in batches
     const batchSize = 100;
     for (let i = 0; i < messages.length; i += batchSize) {
-      const batch = messages.slice(i, i + batchSize);
       // Save batch
+      void messages.slice(i, i + batchSize);
     }
   }
 
@@ -152,7 +147,7 @@ export class BackupManager {
   }
 
   // Import settings
-  private async importSettings(settings: any): Promise<void> {
+  private async importSettings(_settings: any): Promise<void> {
     // Apply settings
   }
 

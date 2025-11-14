@@ -1,11 +1,10 @@
-import React, { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState } from 'react';
 
 interface VideoCallUIProps {
-  peerId: string;
   onEndCall: () => void;
 }
 
-export function VideoCallUI({ peerId, onEndCall }: VideoCallUIProps) {
+export function VideoCallUI({ onEndCall }: VideoCallUIProps) {
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const [isMuted, setIsMuted] = useState(false);
