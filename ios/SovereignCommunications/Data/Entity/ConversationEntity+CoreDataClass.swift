@@ -12,6 +12,11 @@ public class ConversationEntity: NSManagedObject {
     @NSManaged public var messages: NSSet?
     @NSManaged public var contact: ContactEntity?
     
+    /// Computed property for contact name
+    var contactName: String? {
+        return contact?.displayName
+    }
+    
     convenience init(context: NSManagedObjectContext,
                      id: String,
                      contactId: String,
@@ -35,3 +40,4 @@ extension ConversationEntity {
         return set.sorted { $0.timestamp < $1.timestamp }
     }
 }
+

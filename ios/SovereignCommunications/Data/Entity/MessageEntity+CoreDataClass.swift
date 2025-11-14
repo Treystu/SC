@@ -12,6 +12,12 @@ public class MessageEntity: NSManagedObject {
     @NSManaged public var isEncrypted: Bool
     @NSManaged public var conversation: ConversationEntity?
     
+    /// Computed property to check if message is sent by current user
+    var isSent: Bool {
+        let localPeerId = UserDefaults.standard.string(forKey: "localPeerId") ?? ""
+        return senderId == localPeerId
+    }
+    
     convenience init(context: NSManagedObjectContext,
                      id: String,
                      conversationId: String,
@@ -36,3 +42,4 @@ extension MessageEntity {
         return NSFetchRequest<MessageEntity>(entityName: "MessageEntity")
     }
 }
+
