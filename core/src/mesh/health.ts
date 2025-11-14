@@ -139,9 +139,24 @@ export class PeerHealthMonitor {
       payload,
     };
 
-    // Sign message
-    const messageBytes = encodeMessage(message);
-    message.header.signature = signMessage(messageBytes, this.identityPrivateKey);
+    // Create a temporary message for signing
+    const tempMessage = {
+      ...message,
+      header: {
+        ...message.header,
+        signature: new Uint8Array(65), // Placeholder for encoding
+      }
+    };
+
+    // Encode and sign
+    const messageBytes = encodeMessage(tempMessage);
+    const sig64 = signMessage(messageBytes, this.identityPrivateKey);
+    
+    // Pad signature to 65 bytes (compact signature with recovery byte)
+    const sig65 = new Uint8Array(65);
+    sig65.set(sig64, 0);
+    sig65[64] = 0; // Recovery byte placeholder
+    message.header.signature = sig65;
 
     // Send to peer
     const encodedMessage = encodeMessage(message);
