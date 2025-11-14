@@ -7,9 +7,12 @@ import { Message, MessageType, encodeMessage } from '../protocol/message';
 import { signMessage } from '../crypto/primitives';
 
 export interface HeartbeatConfig {
-  interval: number; // Heartbeat interval in ms
+  interval: number; // Base heartbeat interval in ms
   timeout: number; // Peer timeout in ms
   maxMissed: number; // Max missed heartbeats before removing peer
+  adaptiveInterval?: boolean; // Enable adaptive intervals
+  minInterval?: number; // Minimum interval for adaptive
+  maxInterval?: number; // Maximum interval for adaptive
 }
 
 export interface PeerHealth {
@@ -18,6 +21,10 @@ export interface PeerHealth {
   missedHeartbeats: number;
   rtt: number; // Round-trip time in ms
   isHealthy: boolean;
+  packetLoss: number; // 0-1, packet loss rate
+  latencyHistory: number[]; // Recent latency measurements
+  healthScore: number; // 0-100, computed health score
+  adaptiveInterval: number; // Current adaptive interval
 }
 
 /**
@@ -48,6 +55,9 @@ export class PeerHealthMonitor {
       interval: config.interval || 30000, // 30 seconds
       timeout: config.timeout || 90000, // 90 seconds
       maxMissed: config.maxMissed || 3,
+      adaptiveInterval: config.adaptiveInterval !== false,
+      minInterval: config.minInterval || 10000, // 10 seconds
+      maxInterval: config.maxInterval || 60000, // 60 seconds
     };
   }
 
@@ -66,15 +76,34 @@ export class PeerHealthMonitor {
       missedHeartbeats: 0,
       rtt: 0,
       isHealthy: true,
+      packetLoss: 0,
+      latencyHistory: [],
+      healthScore: 100,
+      adaptiveInterval: this.config.interval,
     });
 
     // Start sending heartbeats
-    const interval = setInterval(() => {
+    this.scheduleNextHeartbeat(peerId);
+  }
+
+  /**
+   * Schedule next heartbeat with adaptive interval
+   */
+  private scheduleNextHeartbeat(peerId: string): void {
+    const health = this.peerHealth.get(peerId);
+    if (!health) return;
+
+    const interval = this.config.adaptiveInterval 
+      ? health.adaptiveInterval 
+      : this.config.interval;
+
+    const timeout = setTimeout(() => {
       this.sendHeartbeat(peerId);
       this.checkPeerHealth(peerId);
-    }, this.config.interval);
+      this.scheduleNextHeartbeat(peerId);
+    }, interval);
 
-    this.heartbeatIntervals.set(peerId, interval);
+    this.heartbeatIntervals.set(peerId, timeout as any);
   }
 
   /**
@@ -131,8 +160,27 @@ export class PeerHealthMonitor {
     // Calculate RTT
     const rtt = Date.now() - timestamp;
     health.rtt = rtt;
+    
+    // Update latency history (keep last 10)
+    health.latencyHistory.push(rtt);
+    if (health.latencyHistory.length > 10) {
+      health.latencyHistory.shift();
+    }
+    
     health.lastHeartbeat = Date.now();
+    
+    // Update packet loss (exponential moving average)
+    const alpha = 0.3;
+    health.packetLoss = alpha * 0 + (1 - alpha) * health.packetLoss;
     health.missedHeartbeats = 0;
+
+    // Calculate health score
+    this.updateHealthScore(peerId);
+
+    // Adapt heartbeat interval based on connection quality
+    if (this.config.adaptiveInterval) {
+      this.adaptHeartbeatInterval(peerId);
+    }
 
     // Check if peer became healthy
     if (!health.isHealthy) {
@@ -142,6 +190,59 @@ export class PeerHealthMonitor {
 
     // Update peer last seen in routing table
     this.routingTable.updatePeerLastSeen(peerId);
+  }
+
+  /**
+   * Calculate health score based on multiple metrics
+   */
+  private updateHealthScore(peerId: string): void {
+    const health = this.peerHealth.get(peerId);
+    if (!health) return;
+
+    // Base score
+    let score = 100;
+
+    // Penalty for high latency
+    const avgLatency = health.latencyHistory.length > 0
+      ? health.latencyHistory.reduce((a, b) => a + b, 0) / health.latencyHistory.length
+      : health.rtt;
+    
+    if (avgLatency > 1000) score -= 30;
+    else if (avgLatency > 500) score -= 20;
+    else if (avgLatency > 200) score -= 10;
+
+    // Penalty for packet loss
+    score -= health.packetLoss * 50;
+
+    // Penalty for missed heartbeats
+    score -= health.missedHeartbeats * 10;
+
+    health.healthScore = Math.max(0, Math.min(100, score));
+  }
+
+  /**
+   * Adapt heartbeat interval based on connection quality
+   */
+  private adaptHeartbeatInterval(peerId: string): void {
+    const health = this.peerHealth.get(peerId);
+    if (!health) return;
+
+    const { minInterval = 10000, maxInterval = 60000 } = this.config;
+
+    // Good connection (score > 80): less frequent heartbeats
+    if (health.healthScore > 80) {
+      health.adaptiveInterval = Math.min(maxInterval, health.adaptiveInterval * 1.2);
+    }
+    // Poor connection (score < 50): more frequent heartbeats
+    else if (health.healthScore < 50) {
+      health.adaptiveInterval = Math.max(minInterval, health.adaptiveInterval * 0.8);
+    }
+    // Moderate connection: reset to default
+    else {
+      health.adaptiveInterval = this.config.interval;
+    }
+
+    health.adaptiveInterval = Math.max(minInterval, Math.min(maxInterval, health.adaptiveInterval));
   }
 
   /**
@@ -157,8 +258,15 @@ export class PeerHealthMonitor {
     const timeSinceLastHeartbeat = now - health.lastHeartbeat;
 
     // Check if heartbeat is overdue
-    if (timeSinceLastHeartbeat > this.config.interval * 1.5) {
+    if (timeSinceLastHeartbeat > health.adaptiveInterval * 1.5) {
       health.missedHeartbeats++;
+      
+      // Update packet loss
+      const alpha = 0.3;
+      health.packetLoss = alpha * 1 + (1 - alpha) * health.packetLoss;
+      
+      // Update health score
+      this.updateHealthScore(peerId);
 
       // Check if peer is unhealthy
       if (health.missedHeartbeats >= this.config.maxMissed) {

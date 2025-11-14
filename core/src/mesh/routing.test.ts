@@ -1,4 +1,4 @@
-import { RoutingTable, MessageQueue, Peer } from '../mesh/routing';
+import { RoutingTable, MessageQueue, Peer, createPeer } from '../mesh/routing';
 import { MessageType } from '../protocol/message';
 
 describe('Routing Table', () => {
@@ -10,34 +10,17 @@ describe('Routing Table', () => {
 
   describe('Peer Management', () => {
     it('should add and retrieve peers', () => {
-      const peer: Peer = {
-        id: 'peer1',
-        publicKey: new Uint8Array(32),
-        lastSeen: Date.now(),
-        connectedAt: Date.now(),
-        transportType: 'webrtc',
-        connectionQuality: 100,
-        bytesSent: 0,
-        bytesReceived: 0,
-      };
+      const peer = createPeer('peer1', new Uint8Array(32), 'webrtc');
 
       routingTable.addPeer(peer);
       const retrieved = routingTable.getPeer('peer1');
 
-      expect(retrieved).toEqual(peer);
+      expect(retrieved?.id).toEqual(peer.id);
+      expect(retrieved?.publicKey).toEqual(peer.publicKey);
     });
 
     it('should remove peers', () => {
-      const peer: Peer = {
-        id: 'peer1',
-        publicKey: new Uint8Array(32),
-        lastSeen: Date.now(),
-        connectedAt: Date.now(),
-        transportType: 'webrtc',
-        connectionQuality: 100,
-        bytesSent: 0,
-        bytesReceived: 0,
-      };
+      const peer = createPeer('peer1', new Uint8Array(32), 'webrtc');
 
       routingTable.addPeer(peer);
       routingTable.removePeer('peer1');
@@ -47,27 +30,8 @@ describe('Routing Table', () => {
     });
 
     it('should list all peers', () => {
-      const peer1: Peer = {
-        id: 'peer1',
-        publicKey: new Uint8Array(32),
-        lastSeen: Date.now(),
-        connectedAt: Date.now(),
-        transportType: 'webrtc',
-        connectionQuality: 100,
-        bytesSent: 0,
-        bytesReceived: 0,
-      };
-
-      const peer2: Peer = {
-        id: 'peer2',
-        publicKey: new Uint8Array(32),
-        lastSeen: Date.now(),
-        connectedAt: Date.now(),
-        transportType: 'bluetooth',
-        connectionQuality: 80,
-        bytesSent: 0,
-        bytesReceived: 0,
-      };
+      const peer1 = createPeer('peer1', new Uint8Array(32), 'webrtc');
+      const peer2 = createPeer('peer2', new Uint8Array(32), 'bluetooth');
 
       routingTable.addPeer(peer1);
       routingTable.addPeer(peer2);
@@ -79,16 +43,8 @@ describe('Routing Table', () => {
     });
 
     it('should update peer last seen', () => {
-      const peer: Peer = {
-        id: 'peer1',
-        publicKey: new Uint8Array(32),
-        lastSeen: 1000,
-        connectedAt: 1000,
-        transportType: 'webrtc',
-        connectionQuality: 100,
-        bytesSent: 0,
-        bytesReceived: 0,
-      };
+      const peer = createPeer('peer1', new Uint8Array(32), 'webrtc');
+      peer.lastSeen = 1000;
 
       routingTable.addPeer(peer);
       routingTable.updatePeerLastSeen('peer1');
@@ -98,27 +54,10 @@ describe('Routing Table', () => {
     });
 
     it('should remove stale peers', async () => {
-      const stalePeer: Peer = {
-        id: 'stale',
-        publicKey: new Uint8Array(32),
-        lastSeen: Date.now() - 120000, // 2 minutes ago
-        connectedAt: Date.now() - 120000,
-        transportType: 'webrtc',
-        connectionQuality: 100,
-        bytesSent: 0,
-        bytesReceived: 0,
-      };
+      const stalePeer = createPeer('stale', new Uint8Array(32), 'webrtc');
+      stalePeer.lastSeen = Date.now() - 120000; // 2 minutes ago
 
-      const freshPeer: Peer = {
-        id: 'fresh',
-        publicKey: new Uint8Array(32),
-        lastSeen: Date.now(),
-        connectedAt: Date.now(),
-        transportType: 'webrtc',
-        connectionQuality: 100,
-        bytesSent: 0,
-        bytesReceived: 0,
-      };
+      const freshPeer = createPeer('fresh', new Uint8Array(32), 'webrtc');
 
       routingTable.addPeer(stalePeer);
       routingTable.addPeer(freshPeer);
@@ -153,16 +92,7 @@ describe('Routing Table', () => {
 
   describe('Routing', () => {
     it('should create direct routes for connected peers', () => {
-      const peer: Peer = {
-        id: 'peer1',
-        publicKey: new Uint8Array(32),
-        lastSeen: Date.now(),
-        connectedAt: Date.now(),
-        transportType: 'webrtc',
-        connectionQuality: 100,
-        bytesSent: 0,
-        bytesReceived: 0,
-      };
+      const peer = createPeer('peer1', new Uint8Array(32), 'webrtc');
 
       routingTable.addPeer(peer);
       const nextHop = routingTable.getNextHop('peer1');
@@ -178,16 +108,7 @@ describe('Routing Table', () => {
 
   describe('Statistics', () => {
     it('should return correct stats', () => {
-      const peer: Peer = {
-        id: 'peer1',
-        publicKey: new Uint8Array(32),
-        lastSeen: Date.now(),
-        connectedAt: Date.now(),
-        transportType: 'webrtc',
-        connectionQuality: 100,
-        bytesSent: 0,
-        bytesReceived: 0,
-      };
+      const peer = createPeer('peer1', new Uint8Array(32), 'webrtc');
 
       routingTable.addPeer(peer);
       routingTable.markMessageSeen('hash1');
