@@ -962,14 +962,14 @@ export class WebRTCPeerEnhanced {
   // Event System
   // ============================================================================
 
-  on(event: string, handler: Function): void {
+  on(event: string, handler: (...args: any[]) => any): void {
     if (!this.eventHandlers.has(event)) {
       this.eventHandlers.set(event, new Set());
     }
     this.eventHandlers.get(event)!.add(handler);
   }
 
-  off(event: string, handler: Function): void {
+  off(event: string, handler: (...args: any[]) => any): void {
     const handlers = this.eventHandlers.get(event);
     if (handlers) {
       handlers.delete(handler);
@@ -1117,14 +1117,14 @@ export class WebRTCConnectionPool {
     };
   }
 
-  on(event: string, handler: Function): void {
+  on(event: string, handler: (...args: any[]) => any): void {
     if (!this.eventHandlers.has(event)) {
       this.eventHandlers.set(event, new Set());
     }
     this.eventHandlers.get(event)!.add(handler);
   }
 
-  off(event: string, handler: Function): void {
+  off(event: string, handler: (...args: any[]) => any): void {
     const handlers = this.eventHandlers.get(event);
     if (handlers) {
       handlers.delete(handler);

@@ -319,7 +319,7 @@ class MDNSDiscoverer {
     this.serviceName = serviceName;
   }
   
-  on(event: string, handler: Function) {
+  on(event: string, handler: (...args: any[]) => any) {
     this.listeners.set(event, handler);
   }
   
@@ -397,7 +397,7 @@ class ProximityPairing {
     this.threshold = opts.threshold;
   }
   
-  on(event: string, handler: Function) {
+  on(event: string, handler: (...args: any[]) => any) {
     this.listeners.set(event, handler);
   }
   
@@ -431,7 +431,7 @@ async function connectManualPeer(opts: { ip: string; port: number }) {
 class PeerAnnouncer {
   private listeners = new Map();
   
-  on(event: string, handler: Function) {
+  on(event: string, handler: (...args: any[]) => any) {
     this.listeners.set(event, handler);
   }
   

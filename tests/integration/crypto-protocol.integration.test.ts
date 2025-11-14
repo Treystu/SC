@@ -77,7 +77,7 @@ describe('Crypto-Protocol Integration', () => {
       signature65.set(signature, 0);
       message.header.signature = signature65;
       
-      let encodedWithSig = encodeMessage(message);
+      const encodedWithSig = encodeMessage(message);
       
       // Tamper with the message (change TTL)
       encodedWithSig[2] = 99; // Change TTL field

@@ -279,7 +279,7 @@ export class MDNSDiscoverer {
   /**
    * Unregister event listener
    */
-  off(event: string, callback: Function): void {
+  off(event: string, callback: (...args: any[]) => any): void {
     const handlers = this.listeners.get(event);
     if (handlers) {
       handlers.delete(callback);
