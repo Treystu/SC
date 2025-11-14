@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { MeshNetwork, Message, MessageType, Peer } from '@sc/core';
 
 export interface MeshStatus {
@@ -17,6 +17,7 @@ export interface ReceivedMessage {
 
 /**
  * React Hook for Mesh Network
+ * Optimized with useMemo and useCallback for performance
  */
 export function useMeshNetwork() {
   const [status, setStatus] = useState<MeshStatus>({
@@ -134,12 +135,13 @@ export function useMeshNetwork() {
     return meshNetworkRef.current.getStats();
   }, []);
 
-  return {
+  // Memoized return value to prevent unnecessary re-renders
+  return useMemo(() => ({
     status,
     peers,
     messages,
     sendMessage,
     connectToPeer,
     getStats,
-  };
+  }), [status, peers, messages, sendMessage, connectToPeer, getStats]);
 }

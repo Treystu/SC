@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback, memo } from 'react';
 import './ChatView.css';
 
 interface Message {
@@ -24,21 +24,22 @@ function ChatView({ conversationId: _conversationId, messages: receivedMessages 
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Convert received messages to display format
-  const messages: Message[] = receivedMessages.map(msg => ({
-    id: msg.id,
-    content: msg.content,
-    timestamp: msg.timestamp,
-    isSent: msg.from === 'me',
-    status: 'sent' as const,
-  }));
+  // Memoize message transformation to prevent unnecessary recalculations
+  const messages: Message[] = useMemo(() => 
+    receivedMessages.map(msg => ({
+      id: msg.id,
+      content: msg.content,
+      timestamp: msg.timestamp,
+      isSent: msg.from === 'me',
+      status: 'sent' as const,
+    })), [receivedMessages]);
 
   useEffect(() => {
     // Scroll to bottom when messages change
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSend = () => {
+  const handleSend = useCallback(() => {
     if (!inputValue.trim()) return;
 
     if (onSendMessage) {
@@ -46,14 +47,14 @@ function ChatView({ conversationId: _conversationId, messages: receivedMessages 
     }
     
     setInputValue('');
-  };
+  }, [inputValue, onSendMessage]);
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
-  };
+  }, [handleSend]);
 
   return (
     <div className="chat-view">
@@ -123,4 +124,4 @@ function ChatView({ conversationId: _conversationId, messages: receivedMessages 
   );
 }
 
-export default ChatView;
+export default memo(ChatView);
