@@ -130,7 +130,7 @@ export class WebRTCPeerEnhanced {
   private metricsTimer: NodeJS.Timeout | null = null;
   
   // Event handlers
-  private eventHandlers: Map<string, Set<Function>> = new Map();
+  private eventHandlers: Map<string, Set<(...args: any[]) => any>> = new Map();
   
   // Backpressure management
   private sendQueue: Array<{ type: DataChannelType; data: Uint8Array }> = [];
@@ -1013,7 +1013,7 @@ export class WebRTCPeerEnhanced {
 export class WebRTCConnectionPool {
   private peers: Map<string, WebRTCPeerEnhanced> = new Map();
   private config: Partial<WebRTCConfig>;
-  private eventHandlers: Map<string, Set<Function>> = new Map();
+  private eventHandlers: Map<string, Set<(...args: any[]) => any>> = new Map();
 
   constructor(config: Partial<WebRTCConfig> = {}) {
     this.config = config;

@@ -33,7 +33,7 @@ export class PeerIntroduceRelay {
   private knownPeers: Map<string, PeerIntroduction> = new Map();
   private pendingRequests: Map<string, IntroductionRequest> = new Map();
   private introductionCache: Map<string, Set<string>> = new Map(); // peerId -> introducers
-  private listeners: Map<string, Set<Function>> = new Map();
+  private listeners: Map<string, Set<(...args: any[]) => any>> = new Map();
   private maxIntroductions: number = 50;
   private introductionTTL: number = 3600000; // 1 hour
 

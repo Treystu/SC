@@ -26,7 +26,7 @@ export class ProximityDiscovery {
   private scanning: boolean = false;
   private scanTimer?: NodeJS.Timeout;
   private cleanupTimer?: NodeJS.Timeout;
-  private listeners: Map<string, Set<Function>> = new Map();
+  private listeners: Map<string, Set<(...args: any[]) => any>> = new Map();
 
   constructor(config: Partial<ProximityConfig> = {}) {
     this.config = {

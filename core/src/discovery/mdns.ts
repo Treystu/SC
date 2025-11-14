@@ -195,7 +195,7 @@ export class MDNSDiscoverer {
   private options: MDNSDiscoveryOptions;
   private scanning = false;
   private discoveredServices = new Map<string, MDNSServiceInfo>();
-  private listeners = new Map<string, Set<Function>>();
+  private listeners = new Map<string, Set<(...args: any[]) => any>>();
   private scanInterval: NodeJS.Timeout | null = null;
 
   constructor(serviceType: string, options: Partial<MDNSDiscoveryOptions> = {}) {
