@@ -135,7 +135,7 @@ export class Logger {
   /**
    * Format log message for console
    */
-  private formatMessage(entry: LogEntry): string[] {
+  private formatMessage(entry: LogEntry): any[] {
     const timestamp = new Date(entry.timestamp).toISOString();
     const module = entry.module ? `[${entry.module}]` : '';
     const level = `[${entry.level.toUpperCase()}]`;
