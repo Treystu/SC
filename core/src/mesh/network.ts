@@ -4,7 +4,7 @@
  */
 
 import { Message, MessageType, encodeMessage } from '../protocol/message';
-import { RoutingTable, Peer } from './routing';
+import { RoutingTable, Peer, createPeer } from './routing';
 import { MessageRelay } from './relay';
 import { PeerConnectionPool } from '../transport/webrtc';
 import { generateIdentity, IdentityKeyPair, signMessage } from '../crypto/primitives';
@@ -117,16 +117,11 @@ export class MeshNetwork {
    * Handle peer connected
    */
   private handlePeerConnected(peerId: string): void {
-    const peer: Peer = {
-      id: peerId,
-      publicKey: new Uint8Array(32), // Would be obtained during handshake
-      lastSeen: Date.now(),
-      connectedAt: Date.now(),
-      transportType: 'webrtc',
-      connectionQuality: 100,
-      bytesSent: 0,
-      bytesReceived: 0,
-    };
+    const peer = createPeer(
+      peerId,
+      new Uint8Array(32), // Would be obtained during handshake
+      'webrtc'
+    );
 
     this.routingTable.addPeer(peer);
     this.onPeerConnectedCallback?.(peerId);
