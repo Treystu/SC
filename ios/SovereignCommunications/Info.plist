@@ -57,6 +57,15 @@
         <string>bluetooth-peripheral</string>
         <string>fetch</string>
         <string>processing</string>
+        <string>remote-notification</string>
+    </array>
+    
+    <!-- Background Task Identifiers -->
+    <key>BGTaskSchedulerPermittedIdentifiers</key>
+    <array>
+        <string>com.sovereign.communications.refresh</string>
+        <string>com.sovereign.communications.cleanup</string>
+        <string>com.sovereign.communications.sync</string>
     </array>
     
     <!-- Permissions -->
@@ -72,5 +81,9 @@
     <string>Local network access is used for discovering nearby peers.</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>Photo library access is required to share images.</string>
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>Photo library access is required to save received images.</string>
+    <key>NSFaceIDUsageDescription</key>
+    <string>Face ID is used to secure your identity keys.</string>
 </dict>
 </plist>
