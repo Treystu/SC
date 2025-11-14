@@ -26,7 +26,6 @@ export const ContactList: React.FC<ContactListProps> = ({
   contacts,
   onSelectContact,
   onAddContact,
-  onDeleteContact,
   selectedContactId,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');

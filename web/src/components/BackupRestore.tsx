@@ -39,7 +39,8 @@ export const BackupRestore: React.FC = () => {
 
       setStatus('Backup created successfully!');
     } catch (error) {
-      setStatus(`Error creating backup: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      setStatus(`Error creating backup: ${errorMessage}`);
     } finally {
       setIsProcessing(false);
     }
@@ -57,7 +58,8 @@ export const BackupRestore: React.FC = () => {
       await backupManager.restoreBackup(backupData, password || undefined);
       setStatus('Backup restored successfully! Please reload the app.');
     } catch (error) {
-      setStatus(`Error restoring backup: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      setStatus(`Error restoring backup: ${errorMessage}`);
     } finally {
       setIsProcessing(false);
     }
@@ -166,7 +168,7 @@ export const BackupRestore: React.FC = () => {
         </div>
       )}
 
-      <style jsx>{`
+      <style>{`
         .backup-restore {
           max-width: 600px;
           margin: 0 auto;

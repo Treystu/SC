@@ -24,8 +24,10 @@ export function ContactManager() {
     const contact: Contact = {
       id: crypto.randomUUID(),
       name: newContact.name,
+      displayName: newContact.name,
       publicKey: newContact.publicKey,
       lastSeen: Date.now(),
+      fingerprint: '',
       verified: false
     };
 
@@ -43,7 +45,7 @@ export function ContactManager() {
   };
 
   const filteredContacts = contacts.filter(contact =>
-    contact.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (contact.name || contact.displayName).toLowerCase().includes(searchQuery.toLowerCase()) ||
     contact.publicKey.includes(searchQuery)
   );
 
@@ -76,10 +78,10 @@ export function ContactManager() {
           filteredContacts.map(contact => (
             <div key={contact.id} className="contact-item">
               <div className="contact-avatar">
-                {contact.name.charAt(0).toUpperCase()}
+                {(contact.name || contact.displayName).charAt(0).toUpperCase()}
               </div>
               <div className="contact-info">
-                <div className="contact-name">{contact.name}</div>
+                <div className="contact-name">{contact.name || contact.displayName}</div>
                 <div className="contact-key">
                   {contact.publicKey.substring(0, 16)}...
                 </div>

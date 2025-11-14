@@ -1,7 +1,7 @@
 /**
  * Advanced file export component with multiple formats
  */
-import React, { useState } from 'react';
+import { useState } from 'react';
 
 interface Message {
   id: string;
@@ -9,12 +9,6 @@ interface Message {
   content: string;
   timestamp: number;
   type: 'text' | 'file' | 'voice';
-}
-
-interface ExportOptions {
-  format: 'json' | 'csv' | 'txt' | 'html';
-  includeMetadata: boolean;
-  dateRange?: { start: number; end: number };
 }
 
 export const FileExport: React.FC<{ messages: Message[] }> = ({ messages }) => {

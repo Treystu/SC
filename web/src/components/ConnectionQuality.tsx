@@ -27,9 +27,8 @@ export const ConnectionQuality: React.FC = () => {
         const latency = performance.now() - startTime;
 
         // Estimate bandwidth (simplified)
-        const bandwidth = navigator.connection 
-          ? (navigator.connection as any).downlink || 10 
-          : 10;
+        const connectionInfo = (navigator as any).connection;
+        const bandwidth = connectionInfo ? connectionInfo.downlink || 10 : 10;
 
         // Calculate packet loss (simplified simulation)
         const packetLoss = Math.random() * 2;

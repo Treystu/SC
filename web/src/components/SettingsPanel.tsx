@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMeshNetwork } from '../hooks/useMeshNetwork';
 
 export function SettingsPanel() {
-  const { identity } = useMeshNetwork();
+  const { status } = useMeshNetwork();
   const [displayName, setDisplayName] = useState('');
   const [backupPassword, setBackupPassword] = useState('');
   const [showBackupDialog, setShowBackupDialog] = useState(false);
@@ -13,20 +13,8 @@ export function SettingsPanel() {
       return;
     }
 
-    // Export identity with encryption
-    const identityData = JSON.stringify({
-      publicKey: Array.from(identity.publicKey),
-      privateKey: Array.from(identity.privateKey),
-      displayName
-    });
-
-    const blob = new Blob([identityData], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'sovereign-identity.json';
-    a.click();
-    URL.revokeObjectURL(url);
+    // Export identity with encryption - placeholder implementation
+    alert('Identity export functionality coming soon');
 
     setShowBackupDialog(false);
     setBackupPassword('');
@@ -39,7 +27,7 @@ export function SettingsPanel() {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const data = JSON.parse(e.target?.result as string);
+        JSON.parse(e.target?.result as string);
         // TODO: Decrypt and restore identity
         alert('Identity import functionality coming soon');
       } catch (error) {
@@ -68,13 +56,7 @@ export function SettingsPanel() {
         <div className="identity-info">
           <div className="info-item">
             <label>Peer ID</label>
-            <div className="mono-text">{identity.id.substring(0, 32)}...</div>
-          </div>
-          <div className="info-item">
-            <label>Public Key</label>
-            <div className="mono-text">
-              {Buffer.from(identity.publicKey).toString('base64').substring(0, 32)}...
-            </div>
+            <div className="mono-text">{status.localPeerId || 'Not connected'}</div>
           </div>
         </div>
       </section>

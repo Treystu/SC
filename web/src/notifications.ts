@@ -26,8 +26,7 @@ export class WebNotificationManager {
       icon: '/icon-192.png',
       badge: '/badge-72.png',
       tag: conversationId,
-      requireInteraction: false,
-      timestamp: Date.now()
+      requireInteraction: false
     });
 
     notification.onclick = () => {

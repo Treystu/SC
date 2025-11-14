@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 
 interface Reaction {
   emoji: string;
@@ -13,7 +13,7 @@ interface MessageReactionsProps {
 
 const COMMON_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
 
-export function MessageReactions({ messageId, reactions, onAddReaction }: MessageReactionsProps) {
+export function MessageReactions({ reactions, onAddReaction }: MessageReactionsProps) {
   const [showPicker, setShowPicker] = useState(false);
 
   return (

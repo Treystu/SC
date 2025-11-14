@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 
 interface NotificationSettings {
   enabled: boolean;
@@ -36,35 +36,6 @@ export const Notifications: React.FC = () => {
       const result = await Notification.requestPermission();
       setPermission(result);
     }
-  };
-
-  const showNotification = (title: string, body: string, conversationId: string) => {
-    if (!settings.enabled || permission !== 'granted') return;
-    
-    if (settings.doNotDisturb && isInDNDPeriod()) return;
-    
-    if (settings.perConversation.get(conversationId) === false) return;
-
-    const notification = new Notification(title, {
-      body,
-      icon: '/icon.png',
-      badge: '/badge.png',
-      tag: conversationId,
-      requireInteraction: false,
-      silent: !settings.sound
-    });
-
-    notification.onclick = () => {
-      window.focus();
-      window.location.hash = `#/conversation/${conversationId}`;
-      notification.close();
-    };
-  };
-
-  const isInDNDPeriod = (): boolean => {
-    const now = new Date();
-    const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-    return currentTime >= settings.dndStart && currentTime < settings.dndEnd;
   };
 
   return (

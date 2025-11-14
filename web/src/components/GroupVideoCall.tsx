@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 interface Participant {
   id: string;
@@ -15,7 +15,7 @@ interface GroupVideoCallProps {
 }
 
 export const GroupVideoCall: React.FC<GroupVideoCallProps> = ({ roomId, onLeave }) => {
-  const [participants, setParticipants] = useState<Participant[]>([]);
+  const [participants] = useState<Participant[]>([]);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [videoEnabled, setVideoEnabled] = useState(true);
@@ -113,10 +113,7 @@ export const GroupVideoCall: React.FC<GroupVideoCallProps> = ({ roomId, onLeave 
       // Start screen sharing
       try {
         const screenStream = await navigator.mediaDevices.getDisplayMedia({
-          video: {
-            cursor: 'always',
-            displaySurface: 'monitor',
-          },
+          video: true,
           audio: false,
         });
 
@@ -208,8 +205,8 @@ export const GroupVideoCall: React.FC<GroupVideoCallProps> = ({ roomId, onLeave 
   };
 
   const renderSpeakerView = () => {
-    const speaker = participants.find(p => p.id === activeSpeaker) || participants[0];
-    const others = participants.filter(p => p.id !== activeSpeaker);
+    const speaker: Participant | undefined = participants.find((p: Participant) => p.id === activeSpeaker) || participants[0];
+    const others: Participant[] = participants.filter((p: Participant) => p.id !== activeSpeaker);
 
     return (
       <div className="speaker-layout" style={{ display: 'flex', height: '100%' }}>
@@ -222,7 +219,7 @@ export const GroupVideoCall: React.FC<GroupVideoCallProps> = ({ roomId, onLeave 
             isLocal={true}
             videoRef={localVideoRef}
           />
-          {others.map((participant) => (
+          {others.map((participant: Participant) => (
             <ParticipantVideo key={participant.id} participant={participant} isLocal={false} />
           ))}
         </div>

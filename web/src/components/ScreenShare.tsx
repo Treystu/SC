@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 
 export function ScreenShare() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -8,7 +8,7 @@ export function ScreenShare() {
   const startScreenShare = async () => {
     try {
       const screenStream = await navigator.mediaDevices.getDisplayMedia({
-        video: { cursor: 'always' },
+        video: true,
         audio: false
       });
 
