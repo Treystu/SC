@@ -1,13 +1,19 @@
 package com.sovereign.communications.data.entity
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
  * Contact entity for Room database
- * Task 60: Implement contact persistence
+ * Task 60: Implement contact persistence with indices
  */
-@Entity(tableName = "contacts")
+@Entity(
+    tableName = "contacts",
+    indices = [
+        Index(value = ["publicKey"], name = "index_contacts_publicKey", unique = true)
+    ]
+)
 data class ContactEntity(
     @PrimaryKey
     val id: String,

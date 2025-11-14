@@ -70,6 +70,17 @@
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+        
+        <!-- Notification Action Receiver -->
+        <receiver
+            android:name=".notifications.NotificationReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.sovereign.communications.ACTION_REPLY" />
+                <action android:name="com.sovereign.communications.ACTION_MARK_READ" />
+            </intent-filter>
+        </receiver>
             
     </application>
 

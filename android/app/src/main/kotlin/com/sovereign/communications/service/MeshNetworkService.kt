@@ -1,22 +1,22 @@
 package com.sovereign.communications.service
 
 import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.Binder
 import android.os.IBinder
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import com.sovereign.communications.R
+import com.sovereign.communications.notifications.NotificationManager
 import com.sovereign.communications.ui.MainActivity
 import kotlinx.coroutines.*
 
 /**
  * Foreground service for persistent mesh network connectivity
- * Task 62: Implement foreground service for persistent connectivity
+ * Tasks 62-63: Implement battery-optimized foreground service with proper notifications
  */
 class MeshNetworkService : Service() {
     
@@ -25,10 +25,11 @@ class MeshNetworkService : Service() {
     
     private var isRunning = false
     private var connectedPeers = 0
+    private var wakeLock: PowerManager.WakeLock? = null
+    private lateinit var notificationManager: NotificationManager
     
     companion object {
-        const val CHANNEL_ID = "mesh_network_channel"
-        const val NOTIFICATION_ID = 1
+        const val NOTIFICATION_ID = NotificationManager.NOTIFICATION_ID_SERVICE
         
         fun start(context: Context) {
             val intent = Intent(context, MeshNetworkService::class.java)
@@ -47,8 +48,13 @@ class MeshNetworkService : Service() {
     
     override fun onCreate() {
         super.onCreate()
-        createNotificationChannel()
+        notificationManager = NotificationManager(this)
+        notificationManager.createNotificationChannels()
         isRunning = true
+        
+        // Acquire partial wake lock for network operations
+        // This is battery-optimized and only keeps CPU awake, not screen
+        acquireWakeLock()
     }
     
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -58,6 +64,7 @@ class MeshNetworkService : Service() {
         // Start mesh network operations
         startMeshNetwork()
         
+        // Return START_STICKY to restart service if killed by system
         return START_STICKY
     }
     
@@ -70,20 +77,34 @@ class MeshNetworkService : Service() {
         isRunning = false
         serviceScope.cancel()
         stopMeshNetwork()
+        releaseWakeLock()
     }
     
-    private fun createNotificationChannel() {
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "Mesh Network",
-            NotificationManager.IMPORTANCE_LOW
+    /**
+     * Acquire a partial wake lock for network operations
+     * Task 62: Optimize battery usage
+     */
+    private fun acquireWakeLock() {
+        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        wakeLock = powerManager.newWakeLock(
+            PowerManager.PARTIAL_WAKE_LOCK,
+            "SC::MeshNetworkWakeLock"
         ).apply {
-            description = "Maintains connection to the mesh network"
-            setShowBadge(false)
+            // Set timeout to prevent battery drain if service crashes
+            acquire(10 * 60 * 1000L) // 10 minutes
         }
-        
-        val notificationManager = getSystemService(NotificationManager::class.java)
-        notificationManager.createNotificationChannel(channel)
+    }
+    
+    /**
+     * Release the wake lock
+     */
+    private fun releaseWakeLock() {
+        wakeLock?.let {
+            if (it.isHeld) {
+                it.release()
+            }
+        }
+        wakeLock = null
     }
     
     private fun createNotification(): Notification {
@@ -101,7 +122,7 @@ class MeshNetworkService : Service() {
             "Searching for peers..."
         }
         
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        return NotificationCompat.Builder(this, NotificationManager.CHANNEL_SERVICE)
             .setContentTitle("Sovereign Communications")
             .setContentText(statusText)
             .setSmallIcon(R.drawable.ic_notification)
@@ -109,31 +130,51 @@ class MeshNetworkService : Service() {
             .setOngoing(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .build()
     }
     
     private fun updateNotification() {
         val notification = createNotification()
-        val notificationManager = getSystemService(NotificationManager::class.java)
-        notificationManager.notify(NOTIFICATION_ID, notification)
+        val systemNotificationManager = getSystemService(Context.NOTIFICATION_SERVICE) 
+            as android.app.NotificationManager
+        systemNotificationManager.notify(NOTIFICATION_ID, notification)
     }
     
+    /**
+     * Start mesh network with battery-optimized heartbeat
+     * Task 62: Optimize battery usage with adaptive intervals
+     */
     private fun startMeshNetwork() {
         serviceScope.launch {
             // TODO: Initialize mesh network
             // - Load identity from secure storage
             // - Start WebRTC connections
-            // - Start BLE scanning/advertising
+            // - Start BLE scanning/advertising with duty cycling
             // - Initialize routing table
             // - Start peer health monitoring
             
+            var heartbeatInterval = 30000L // Start with 30 seconds
+            
             while (isActive && isRunning) {
                 // Mesh network heartbeat
-                delay(30000) // 30 seconds
+                delay(heartbeatInterval)
+                
+                // Adaptive heartbeat: increase interval if no peers connected
+                // to save battery, decrease when peers are active
+                heartbeatInterval = when {
+                    connectedPeers > 0 -> 30000L  // 30 seconds when active
+                    else -> 60000L                // 60 seconds when idle
+                }
                 
                 // Update connected peers count
                 // connectedPeers = meshNetwork.getConnectedPeerCount()
                 updateNotification()
+                
+                // Renew wake lock periodically
+                if (wakeLock?.isHeld == false) {
+                    acquireWakeLock()
+                }
             }
         }
     }
