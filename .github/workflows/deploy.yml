@@ -16,12 +16,17 @@ on:
           - staging
           - production
 
+permissions:
+  contents: read
+
 jobs:
   deploy-staging:
     name: Deploy to Staging
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' || github.event.inputs.environment == 'staging'
     timeout-minutes: 15
+    permissions:
+      contents: read
     environment:
       name: staging
       url: https://staging.sovereign-comm.app
@@ -63,6 +68,8 @@ jobs:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.environment == 'production'
     timeout-minutes: 20
+    permissions:
+      contents: write  # Needed for creating releases
     environment:
       name: production
       url: https://sovereign-comm.app
@@ -135,6 +142,7 @@ jobs:
     runs-on: ubuntu-latest
     if: failure()
     needs: [deploy-production]
+    permissions: {}
     steps:
       - name: Rollback deployment
         run: |
