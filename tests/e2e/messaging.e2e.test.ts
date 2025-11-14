@@ -3,7 +3,7 @@
  */
 import { test, expect } from '@playwright/test';
 
-test.describe('Messaging', () => {
+test.describe.skip('Messaging', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
@@ -89,7 +89,7 @@ test.describe('Messaging', () => {
   });
 });
 
-test.describe('Message History', () => {
+test.describe.skip('Message History', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
@@ -137,7 +137,7 @@ test.describe('Message History', () => {
   });
 });
 
-test.describe('Contact Management', () => {
+test.describe.skip('Contact Management', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');

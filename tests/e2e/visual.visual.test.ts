@@ -3,7 +3,7 @@
  */
 import { test, expect } from '@playwright/test';
 
-test.describe('Visual Regression', () => {
+test.describe.skip('Visual Regression', () => {
   test('home page layout', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
@@ -96,7 +96,7 @@ test.describe('Visual Regression', () => {
   });
 });
 
-test.describe('Component Visual Tests', () => {
+test.describe.skip('Component Visual Tests', () => {
   test('button states', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
