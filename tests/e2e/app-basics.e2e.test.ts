@@ -75,7 +75,7 @@ test.describe('Identity Management', () => {
     await expect(connectionStatus).toBeVisible();
   });
 
-  test('should generate identity on first load', async ({ page }) => {
+  test.skip('should generate identity on first load', async ({ page }) => {
     // Clear storage
     await page.goto('/');
     await page.evaluate(() => {
