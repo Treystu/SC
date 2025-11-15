@@ -8,6 +8,9 @@ export default defineConfig({
   testDir: './tests',
   testMatch: /.*\.e2e\.test\.ts$/,
   
+  // Snapshot configuration for visual regression
+  snapshotPathTemplate: '{testDir}/visual-baselines/{testFilePath}/{arg}{ext}',
+  
   // Maximum time one test can run
   timeout: 30 * 1000,
   
@@ -38,6 +41,21 @@ export default defineConfig({
     
     // Video on failure
     video: 'retain-on-failure',
+    
+    // Visual regression settings
+    ignoreHTTPSErrors: true,
+    launchOptions: {
+      slowMo: process.env.CI ? 0 : 100,
+    },
+  },
+
+  // Visual regression expect defaults
+  expect: {
+    toHaveScreenshot: {
+      maxDiffPixels: 100,
+      threshold: 0.2,
+      animations: 'disabled',
+    },
   },
 
   // Configure projects for major browsers
@@ -65,6 +83,17 @@ export default defineConfig({
     {
       name: 'Mobile Safari',
       use: { ...devices['iPhone 12'] },
+    },
+    
+    // Visual regression testing (Chromium only for consistency)
+    {
+      name: 'visual',
+      use: { 
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1280, height: 720 },
+        deviceScaleFactor: 1,
+      },
+      testMatch: /.*visual-regression\.test\.ts$/,
     },
   ],
 
