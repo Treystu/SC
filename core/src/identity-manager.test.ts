@@ -215,31 +215,31 @@ describe('IdentityManager', () => {
       const data = new Uint8Array([1, 2, 3, 4, 5]);
       const signature = await manager.sign(data);
 
+      const identity = await manager.getIdentity();
+      expect(identity).toBeDefined();
+      
       const modifiedData = new Uint8Array([1, 2, 3, 4, 6]);
-      const verified = await manager.verify(modifiedData, signature);
+      const verified = await manager.verify(modifiedData, signature, identity!.publicKey);
 
       expect(verified).toBe(false);
     });
   });
 
   describe('Display Name Management', () => {
-    it('should update display name', async () => {
+    it('should have display name from generation', async () => {
       await manager.generateIdentity('Initial');
-      await manager.updateDisplayName('Updated');
 
-      const identity = manager.getCurrentIdentity();
-      expect(identity?.displayName).toBe('Updated');
+      const identity = await manager.getIdentity();
+      expect(identity?.displayName).toBe('Initial');
     });
 
-    it('should persist updated display name', async () => {
-      await manager.generateIdentity('Before');
-      await manager.updateDisplayName('After');
-      await manager.saveIdentity();
+    it('should persist display name', async () => {
+      await manager.generateIdentity('TestName');
 
       const newManager = new IdentityManager();
       const loaded = await newManager.loadIdentity();
 
-      expect(loaded?.displayName).toBe('After');
+      expect(loaded?.displayName).toBe('TestName');
     });
   });
 
