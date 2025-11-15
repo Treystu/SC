@@ -291,6 +291,13 @@ export class MemoryKeyStorage implements KeyStorage {
   }
 
   async storeKey(keyId: string, key: Uint8Array, metadata?: KeyMetadata): Promise<void> {
+    if (!keyId || keyId.trim() === '') {
+      throw new Error('Key ID cannot be empty');
+    }
+    if (!key) {
+      throw new Error('Key value cannot be null or undefined');
+    }
+
     const sessionKey = generateSessionKey();
     const encryptedKey = encryptMessage(key, this.masterKey, sessionKey.nonce);
     
@@ -308,6 +315,10 @@ export class MemoryKeyStorage implements KeyStorage {
   }
 
   async getKey(keyId: string): Promise<Uint8Array | null> {
+    if (!keyId) {
+      throw new Error('Key ID cannot be null or undefined');
+    }
+
     const storedKey = this.keys.get(keyId);
     if (!storedKey) return null;
     
@@ -370,5 +381,52 @@ export class MemoryKeyStorage implements KeyStorage {
       secureWipe(storedKey.nonce);
     }
     this.keys.clear();
+  }
+
+  async clearAll(): Promise<void> {
+    this.clear();
+  }
+
+  async removeOldKeys(beforeTimestamp: number): Promise<void> {
+    const keysToRemove: string[] = [];
+    
+    for (const [keyId, storedKey] of this.keys.entries()) {
+      if (storedKey.metadata.createdAt < beforeTimestamp) {
+        keysToRemove.push(keyId);
+      }
+    }
+    
+    for (const keyId of keysToRemove) {
+      await this.deleteKey(keyId);
+    }
+  }
+
+  async findKeysByTag(tag: string): Promise<string[]> {
+    const result: string[] = [];
+    
+    for (const [keyId, storedKey] of this.keys.entries()) {
+      if (storedKey.metadata.tags && storedKey.metadata.tags.includes(tag)) {
+        result.push(keyId);
+      }
+    }
+    
+    return result;
+  }
+
+  async count(): Promise<number> {
+    return this.keys.size;
+  }
+
+  async getStorageSize(): Promise<number> {
+    let totalSize = 0;
+    
+    for (const storedKey of this.keys.values()) {
+      totalSize += storedKey.encryptedKey.byteLength;
+      totalSize += storedKey.nonce.byteLength;
+    }
+    
+    return totalSize;
+  }
+}
   }
 }

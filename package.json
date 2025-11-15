@@ -20,7 +20,8 @@
     "test:coverage": "npm run test -w core -- --coverage",
     "test:mutation": "stryker run",
     "dev": "npm run dev -w web",
-    "lint": "eslint . --ext .ts,.tsx"
+    "lint": "eslint . --ext .ts,.tsx",
+    "lint:fix": "eslint . --ext .ts,.tsx --fix"
   },
   "keywords": [
     "mesh-networking",
