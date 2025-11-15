@@ -428,5 +428,3 @@ export class MemoryKeyStorage implements KeyStorage {
     return totalSize;
   }
 }
-  }
-}

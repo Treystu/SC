@@ -153,11 +153,11 @@ export class FileTransferManager {
     partial.lastActivityTime = Date.now();
     
     // Update transfer state
-    this.updateTransferProgress(chunk.fileId);
+    this.internalUpdateTransferProgress(chunk.fileId);
   }
   
-  // Task 188: Update transfer progress
-  private updateTransferProgress(fileId: string): void {
+  // Task 188: Update transfer progress internally
+  private internalUpdateTransferProgress(fileId: string): void {
     const partial = this.partialFiles.get(fileId);
     const state = this.activeTransfers.get(fileId);
     

@@ -65,5 +65,65 @@ export { PeerAnnouncementManager, type PeerCapabilities as AnnouncementCapabilit
 // File transfer
 export * from './transfer/file';
 
+// Health check
+export {
+  HealthChecker,
+  getHealthChecker,
+  quickHealthCheck,
+  getHealthStatus,
+  type HealthCheckResult,
+  type ComponentHealth,
+} from './health-check';
+
+// Validation
+export {
+  ValidationError,
+  required,
+  validateStringLength,
+  validateNumberRange,
+  validateArrayLength,
+  validatePublicKey,
+  validatePrivateKey,
+  validateSignature,
+  validateProtocolVersion,
+  validateTTL,
+  validateTimestamp,
+  validatePeerId,
+  validateConversationId,
+  validateMessageContent,
+  validateEmail,
+  validateUrl,
+  validateIPAddress,
+  validatePort,
+  validateFileSize,
+  validateFileName,
+  validateMimeType,
+  sanitizeHtml,
+  sanitizeInput,
+  validateRateLimitToken,
+  validateToken,
+  validateSessionKey,
+  validateNonce,
+  validateUsername,
+  validateDisplayName,
+  validateRequiredFields,
+  validateEnum,
+  validateArray,
+  compose,
+  optional,
+} from './validation';
+
+// Rate limiting
+export {
+  TokenBucketRateLimiter,
+  SlidingWindowRateLimiter,
+  FixedWindowRateLimiter,
+  CompositeRateLimiter,
+  MessageRateLimiter,
+  RateLimiters,
+  type RateLimitConfig,
+  type RateLimitInfo,
+} from './rate-limiter-enhanced';
+
 // Version
 export const VERSION = '0.1.0';

@@ -312,7 +312,7 @@ export class MeshNetwork {
     const message: Message = {
       header: {
         version: 0x01,
-        type: MessageType.BINARY,
+        type: MessageType.FILE_CHUNK,
         ttl: this.defaultTTL,
         timestamp: Date.now(),
         senderId: this.identity.publicKey,
