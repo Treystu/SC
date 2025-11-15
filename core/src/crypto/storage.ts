@@ -172,7 +172,7 @@ export class WebKeyStorage implements KeyStorage {
   async getKey(keyId: string): Promise<Uint8Array | null> {
     if (!this.db) await this.init();
 
-    return new Promise(async (resolve, reject) => {
+    return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction([this.storeName, this.metadataStore], 'readwrite');
       const keyStore = transaction.objectStore(this.storeName);
       const metaStore = transaction.objectStore(this.metadataStore);

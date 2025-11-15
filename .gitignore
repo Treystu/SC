@@ -56,6 +56,17 @@ screenshots/
 benchmark-results.json
 junit.xml
 
+# Test results
+test-results/
+playwright-report/
+screenshots/
+visual-diff/
+performance-results/
+reports/
+
+# Stryker mutation testing
+.stryker-tmp/
+
 # Temporary files
 tmp/
 temp/

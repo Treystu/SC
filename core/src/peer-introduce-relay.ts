@@ -33,7 +33,7 @@ export class PeerIntroduceRelay {
   private knownPeers: Map<string, PeerIntroduction> = new Map();
   private pendingRequests: Map<string, IntroductionRequest> = new Map();
   private introductionCache: Map<string, Set<string>> = new Map(); // peerId -> introducers
-  private listeners: Map<string, Set<Function>> = new Map();
+  private listeners: Map<string, Set<(...args: any[]) => any>> = new Map();
   private maxIntroductions: number = 50;
   private introductionTTL: number = 3600000; // 1 hour
 
@@ -323,7 +323,7 @@ export class PeerIntroduceRelay {
   /**
    * Event listener registration
    */
-  on(event: string, callback: Function): void {
+  on(event: string, callback: (...args: any[]) => any): void {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, new Set());
     }
@@ -333,7 +333,7 @@ export class PeerIntroduceRelay {
   /**
    * Event listener removal
    */
-  off(event: string, callback: Function): void {
+  off(event: string, callback: (...args: any[]) => any): void {
     const listeners = this.listeners.get(event);
     if (listeners) {
       listeners.delete(callback);

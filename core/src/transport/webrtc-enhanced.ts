@@ -130,7 +130,7 @@ export class WebRTCPeerEnhanced {
   private metricsTimer: NodeJS.Timeout | null = null;
   
   // Event handlers
-  private eventHandlers: Map<string, Set<Function>> = new Map();
+  private eventHandlers: Map<string, Set<(...args: any[]) => any>> = new Map();
   
   // Backpressure management
   private sendQueue: Array<{ type: DataChannelType; data: Uint8Array }> = [];
@@ -968,14 +968,14 @@ export class WebRTCPeerEnhanced {
   // Event System
   // ============================================================================
 
-  on(event: string, handler: Function): void {
+  on(event: string, handler: (...args: any[]) => any): void {
     if (!this.eventHandlers.has(event)) {
       this.eventHandlers.set(event, new Set());
     }
     this.eventHandlers.get(event)!.add(handler);
   }
 
-  off(event: string, handler: Function): void {
+  off(event: string, handler: (...args: any[]) => any): void {
     const handlers = this.eventHandlers.get(event);
     if (handlers) {
       handlers.delete(handler);
@@ -1019,7 +1019,7 @@ export class WebRTCPeerEnhanced {
 export class WebRTCConnectionPool {
   private peers: Map<string, WebRTCPeerEnhanced> = new Map();
   private config: Partial<WebRTCConfig>;
-  private eventHandlers: Map<string, Set<Function>> = new Map();
+  private eventHandlers: Map<string, Set<(...args: any[]) => any>> = new Map();
 
   constructor(config: Partial<WebRTCConfig> = {}) {
     this.config = config;
@@ -1123,14 +1123,14 @@ export class WebRTCConnectionPool {
     };
   }
 
-  on(event: string, handler: Function): void {
+  on(event: string, handler: (...args: any[]) => any): void {
     if (!this.eventHandlers.has(event)) {
       this.eventHandlers.set(event, new Set());
     }
     this.eventHandlers.get(event)!.add(handler);
   }
 
-  off(event: string, handler: Function): void {
+  off(event: string, handler: (...args: any[]) => any): void {
     const handlers = this.eventHandlers.get(event);
     if (handlers) {
       handlers.delete(handler);

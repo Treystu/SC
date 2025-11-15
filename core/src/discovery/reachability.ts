@@ -59,7 +59,7 @@ export class ReachabilityVerifier {
     timestamp: number;
     timeout: NodeJS.Timeout;
   }>();
-  private listeners = new Map<string, Set<Function>>();
+  private listeners = new Map<string, Set<(...args: any[]) => any>>();
 
   constructor(options: Partial<ReachabilityOptions> = {}) {
     this.options = { ...DEFAULT_OPTIONS, ...options };
@@ -384,7 +384,7 @@ export class ReachabilityVerifier {
   /**
    * Unregister event listener
    */
-  off(event: string, callback: Function): void {
+  off(event: string, callback: (...args: any[]) => any): void {
     const handlers = this.listeners.get(event);
     if (handlers) {
       handlers.delete(callback);

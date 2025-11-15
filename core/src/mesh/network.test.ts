@@ -1,257 +1,500 @@
-/**
- * Mesh Network Tests
- * 
- * Tests for the high-level mesh network orchestration
- */
+import { MeshNetwork } from './network';
+import { Peer } from '../types';
 
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-import { MeshNetwork, MeshNetworkConfig } from './network';
-import { MessageType } from '../protocol/message';
-import { generateIdentity } from '../crypto/primitives';
-
-describe('Mesh Network', () => {
+describe('MeshNetwork', () => {
   let network: MeshNetwork;
 
   beforeEach(() => {
     network = new MeshNetwork();
   });
 
-  describe('Initialization', () => {
-    it('should initialize with default config', () => {
-      const net = new MeshNetwork();
-      expect(net).toBeDefined();
-    });
-
-    it('should initialize with custom identity', () => {
-      const identity = generateIdentity();
-      const config: MeshNetworkConfig = { identity };
-      const net = new MeshNetwork(config);
-      
-      expect(net).toBeDefined();
-    });
-
-    it('should initialize with custom max peers', () => {
-      const config: MeshNetworkConfig = { maxPeers: 100 };
-      const net = new MeshNetwork(config);
-      
-      expect(net).toBeDefined();
-    });
-
-    it('should initialize with custom default TTL', () => {
-      const config: MeshNetworkConfig = { defaultTTL: 20 };
-      const net = new MeshNetwork(config);
-      
-      expect(net).toBeDefined();
-    });
-
-    it('should generate identity if not provided', () => {
-      const net1 = new MeshNetwork();
-      const net2 = new MeshNetwork();
-      
-      // Each network should have unique identity
-      expect(net1).not.toBe(net2);
-    });
+  afterEach(() => {
+    network.shutdown();
   });
 
   describe('Peer Management', () => {
-    it('should get local peer ID', () => {
-      const peerId = network.getLocalPeerId();
-      expect(peerId).toBeDefined();
-      expect(typeof peerId).toBe('string');
-      expect(peerId.length).toBeGreaterThan(0);
+    it('should add a peer to the network', () => {
+      const peer: Peer = {
+        id: 'peer1',
+        publicKey: new Uint8Array(32),
+        endpoint: 'ws://localhost:8080',
+        state: 'connected',
+        metadata: {}
+      };
+
+      network.addPeer(peer);
+      expect(network.getPeer('peer1')).toEqual(peer);
     });
 
-    it('should get public key', () => {
-      const publicKey = network.getPublicKey();
-      expect(publicKey).toBeDefined();
-      expect(publicKey).toBeInstanceOf(Uint8Array);
-      expect(publicKey.length).toBe(32);
+    it('should remove a peer from the network', () => {
+      const peer: Peer = {
+        id: 'peer1',
+        publicKey: new Uint8Array(32),
+        endpoint: 'ws://localhost:8080',
+        state: 'connected',
+        metadata: {}
+      };
+
+      network.addPeer(peer);
+      network.removePeer('peer1');
+      expect(network.getPeer('peer1')).toBeUndefined();
     });
 
-    it('should list connected peers', () => {
-      const peers = network.getConnectedPeers();
-      expect(Array.isArray(peers)).toBe(true);
-      expect(peers.length).toBe(0);
+    it('should update peer status', () => {
+      const peer: Peer = {
+        id: 'peer1',
+        publicKey: new Uint8Array(32),
+        endpoint: 'ws://localhost:8080',
+        state: 'connected',
+        metadata: {}
+      };
+
+      network.addPeer(peer);
+      network.updatePeerStatus('peer1', 'disconnected');
+      
+      const updated = network.getPeer('peer1');
+      expect(updated?.state).toBe('disconnected');
     });
 
-    it('should get peer count', () => {
-      const count = network.getPeerCount();
+    it('should get all peers', () => {
+      const peer1: Peer = {
+        id: 'peer1',
+        publicKey: new Uint8Array(32),
+        endpoint: 'ws://localhost:8080',
+        state: 'connected',
+        metadata: {}
+      };
+
+      const peer2: Peer = {
+        id: 'peer2',
+        publicKey: new Uint8Array(32),
+        endpoint: 'ws://localhost:8081',
+        state: 'connected',
+        metadata: {}
+      };
+
+      network.addPeer(peer1);
+      network.addPeer(peer2);
+
+      const peers = network.getAllPeers();
+      expect(peers).toHaveLength(2);
+      expect(peers).toContainEqual(peer1);
+      expect(peers).toContainEqual(peer2);
+    });
+
+    it('should handle duplicate peer additions', () => {
+      const peer: Peer = {
+        id: 'peer1',
+        publicKey: new Uint8Array(32),
+        endpoint: 'ws://localhost:8080',
+        state: 'connected',
+        metadata: {}
+      };
+
+      network.addPeer(peer);
+      network.addPeer(peer); // Add again
+
+      const peers = network.getAllPeers();
+      expect(peers).toHaveLength(1);
+    });
+
+    it('should handle peer disconnections', () => {
+      const peer: Peer = {
+        id: 'peer1',
+        publicKey: new Uint8Array(32),
+        endpoint: 'ws://localhost:8080',
+        state: 'connected',
+        metadata: {}
+      };
+
+      network.addPeer(peer);
+      network.handlePeerDisconnect('peer1');
+
+      const updated = network.getPeer('peer1');
+      expect(updated?.state).toBe('disconnected');
+    });
+
+    it('should get connected peers only', () => {
+      const peer1: Peer = {
+        id: 'peer1',
+        publicKey: new Uint8Array(32),
+        endpoint: 'ws://localhost:8080',
+        state: 'connected',
+        metadata: {}
+      };
+
+      const peer2: Peer = {
+        id: 'peer2',
+        publicKey: new Uint8Array(32),
+        endpoint: 'ws://localhost:8081',
+        state: 'disconnected',
+        metadata: {}
+      };
+
+      network.addPeer(peer1);
+      network.addPeer(peer2);
+
+      const connected = network.getConnectedPeers();
+      expect(connected).toHaveLength(1);
+      expect(connected[0].id).toBe('peer1');
+    });
+  });
+
+  describe('Message Routing', () => {
+    it('should route direct message to peer', () => {
+      const peer: Peer = {
+        id: 'peer1',
+        publicKey: new Uint8Array(32),
+        endpoint: 'ws://localhost:8080',
+        state: 'connected',
+        metadata: {}
+      };
+
+      network.addPeer(peer);
+
+      const message = new Uint8Array([1, 2, 3, 4]);
+      const result = network.sendMessage('peer1', message);
+      
+      expect(result).toBe(true);
+    });
+
+    it('should broadcast message to all peers', () => {
+      const peer1: Peer = {
+        id: 'peer1',
+        publicKey: new Uint8Array(32),
+        endpoint: 'ws://localhost:8080',
+        state: 'connected',
+        metadata: {}
+      };
+
+      const peer2: Peer = {
+        id: 'peer2',
+        publicKey: new Uint8Array(32),
+        endpoint: 'ws://localhost:8081',
+        state: 'connected',
+        metadata: {}
+      };
+
+      network.addPeer(peer1);
+      network.addPeer(peer2);
+
+      const message = new Uint8Array([1, 2, 3, 4]);
+      const count = network.broadcast(message);
+      
+      expect(count).toBe(2);
+    });
+
+    it('should handle multi-hop routing', () => {
+      const peer1: Peer = {
+        id: 'peer1',
+        publicKey: new Uint8Array(32),
+        endpoint: 'ws://localhost:8080',
+        state: 'connected',
+        metadata: {}
+      };
+
+      const peer2: Peer = {
+        id: 'peer2',
+        publicKey: new Uint8Array(32),
+        endpoint: 'ws://localhost:8081',
+        state: 'connected',
+        metadata: {}
+      };
+
+      network.addPeer(peer1);
+      network.addPeer(peer2);
+
+      // Set up route: local -> peer1 -> peer2
+      network.addRoute('peer2', ['peer1', 'peer2']);
+
+      const message = new Uint8Array([1, 2, 3, 4]);
+      const result = network.sendMessage('peer2', message);
+      
+      expect(result).toBe(true);
+    });
+
+    it('should optimize routes', () => {
+      const peer1: Peer = {
+        id: 'peer1',
+        publicKey: new Uint8Array(32),
+        endpoint: 'ws://localhost:8080',
+        state: 'connected',
+        metadata: { latency: 100 }
+      };
+
+      const peer2: Peer = {
+        id: 'peer2',
+        publicKey: new Uint8Array(32),
+        endpoint: 'ws://localhost:8081',
+        state: 'connected',
+        metadata: { latency: 50 }
+      };
+
+      network.addPeer(peer1);
+      network.addPeer(peer2);
+
+      network.optimizeRoutes();
+
+      // Expect peer2 to be preferred due to lower latency
+      const route = network.getRoute('peer2');
+      expect(route).toEqual(['peer2']);
+    });
+
+    it('should forward messages to next hop', () => {
+      const peer1: Peer = {
+        id: 'peer1',
+        publicKey: new Uint8Array(32),
+        endpoint: 'ws://localhost:8080',
+        state: 'connected',
+        metadata: {}
+      };
+
+      network.addPeer(peer1);
+
+      const message = new Uint8Array([1, 2, 3, 4]);
+      const result = network.forwardMessage('peer1', 'peer2', message);
+      
+      expect(result).toBe(true);
+    });
+
+    it('should update routing table', () => {
+      const peer: Peer = {
+        id: 'peer1',
+        publicKey: new Uint8Array(32),
+        endpoint: 'ws://localhost:8080',
+        state: 'connected',
+        metadata: {}
+      };
+
+      network.addPeer(peer);
+      network.updateRoutingTable('peer1', ['peer1']);
+
+      const route = network.getRoute('peer1');
+      expect(route).toEqual(['peer1']);
+    });
+
+    it('should not route to disconnected peers', () => {
+      const peer: Peer = {
+        id: 'peer1',
+        publicKey: new Uint8Array(32),
+        endpoint: 'ws://localhost:8080',
+        state: 'disconnected',
+        metadata: {}
+      };
+
+      network.addPeer(peer);
+
+      const message = new Uint8Array([1, 2, 3, 4]);
+      const result = network.sendMessage('peer1', message);
+      
+      expect(result).toBe(false);
+    });
+
+    it('should handle broadcast to empty network', () => {
+      const message = new Uint8Array([1, 2, 3, 4]);
+      const count = network.broadcast(message);
+      
       expect(count).toBe(0);
     });
   });
 
-  describe('Message Handling', () => {
-    it('should set message callback', () => {
-      const callback = jest.fn();
-      network.onMessage(callback);
-      
-      expect(callback).not.toHaveBeenCalled();
+  describe('Network Topology', () => {
+    it('should form mesh network', () => {
+      const peer1: Peer = {
+        id: 'peer1',
+        publicKey: new Uint8Array(32),
+        endpoint: 'ws://localhost:8080',
+        state: 'connected',
+        metadata: {}
+      };
+
+      const peer2: Peer = {
+        id: 'peer2',
+        publicKey: new Uint8Array(32),
+        endpoint: 'ws://localhost:8081',
+        state: 'connected',
+        metadata: {}
+      };
+
+      network.addPeer(peer1);
+      network.addPeer(peer2);
+
+      const topology = network.getTopology();
+      expect(topology.peers).toHaveLength(2);
     });
 
-    it('should set peer connected callback', () => {
-      const callback = jest.fn();
-      network.onPeerConnected(callback);
-      
-      expect(callback).not.toHaveBeenCalled();
+    it('should integrate with peer discovery', () => {
+      const discoveredPeer: Peer = {
+        id: 'discovered1',
+        publicKey: new Uint8Array(32),
+        endpoint: 'ws://localhost:8082',
+        state: 'connected',
+        metadata: {}
+      };
+
+      network.onPeerDiscovered(discoveredPeer);
+
+      const peer = network.getPeer('discovered1');
+      expect(peer).toEqual(discoveredPeer);
     });
 
-    it('should set peer disconnected callback', () => {
-      const callback = jest.fn();
-      network.onPeerDisconnected(callback);
-      
-      expect(callback).not.toHaveBeenCalled();
+    it('should establish connections', () => {
+      const peer: Peer = {
+        id: 'peer1',
+        publicKey: new Uint8Array(32),
+        endpoint: 'ws://localhost:8080',
+        state: 'connecting',
+        metadata: {}
+      };
+
+      network.addPeer(peer);
+      network.establishConnection('peer1');
+
+      const updated = network.getPeer('peer1');
+      expect(updated?.state).toBe('connected');
     });
 
-    it('should send text message', async () => {
-      const recipientId = 'peer-123';
-      const text = 'Hello, World!';
-      
-      // Should not throw
-      await expect(network.sendTextMessage(recipientId, text)).resolves.not.toThrow();
+    it('should expand network with new peers', () => {
+      const initialCount = network.getAllPeers().length;
+
+      const peer: Peer = {
+        id: 'peer1',
+        publicKey: new Uint8Array(32),
+        endpoint: 'ws://localhost:8080',
+        state: 'connected',
+        metadata: {}
+      };
+
+      network.addPeer(peer);
+
+      expect(network.getAllPeers().length).toBe(initialCount + 1);
     });
 
-    it('should send binary message', async () => {
-      const recipientId = 'peer-123';
-      const data = new Uint8Array([1, 2, 3, 4, 5]);
-      
-      await expect(network.sendBinaryMessage(recipientId, data)).resolves.not.toThrow();
-    });
+    it('should update topology when peers change', () => {
+      const peer: Peer = {
+        id: 'peer1',
+        publicKey: new Uint8Array(32),
+        endpoint: 'ws://localhost:8080',
+        state: 'connected',
+        metadata: {}
+      };
 
-    it('should broadcast message to all peers', async () => {
-      const text = 'Broadcast message';
-      
-      await expect(network.broadcastMessage(text)).resolves.not.toThrow();
-    });
-  });
+      network.addPeer(peer);
+      const topology1 = network.getTopology();
 
-  describe('Connection Management', () => {
-    it('should attempt to connect to peer', async () => {
-      const peerId = 'remote-peer-123';
-      
-      // This will fail without actual WebRTC setup, but should not throw immediately
-      const connectPromise = network.connectToPeer(peerId);
-      expect(connectPromise).toBeInstanceOf(Promise);
-    });
+      network.removePeer('peer1');
+      const topology2 = network.getTopology();
 
-    it('should reject connection when max peers reached', async () => {
-      const config: MeshNetworkConfig = { maxPeers: 0 };
-      const net = new MeshNetwork(config);
-      
-      await expect(net.connectToPeer('peer-1')).rejects.toThrow('Maximum number of peers reached');
-    });
-
-    it('should disconnect from peer', async () => {
-      const peerId = 'peer-123';
-      
-      await expect(network.disconnectFromPeer(peerId)).resolves.not.toThrow();
-    });
-
-    it('should disconnect from all peers', async () => {
-      await expect(network.disconnectAll()).resolves.not.toThrow();
-    });
-  });
-
-  describe('Network State', () => {
-    it('should check if connected to peer', () => {
-      const isConnected = network.isConnectedToPeer('peer-123');
-      expect(typeof isConnected).toBe('boolean');
-      expect(isConnected).toBe(false);
-    });
-
-    it('should get network statistics', () => {
-      const stats = network.getStatistics();
-      
-      expect(stats).toBeDefined();
-      expect(stats.peerCount).toBeDefined();
-      expect(stats.messagesSent).toBeDefined();
-      expect(stats.messagesReceived).toBeDefined();
-      expect(stats.bytesTransferred).toBeDefined();
-    });
-
-    it('should start network', async () => {
-      await expect(network.start()).resolves.not.toThrow();
-    });
-
-    it('should stop network', async () => {
-      await expect(network.stop()).resolves.not.toThrow();
-    });
-
-    it('should restart network', async () => {
-      await network.start();
-      await expect(network.stop()).resolves.not.toThrow();
-      await expect(network.start()).resolves.not.toThrow();
+      expect(topology1.peers.length).toBeGreaterThan(topology2.peers.length);
     });
   });
 
-  describe('Configuration', () => {
-    it('should respect max peers limit', () => {
-      const config: MeshNetworkConfig = { maxPeers: 5 };
-      const net = new MeshNetwork(config);
+  describe('Health Monitoring', () => {
+    it('should check peer health', () => {
+      const peer: Peer = {
+        id: 'peer1',
+        publicKey: new Uint8Array(32),
+        endpoint: 'ws://localhost:8080',
+        state: 'connected',
+        metadata: {}
+      };
+
+      network.addPeer(peer);
       
-      expect(net).toBeDefined();
+      const health = network.checkPeerHealth('peer1');
+      expect(health).toBeDefined();
     });
 
-    it('should use default TTL for messages', () => {
-      const config: MeshNetworkConfig = { defaultTTL: 15 };
-      const net = new MeshNetwork(config);
-      
-      expect(net).toBeDefined();
+    it('should track connection quality', () => {
+      const peer: Peer = {
+        id: 'peer1',
+        publicKey: new Uint8Array(32),
+        endpoint: 'ws://localhost:8080',
+        state: 'connected',
+        metadata: {}
+      };
+
+      network.addPeer(peer);
+      network.updateConnectionQuality('peer1', 0.9);
+
+      const quality = network.getConnectionQuality('peer1');
+      expect(quality).toBe(0.9);
     });
 
-    it('should handle zero max peers', () => {
-      const config: MeshNetworkConfig = { maxPeers: 0 };
-      const net = new MeshNetwork(config);
+    it('should detect dead peers', () => {
+      const peer: Peer = {
+        id: 'peer1',
+        publicKey: new Uint8Array(32),
+        endpoint: 'ws://localhost:8080',
+        state: 'connected',
+        metadata: { lastSeen: Date.now() - 60000 }
+      };
+
+      network.addPeer(peer);
       
-      expect(net.getPeerCount()).toBe(0);
+      const dead = network.getDeadPeers(30000); // 30s timeout
+      expect(dead).toContain('peer1');
     });
 
-    it('should handle large max peers', () => {
-      const config: MeshNetworkConfig = { maxPeers: 1000 };
-      const net = new MeshNetwork(config);
-      
-      expect(net).toBeDefined();
+    it('should update health status', () => {
+      const peer: Peer = {
+        id: 'peer1',
+        publicKey: new Uint8Array(32),
+        endpoint: 'ws://localhost:8080',
+        state: 'connected',
+        metadata: {}
+      };
+
+      network.addPeer(peer);
+      network.updateHealthStatus('peer1', 'healthy');
+
+      const health = network.checkPeerHealth('peer1');
+      expect(health?.status).toBe('healthy');
     });
   });
 
   describe('Error Handling', () => {
-    it('should handle invalid peer ID gracefully', async () => {
-      const result = network.isConnectedToPeer('');
-      expect(result).toBe(false);
+    it('should handle peer failure recovery', () => {
+      const peer: Peer = {
+        id: 'peer1',
+        publicKey: new Uint8Array(32),
+        endpoint: 'ws://localhost:8080',
+        state: 'failed',
+        metadata: {}
+      };
+
+      network.addPeer(peer);
+      network.recoverPeer('peer1');
+
+      const recovered = network.getPeer('peer1');
+      expect(recovered?.state).toBe('connecting');
     });
 
-    it('should handle empty message gracefully', async () => {
-      await expect(network.sendTextMessage('peer-123', '')).resolves.not.toThrow();
-    });
+    it('should handle network partition', () => {
+      const peer1: Peer = {
+        id: 'peer1',
+        publicKey: new Uint8Array(32),
+        endpoint: 'ws://localhost:8080',
+        state: 'connected',
+        metadata: {}
+      };
 
-    it('should handle null callbacks gracefully', () => {
-      expect(() => network.onMessage(null as any)).not.toThrow();
-    });
-  });
+      const peer2: Peer = {
+        id: 'peer2',
+        publicKey: new Uint8Array(32),
+        endpoint: 'ws://localhost:8081',
+        state: 'connected',
+        metadata: {}
+      };
 
-  describe('Multiple Networks', () => {
-    it('should allow multiple network instances', () => {
-      const net1 = new MeshNetwork();
-      const net2 = new MeshNetwork();
-      
-      expect(net1.getLocalPeerId()).not.toBe(net2.getLocalPeerId());
-    });
+      network.addPeer(peer1);
+      network.addPeer(peer2);
 
-    it('should have independent peer lists', () => {
-      const net1 = new MeshNetwork();
-      const net2 = new MeshNetwork();
-      
-      expect(net1.getPeerCount()).toBe(0);
-      expect(net2.getPeerCount()).toBe(0);
-    });
+      network.handlePartition(['peer1'], ['peer2']);
 
-    it('should have independent statistics', () => {
-      const net1 = new MeshNetwork();
-      const net2 = new MeshNetwork();
-      
-      const stats1 = net1.getStatistics();
-      const stats2 = net2.getStatistics();
-      
-      expect(stats1).not.toBe(stats2);
+      // Should maintain both partitions
+      expect(network.getPeer('peer1')).toBeDefined();
+      expect(network.getPeer('peer2')).toBeDefined();
     });
   });
 });

@@ -53,7 +53,7 @@ describe('PeerRegistry', () => {
       peer1.lastSeen = Date.now() - 6 * 60 * 1000; // 6 minutes ago
     }
     
-    registry.removeStale Peers(5 * 60 * 1000); // 5 minute timeout
+    registry.removeStalePeers(5 * 60 * 1000); // 5 minute timeout
     
     expect(registry.hasPeer('peer1')).toBe(false);
     expect(registry.hasPeer('peer2')).toBe(true);

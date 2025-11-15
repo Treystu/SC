@@ -1,348 +1,307 @@
-# Tests Directory
+# Testing Infrastructure - Quick Start Guide
 
-This directory contains integration tests, E2E tests, and cross-module test suites for Sovereign Communications.
+## Overview
 
-## Directory Structure
+Sovereign Communications now has comprehensive testing infrastructure covering unit tests, integration tests, E2E tests, visual regression, property-based testing, mutation testing, and performance benchmarks.
 
+## Running Tests
+
+### Unit Tests
+```bash
+# Run all unit tests
+npm test
+
+# Run with coverage
+npm run test:coverage
+
+# Run specific test file
+npm test -- rate-limiter.test.ts
+
+# Watch mode
+npm test -- --watch
 ```
-tests/
-├── app.e2e.test.ts              # End-to-end application tests
-├── visual-regression.test.ts    # Visual regression tests
-├── contracts.test.ts            # Contract tests between modules
-├── e2e-framework.ts             # E2E test framework and helpers
-├── ble-mesh.test.ts            # Bluetooth mesh integration tests
-├── crypto.test.ts              # Crypto integration tests
-├── file-transfer.test.ts       # File transfer integration tests
-├── mesh-network.test.ts        # Mesh network integration tests
-├── peer-discovery.test.ts      # Peer discovery integration tests
-├── webrtc-integration.test.ts  # WebRTC integration tests
-└── visual-baselines/           # Baseline screenshots for visual tests
-```
-
-## Test Types
 
 ### Integration Tests
-
-Integration tests verify that modules work correctly together. These tests are located in `tests/*.test.ts` files (excluding E2E tests).
-
-**Examples:**
-- `crypto.test.ts` - Tests crypto module integration
-- `mesh-network.test.ts` - Tests mesh networking components together
-- `webrtc-integration.test.ts` - Tests WebRTC with mesh networking
-
-**Running integration tests:**
 ```bash
+# Run all integration tests
 npm run test:integration
+
+# Run with coverage
+npm run test:integration -- --coverage
 ```
 
 ### E2E Tests
-
-E2E (End-to-End) tests verify complete user workflows across the application using Playwright.
-
-**Test Files:**
-- `app.e2e.test.ts` - Main application user flows
-- `visual-regression.test.ts` - Visual regression testing
-
-**Running E2E tests:**
 ```bash
-# All E2E tests
+# Run all E2E tests
 npm run test:e2e
 
-# Specific browser
-npx playwright test --project=chromium
+# Run specific browser
+npm run test:e2e -- --project=chromium
 
-# UI mode (interactive)
+# Run in UI mode (interactive)
 npm run test:e2e:ui
 
-# Debug mode
-npx playwright test --debug
+# Run visual regression tests
+npm run test:visual
 ```
 
-### Contract Tests
-
-Contract tests ensure that module interfaces remain stable and compatible.
-
-**Test File:**
-- `contracts.test.ts` - Interface and data contract tests
-
-**Running contract tests:**
+### Performance Tests
 ```bash
-npm test tests/contracts.test.ts
+# Run performance benchmarks
+npm run test:performance
 ```
 
-### Visual Regression Tests
-
-Visual tests detect unintended UI changes by comparing screenshots.
-
-**Test File:**
-- `visual-regression.test.ts` - Component and page screenshot tests
-
-**Running visual tests:**
+### Mutation Testing
 ```bash
-npx playwright test --project=visual
+# Run mutation tests (takes time!)
+npm run test:mutation
 ```
 
-**Updating baselines:**
-```bash
-npx playwright test --project=visual --update-snapshots
+## Test Organization
+
+```
+SC/
+├── core/src/
+│   ├── **/*.test.ts          # Unit tests (co-located with source)
+│   └── crypto/
+│       └── property-based.test.ts  # Property-based tests
+├── tests/
+│   ├── integration/           # Integration tests
+│   │   ├── setup.ts
+│   │   ├── teardown.ts
+│   │   └── *.integration.test.ts
+│   ├── e2e/                   # E2E tests
+│   │   ├── *.e2e.test.ts
+│   │   └── *.visual.test.ts
+│   ├── performance/           # Performance benchmarks
+│   │   └── *-benchmarks.ts
+│   └── scripts/
+│       └── coverage-gaps.js   # Coverage analysis tool
 ```
 
-## Test Framework (e2e-framework.ts)
+## Writing Tests
 
-The E2E test framework provides helper methods for common testing scenarios:
-
+### Unit Test Example
 ```typescript
-import { E2ETestFramework } from './e2e-framework';
+import { RateLimiter } from './rate-limiter';
 
-test('example test', async ({ page }) => {
-  const framework = new E2ETestFramework(page);
-  
-  await framework.navigateToApp();
-  await framework.createNewContact('Alice', publicKey);
-  await framework.sendMessage('Alice', 'Hello!');
-  await framework.waitForMessageReceived('Hello!');
-});
-```
+describe('RateLimiter', () => {
+  it('should allow consumption within capacity', () => {
+    const limiter = new RateLimiter({
+      capacity: 10,
+      refillRate: 1,
+    });
 
-### Available Methods
-
-**Navigation:**
-- `navigateToApp()` - Navigate to application and wait for load
-- `clearLocalStorage()` - Clear browser local storage
-- `clearIndexedDB()` - Clear IndexedDB databases
-
-**Contacts:**
-- `createNewContact(name, publicKey)` - Add a new contact
-- `getPeerCount()` - Get number of connected peers
-- `waitForPeerConnection(count)` - Wait for peer connections
-
-**Messaging:**
-- `sendMessage(contactName, message)` - Send a text message
-- `waitForMessageReceived(message)` - Wait for message to appear
-- `getMessageCount()` - Get number of messages
-
-**File Transfer:**
-- `sendFile(contactName, filePath)` - Send a file
-- `waitForFileTransferComplete(fileName)` - Wait for transfer completion
-
-**Voice/Video:**
-- `startVoiceCall(contactName)` - Initiate voice call
-- `endVoiceCall()` - End active call
-
-**Network:**
-- `enableOfflineMode()` - Simulate offline state
-- `disableOfflineMode()` - Restore online state
-- `simulateSlowNetwork()` - Add network latency
-- `simulateNetworkFailure()` - Block all network requests
-- `restoreNetwork()` - Remove network simulation
-
-**Performance:**
-- `measurePerformance()` - Get page load metrics
-- `takeScreenshot(name)` - Take and save screenshot
-
-## Writing New Tests
-
-### Integration Test Template
-
-```typescript
-import { describe, it, expect } from 'vitest';
-
-describe('Module Integration', () => {
-  it('should integrate correctly', async () => {
-    // Arrange
-    const module1 = new Module1();
-    const module2 = new Module2();
-    
-    // Act
-    const result = await module1.interactWith(module2);
-    
-    // Assert
-    expect(result).toBeDefined();
+    expect(limiter.tryConsume(5)).toBe(true);
   });
 });
 ```
 
-### E2E Test Template
-
+### Integration Test Example
 ```typescript
-import { test, expect } from '@playwright/test';
-import { E2ETestFramework } from './e2e-framework';
-
-test.describe('Feature Name', () => {
-  let framework: E2ETestFramework;
-
-  test.beforeEach(async ({ page }) => {
-    framework = new E2ETestFramework(page);
-    await framework.navigateToApp();
-  });
-
-  test('should perform user action', async ({ page }) => {
-    // Test steps
-    await framework.createNewContact('TestUser', publicKey);
+// tests/integration/crypto-protocol.integration.test.ts
+describe('Crypto-Protocol Integration', () => {
+  it('should sign and verify a complete message', async () => {
+    const identity = await generateIdentity();
+    const message = createMessage(identity);
+    const encoded = encodeMessage(message);
+    const decoded = decodeMessage(encoded);
     
-    // Assertions
-    await expect(page.locator('[data-testid="contact-TestUser"]')).toBeVisible();
+    expect(decoded).toEqual(message);
   });
 });
 ```
 
-### Visual Test Template
-
+### E2E Test Example
 ```typescript
+// tests/e2e/messaging.e2e.test.ts
 import { test, expect } from '@playwright/test';
 
-test('should match component screenshot @visual', async ({ page }) => {
-  await page.goto('/component');
-  await page.waitForLoadState('networkidle');
+test('should send a text message', async ({ page }) => {
+  await page.goto('/');
+  await page.fill('[data-testid="message-input"]', 'Hello!');
+  await page.click('[data-testid="send-btn"]');
   
-  await expect(page).toHaveScreenshot('component-name.png', {
-    fullPage: true,
-    animations: 'disabled',
-  });
+  await expect(page.locator('text=Hello!')).toBeVisible();
 });
 ```
+
+### Property-Based Test Example
+```typescript
+import fc from 'fast-check';
+
+it('should verify any signed message', async () => {
+  await fc.assert(
+    fc.asyncProperty(
+      fc.uint8Array({ minLength: 1, maxLength: 1000 }),
+      async (data) => {
+        const identity = await generateIdentity();
+        const signature = await signMessage(data, identity.privateKey);
+        const isValid = await verifySignature(data, signature, identity.publicKey);
+        
+        expect(isValid).toBe(true);
+      }
+    ),
+    { numRuns: 50 }
+  );
+});
+```
+
+## Coverage Analysis
+
+```bash
+# Analyze coverage gaps
+node tests/scripts/coverage-gaps.js
+
+# Generate coverage report
+npm run test:coverage
+```
+
+View coverage report in `core/coverage/lcov-report/index.html`
+
+## CI/CD Workflows
+
+### CI Pipeline (.github/workflows/ci.yml)
+- Runs on: Push to main/develop/copilot branches, PRs
+- Jobs: Lint → Test → Build → Integration Tests → Security
+- Matrix: Node 18, 20, 22
+- Timeout: 15 minutes
+
+### E2E Pipeline (.github/workflows/e2e.yml)
+- Runs on: Push to main/develop, PRs, nightly schedule
+- Jobs: E2E tests (Chromium, Firefox, WebKit), Visual regression, Performance
+- Screenshots/videos on failure
+- Timeout: 20 minutes
+
+### Deployment Pipeline (.github/workflows/deploy.yml)
+- Runs on: Push to main (staging), version tags (production)
+- Features: Canary deployments, health monitoring, rollback
+- Timeout: 20 minutes
+
+## Test Configuration Files
+
+- **core/jest.config.cjs** - Unit test configuration
+- **jest.integration.config.js** - Integration test configuration
+- **playwright.config.ts** - E2E test configuration
+- **playwright.visual.config.ts** - Visual regression configuration
+- **stryker.conf.js** - Mutation testing configuration
 
 ## Best Practices
 
-### General
-1. **Use descriptive test names** - Clearly state what is being tested
-2. **Follow AAA pattern** - Arrange, Act, Assert
-3. **One assertion per test** - Keep tests focused
-4. **Clean up after tests** - Use `afterEach` for cleanup
-5. **Avoid test interdependence** - Each test should be independent
+1. **Test Naming**: Use descriptive names that explain behavior
+   - Good: `should allow consumption within capacity`
+   - Bad: `test1`
 
-### E2E Tests
-1. **Use data-testid attributes** - Don't rely on text or classes
-2. **Wait for elements properly** - Use Playwright's auto-waiting
-3. **Handle async operations** - Always await promises
-4. **Take screenshots on failure** - Helps debugging
-5. **Test happy paths first** - Then add edge cases
+2. **AAA Pattern**: Arrange, Act, Assert
+   ```typescript
+   it('should...', () => {
+     // Arrange
+     const limiter = new RateLimiter({ capacity: 10, refillRate: 1 });
+     
+     // Act
+     const result = limiter.tryConsume(5);
+     
+     // Assert
+     expect(result).toBe(true);
+   });
+   ```
 
-### Visual Tests
-1. **Disable animations** - Ensures consistent screenshots
-2. **Use fixed viewport** - Consistent screen size
-3. **Mask dynamic content** - Hide timestamps, random IDs
-4. **Update baselines carefully** - Review changes before committing
-5. **Run on same OS in CI** - Prevents pixel differences
+3. **Isolation**: Each test should be independent
+   - Use `beforeEach`/`afterEach` for setup/cleanup
+   - Don't share state between tests
 
-### Integration Tests
-1. **Test real interactions** - Don't mock everything
-2. **Verify data flows** - Check data passes correctly
-3. **Test error propagation** - Ensure errors bubble up
-4. **Use realistic data** - Test with actual use case data
-5. **Performance matters** - Keep tests fast
+4. **Mock External Dependencies**: Use Jest mocks
+   ```typescript
+   jest.mock('./external-service');
+   ```
+
+5. **Test Edge Cases**: Include boundary conditions
+   - Empty inputs
+   - Maximum values
+   - Error conditions
 
 ## Debugging Tests
 
-### E2E Tests
-
-**Debug mode:**
+### Jest Debugger
 ```bash
-npx playwright test --debug
-```
-
-**Headed mode:**
-```bash
-npx playwright test --headed
-```
-
-**Show trace viewer:**
-```bash
-npx playwright show-trace trace.zip
-```
-
-**Console logging:**
-```typescript
-test('debug test', async ({ page }) => {
-  page.on('console', msg => console.log(msg.text()));
-  // ... test steps
-});
-```
-
-### Integration Tests
-
-**Run single test:**
-```bash
-npm test -- -t "test name"
-```
-
-**Verbose output:**
-```bash
-npm test -- --verbose
-```
-
-**Debug in Node:**
-```bash
+# Run with Node debugger
 node --inspect-brk node_modules/.bin/jest --runInBand
+
+# VS Code launch.json
+{
+  "type": "node",
+  "request": "launch",
+  "name": "Jest Debug",
+  "program": "${workspaceFolder}/node_modules/.bin/jest",
+  "args": ["--runInBand"],
+  "console": "integratedTerminal"
+}
 ```
 
-## CI/CD Integration
+### Playwright Debugger
+```bash
+# Run in debug mode
+npm run test:e2e -- --debug
 
-### Automated Testing
+# Use UI mode
+npm run test:e2e:ui
+```
 
-All tests run automatically on:
-- Pull requests
-- Pushes to `main` and `develop`
-- Manual workflow dispatch
+## Coverage Targets
 
-### Test Reports
+- **Overall**: 95%+
+- **Critical paths** (crypto, security): 100%
+- **New code**: 100%
+- **Files**: 80%+ (currently 23%)
 
-Test results are published as:
-- GitHub Actions checks
-- PR comments with summary
-- HTML reports (artifacts)
-- Coverage reports (Codecov)
+## Test Performance
 
-### Visual Regression
-
-Visual tests run on every PR:
-- Screenshots compared to baselines
-- Differences highlighted
-- Manual approval required for changes
+- **Unit tests**: <10 seconds
+- **Integration tests**: <30 seconds
+- **E2E tests**: <5 minutes
+- **Full CI pipeline**: <15 minutes
 
 ## Troubleshooting
 
-### Common Issues
+### "Cannot find module" errors
+```bash
+npm install
+npm run build -w core
+```
 
-**Flaky E2E tests:**
-- Increase timeouts
-- Add proper waits
-- Mock unstable dependencies
-- Use retries in CI
+### "Test timeout" errors
+```typescript
+// Increase timeout for specific test
+it('slow test', async () => {
+  // ...
+}, 30000); // 30 second timeout
+```
 
-**Visual test failures:**
-- Check OS differences (font rendering)
-- Verify viewport size
-- Disable animations
-- Update baselines if intentional
-
-**Slow tests:**
-- Use `test.concurrent` for parallel tests
-- Mock heavy operations
-- Reduce test data size
-- Optimize selectors
-
-**Integration test failures:**
-- Check module initialization
-- Verify mock setup
-- Review error messages
-- Add debug logging
-
-## Contributing
-
-When adding new tests:
-
-1. Choose appropriate test type (unit/integration/E2E)
-2. Follow existing patterns and structure
-3. Add to relevant test file or create new one
-4. Update this README if adding new patterns
-5. Ensure tests pass locally before PR
-6. Check CI results
+### Flaky tests
+- Check for timing issues (use `waitFor` instead of `setTimeout`)
+- Ensure proper cleanup in `afterEach`
+- Check for shared state between tests
 
 ## Resources
 
-- [Playwright Documentation](https://playwright.dev/)
-- [Vitest Documentation](https://vitest.dev/)
-- [Testing Best Practices](https://testingjavascript.com/)
-- [E2E Testing Guide](https://playwright.dev/docs/best-practices)
-- [Visual Testing Guide](https://playwright.dev/docs/test-snapshots)
+- **Full Documentation**: [docs/TESTING.md](../docs/TESTING.md)
+- **Jest Docs**: https://jestjs.io/
+- **Playwright Docs**: https://playwright.dev/
+- **fast-check Docs**: https://github.com/dubzzz/fast-check
+
+## Getting Help
+
+1. Check existing tests for examples
+2. Review test documentation
+3. Run coverage analysis to identify gaps
+4. Ask in team chat or open an issue
+
+---
+
+**Quick Reference:**
+- Unit tests: `npm test`
+- Coverage: `npm run test:coverage`
+- E2E tests: `npm run test:e2e`
+- Integration: `npm run test:integration`
+- Performance: `npm run test:performance`
+- Coverage gaps: `node tests/scripts/coverage-gaps.js`

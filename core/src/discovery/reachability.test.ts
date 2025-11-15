@@ -75,7 +75,7 @@ describe('Enhanced Reachability Verification', () => {
     });
 
     it('should try multiple methods', async () => {
-      let attemptedMethods: string[] = [];
+      const attemptedMethods: string[] = [];
       
       const mockSendPing = async (peerId: string, ping: PingMessage) => {
         attemptedMethods.push(ping.method);
