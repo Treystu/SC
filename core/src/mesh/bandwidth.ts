@@ -43,6 +43,7 @@ export class BandwidthScheduler {
 
   private readonly MAX_QUEUE_SIZE = 1000;
   private readonly CONGESTION_THRESHOLD = 0.8; // 80% utilization
+  private readonly MAX_RETRY_ATTEMPTS = 5;
   private sendingRate = 0;
   private lastSendTime = Date.now();
   private sendingWindow: number[] = [];
@@ -239,6 +240,60 @@ export class BandwidthScheduler {
     this.metrics.queuedMessages = this.queue.length;
 
     return removed;
+  }
+
+  /**
+   * Update available bandwidth estimate
+   */
+  updateBandwidth(bandwidth: number): void {
+    this.metrics.availableBandwidth = bandwidth;
+  }
+
+  /**
+   * Schedule a message for retry
+   */
+  scheduleRetry(message: ScheduledMessage): boolean {
+    const retryMessage: ScheduledMessage = {
+      ...message,
+      retries: message.retries + 1,
+      timestamp: Date.now()
+    };
+
+    // Limit retry attempts
+    if (retryMessage.retries > this.MAX_RETRY_ATTEMPTS) {
+      return false;
+    }
+
+    return this.scheduleMessage(retryMessage);
+  }
+
+  /**
+   * Clear all messages from queue
+   */
+  clearQueue(): void {
+    this.queue = [];
+    this.metrics.queuedMessages = 0;
+  }
+
+  /**
+   * Get queue length
+   */
+  getQueueLength(): number {
+    return this.queue.length;
+  }
+
+  /**
+   * Check if queue is empty
+   */
+  isEmpty(): boolean {
+    return this.queue.length === 0;
+  }
+
+  /**
+   * Check if queue is full
+   */
+  isFull(): boolean {
+    return this.queue.length >= this.MAX_QUEUE_SIZE;
   }
 }
 

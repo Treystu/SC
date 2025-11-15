@@ -33,6 +33,11 @@ export class MeshNetwork {
   private onPeerConnectedCallback?: (peerId: string) => void;
   private onPeerDisconnectedCallback?: (peerId: string) => void;
 
+  // Metrics tracking
+  private messagesSent = 0;
+  private messagesReceived = 0;
+  private bytesTransferred = 0;
+
   constructor(config: MeshNetworkConfig = {}) {
     // Initialize identity
     this.identity = config.identity || generateIdentity();
@@ -58,12 +63,16 @@ export class MeshNetwork {
   private setupMessageHandlers(): void {
     // Handle messages addressed to this peer
     this.messageRelay.onMessageForSelf((message) => {
+      this.messagesReceived++;
+      this.bytesTransferred += message.payload.byteLength;
       this.onMessageCallback?.(message);
     });
 
     // Handle message forwarding (flood routing)
     this.messageRelay.onForwardMessage((message, excludePeerId) => {
       const encodedMessage = encodeMessage(message);
+      this.messagesSent++;
+      this.bytesTransferred += encodedMessage.byteLength;
       this.peerPool.broadcast(encodedMessage, excludePeerId);
     });
 
@@ -273,5 +282,125 @@ export class MeshNetwork {
    */
   getLocalPeerId(): string {
     return this.localPeerId;
+  }
+
+  /**
+   * Get public key
+   */
+  getPublicKey(): Uint8Array {
+    return this.identity.publicKey;
+  }
+
+  /**
+   * Get peer count
+   */
+  getPeerCount(): number {
+    return this.routingTable.getAllPeers().length;
+  }
+
+  /**
+   * Send text message
+   */
+  async sendTextMessage(recipientId: string, text: string): Promise<void> {
+    return this.sendMessage(recipientId, text);
+  }
+
+  /**
+   * Send binary message
+   */
+  async sendBinaryMessage(recipientId: string, data: Uint8Array): Promise<void> {
+    const message: Message = {
+      header: {
+        version: 0x01,
+        type: MessageType.BINARY,
+        ttl: this.defaultTTL,
+        timestamp: Date.now(),
+        senderId: this.identity.publicKey,
+        signature: new Uint8Array(65),
+      },
+      payload: data,
+    };
+
+    const messageBytes = encodeMessage(message);
+    message.header.signature = signMessage(messageBytes, this.identity.privateKey);
+    const encodedMessage = encodeMessage(message);
+    
+    this.peerPool.broadcast(encodedMessage);
+  }
+
+  /**
+   * Broadcast message to all peers
+   */
+  async broadcastMessage(text: string): Promise<void> {
+    const payload = new TextEncoder().encode(text);
+    const message: Message = {
+      header: {
+        version: 0x01,
+        type: MessageType.TEXT,
+        ttl: this.defaultTTL,
+        timestamp: Date.now(),
+        senderId: this.identity.publicKey,
+        signature: new Uint8Array(65),
+      },
+      payload,
+    };
+
+    const messageBytes = encodeMessage(message);
+    message.header.signature = signMessage(messageBytes, this.identity.privateKey);
+    const encodedMessage = encodeMessage(message);
+    
+    this.peerPool.broadcast(encodedMessage);
+  }
+
+  /**
+   * Disconnect from a specific peer
+   */
+  async disconnectFromPeer(peerId: string): Promise<void> {
+    const peer = this.peerPool.getPeer(peerId);
+    if (peer) {
+      peer.close();
+    }
+    this.routingTable.removePeer(peerId);
+  }
+
+  /**
+   * Disconnect from all peers
+   */
+  async disconnectAll(): Promise<void> {
+    this.shutdown();
+  }
+
+  /**
+   * Check if connected to a peer
+   */
+  isConnectedToPeer(peerId: string): boolean {
+    const peer = this.routingTable.getPeer(peerId);
+    return peer !== null;
+  }
+
+  /**
+   * Get network statistics
+   */
+  getStatistics() {
+    return {
+      peerCount: this.getPeerCount(),
+      messagesSent: this.messagesSent,
+      messagesReceived: this.messagesReceived,
+      bytesTransferred: this.bytesTransferred,
+    };
+  }
+
+  /**
+   * Start the network
+   */
+  async start(): Promise<void> {
+    // Already initialized in constructor
+  }
+
+  /**
+   * Stop the network
+   */
+  async stop(): Promise<void> {
+    this.shutdown();
   }
 }

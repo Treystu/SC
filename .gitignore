@@ -46,6 +46,15 @@ yarn-error.log*
 # Test coverage
 coverage/
 .nyc_output/
+core/coverage/
+
+# Test artifacts
+test-results/
+playwright-report/
+screenshots/
+.stryker-tmp/
+benchmark-results.json
+junit.xml
 
 # Temporary files
 tmp/
