@@ -397,13 +397,45 @@ export function validateMimeType(mimeType: string): string {
 
 /**
  * Sanitize HTML to prevent XSS
+ * 
+ * WARNING: This is a BASIC sanitizer and should NOT be used for untrusted HTML in production.
+ * For production use, use a library like DOMPurify: https://github.com/cure53/DOMPurify
+ * 
+ * This function is provided as a fallback and educational example only.
+ * It is intentionally simple and has known limitations.
+ * 
+ * Recommended approach for production:
+ * ```typescript
+ * import DOMPurify from 'dompurify';
+ * const clean = DOMPurify.sanitize(dirty);
+ * ```
  */
 export function sanitizeHtml(html: string): string {
-  // Basic sanitization - remove script tags and event handlers
-  return html
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-    .replace(/on\w+\s*=\s*["'][^"']*["']/gi, '')
-    .replace(/on\w+\s*=\s*[^\s>]*/gi, '');
+  // WARNING: Basic sanitization only - NOT SECURE for untrusted HTML
+  // This is a placeholder implementation
+  // In production, use DOMPurify or similar library
+  
+  let sanitized = html;
+  let previousLength = 0;
+  let iterations = 0;
+  const maxIterations = 10; // Prevent infinite loops
+  
+  // Keep removing until no changes occur (handles nested patterns)
+  while (sanitized.length !== previousLength && iterations < maxIterations) {
+    previousLength = sanitized.length;
+    iterations++;
+    
+    // Remove script tags with whitespace tolerance
+    // Note: This regex has known limitations and may not catch all cases
+    sanitized = sanitized.replace(/<script[\s\S]*?<\/script[\s\S]*?>/gi, '');
+    
+    // Remove event handlers
+    // Note: This may not catch all event handler patterns
+    sanitized = sanitized.replace(/on\w+[\s\S]*?=[\s\S]*?(["'])[^"']*\1/gi, '');
+    sanitized = sanitized.replace(/on\w+[\s\S]*?=[^\s>]*/gi, '');
+  }
+  
+  return sanitized;
 }
 
 /**
