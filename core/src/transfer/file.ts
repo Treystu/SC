@@ -306,4 +306,103 @@ export class FileTransferManager {
     }
     return true;
   }
+
+  // Assemble file from chunks
+  assembleFile(chunks: FileChunk[], metadata: FileMetadata): Uint8Array {
+    const fileData = new Uint8Array(metadata.fileSize);
+    let offset = 0;
+    
+    // Sort chunks by index
+    const sortedChunks = chunks.sort((a, b) => a.chunkIndex - b.chunkIndex);
+    
+    // Check all chunks are present
+    for (let i = 0; i < metadata.totalChunks; i++) {
+      if (!sortedChunks[i] || sortedChunks[i].chunkIndex !== i) {
+        throw new Error(`Missing chunk ${i}`);
+      }
+    }
+    
+    for (const chunk of sortedChunks) {
+      fileData.set(chunk.data, offset);
+      offset += chunk.data.length;
+    }
+    
+    return fileData;
+  }
+
+  // Verify file checksum
+  async verifyFileChecksum(fileData: Uint8Array, expectedChecksum: Uint8Array): Promise<boolean> {
+    const computedChecksum = sha256(fileData);
+    return this.arraysEqual(computedChecksum, expectedChecksum);
+  }
+
+  // Initialize transfer
+  initializeTransfer(metadata: FileMetadata): TransferState {
+    const state: TransferState = {
+      fileId: metadata.fileId,
+      metadata,
+      progress: 0,
+      bytesTransferred: 0,
+      status: 'pending'
+    };
+    
+    this.activeTransfers.set(metadata.fileId, state);
+    this.queueTransfer(metadata.fileId);
+    
+    return state;
+  }
+
+  // Update transfer progress (public version)
+  updateTransferProgress(fileId: string, progress: number, bytesTransferred: number): void {
+    const state = this.activeTransfers.get(fileId);
+    if (state) {
+      state.progress = progress;
+      state.bytesTransferred = bytesTransferred;
+      state.status = progress >= 100 ? 'completed' : 'active';
+    }
+  }
+
+  // Complete transfer
+  completeTransfer(fileId: string): void {
+    const state = this.activeTransfers.get(fileId);
+    if (state) {
+      state.status = 'completed';
+      state.progress = 100;
+    }
+  }
+
+  // Pause transfer
+  pauseTransfer(fileId: string): void {
+    const state = this.activeTransfers.get(fileId);
+    if (state) {
+      state.status = 'paused';
+    }
+  }
+
+  // Resume transfer
+  resumeTransfer(fileId: string): void {
+    const state = this.activeTransfers.get(fileId);
+    if (state) {
+      state.status = 'active';
+    }
+  }
+
+  // Initialize receive
+  initializeReceive(metadata: FileMetadata): void {
+    this.initializePartialFile(metadata);
+  }
+
+  // Mark chunk as received
+  markChunkReceived(fileId: string, chunkIndex: number): void {
+    const partial = this.partialFiles.get(fileId);
+    if (partial) {
+      partial.receivedChunks.add(chunkIndex);
+      partial.lastActivityTime = Date.now();
+    }
+  }
+
+  // Check transfer timeouts
+  checkTransferTimeouts(): void {
+    this.cleanupStaleTransfers();
+  }
 }

@@ -185,7 +185,10 @@ export class WebRTCPeerEnhanced {
       this.setupConnectionHandlers();
       this.setupDataChannels();
       
-      this.emit('initialized', { peerId: this.peerId });
+      // Emit initialized event asynchronously to ensure listeners are attached
+      setImmediate(() => {
+        this.emit('initialized', { peerId: this.peerId });
+      });
       
       if (this.config.metricsEnabled) {
         this.startMetricsCollection();
@@ -262,7 +265,10 @@ export class WebRTCPeerEnhanced {
     this.setupDataChannelHandlers(channel, config.type);
     this.dataChannels.set(config.type, channel);
 
-    this.emit('channel-created', { type: config.type, label });
+    // Emit channel-created event asynchronously
+    setImmediate(() => {
+      this.emit('channel-created', { type: config.type, label });
+    });
     
     return channel;
   }
