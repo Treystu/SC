@@ -117,7 +117,7 @@ export class HealthChecker {
       return {
         healthy: false,
         status: 'error',
-        details: `Crypto check failed: ${error.message}`,
+        details: `Crypto check failed: ${error instanceof Error ? error.message : String(error)}`,
         lastCheck: Date.now(),
       };
     }
@@ -167,7 +167,7 @@ export class HealthChecker {
       return {
         healthy: false,
         status: 'error',
-        details: `Storage check failed: ${error.message}`,
+        details: `Storage check failed: ${error instanceof Error ? error.message : String(error)}`,
         lastCheck: Date.now(),
       };
     }
@@ -195,7 +195,7 @@ export class HealthChecker {
       return {
         healthy: false,
         status: 'error',
-        details: `Network check failed: ${error.message}`,
+        details: `Network check failed: ${error instanceof Error ? error.message : String(error)}`,
         lastCheck: Date.now(),
       };
     }
