@@ -1,5 +1,6 @@
 import { useState, useCallback, memo } from 'react';
 import './ConversationList.css';
+import { AddContactDialog } from './AddContactDialog';
 
 interface Conversation {
   id: string;
@@ -12,6 +13,7 @@ interface Conversation {
 interface ConversationListProps {
   selectedId: string | null;
   onSelect: (id: string) => void;
+  onAddContact?: (peerId: string, name: string) => void;
 }
 
 // Memoized conversation item component
@@ -57,20 +59,37 @@ const ConversationItem = memo(({
 
 ConversationItem.displayName = 'ConversationItem';
 
-function ConversationList({ selectedId, onSelect }: ConversationListProps) {
+function ConversationList({ selectedId, onSelect, onAddContact }: ConversationListProps) {
   // Mock data - will be replaced with actual state management
   const [conversations] = useState<Conversation[]>([]);
+  const [showAddDialog, setShowAddDialog] = useState(false);
 
   // Memoized select handler
   const handleSelect = useCallback((id: string) => {
     onSelect(id);
   }, [onSelect]);
 
+  const handleAddContact = useCallback((peerId: string, name: string) => {
+    onAddContact?.(peerId, name);
+  }, [onAddContact]);
+
   return (
     <div className="conversation-list">
+      <AddContactDialog
+        isOpen={showAddDialog}
+        onClose={() => setShowAddDialog(false)}
+        onAdd={handleAddContact}
+      />
+      
       <div className="list-header">
         <h2>Conversations</h2>
-        <button className="add-button" title="Add Contact">+</button>
+        <button 
+          className="add-button" 
+          title="Add Contact"
+          onClick={() => setShowAddDialog(true)}
+        >
+          +
+        </button>
       </div>
       
       <div className="list-content">

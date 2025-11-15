@@ -9,7 +9,7 @@ import { announce } from './utils/accessibility';
 
 function App() {
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
-  const { status, messages, sendMessage } = useMeshNetwork();
+  const { status, messages, sendMessage, connectToPeer } = useMeshNetwork();
 
   // Announce connection status changes to screen readers
   useEffect(() => {
@@ -19,6 +19,17 @@ function App() {
       announce.message('Disconnected from network', 'polite');
     }
   }, [status.isConnected, status.peerCount]);
+
+  const handleAddContact = async (peerId: string, name: string) => {
+    try {
+      await connectToPeer(peerId);
+      announce.message(`Connected to ${name}`, 'polite');
+      // TODO: Save contact to IndexedDB
+    } catch (error) {
+      console.error('Failed to connect to peer:', error);
+      announce.message(`Failed to connect to ${name}`, 'assertive');
+    }
+  };
 
   return (
     <ErrorBoundary>
@@ -42,6 +53,7 @@ function App() {
               <ConversationList 
                 selectedId={selectedConversation}
                 onSelect={setSelectedConversation}
+                onAddContact={handleAddContact}
               />
             </ErrorBoundary>
           </aside>
