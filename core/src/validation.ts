@@ -383,7 +383,7 @@ export function validateFileName(fileName: string): string {
  * Validate MIME type
  */
 export function validateMimeType(mimeType: string): string {
-  const mimeRegex = /^[a-z]+\/[a-z0-9\-\+\.]+$/i;
+  const mimeRegex = /^[a-z]+\/[a-z0-9\-+.]+$/i;
   if (!mimeRegex.test(mimeType)) {
     throw new ValidationError(
       'Invalid MIME type format',
