@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { MeshNetwork, Message, MessageType, Peer } from '@sc/core';
+import { getDatabase } from '../storage/database';
 
 export interface MeshStatus {
   isConnected: boolean;
@@ -18,6 +19,7 @@ export interface ReceivedMessage {
 /**
  * React Hook for Mesh Network
  * Optimized with useMemo and useCallback for performance
+ * Integrated with IndexedDB persistence (V1)
  */
 export function useMeshNetwork() {
   const [status, setStatus] = useState<MeshStatus>({
@@ -29,75 +31,174 @@ export function useMeshNetwork() {
   const [messages, setMessages] = useState<ReceivedMessage[]>([]);
   const meshNetworkRef = useRef<MeshNetwork | null>(null);
 
-  // Initialize mesh network
+  // Initialize mesh network with persistence
   useEffect(() => {
-    const network = new MeshNetwork({
-      defaultTTL: 10,
-      maxPeers: 50,
-    });
+    const initMeshNetwork = async () => {
+      const network = new MeshNetwork({
+        defaultTTL: 10,
+        maxPeers: 50,
+      });
 
-    meshNetworkRef.current = network;
+      meshNetworkRef.current = network;
 
-    // Update status
-    setStatus({
-      isConnected: true,
-      peerCount: 0,
-      localPeerId: network.getLocalPeerId(),
-    });
+      // Initialize database
+      const db = getDatabase();
+      await db.init();
 
-    // Handle incoming messages
-    network.onMessage((message: Message) => {
+      // Load persisted identity (if exists)
       try {
-        const payload = new TextDecoder().decode(message.payload);
-        const data = JSON.parse(payload);
-        
-        const receivedMessage: ReceivedMessage = {
-          id: `${message.header.timestamp}-${Math.random()}`,
-          from: Array.from(message.header.senderId)
-            .map(b => b.toString(16).padStart(2, '0'))
-            .join('')
-            .substring(0, 8),
-          content: data.text || '',
-          timestamp: data.timestamp || message.header.timestamp,
-          type: message.header.type,
-        };
-
-        setMessages(prev => [...prev, receivedMessage]);
+        const identity = await db.getPrimaryIdentity();
+        if (identity) {
+          console.log('Loaded persisted identity:', identity.fingerprint);
+          // TODO: Initialize network with existing identity
+        }
       } catch (error) {
-        console.error('Failed to parse message:', error);
+        console.error('Failed to load identity:', error);
       }
-    });
 
-    // Handle peer connected
-    network.onPeerConnected((peerId) => {
-      console.log('Peer connected:', peerId);
-      updatePeerStatus();
-    });
+      // Load persisted peers and populate routing table
+      try {
+        const activePeers = await db.getActivePeers();
+        console.log(`Loaded ${activePeers.length} persisted peers`);
+        
+        // TODO: Add peers to routing table
+        // activePeers.forEach(peer => {
+        //   network.routingTable.addPeer(createPeerFromPersisted(peer));
+        // });
+      } catch (error) {
+        console.error('Failed to load peers:', error);
+      }
 
-    // Handle peer disconnected
-    network.onPeerDisconnected((peerId) => {
-      console.log('Peer disconnected:', peerId);
-      updatePeerStatus();
-    });
+      // Load persisted routes
+      try {
+        const routes = await db.getAllRoutes();
+        console.log(`Loaded ${routes.length} persisted routes`);
+        
+        // TODO: Populate routing table with routes
+      } catch (error) {
+        console.error('Failed to load routes:', error);
+      }
 
-    const updatePeerStatus = () => {
-      const connectedPeers = network.getConnectedPeers();
-      setPeers(connectedPeers);
-      setStatus(prev => ({
-        ...prev,
-        peerCount: connectedPeers.length,
-        isConnected: connectedPeers.length > 0,
-      }));
+      // Clean up expired data
+      try {
+        await db.deleteExpiredRoutes();
+        await db.deleteExpiredSessionKeys();
+      } catch (error) {
+        console.error('Failed to clean up expired data:', error);
+      }
+
+      // Update status
+      setStatus({
+        isConnected: true,
+        peerCount: 0,
+        localPeerId: network.getLocalPeerId(),
+      });
+
+      // Handle incoming messages with persistence
+      network.onMessage(async (message: Message) => {
+        try {
+          const payload = new TextDecoder().decode(message.payload);
+          const data = JSON.parse(payload);
+          
+          const receivedMessage: ReceivedMessage = {
+            id: `${message.header.timestamp}-${Math.random()}`,
+            from: Array.from(message.header.senderId)
+              .map(b => b.toString(16).padStart(2, '0'))
+              .join('')
+              .substring(0, 8),
+            content: data.text || '',
+            timestamp: data.timestamp || message.header.timestamp,
+            type: message.header.type,
+          };
+
+          setMessages(prev => [...prev, receivedMessage]);
+
+          // Persist message to IndexedDB
+          try {
+            await db.saveMessage({
+              id: receivedMessage.id,
+              conversationId: receivedMessage.from, // Use sender as conversation ID for now
+              content: receivedMessage.content,
+              timestamp: receivedMessage.timestamp,
+              senderId: receivedMessage.from,
+              recipientId: network.getLocalPeerId(),
+              type: receivedMessage.type === MessageType.TEXT ? 'text' : 
+                    receivedMessage.type === MessageType.FILE_METADATA || receivedMessage.type === MessageType.FILE_CHUNK ? 'file' : 
+                    receivedMessage.type === MessageType.VOICE ? 'voice' : 'text',
+              status: 'delivered',
+            });
+          } catch (error) {
+            console.error('Failed to persist message:', error);
+          }
+        } catch (error) {
+          console.error('Failed to parse message:', error);
+        }
+      });
+
+      // Handle peer connected with persistence
+      network.onPeerConnected(async (peerId) => {
+        console.log('Peer connected:', peerId);
+        updatePeerStatus();
+
+        // Persist peer connection
+        try {
+          await db.savePeer({
+            id: peerId,
+            publicKey: '', // TODO: Get actual public key
+            transportType: 'webrtc',
+            lastSeen: Date.now(),
+            connectedAt: Date.now(),
+            connectionQuality: 100,
+            bytesSent: 0,
+            bytesReceived: 0,
+            reputation: 50, // Start with neutral reputation
+            isBlacklisted: false,
+          });
+        } catch (error) {
+          console.error('Failed to persist peer:', error);
+        }
+      });
+
+      // Handle peer disconnected with persistence
+      network.onPeerDisconnected(async (peerId) => {
+        console.log('Peer disconnected:', peerId);
+        updatePeerStatus();
+
+        // Update peer's last seen time
+        try {
+          const peer = await db.getPeer(peerId);
+          if (peer) {
+            peer.lastSeen = Date.now();
+            await db.savePeer(peer);
+          }
+        } catch (error) {
+          console.error('Failed to update peer last seen:', error);
+        }
+      });
+
+      const updatePeerStatus = () => {
+        const connectedPeers = network.getConnectedPeers();
+        setPeers(connectedPeers);
+        setStatus(prev => ({
+          ...prev,
+          peerCount: connectedPeers.length,
+          isConnected: connectedPeers.length > 0,
+        }));
+      };
     };
+
+    initMeshNetwork();
 
     // Cleanup on unmount
     return () => {
-      network.shutdown();
-      meshNetworkRef.current = null;
+      if (meshNetworkRef.current) {
+        meshNetworkRef.current.shutdown();
+        meshNetworkRef.current = null;
+      }
     };
   }, []);
 
-  // Send message function
+  // Send message function with persistence
   const sendMessage = useCallback(async (recipientId: string, content: string) => {
     if (!meshNetworkRef.current) {
       throw new Error('Mesh network not initialized');
@@ -115,6 +216,23 @@ export function useMeshNetwork() {
     };
 
     setMessages(prev => [...prev, localMessage]);
+
+    // Persist sent message to IndexedDB
+    try {
+      const db = getDatabase();
+      await db.saveMessage({
+        id: localMessage.id,
+        conversationId: recipientId,
+        content: localMessage.content,
+        timestamp: localMessage.timestamp,
+        senderId: meshNetworkRef.current.getLocalPeerId(),
+        recipientId,
+        type: 'text',
+        status: 'sent',
+      });
+    } catch (error) {
+      console.error('Failed to persist sent message:', error);
+    }
   }, []);
 
   // Connect to peer
