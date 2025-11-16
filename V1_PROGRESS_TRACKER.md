@@ -50,10 +50,18 @@
   - Test failures are in bandwidth scheduler and connection manager
   - Can proceed with persistence work while fixing test failures in parallel
 
-### Phase 1.2: Web IndexedDB Persistence (0/13 complete)
+### Phase 1.2: Web IndexedDB Persistence (1/13 complete)
 
-- [ ] **1.2.1** Extend IndexedDB schema - NOT STARTED
-- [ ] **1.2.2** Create IndexedDB object stores - NOT STARTED
+- [x] **1.2.1** Extend IndexedDB schema - ✅ COMPLETE (2024-11-16)
+  - Added Identity interface for user cryptographic identities
+  - Added PersistedPeer interface with reputation and mesh metadata
+  - Added Route interface for routing table persistence  
+  - Added SessionKey interface for Perfect Forward Secrecy
+  - Added store configs for identities, persistedPeers, routes, sessionKeys
+  - Incremented DB_VERSION to 2
+  - All changes compile successfully
+  
+- [ ] **1.2.2** Create IndexedDB object stores - IN PROGRESS
 - [ ] **1.2.3** Implement identity CRUD operations - NOT STARTED
 - [ ] **1.2.4** Implement peer persistence operations - NOT STARTED
 - [ ] **1.2.5** Implement routing table persistence - NOT STARTED
@@ -85,11 +93,11 @@
 | Phase | Progress | Tasks Complete | Est. Duration | Status |
 |-------|----------|----------------|---------------|--------|
 | **1.1 Core Build** | 88% | 7/8 | 1-2 days | 🟢 Complete (build works) |
-| **1.2 Web Persistence** | 0% | 0/13 | 1 week | 🟡 Ready to start |
+| **1.2 Web Persistence** | 8% | 1/13 | 1 week | 🟡 In Progress |
 | **1.3 Android Persistence** | 0% | 0/14 | 1.5 weeks | ⚪ Blocked |
 | **1.4 iOS Persistence** | 0% | 0/7 | 1 week | ⚪ Blocked |
 | **1.5 Export Format** | 0% | 0/6 | 3 days | ⚪ Blocked |
-| **Phase 1 Total** | 15% | 7/48 | ~3 weeks | 🟡 In Progress |
+| **Phase 1 Total** | 17% | 8/48 | ~3 weeks | 🟡 In Progress |
 
 ---
 
