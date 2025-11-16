@@ -43,6 +43,12 @@ npm run test:e2e:ui
 
 # Run visual regression tests
 npm run test:visual
+
+# Cross-platform tests
+npm run test:e2e:cross-platform     # Web-to-Web tests
+npm run test:e2e:android            # Web-to-Android (requires Appium + emulator)
+npm run test:e2e:ios                # Web-to-iOS (requires Appium + simulator)
+npm run test:e2e:mobile             # All mobile tests
 ```
 
 ### Performance Tests
@@ -71,12 +77,25 @@ SC/
 │   │   ├── teardown.ts
 │   │   └── *.integration.test.ts
 │   ├── e2e/                   # E2E tests
-│   │   ├── *.e2e.test.ts
-│   │   └── *.visual.test.ts
+│   │   ├── app-basics.e2e.test.ts
+│   │   ├── messaging.e2e.test.ts
+│   │   ├── visual.visual.test.ts
+│   │   ├── cross-platform/    # Cross-platform tests
+│   │   │   ├── web-to-web.e2e.test.ts
+│   │   │   └── multi-platform.e2e.test.ts
+│   │   └── mobile/            # Mobile integration tests
+│   │       ├── android/
+│   │       │   └── web-to-android.e2e.test.ts
+│   │       └── ios/
+│   │           └── web-to-ios.e2e.test.ts
 │   ├── performance/           # Performance benchmarks
 │   │   └── *-benchmarks.ts
+│   ├── cross-platform-framework.ts  # Cross-platform test framework
+│   ├── e2e-framework.ts       # Web E2E framework
 │   └── scripts/
 │       └── coverage-gaps.js   # Coverage analysis tool
+├── appium.config.ts           # Appium configuration for mobile
+└── docs/E2E_TESTING.md        # Detailed E2E testing guide
 ```
 
 ## Writing Tests
@@ -126,6 +145,44 @@ test('should send a text message', async ({ page }) => {
 });
 ```
 
+### Cross-Platform Test Example
+```typescript
+// tests/e2e/cross-platform/web-to-web.e2e.test.ts
+import { test, expect } from '@playwright/test';
+import { CrossPlatformTestCoordinator, WebClient } from '../../cross-platform-framework';
+
+test('should send message between clients', async ({ browser, page }) => {
+  const coordinator = new CrossPlatformTestCoordinator();
+  
+  // Create clients
+  const client1 = await coordinator.createClient(
+    { platform: 'web', name: 'alice' },
+    page,
+    browser
+  ) as WebClient;
+  
+  const context2 = await browser.newContext();
+  const page2 = await context2.newPage();
+  const client2 = await coordinator.createClient(
+    { platform: 'web', name: 'bob' },
+    page2,
+    browser
+  ) as WebClient;
+  
+  // Connect and test
+  await coordinator.connectClients(client1, client2);
+  const received = await coordinator.sendAndVerifyMessage(
+    client1,
+    client2,
+    'Hello!',
+    10000
+  );
+  
+  expect(received).toBe(true);
+  await coordinator.cleanup();
+});
+```
+
 ### Property-Based Test Example
 ```typescript
 import fc from 'fast-check';
@@ -169,9 +226,13 @@ View coverage report in `core/coverage/lcov-report/index.html`
 
 ### E2E Pipeline (.github/workflows/e2e.yml)
 - Runs on: Push to main/develop, PRs, nightly schedule
-- Jobs: E2E tests (Chromium, Firefox, WebKit), Visual regression, Performance
+- Jobs: 
+  - **Web E2E**: Basic web tests (chromium, firefox, webkit)
+  - **Cross-Platform Web**: Web-to-Web messaging tests
+  - **Android E2E**: Web-to-Android tests (nightly or manual)
+  - **iOS E2E**: Web-to-iOS tests (nightly or manual, macOS runner)
 - Screenshots/videos on failure
-- Timeout: 20 minutes
+- Timeout: 20-60 minutes (depending on platform)
 
 ### Deployment Pipeline (.github/workflows/deploy.yml)
 - Runs on: Push to main (staging), version tags (production)
@@ -285,8 +346,10 @@ it('slow test', async () => {
 ## Resources
 
 - **Full Documentation**: [docs/TESTING.md](../docs/TESTING.md)
+- **E2E Testing Guide**: [docs/E2E_TESTING.md](../docs/E2E_TESTING.md)
 - **Jest Docs**: https://jestjs.io/
 - **Playwright Docs**: https://playwright.dev/
+- **Appium Docs**: https://appium.io/docs/en/latest/
 - **fast-check Docs**: https://github.com/dubzzz/fast-check
 
 ## Getting Help
@@ -302,6 +365,8 @@ it('slow test', async () => {
 - Unit tests: `npm test`
 - Coverage: `npm run test:coverage`
 - E2E tests: `npm run test:e2e`
+- Cross-platform: `npm run test:e2e:cross-platform`
 - Integration: `npm run test:integration`
 - Performance: `npm run test:performance`
 - Coverage gaps: `node tests/scripts/coverage-gaps.js`
+- Mobile tests: `npm run test:e2e:mobile` (requires Appium setup)
