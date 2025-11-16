@@ -9,7 +9,8 @@ import { announce } from './utils/accessibility';
 
 function App() {
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
-  const { status, messages, sendMessage } = useMeshNetwork();
+  const [demoMessages, setDemoMessages] = useState<Array<{id: string; from: string; content: string; timestamp: number}>>([]);
+  const { status, messages, sendMessage, connectToPeer } = useMeshNetwork();
 
   // Announce connection status changes to screen readers
   useEffect(() => {
@@ -19,6 +20,61 @@ function App() {
       announce.message('Disconnected from network', 'polite');
     }
   }, [status.isConnected, status.peerCount]);
+
+  const handleAddContact = async (peerId: string, name: string) => {
+    try {
+      // Special demo mode for testing without real peers
+      if (peerId.toLowerCase() === 'demo') {
+        announce.message(`Demo mode activated - messages will echo back`, 'polite');
+        setSelectedConversation('demo');
+        // Add welcome message
+        setTimeout(() => {
+          setDemoMessages(prev => [...prev, {
+            id: `demo-${Date.now()}`,
+            from: 'demo',
+            content: `Hi! This is demo mode. Your messages will echo back. Try sending something!`,
+            timestamp: Date.now()
+          }]);
+        }, 500);
+        return;
+      }
+      
+      await connectToPeer(peerId);
+      announce.message(`Connected to ${name}`, 'polite');
+      setSelectedConversation(peerId);
+      // TODO: Save contact to IndexedDB
+    } catch (error) {
+      console.error('Failed to connect to peer:', error);
+      announce.message(`Failed to connect to ${name}`, 'assertive');
+    }
+  };
+
+  const handleSendMessage = (content: string) => {
+    if (selectedConversation === 'demo') {
+      // Add user message
+      const userMsg = {
+        id: `me-${Date.now()}`,
+        from: 'me',
+        content,
+        timestamp: Date.now()
+      };
+      setDemoMessages(prev => [...prev, userMsg]);
+      
+      // Echo back after delay
+      setTimeout(() => {
+        setDemoMessages(prev => [...prev, {
+          id: `demo-${Date.now()}`,
+          from: 'demo',
+          content: `Echo: ${content}`,
+          timestamp: Date.now()
+        }]);
+      }, 1000);
+    } else if (selectedConversation) {
+      sendMessage(selectedConversation, content);
+    }
+  };
+
+  const displayMessages = selectedConversation === 'demo' ? demoMessages : messages;
 
   return (
     <ErrorBoundary>
@@ -42,6 +98,8 @@ function App() {
               <ConversationList 
                 selectedId={selectedConversation}
                 onSelect={setSelectedConversation}
+                onAddContact={handleAddContact}
+                localPeerId={status.localPeerId}
               />
             </ErrorBoundary>
           </aside>
@@ -51,8 +109,8 @@ function App() {
               {selectedConversation ? (
                 <ChatView 
                   conversationId={selectedConversation}
-                  messages={messages}
-                  onSendMessage={(content) => sendMessage(selectedConversation, content)}
+                  messages={displayMessages}
+                  onSendMessage={handleSendMessage}
                 />
               ) : (
                 <div className="empty-state">

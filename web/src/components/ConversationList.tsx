@@ -1,5 +1,7 @@
 import { useState, useCallback, memo } from 'react';
 import './ConversationList.css';
+import { AddContactDialog } from './AddContactDialog';
+import { SignalingExportDialog, SignalingImportDialog } from './SignalingDialog';
 
 interface Conversation {
   id: string;
@@ -12,6 +14,8 @@ interface Conversation {
 interface ConversationListProps {
   selectedId: string | null;
   onSelect: (id: string) => void;
+  onAddContact?: (peerId: string, name: string) => void;
+  localPeerId?: string;
 }
 
 // Memoized conversation item component
@@ -57,20 +61,67 @@ const ConversationItem = memo(({
 
 ConversationItem.displayName = 'ConversationItem';
 
-function ConversationList({ selectedId, onSelect }: ConversationListProps) {
+function ConversationList({ selectedId, onSelect, onAddContact, localPeerId = '' }: ConversationListProps) {
   // Mock data - will be replaced with actual state management
   const [conversations] = useState<Conversation[]>([]);
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [showSignalingExport, setShowSignalingExport] = useState(false);
+  const [showSignalingImport, setShowSignalingImport] = useState(false);
 
   // Memoized select handler
   const handleSelect = useCallback((id: string) => {
     onSelect(id);
   }, [onSelect]);
 
+  const handleAddContact = useCallback((peerId: string, name: string) => {
+    onAddContact?.(peerId, name);
+  }, [onAddContact]);
+
   return (
     <div className="conversation-list">
+      <AddContactDialog
+        isOpen={showAddDialog}
+        onClose={() => setShowAddDialog(false)}
+        onAdd={handleAddContact}
+      />
+      
+      <SignalingExportDialog
+        isOpen={showSignalingExport}
+        onClose={() => setShowSignalingExport(false)}
+        localPeerId={localPeerId}
+      />
+      
+      <SignalingImportDialog
+        isOpen={showSignalingImport}
+        onClose={() => setShowSignalingImport(false)}
+        onImport={handleAddContact}
+      />
+      
       <div className="list-header">
         <h2>Conversations</h2>
-        <button className="add-button" title="Add Contact">+</button>
+        <div className="header-actions">
+          <button 
+            className="add-button" 
+            title="Add Options"
+            onClick={() => setShowMenu(!showMenu)}
+          >
+            +
+          </button>
+          {showMenu && (
+            <div className="add-menu">
+              <button onClick={() => { setShowAddDialog(true); setShowMenu(false); }}>
+                Quick Add (Demo/Testing)
+              </button>
+              <button onClick={() => { setShowSignalingImport(true); setShowMenu(false); }}>
+                Add via Code
+              </button>
+              <button onClick={() => { setShowSignalingExport(true); setShowMenu(false); }}>
+                Share My Info
+              </button>
+            </div>
+          )}
+        </div>
       </div>
       
       <div className="list-content">

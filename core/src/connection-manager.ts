@@ -97,8 +97,10 @@ export class ConnectionManager {
     const connected = this.getConnectedPeers();
     if (connected.length === 0) return null;
 
+    // Prioritize quality first, then latency as tiebreaker
     return connected.reduce((best, conn) =>
-      conn.quality > best.quality && conn.latency < best.latency ? conn : best
+      conn.quality > best.quality ? conn : 
+      conn.quality === best.quality && conn.latency < best.latency ? conn : best
     );
   }
 
