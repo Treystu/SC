@@ -811,6 +811,239 @@ export class DatabaseManager {
     });
   }
 
+  // ===== DATA SOVEREIGNTY OPERATIONS =====
+
+  /**
+   * Export all user data (sovereignty feature)
+   * Returns a complete snapshot of all local data
+   */
+  async exportAllData(): Promise<{
+    version: string;
+    exportedAt: number;
+    identities: Identity[];
+    contacts: StoredContact[];
+    conversations: StoredConversation[];
+    messages: StoredMessage[];
+    peers: PersistedPeer[];
+    routes: Route[];
+    sessionKeys: SessionKey[];
+  }> {
+    if (!this.db) await this.init();
+
+    const [identities, contacts, conversations, messages, peers, routes, sessionKeys] = await Promise.all([
+      this.getAllIdentities(),
+      this.getContacts(),
+      this.getConversations(),
+      this.getAllMessages(),
+      this.getAllPeers(),
+      this.getAllRoutes(),
+      this.getAllSessionKeys()
+    ]);
+
+    return {
+      version: '1.0',
+      exportedAt: Date.now(),
+      identities,
+      contacts,
+      conversations,
+      messages,
+      peers,
+      routes,
+      sessionKeys
+    };
+  }
+
+  /**
+   * Get all messages (helper for export)
+   */
+  private async getAllMessages(): Promise<StoredMessage[]> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['messages'], 'readonly');
+      const store = transaction.objectStore('messages');
+      const request = store.getAll();
+
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  /**
+   * Get all session keys (helper for export)
+   */
+  private async getAllSessionKeys(): Promise<SessionKey[]> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['sessionKeys'], 'readonly');
+      const store = transaction.objectStore('sessionKeys');
+      const request = store.getAll();
+
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  /**
+   * Import data (sovereignty feature)
+   * Merges or overwrites existing data based on strategy
+   */
+  async importData(
+    data: {
+      version: string;
+      exportedAt: number;
+      identities?: Identity[];
+      contacts?: StoredContact[];
+      conversations?: StoredConversation[];
+      messages?: StoredMessage[];
+      peers?: PersistedPeer[];
+      routes?: Route[];
+      sessionKeys?: SessionKey[];
+    },
+    options: {
+      mergeStrategy: 'overwrite' | 'merge' | 'skip-existing';
+    } = { mergeStrategy: 'merge' }
+  ): Promise<{
+    imported: number;
+    skipped: number;
+    errors: string[];
+  }> {
+    if (!this.db) await this.init();
+
+    let imported = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+
+    try {
+      // Validate version
+      if (data.version !== '1.0') {
+        errors.push(`Unsupported export version: ${data.version}`);
+        return { imported, skipped, errors };
+      }
+
+      // Import identities
+      if (data.identities) {
+        for (const identity of data.identities) {
+          try {
+            const existing = await this.getIdentity(identity.id);
+            if (existing && options.mergeStrategy === 'skip-existing') {
+              skipped++;
+            } else {
+              await this.saveIdentity(identity);
+              imported++;
+            }
+          } catch (error) {
+            errors.push(`Failed to import identity ${identity.id}: ${error}`);
+          }
+        }
+      }
+
+      // Import contacts
+      if (data.contacts) {
+        for (const contact of data.contacts) {
+          try {
+            const existing = await this.getContact(contact.id);
+            if (existing && options.mergeStrategy === 'skip-existing') {
+              skipped++;
+            } else {
+              await this.saveContact(contact);
+              imported++;
+            }
+          } catch (error) {
+            errors.push(`Failed to import contact ${contact.id}: ${error}`);
+          }
+        }
+      }
+
+      // Import conversations
+      if (data.conversations) {
+        for (const conversation of data.conversations) {
+          try {
+            const existing = await this.getConversation(conversation.id);
+            if (existing && options.mergeStrategy === 'skip-existing') {
+              skipped++;
+            } else {
+              await this.saveConversation(conversation);
+              imported++;
+            }
+          } catch (error) {
+            errors.push(`Failed to import conversation ${conversation.id}: ${error}`);
+          }
+        }
+      }
+
+      // Import messages
+      if (data.messages) {
+        for (const message of data.messages) {
+          try {
+            await this.saveMessage(message);
+            imported++;
+          } catch (error) {
+            errors.push(`Failed to import message ${message.id}: ${error}`);
+          }
+        }
+      }
+
+      // Import peers
+      if (data.peers) {
+        for (const peer of data.peers) {
+          try {
+            const existing = await this.getPeer(peer.id);
+            if (existing && options.mergeStrategy === 'skip-existing') {
+              skipped++;
+            } else {
+              await this.savePeer(peer);
+              imported++;
+            }
+          } catch (error) {
+            errors.push(`Failed to import peer ${peer.id}: ${error}`);
+          }
+        }
+      }
+
+      // Import routes
+      if (data.routes) {
+        for (const route of data.routes) {
+          try {
+            await this.saveRoute(route);
+            imported++;
+          } catch (error) {
+            errors.push(`Failed to import route ${route.destinationId}: ${error}`);
+          }
+        }
+      }
+
+      // Import session keys
+      if (data.sessionKeys) {
+        for (const sessionKey of data.sessionKeys) {
+          try {
+            await this.saveSessionKey(sessionKey);
+            imported++;
+          } catch (error) {
+            errors.push(`Failed to import session key ${sessionKey.peerId}: ${error}`);
+          }
+        }
+      }
+    } catch (error) {
+      errors.push(`Import failed: ${error}`);
+    }
+
+    return { imported, skipped, errors };
+  }
+
+  /**
+   * Securely delete all user data (sovereignty feature)
+   * Requires confirmation token to prevent accidental deletion
+   */
+  async deleteAllData(confirmationToken: string): Promise<void> {
+    if (confirmationToken !== 'DELETE ALL MY DATA') {
+      throw new Error('Invalid confirmation token. Data not deleted.');
+    }
+
+    await this.clearAll();
+  }
+
   /**
    * Clear all data
    */
