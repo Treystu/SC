@@ -99,6 +99,7 @@ function App() {
                 selectedId={selectedConversation}
                 onSelect={setSelectedConversation}
                 onAddContact={handleAddContact}
+                localPeerId={status.localPeerId}
               />
             </ErrorBoundary>
           </aside>
