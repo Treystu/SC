@@ -3,12 +3,14 @@ import './App.css';
 import ConversationList from './components/ConversationList';
 import ChatView from './components/ChatView';
 import ConnectionStatus from './components/ConnectionStatus';
+import { SettingsPanel } from './components/SettingsPanel';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useMeshNetwork } from './hooks/useMeshNetwork';
 import { announce } from './utils/accessibility';
 
 function App() {
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
   const [demoMessages, setDemoMessages] = useState<Array<{id: string; from: string; content: string; timestamp: number}>>([]);
   const { status, messages, sendMessage, connectToPeer } = useMeshNetwork();
 
@@ -86,10 +88,20 @@ function App() {
 
         <header className="app-header" role="banner">
           <h1>Sovereign Communications</h1>
-          <ConnectionStatus 
-            status={status.isConnected ? 'online' : 'offline'}
-            peerCount={status.peerCount}
-          />
+          <div className="header-controls">
+            <button 
+              onClick={() => setShowSettings(!showSettings)}
+              className="settings-btn"
+              aria-label="Settings"
+              title="Settings"
+            >
+              ⚙️
+            </button>
+            <ConnectionStatus 
+              status={status.isConnected ? 'online' : 'offline'}
+              peerCount={status.peerCount}
+            />
+          </div>
         </header>
         
         <div className="app-body">
@@ -141,6 +153,22 @@ function App() {
             </ErrorBoundary>
           </main>
         </div>
+
+        {/* Settings Modal */}
+        {showSettings && (
+          <div className="modal-overlay" onClick={() => setShowSettings(false)}>
+            <div className="modal-content settings-modal" onClick={(e) => e.stopPropagation()}>
+              <button 
+                className="modal-close" 
+                onClick={() => setShowSettings(false)}
+                aria-label="Close settings"
+              >
+                ×
+              </button>
+              <SettingsPanel />
+            </div>
+          </div>
+        )}
       </div>
     </ErrorBoundary>
   );
