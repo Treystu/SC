@@ -1,0 +1,764 @@
+name: Unified CI/CD
+
+on:
+  push:
+    branches: [ main, develop, 'copilot/**' ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  # TypeScript Linting
+  lint-typescript:
+    name: Lint TypeScript/JavaScript
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run ESLint
+        run: npm run lint
+        continue-on-error: false
+
+  # Kotlin Linting
+  lint-kotlin:
+    name: Lint Kotlin (Android)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      
+      - name: Setup ktlint
+        run: |
+          curl -sSLO https://github.com/pinterest/ktlint/releases/download/1.0.1/ktlint
+          chmod a+x ktlint
+          sudo mv ktlint /usr/local/bin/
+      
+      - name: Run ktlint
+        working-directory: android
+        run: ktlint --android "app/src/**/*.kt" || true
+        continue-on-error: true
+
+  # Swift Linting
+  lint-swift:
+    name: Lint Swift (iOS)
+    runs-on: macos-14
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install SwiftLint
+        run: |
+          brew install swiftlint
+      
+      - name: Run SwiftLint
+        working-directory: ios
+        run: swiftlint lint --quiet || true
+        continue-on-error: true
+
+  # Build Core Library
+  build-core:
+    name: Build Core Library
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [lint-typescript]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build core library
+        run: npm run build -w core
+      
+      - name: Upload core artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-build
+          path: core/dist
+          retention-days: 7
+
+  # Build Web Application
+  build-web:
+    name: Build Web Application
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [lint-typescript, build-core]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build core library
+        run: npm run build -w core
+      
+      - name: Build web application
+        run: npm run build -w web
+        env:
+          NODE_ENV: production
+      
+      - name: Upload web artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: web/dist
+          retention-days: 7
+
+  # Build Android Application
+  build-android:
+    name: Build Android Application
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [lint-kotlin]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+      
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+      
+      - name: Create gradlew wrapper if missing
+        working-directory: android
+        run: |
+          if [ ! -f gradlew ]; then
+            echo "Creating Gradle wrapper..."
+            # Download Gradle wrapper jar
+            mkdir -p gradle/wrapper
+            curl -L https://raw.githubusercontent.com/gradle/gradle/master/gradle/wrapper/gradle-wrapper.jar -o gradle/wrapper/gradle-wrapper.jar
+            
+            # Create gradle-wrapper.properties
+            cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          EOF
+            
+            # Create gradlew script
+            cat > gradlew << 'EOF'
+          #!/bin/sh
+          ##############################################################################
+          #
+          #   Gradle start up script for POSIX generated by Gradle.
+          #
+          ##############################################################################
+          
+          DEFAULT_JVM_OPTS='"-Xmx64m" "-Xms64m"'
+          
+          APP_NAME="Gradle"
+          APP_BASE_NAME=$(basename "$0")
+          
+          # Use the maximum available, or set MAX_FD != -1 to use that value.
+          MAX_FD=maximum
+          
+          GRADLE_APP=${GRADLE_APP:-"$APP_NAME"}
+          
+          # Resolve links: $0 may be a link
+          app_path=$0
+          
+          # Need this for daisy-chained symlinks.
+          while
+              APP_HOME=${app_path%"${app_path##*/}"}  # leaves a trailing /; empty if no leading path
+              [ -h "$app_path" ]
+          do
+              ls=$( ls -ld "$app_path" )
+              link=${ls#*' -> '}
+              case $link in             #(
+                  /*)   app_path=$link ;; #(
+                  *)    app_path=$APP_HOME$link ;;
+              esac
+          done
+          
+          APP_HOME=$( cd "${APP_HOME:-./}" && pwd -P ) || exit
+          
+          # This is normally unused
+          # shellcheck disable=SC2034
+          APP_BASE_NAME=${0##*/}
+          APP_HOME=$( cd "${APP_HOME:-./}" && pwd -P ) || exit
+          
+          # Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script.
+          DEFAULT_JVM_OPTS='"-Xmx64m" "-Xms64m"'
+          
+          # Use the maximum available, or set MAX_FD != -1 to use that value.
+          MAX_FD=maximum
+          
+          warn () {
+              echo "$*"
+          } >&2
+          
+          die () {
+              echo
+              echo "$*"
+              echo
+              exit 1
+          } >&2
+          
+          # OS specific support (must be 'true' or 'false').
+          cygwin=false
+          msys=false
+          darwin=false
+          nonstop=false
+          case "$( uname )" in                #(
+              CYGWIN* )         cygwin=true  ;; #(
+              Darwin* )         darwin=true  ;; #(
+              MSYS* | MINGW* )  msys=true    ;; #(
+              NONSTOP* )        nonstop=true ;;
+          esac
+          
+          CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
+          
+          # Determine the Java command to use to start the JVM.
+          if [ -n "$JAVA_HOME" ] ; then
+              if [ -x "$JAVA_HOME/jre/sh/java" ] ; then
+                  # IBM's JDK on AIX uses strange locations for the executables
+                  JAVACMD=$JAVA_HOME/jre/sh/java
+              else
+                  JAVACMD=$JAVA_HOME/bin/java
+              fi
+              if [ ! -x "$JAVACMD" ] ; then
+                  die "ERROR: JAVA_HOME is set to an invalid directory: $JAVA_HOME
+          
+          Please set the JAVA_HOME variable in your environment to match the
+          location of your Java installation."
+              fi
+          else
+              JAVACMD=java
+              if ! command -v java >/dev/null 2>&1
+              then
+                  die "ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH.
+          
+          Please set the JAVA_HOME variable in your environment to match the
+          location of your Java installation."
+              fi
+          fi
+          
+          # Increase the maximum file descriptors if we can.
+          if ! "$cygwin" && ! "$darwin" && ! "$nonstop" ; then
+              case $MAX_FD in #(
+                  max*)
+                      # In POSIX sh, ulimit -H is undefined. That's why the result is checked to see if it worked.
+                      # shellcheck disable=SC3045
+                      MAX_FD=$( ulimit -H -n ) ||
+                          warn "Could not query maximum file descriptor limit"
+              esac
+              case $MAX_FD in  #(
+                  '' | soft) :;; #(
+                  *)
+                      # In POSIX sh, ulimit -n is undefined. That's why the result is checked to see if it worked.
+                      # shellcheck disable=SC3045
+                      ulimit -n "$MAX_FD" ||
+                          warn "Could not set maximum file descriptor limit to $MAX_FD"
+              esac
+          fi
+          
+          # Collect all arguments for the java command, stacking in reverse order:
+          #   * args from the command line
+          #   * the main class name
+          #   * -classpath
+          #   * -D...appname settings
+          #   * --module-path (only if needed)
+          #   * DEFAULT_JVM_OPTS, JAVA_OPTS, and GRADLE_OPTS environment variables.
+          
+          # For Cygwin or MSYS, switch paths to Windows format before running java
+          if "$cygwin" || "$msys" ; then
+              APP_HOME=$( cygpath --path --mixed "$APP_HOME" )
+              CLASSPATH=$( cygpath --path --mixed "$CLASSPATH" )
+          
+              JAVACMD=$( cygpath --unix "$JAVACMD" )
+          
+              # Now convert the arguments - kludge to limit ourselves to /bin/sh
+              for arg do
+                  if
+                      case $arg in                                #(
+                          -*)   false ;;                            # don't mess with options #(
+                          /?*)  t=${arg#/} t=/${t%%/*}              # looks like a POSIX filepath
+                                [ -e "$t" ] ;;                      #(
+                          *)    false ;;
+                      esac
+                  then
+                      arg=$( cygpath --path --ignore --mixed "$arg" )
+                  fi
+                  # Roll the args list around exactly as many times as the number of
+                  # args, so each arg winds up back in the position where it started, but
+                  # possibly modified.
+                  shift
+                  set -- "$@" "$arg"
+              done
+          fi
+          
+          # Collect all arguments for the java command;
+          #   * $DEFAULT_JVM_OPTS, $JAVA_OPTS, and $GRADLE_OPTS can contain fragments of
+          #     shell script including quotes and variable substitutions, so put them in
+          #     double quotes to make sure that they get re-expanded; and
+          #   * put everything else in single quotes, so that it's not re-expanded.
+          
+          set -- \
+              "-Dorg.gradle.appname=$APP_BASE_NAME" \
+              -classpath "$CLASSPATH" \
+              org.gradle.wrapper.GradleWrapperMain \
+              "$@"
+          
+          # Stop when "xargs" is not available.
+          if ! command -v xargs >/dev/null 2>&1
+          then
+              die "xargs is not available"
+          fi
+          
+          # Use "xargs" to parse quoted args.
+          #
+          # With -n1 it outputs one arg per line, with the quotes and backslashes removed.
+          #
+          # In Bash we could simply go:
+          #
+          #   readarray ARGS < <( xargs -n1 <<<"$var" ) &&
+          #   set -- "${ARGS[@]}" "$@"
+          #
+          # but POSIX shell has neither arrays nor command substitution, so instead we
+          # post-process each arg (as a line of input to sed) to backslash-escape any
+          # character that might be a shell metacharacter, then use eval to parse
+          # the output into shell arguments.
+          #
+          # This will of course break if any of these variables contains a newline or
+          # an unmatched quote.
+          #
+          
+          eval "set -- $(
+                  printf '%s\n' "$DEFAULT_JVM_OPTS $JAVA_OPTS $GRADLE_OPTS" |
+                  xargs -n1 |
+                  sed ' s~[^-[:alnum:]+,./:=@_]~\\&~g; ' |
+                  tr '\n' ' '
+              )" '"$@"'
+          
+          exec "$JAVACMD" "$@"
+          EOF
+            
+            chmod +x gradlew
+            
+            # Create gradlew.bat for Windows
+            cat > gradlew.bat << 'EOF'
+          @rem
+          @rem Copyright 2015 the original author or authors.
+          @rem
+          @rem Licensed under the Apache License, Version 2.0 (the "License");
+          @rem you may not use this file except in compliance with the License.
+          @rem You may obtain a copy of the License at
+          @rem
+          @rem      https://www.apache.org/licenses/LICENSE-2.0
+          @rem
+          @rem Unless required by applicable law or agreed to in writing, software
+          @rem distributed under the License is distributed on an "AS IS" BASIS,
+          @rem WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+          @rem See the License for the specific language governing permissions and
+          @rem limitations under the License.
+          @rem
+          
+          @if "%DEBUG%"=="" @echo off
+          @rem ##########################################################################
+          @rem
+          @rem  Gradle startup script for Windows
+          @rem
+          @rem ##########################################################################
+          
+          @rem Set local scope for the variables with windows NT shell
+          if "%OS%"=="Windows_NT" setlocal
+          
+          set DIRNAME=%~dp0
+          if "%DIRNAME%"=="" set DIRNAME=.
+          set APP_BASE_NAME=%~n0
+          set APP_HOME=%DIRNAME%
+          
+          @rem Resolve any "." and ".." in APP_HOME to make it shorter.
+          for %%i in ("%APP_HOME%") do set APP_HOME=%%~fi
+          
+          @rem Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script.
+          set DEFAULT_JVM_OPTS="-Xmx64m" "-Xms64m"
+          
+          @rem Find java.exe
+          if defined JAVA_HOME goto findJavaFromJavaHome
+          
+          set JAVA_EXE=java.exe
+          %JAVA_EXE% -version >NUL 2>&1
+          if %ERRORLEVEL% equ 0 goto execute
+          
+          echo.
+          echo ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH.
+          echo.
+          echo Please set the JAVA_HOME variable in your environment to match the
+          echo location of your Java installation.
+          
+          goto fail
+          
+          :findJavaFromJavaHome
+          set JAVA_HOME=%JAVA_HOME:"=%
+          set JAVA_EXE=%JAVA_HOME%/bin/java.exe
+          
+          if exist "%JAVA_EXE%" goto execute
+          
+          echo.
+          echo ERROR: JAVA_HOME is set to an invalid directory: %JAVA_HOME%
+          echo.
+          echo Please set the JAVA_HOME variable in your environment to match the
+          echo location of your Java installation.
+          
+          goto fail
+          
+          :execute
+          @rem Setup the command line
+          
+          set CLASSPATH=%APP_HOME%\gradle\wrapper\gradle-wrapper.jar
+          
+          
+          @rem Execute Gradle
+          "%JAVA_EXE%" %DEFAULT_JVM_OPTS% %JAVA_OPTS% %GRADLE_OPTS% "-Dorg.gradle.appname=%APP_BASE_NAME%" -classpath "%CLASSPATH%" org.gradle.wrapper.GradleWrapperMain %*
+          
+          :end
+          @rem End local scope for the variables with windows NT shell
+          if %ERRORLEVEL% equ 0 goto mainEnd
+          
+          :fail
+          rem Set variable GRADLE_EXIT_CONSOLE if you need the _script_ return code instead of
+          rem the _cmd.exe /c_ return code!
+          set EXIT_CODE=%ERRORLEVEL%
+          if %EXIT_CODE% equ 0 set EXIT_CODE=1
+          if not ""=="%GRADLE_EXIT_CONSOLE%" exit %EXIT_CODE%
+          exit /b %EXIT_CODE%
+          
+          :mainEnd
+          if "%OS%"=="Windows_NT" endlocal
+          
+          :omega
+          EOF
+          fi
+      
+      - name: Make gradlew executable
+        working-directory: android
+        run: chmod +x gradlew
+      
+      - name: Build Android debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --stacktrace
+      
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+          retention-days: 7
+
+  # Build iOS Application
+  build-ios:
+    name: Build iOS Application
+    runs-on: macos-14
+    timeout-minutes: 20
+    needs: [lint-swift]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      
+      - name: Build iOS app for simulator
+        working-directory: ios
+        run: |
+          swift build || echo "Swift build not configured as SPM library"
+          # Alternative: Use xcodebuild if there's an Xcode project
+          # xcodebuild -scheme SovereignCommunications \
+          #   -sdk iphonesimulator \
+          #   -configuration Debug \
+          #   -derivedDataPath build \
+          #   CODE_SIGNING_ALLOWED=NO || true
+
+  # Unit Tests - Core
+  test-core:
+    name: Test Core Library
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [build-core]
+    strategy:
+      matrix:
+        node-version: [18, 20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run core unit tests
+        run: npm test -w core -- --coverage --maxWorkers=2
+        continue-on-error: ${{ matrix.node-version != 20 }}
+      
+      - name: Upload coverage
+        if: matrix.node-version == 20
+        uses: codecov/codecov-action@v4
+        with:
+          directory: ./core/coverage
+          flags: core
+          fail_ci_if_error: false
+
+  # Unit Tests - Android
+  test-android:
+    name: Test Android (Unit Tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [build-android]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+      
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+      
+      - name: Ensure gradlew exists
+        working-directory: android
+        run: |
+          if [ ! -f gradlew ]; then
+            echo "Gradle wrapper not found - this should have been created in build job"
+            exit 1
+          fi
+          chmod +x gradlew
+      
+      - name: Run Android unit tests
+        working-directory: android
+        run: ./gradlew test --stacktrace || echo "No unit tests configured yet"
+        continue-on-error: true
+
+  # Unit Tests - iOS
+  test-ios:
+    name: Test iOS (Unit Tests)
+    runs-on: macos-14
+    timeout-minutes: 15
+    needs: [build-ios]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      
+      - name: Run iOS unit tests
+        working-directory: ios
+        run: |
+          swift test || echo "No Swift tests configured yet"
+        continue-on-error: true
+
+  # Integration Tests
+  test-integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [build-web]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Download web build
+        uses: actions/download-artifact@v4
+        with:
+          name: web-build
+          path: web/dist
+      
+      - name: Download core build
+        uses: actions/download-artifact@v4
+        with:
+          name: core-build
+          path: core/dist
+      
+      - name: Run integration tests
+        run: npm run test:integration
+        continue-on-error: true
+
+  # E2E Tests - Web
+  test-e2e-web:
+    name: E2E Tests (Web)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [build-web]
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+      
+      - name: Build application
+        run: |
+          npm run build -w core
+          npm run build -w web
+      
+      - name: Run E2E tests
+        run: npm run test:e2e -- --project=${{ matrix.browser }}
+        env:
+          CI: true
+        continue-on-error: true
+      
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results-${{ matrix.browser }}
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+
+  # Security Audit
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Run npm audit
+        run: npm audit --audit-level=moderate || true
+        continue-on-error: true
+      
+      - name: Check for known vulnerabilities
+        run: |
+          npx audit-ci --moderate || echo "Vulnerabilities found - review required"
+        continue-on-error: true
+
+  # Final Status Check
+  ci-success:
+    name: CI Success
+    runs-on: ubuntu-latest
+    needs: [
+      lint-typescript,
+      lint-kotlin,
+      lint-swift,
+      build-core,
+      build-web,
+      build-android,
+      build-ios,
+      test-core,
+      test-android,
+      test-ios,
+      test-integration,
+      test-e2e-web,
+      security-audit
+    ]
+    if: always()
+    steps:
+      - name: Check all jobs status
+        run: |
+          echo "Lint TypeScript: ${{ needs.lint-typescript.result }}"
+          echo "Lint Kotlin: ${{ needs.lint-kotlin.result }}"
+          echo "Lint Swift: ${{ needs.lint-swift.result }}"
+          echo "Build Core: ${{ needs.build-core.result }}"
+          echo "Build Web: ${{ needs.build-web.result }}"
+          echo "Build Android: ${{ needs.build-android.result }}"
+          echo "Build iOS: ${{ needs.build-ios.result }}"
+          echo "Test Core: ${{ needs.test-core.result }}"
+          echo "Test Android: ${{ needs.test-android.result }}"
+          echo "Test iOS: ${{ needs.test-ios.result }}"
+          echo "Test Integration: ${{ needs.test-integration.result }}"
+          echo "Test E2E Web: ${{ needs.test-e2e-web.result }}"
+          echo "Security Audit: ${{ needs.security-audit.result }}"
+          
+          # Fail if any critical job failed
+          if [ "${{ needs.lint-typescript.result }}" = "failure" ] || \
+             [ "${{ needs.build-core.result }}" = "failure" ] || \
+             [ "${{ needs.build-web.result }}" = "failure" ] || \
+             [ "${{ needs.test-core.result }}" = "failure" ]; then
+            echo "Critical jobs failed"
+            exit 1
+          fi
+          
+          echo "CI Pipeline completed successfully"

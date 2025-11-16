@@ -10,6 +10,7 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces",
+    "build:all": "./scripts/build-all.sh",
     "test": "npm run test --workspaces",
     "test:unit": "npm run test -w core",
     "test:integration": "jest --config jest.integration.config.js",
@@ -26,8 +27,10 @@
     "dev": "npm run dev -w web",
     "lint": "eslint . --ext .ts,.tsx",
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
+    "lint:all": "./scripts/lint-all.sh",
     "appium": "appium",
-    "appium:doctor": "appium-doctor"
+    "appium:doctor": "appium-doctor",
+    "ci:local": "./scripts/lint-all.sh && ./scripts/build-all.sh && npm test"
   },
   "keywords": [
     "mesh-networking",

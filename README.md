@@ -1,5 +1,9 @@
 # Sovereign Communications
 
+[![CI Status](https://github.com/Treystu/SC/workflows/Unified%20CI%2FCD/badge.svg)](https://github.com/Treystu/SC/actions/workflows/unified-ci.yml)
+[![Release](https://github.com/Treystu/SC/workflows/Release/badge.svg)](https://github.com/Treystu/SC/actions/workflows/release.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A decentralized, end-to-end encrypted mesh networking communication platform that works across Web, Android, and iOS with no central servers.
 
 ## 🌟 Features
@@ -232,6 +236,15 @@ npm test
 
 # With coverage
 npm test -- --coverage
+
+# Run all tests
+npm test
+
+# Run integration tests
+npm run test:integration
+
+# Run E2E tests
+npm run test:e2e
 ```
 
 Current test coverage:
@@ -239,6 +252,38 @@ Current test coverage:
 - ✅ Message encoding/decoding
 - ✅ Routing table and peer management
 - ✅ Message queue prioritization
+
+## 🚀 CI/CD
+
+The project uses comprehensive GitHub Actions workflows for continuous integration and deployment across all platforms.
+
+### Automated Testing & Building
+
+Every push and pull request triggers:
+- **Linting**: ESLint (TypeScript), ktlint (Kotlin), SwiftLint (Swift)
+- **Building**: Web, Android, and iOS applications
+- **Unit Tests**: Core library (Node 18, 20, 22)
+- **Integration Tests**: Cross-platform functionality
+- **E2E Tests**: Playwright tests across browsers
+- **Security Audit**: Dependency vulnerability scanning
+
+### Release Automation
+
+Tagged releases automatically:
+- Build production artifacts for all platforms
+- Run full test suite
+- Create GitHub releases with changelogs
+- Attach platform-specific installers:
+  - Web: `web-{version}.tar.gz`
+  - Android: `sovereign-communications-{version}.apk`
+  - iOS: Build artifacts
+
+**Release Types**:
+- `v1.0.0` - Production release
+- `v1.0.0-beta.1` - Beta release
+- `v1.0.0-alpha.1` - Alpha release
+
+For detailed CI/CD documentation, see [docs/ci-cd.md](./docs/ci-cd.md).
 
 ## 📖 Protocol Specification
 
