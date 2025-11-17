@@ -1,5 +1,6 @@
 package com.sovereign.communications.ui
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -11,6 +12,7 @@ import com.sovereign.communications.notifications.NotificationManager
 import com.sovereign.communications.permissions.PermissionManager
 import com.sovereign.communications.service.MeshNetworkService
 import com.sovereign.communications.ui.screen.MainScreen
+import com.sovereign.communications.ui.screen.OnboardingScreen
 import com.sovereign.communications.ui.theme.SCTheme
 
 /**
@@ -41,9 +43,29 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    MainScreen()
+                    AppContent()
                 }
             }
+        }
+    }
+    
+    @Composable
+    fun AppContent() {
+        val prefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        var showOnboarding by remember {
+            mutableStateOf(!prefs.getBoolean("onboarding_complete", false))
+        }
+        
+        if (showOnboarding) {
+            OnboardingScreen(
+                localPeerId = "generated_peer_id_placeholder", // TODO: Get from MeshNetwork
+                onComplete = {
+                    prefs.edit().putBoolean("onboarding_complete", true).apply()
+                    showOnboarding = false
+                }
+            )
+        } else {
+            MainScreen()
         }
     }
     
