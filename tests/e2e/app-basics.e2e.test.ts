@@ -3,7 +3,40 @@
  */
 import { test, expect } from '@playwright/test';
 
+// Helper to skip onboarding for tests
+async function skipOnboardingIfPresent(page: any) {
+  // Check if onboarding is showing
+  const onboardingVisible = await page.locator('dialog[aria-label*="Welcome"], div:has-text("Welcome to Sovereign Communications")').isVisible().catch(() => false);
+  
+  if (onboardingVisible) {
+    // Try to skip the onboarding
+    const skipButton = page.locator('button:has-text("Skip Tutorial")');
+    if (await skipButton.isVisible().catch(() => false)) {
+      await skipButton.click();
+      // Wait for onboarding to close
+      await page.waitForTimeout(500);
+    } else {
+      // If no skip button, complete it quickly
+      // Click through all the steps
+      for (let i = 0; i < 4; i++) {
+        const continueBtn = page.locator('button:has-text("Continue"), button:has-text("Get Started"), button:has-text("Start Messaging")').first();
+        if (await continueBtn.isVisible().catch(() => false)) {
+          await continueBtn.click();
+          await page.waitForTimeout(300);
+        }
+      }
+    }
+  }
+}
+
 test.describe('Application Load', () => {
+  test.beforeEach(async ({ page, context }) => {
+    // Set localStorage to skip onboarding
+    await context.addInitScript(() => {
+      localStorage.setItem('sc-onboarding-complete', 'true');
+    });
+  });
+
   test('should load the application', async ({ page }) => {
     await page.goto('/');
     
@@ -52,18 +85,25 @@ test.describe('Application Load', () => {
 });
 
 test.describe('Identity Management', () => {
+  test.beforeEach(async ({ page, context }) => {
+    // Set localStorage to skip onboarding
+    await context.addInitScript(() => {
+      localStorage.setItem('sc-onboarding-complete', 'true');
+    });
+  });
+
   test('should display peer information', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
     
     // Check if peer info is displayed
-    const peerInfo = page.locator('.peer-info');
+    const peerInfo = page.locator('.peer-info, div:has-text("Your Peer ID")');
     if (await peerInfo.count() > 0) {
-      await expect(peerInfo).toBeVisible();
+      await expect(peerInfo.first()).toBeVisible();
       
       // Should show peer ID
-      const peerIdText = await peerInfo.textContent();
-      expect(peerIdText).toContain('Your Peer ID');
+      const peerIdText = await peerInfo.first().textContent();
+      expect(peerIdText).toContain('Peer ID');
     }
   });
 
