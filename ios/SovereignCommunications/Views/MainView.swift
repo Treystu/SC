@@ -7,7 +7,7 @@ struct MainView: View {
         TabView(selection: $selectedTab) {
             ConversationListView()
                 .tabItem {
-                    Label("Chats", systemImage: "message.fill")
+                    Label("Conversations", systemImage: "message.fill")
                 }
                 .tag(0)
             
