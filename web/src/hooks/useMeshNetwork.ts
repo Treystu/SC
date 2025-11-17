@@ -108,8 +108,8 @@ export function useMeshNetwork() {
           
           const receivedMessage: ReceivedMessage = {
             id: `${message.header.timestamp}-${Math.random()}`,
-            from: Array.from(message.header.senderId)
-              .map(b => b.toString(16).padStart(2, '0'))
+            from: Array.from(message.header.senderId as Uint8Array)
+              .map((b) => (b as number).toString(16).padStart(2, '0'))
               .join('')
               .substring(0, 8),
             content: data.text || '',
@@ -117,7 +117,7 @@ export function useMeshNetwork() {
             type: message.header.type,
           };
 
-          setMessages(prev => [...prev, receivedMessage]);
+          setMessages((prev: ReceivedMessage[]) => [...prev, receivedMessage]);
 
           // Persist message to IndexedDB
           try {
@@ -142,7 +142,7 @@ export function useMeshNetwork() {
       });
 
       // Handle peer connected with persistence
-      network.onPeerConnected(async (peerId) => {
+      network.onPeerConnected(async (peerId: string) => {
         console.log('Peer connected:', peerId);
         updatePeerStatus();
 
@@ -166,7 +166,7 @@ export function useMeshNetwork() {
       });
 
       // Handle peer disconnected with persistence
-      network.onPeerDisconnected(async (peerId) => {
+      network.onPeerDisconnected(async (peerId: string) => {
         console.log('Peer disconnected:', peerId);
         updatePeerStatus();
 
@@ -185,7 +185,7 @@ export function useMeshNetwork() {
       const updatePeerStatus = () => {
         const connectedPeers = network.getConnectedPeers();
         setPeers(connectedPeers);
-        setStatus(prev => ({
+        setStatus((prev: MeshStatus) => ({
           ...prev,
           peerCount: connectedPeers.length,
           isConnected: connectedPeers.length > 0,
@@ -221,7 +221,7 @@ export function useMeshNetwork() {
       type: MessageType.TEXT,
     };
 
-    setMessages(prev => [...prev, localMessage]);
+    setMessages((prev: ReceivedMessage[]) => [...prev, localMessage]);
 
     // Persist sent message to IndexedDB
     try {
