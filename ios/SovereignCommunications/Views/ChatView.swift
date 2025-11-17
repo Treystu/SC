@@ -10,6 +10,9 @@ struct ChatView: View {
     @State private var messages: [MessageEntity] = []
     @FocusState private var isInputFocused: Bool
     
+    // Note: For full integration, use @StateObject with a ViewModel that
+    // connects to the mesh network layer and Core Data
+    
     var body: some View {
         VStack(spacing: 0) {
             // Messages list
@@ -58,7 +61,7 @@ struct ChatView: View {
     private func sendMessage() {
         guard !messageText.isEmpty else { return }
         
-        // TODO: Integrate with mesh network to send message
+        // Save to Core Data (persistence layer)
         let newMessage = MessageEntity(context: CoreDataStack.shared.viewContext)
         newMessage.id = UUID().uuidString
         newMessage.conversationId = conversation.id
@@ -71,6 +74,10 @@ struct ChatView: View {
             try CoreDataStack.shared.viewContext.save()
             messages.append(newMessage)
             messageText = ""
+            
+            // TODO: For full integration, send via mesh network:
+            // let meshNetwork = MeshNetworkManager.shared
+            // meshNetwork.sendMessage(to: conversation.id, content: messageText)
         } catch {
             print("Error saving message: \(error)")
         }
