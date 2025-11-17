@@ -33,7 +33,7 @@ fun MainScreen() {
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
                     icon = { Icon(Icons.Default.Message, "Conversations") },
-                    label = { Text("Chats") }
+                    label = { Text("Conversations") }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 1,

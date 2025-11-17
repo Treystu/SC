@@ -5,14 +5,25 @@ import ChatView from './components/ChatView';
 import ConnectionStatus from './components/ConnectionStatus';
 import { SettingsPanel } from './components/SettingsPanel';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { OnboardingFlow } from './components/Onboarding/OnboardingFlow';
 import { useMeshNetwork } from './hooks/useMeshNetwork';
 import { announce } from './utils/accessibility';
+import { getDatabase } from './storage/database';
 
 function App() {
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [demoMessages, setDemoMessages] = useState<Array<{id: string; from: string; content: string; timestamp: number}>>([]);
   const { status, messages, sendMessage, connectToPeer } = useMeshNetwork();
+
+  // Check if onboarding has been completed
+  useEffect(() => {
+    const onboardingComplete = localStorage.getItem('sc-onboarding-complete');
+    if (!onboardingComplete) {
+      setShowOnboarding(true);
+    }
+  }, []);
 
   // Announce connection status changes to screen readers
   useEffect(() => {
@@ -44,14 +55,32 @@ function App() {
       await connectToPeer(peerId);
       announce.message(`Connected to ${name}`, 'polite');
       setSelectedConversation(peerId);
-      // TODO: Save contact to IndexedDB
+      
+      // Save contact to IndexedDB
+      try {
+        const db = getDatabase();
+        await db.saveContact({
+          id: peerId,
+          publicKey: peerId, // In production, use actual public key
+          displayName: name,
+          lastSeen: Date.now(),
+          createdAt: Date.now(),
+          fingerprint: '', // In production, generate from public key
+          verified: false,
+          blocked: false,
+          endpoints: [{ type: 'webrtc' }]
+        });
+        console.log('Contact saved to IndexedDB:', name);
+      } catch (dbError) {
+        console.error('Failed to save contact:', dbError);
+      }
     } catch (error) {
       console.error('Failed to connect to peer:', error);
       announce.message(`Failed to connect to ${name}`, 'assertive');
     }
   };
 
-  const handleSendMessage = (content: string) => {
+  const handleSendMessage = async (content: string) => {
     if (selectedConversation === 'demo') {
       // Add user message
       const userMsg = {
@@ -73,6 +102,24 @@ function App() {
       }, 1000);
     } else if (selectedConversation) {
       sendMessage(selectedConversation, content);
+      
+      // Save message to IndexedDB
+      try {
+        const db = getDatabase();
+        await db.saveMessage({
+          id: `msg-${Date.now()}`,
+          conversationId: selectedConversation,
+          content,
+          timestamp: Date.now(),
+          senderId: status.localPeerId,
+          recipientId: selectedConversation,
+          type: 'text',
+          status: 'sent'
+        });
+        console.log('Message saved to IndexedDB');
+      } catch (dbError) {
+        console.error('Failed to save message:', dbError);
+      }
     }
   };
 
@@ -80,6 +127,14 @@ function App() {
 
   return (
     <ErrorBoundary>
+      {/* Onboarding Flow */}
+      {showOnboarding && (
+        <OnboardingFlow
+          onComplete={() => setShowOnboarding(false)}
+          localPeerId={status.localPeerId}
+        />
+      )}
+
       <div className="app" role="application" aria-label="Sovereign Communications Messenger">
         {/* Skip to main content link for keyboard navigation */}
         <a href="#main-content" className="skip-link">

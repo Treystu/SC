@@ -36,6 +36,9 @@ fun ChatScreen(
     onNavigateBack: () -> Unit
 ) {
     var messageText by remember { mutableStateOf("") }
+    
+    // Demo messages showing the UI works
+    // In production, this would be replaced with ViewModel collecting from Room DB
     val messages = remember {
         mutableStateListOf(
             Message("1", "Hey! How's it going?", System.currentTimeMillis() - 3600000, false, "read"),
@@ -45,6 +48,12 @@ fun ChatScreen(
         )
     }
     val listState = rememberLazyListState()
+
+    // Note: For full integration, inject ChatViewModel here:
+    // val viewModel: ChatViewModel = viewModel(
+    //     factory = ChatViewModelFactory(contactId, messageDao)
+    // )
+    // val messages by viewModel.messages.collectAsState()
 
     Scaffold(
         topBar = {
@@ -89,6 +98,7 @@ fun ChatScreen(
                 onTextChange = { messageText = it },
                 onSend = {
                     if (messageText.isNotBlank()) {
+                        // Add message to local list (demo)
                         messages.add(
                             Message(
                                 id = UUID.randomUUID().toString(),
@@ -98,6 +108,19 @@ fun ChatScreen(
                                 status = "pending"
                             )
                         )
+                        
+                        // For full integration: viewModel.sendMessage(messageText)
+                        
+                        messageText = ""
+                        
+                        // Auto-scroll to bottom
+                        // Note: In production, use LaunchedEffect with messages.size
+                    }
+                }
+            )
+        }
+    }
+}
                         messageText = ""
                     }
                 }
