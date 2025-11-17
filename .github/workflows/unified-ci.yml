@@ -169,9 +169,22 @@ jobs:
         with:
           gradle-version: 8.5
       
+      - name: Make gradle wrapper executable (if exists)
+        working-directory: android
+        run: |
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+          fi
+        continue-on-error: true
+      
       - name: Build Android debug APK
         working-directory: android
-        run: gradle assembleDebug --stacktrace
+        run: |
+          if [ -f "./gradlew" ]; then
+            ./gradlew assembleDebug --stacktrace
+          else
+            gradle assembleDebug --stacktrace
+          fi
       
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
@@ -197,13 +210,25 @@ jobs:
       - name: Build iOS app for simulator
         working-directory: ios
         run: |
-          swift build || echo "Swift build not configured as SPM library"
-          # Alternative: Use xcodebuild if there's an Xcode project
-          # xcodebuild -scheme SovereignCommunications \
-          #   -sdk iphonesimulator \
-          #   -configuration Debug \
-          #   -derivedDataPath build \
-          #   CODE_SIGNING_ALLOWED=NO || true
+          # Check if Package.swift exists (SPM project)
+          if [ -f "Package.swift" ]; then
+            echo "Building SPM package..."
+            swift build || echo "Swift build not fully configured"
+          fi
+          
+          # Check if xcodeproj or xcworkspace exists
+          if ls *.xcodeproj 1> /dev/null 2>&1; then
+            SCHEME=$(xcodebuild -list -project *.xcodeproj 2>/dev/null | grep -A 1 "Schemes:" | tail -1 | xargs || echo "SovereignCommunications")
+            echo "Building Xcode project with scheme: $SCHEME"
+            xcodebuild -scheme "$SCHEME" \
+              -sdk iphonesimulator \
+              -configuration Debug \
+              -derivedDataPath build \
+              CODE_SIGNING_ALLOWED=NO || echo "Xcode build not configured"
+          else
+            echo "No Xcode project found, SPM-only build"
+          fi
+        continue-on-error: true  # iOS build may not be fully configured
 
   # Unit Tests - Core
   test-core:
@@ -228,7 +253,7 @@ jobs:
       
       - name: Run core unit tests
         run: npm test -w core -- --coverage --maxWorkers=2
-        continue-on-error: true
+        continue-on-error: false
       
       - name: Upload coverage
         if: matrix.node-version == 20
@@ -237,7 +262,7 @@ jobs:
           directory: ./core/coverage
           flags: core
           fail_ci_if_error: false
-        continue-on-error: true
+        continue-on-error: true  # Coverage upload failures shouldn't fail CI
 
   # Unit Tests - Android
   test-android:
@@ -274,8 +299,13 @@ jobs:
       
       - name: Run Android unit tests
         working-directory: android
-        run: gradle test --stacktrace || echo "No unit tests configured yet"
-        continue-on-error: true
+        run: |
+          if [ -f "./gradlew" ]; then
+            ./gradlew test --stacktrace || echo "No unit tests configured yet"
+          else
+            gradle test --stacktrace || echo "No unit tests configured yet"
+          fi
+        continue-on-error: true  # Android tests may not be fully implemented
 
   # Unit Tests - iOS
   test-ios:
@@ -294,8 +324,19 @@ jobs:
       - name: Run iOS unit tests
         working-directory: ios
         run: |
-          swift test || echo "No Swift tests configured yet"
-        continue-on-error: true
+          if [ -f "Package.swift" ]; then
+            swift test || echo "No Swift tests configured yet"
+          fi
+          
+          # Run Xcode tests if project exists
+          if ls *.xcodeproj 1> /dev/null 2>&1; then
+            SCHEME=$(xcodebuild -list -project *.xcodeproj 2>/dev/null | grep -A 1 "Schemes:" | tail -1 | xargs || echo "SovereignCommunications")
+            xcodebuild test -scheme "$SCHEME" \
+              -sdk iphonesimulator \
+              -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
+              CODE_SIGNING_ALLOWED=NO || echo "No Xcode tests configured"
+          fi
+        continue-on-error: true  # iOS tests may not be fully implemented
 
   # Integration Tests
   test-integration:
@@ -329,7 +370,7 @@ jobs:
       
       - name: Run integration tests
         run: npm run test:integration
-        continue-on-error: true
+        continue-on-error: false
 
   # E2E Tests - Web
   test-e2e-web:
@@ -365,7 +406,7 @@ jobs:
         run: npm run test:e2e -- --project=${{ matrix.browser }}
         env:
           CI: true
-        continue-on-error: true
+        continue-on-error: false
       
       - name: Upload test results
         if: always()
@@ -422,26 +463,76 @@ jobs:
     steps:
       - name: Check all jobs status
         run: |
-          echo "Lint TypeScript: ${{ needs.lint-typescript.result }}"
-          echo "Lint Kotlin: ${{ needs.lint-kotlin.result }}"
-          echo "Lint Swift: ${{ needs.lint-swift.result }}"
-          echo "Build Core: ${{ needs.build-core.result }}"
-          echo "Build Web: ${{ needs.build-web.result }}"
-          echo "Build Android: ${{ needs.build-android.result }}"
-          echo "Build iOS: ${{ needs.build-ios.result }}"
-          echo "Test Core: ${{ needs.test-core.result }}"
-          echo "Test Android: ${{ needs.test-android.result }}"
-          echo "Test iOS: ${{ needs.test-ios.result }}"
-          echo "Test Integration: ${{ needs.test-integration.result }}"
-          echo "Test E2E Web: ${{ needs.test-e2e-web.result }}"
-          echo "Security Audit: ${{ needs.security-audit.result }}"
+          echo "=== CI Pipeline Status Summary ==="
+          echo ""
+          echo "Linting:"
+          echo "  TypeScript: ${{ needs.lint-typescript.result }}"
+          echo "  Kotlin: ${{ needs.lint-kotlin.result }}"
+          echo "  Swift: ${{ needs.lint-swift.result }}"
+          echo ""
+          echo "Builds:"
+          echo "  Core: ${{ needs.build-core.result }}"
+          echo "  Web: ${{ needs.build-web.result }}"
+          echo "  Android: ${{ needs.build-android.result }}"
+          echo "  iOS: ${{ needs.build-ios.result }}"
+          echo ""
+          echo "Tests:"
+          echo "  Core: ${{ needs.test-core.result }}"
+          echo "  Android: ${{ needs.test-android.result }}"
+          echo "  iOS: ${{ needs.test-ios.result }}"
+          echo "  Integration: ${{ needs.test-integration.result }}"
+          echo "  E2E Web: ${{ needs.test-e2e-web.result }}"
+          echo ""
+          echo "Security:"
+          echo "  Audit: ${{ needs.security-audit.result }}"
+          echo ""
           
-          # Fail if any critical job failed
-          if [ "${{ needs.lint-typescript.result }}" = "failure" ] || \
-             [ "${{ needs.build-core.result }}" = "failure" ] || \
-             [ "${{ needs.build-web.result }}" = "failure" ]; then
-            echo "Critical jobs failed"
-            exit 1
+          # Critical jobs that MUST pass
+          CRITICAL_FAILED=0
+          
+          if [ "${{ needs.lint-typescript.result }}" = "failure" ]; then
+            echo "❌ CRITICAL: TypeScript linting failed"
+            CRITICAL_FAILED=1
           fi
           
-          echo "CI Pipeline completed successfully"
+          if [ "${{ needs.build-core.result }}" = "failure" ]; then
+            echo "❌ CRITICAL: Core library build failed"
+            CRITICAL_FAILED=1
+          fi
+          
+          if [ "${{ needs.build-web.result }}" = "failure" ]; then
+            echo "❌ CRITICAL: Web application build failed"
+            CRITICAL_FAILED=1
+          fi
+          
+          if [ "${{ needs.test-core.result }}" = "failure" ]; then
+            echo "❌ CRITICAL: Core tests failed"
+            CRITICAL_FAILED=1
+          fi
+          
+          # Warning for non-critical failures
+          if [ "${{ needs.build-android.result }}" = "failure" ]; then
+            echo "⚠️  WARNING: Android build failed (non-blocking)"
+          fi
+          
+          if [ "${{ needs.build-ios.result }}" = "failure" ]; then
+            echo "⚠️  WARNING: iOS build failed (non-blocking)"
+          fi
+          
+          if [ "${{ needs.test-integration.result }}" = "failure" ]; then
+            echo "⚠️  WARNING: Integration tests failed (non-blocking)"
+          fi
+          
+          if [ "${{ needs.test-e2e-web.result }}" = "failure" ]; then
+            echo "⚠️  WARNING: E2E tests failed (non-blocking)"
+          fi
+          
+          # Final decision
+          if [ $CRITICAL_FAILED -eq 1 ]; then
+            echo ""
+            echo "❌ CI PIPELINE FAILED - Critical jobs failed"
+            exit 1
+          else
+            echo ""
+            echo "✅ CI PIPELINE PASSED - All critical jobs succeeded"
+          fi
