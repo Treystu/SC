@@ -183,11 +183,21 @@ jobs:
       
       - name: Build Android Release APK
         working-directory: android
-        run: gradle assembleRelease --stacktrace
+        run: |
+          if [ -f "./gradlew" ]; then
+            ./gradlew assembleRelease --stacktrace
+          else
+            gradle assembleRelease --stacktrace
+          fi
       
       - name: Build Android App Bundle
         working-directory: android
-        run: gradle bundleRelease --stacktrace || echo "Bundle build failed, continuing with APK only"
+        run: |
+          if [ -f "./gradlew" ]; then
+            ./gradlew bundleRelease --stacktrace || echo "Bundle build failed, continuing with APK only"
+          else
+            gradle bundleRelease --stacktrace || echo "Bundle build failed, continuing with APK only"
+          fi
         continue-on-error: true
       
       - name: Sign APK (if keystore available)
