@@ -718,22 +718,22 @@ This audit provides a comprehensive comparison of features, UI/UX, and implement
 
 ## 5. Actionable Implementation Plan
 
-### Phase 1: Critical Fixes (Week 1-2)
+### Phase 1: Critical Fixes (Data Persistence & Core UX)
 
 **Goal:** Make app functional and usable
 
-#### Week 1: Data Persistence
-- [ ] **Day 1-2:** Web IndexedDB integration
+#### Step 1: Data Persistence Integration
+- [ ] Web IndexedDB integration
   - Wire up message storage
   - Wire up contact storage
   - Test persistence across reloads
   
-- [ ] **Day 3-4:** Android Room integration
+- [ ] Android Room integration
   - Connect database to service
   - Implement DAOs and repositories
   - Test persistence
 
-- [ ] **Day 5:** iOS Core Data integration
+- [ ] iOS Core Data integration
   - Verify entities working
   - Connect to view models
   - Test persistence
@@ -742,23 +742,23 @@ This audit provides a comprehensive comparison of features, UI/UX, and implement
 
 ---
 
-#### Week 2: Core UX
-- [ ] **Day 1-2:** Onboarding flow
+#### Step 2: Core UX Implementation
+- [ ] Onboarding flow
   - Design screens (all platforms)
   - Implement welcome screen
   - Add first-contact guide
   
-- [ ] **Day 3:** Android chat integration
+- [ ] Android chat integration
   - Connect ChatScreen to service
   - Test message flow
   - Fix any issues
 
-- [ ] **Day 4:** Terminology standardization
+- [ ] Terminology standardization
   - Update all UI strings
   - Create terminology guide
   - Review all platforms
 
-- [ ] **Day 5:** Testing & fixes
+- [ ] Critical flow testing
   - Test all critical flows
   - Fix blocking bugs
   - Prepare for Phase 2
@@ -767,37 +767,37 @@ This audit provides a comprehensive comparison of features, UI/UX, and implement
 
 ---
 
-### Phase 2: Polish & Parity (Week 3-4)
+### Phase 2: Feature Parity & Polish
 
-#### Week 3: Feature Parity
-- [ ] **Day 1:** Web QR scanner
-- [ ] **Day 2:** Notification system (all platforms)
-- [ ] **Day 3:** Settings functionality
-- [ ] **Day 4:** Contact detail views
-- [ ] **Day 5:** Media features
+#### Step 3: Feature Completion
+- [ ] Web QR scanner
+- [ ] Notification system (all platforms)
+- [ ] Settings functionality
+- [ ] Contact detail views
+- [ ] Media features
 
 **Deliverable:** Feature-complete platforms
 
 ---
 
-#### Week 4: Testing & Documentation
-- [ ] **Day 1-2:** Cross-platform testing
+#### Step 4: Testing & Documentation
+- [ ] Cross-platform testing
   - Test web ↔ Android
   - Test web ↔ iOS
   - Test Android ↔ iOS
   
-- [ ] **Day 3:** UI/UX review
+- [ ] UI/UX review
   - Check consistency
   - Fix visual bugs
   - Verify branding
 
-- [ ] **Day 4:** Documentation
+- [ ] Documentation
   - User guides per platform
   - FAQ
   - Privacy explanation
   - Troubleshooting
 
-- [ ] **Day 5:** Final testing
+- [ ] Final testing
   - Accessibility audit
   - Performance testing
   - Security review
@@ -896,14 +896,14 @@ This audit provides a comprehensive comparison of features, UI/UX, and implement
 - ✅ **iOS App:** 87% feature complete
 
 ### Critical Path to V1 Beta
-1. **Fix data persistence** (all platforms) - 1 week
-2. **Add user onboarding** (all platforms) - 3 days
-3. **Complete Android chat** (Android) - 2 days
-4. **Standardize terminology** (all platforms) - 1 day
-5. **Add notifications** (all platforms) - 3 days
-6. **Testing & polish** - 1 week
+1. **Fix data persistence** (all platforms) - Phase 1, Step 1
+2. **Add user onboarding** (all platforms) - Phase 1, Step 2
+3. **Complete Android chat** (Android) - Phase 1, Step 2
+4. **Standardize terminology** (all platforms) - Phase 1, Step 2
+5. **Add notifications** (all platforms) - Phase 2, Step 3
+6. **Testing & polish** - Phase 2, Step 4
 
-**Total Time:** 3-4 weeks to V1 beta
+**Implementation:** 2 Phases, 4 Steps total
 
 ---
 

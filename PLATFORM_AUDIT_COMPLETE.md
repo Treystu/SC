@@ -32,11 +32,11 @@
 4. Inconsistent terminology
 
 ### Timeline
-**3-4 weeks to V1 beta**
-- Week 1: Data persistence
-- Week 2: Onboarding + Android chat
-- Week 3: Feature parity
-- Week 4: Testing + docs
+**Completion phases to V1 beta**
+- Phase 1, Step 1: Data persistence
+- Phase 1, Step 2: Onboarding + Android chat
+- Phase 2, Step 3: Feature parity
+- Phase 2, Step 4: Testing + docs
 
 ---
 
@@ -76,7 +76,7 @@
 1. **Review** audit documents with team
 2. **Create** GitHub issues from action items
 3. **Assign** P0 blockers for immediate work
-4. **Begin** Week 1 implementation (data persistence)
+4. **Begin** Phase implementation implementation (data persistence)
 5. **Track** progress using provided checklists
 
 ---

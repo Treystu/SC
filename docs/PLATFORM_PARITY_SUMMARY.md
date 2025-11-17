@@ -125,64 +125,64 @@ This audit comprehensively evaluates feature parity, UI/UX consistency, and impl
 
 ## Critical Path to V1 Beta
 
-### Timeline: 3-4 Weeks
+### Implementation Phases
 
-**Week 1: Data Persistence**
+**Phase 1: Critical Fixes (Data Persistence & Core UX)**
+
+**Step 1: Data Persistence Integration**
 - Integrate IndexedDB (Web)
 - Integrate Room database (Android)
 - Integrate Core Data (iOS)
 - Test persistence across restarts
-- **Effort:** 5 days
 
-**Week 2: Core UX**
+**Step 2: Core UX Implementation**
 - Implement onboarding flow (all platforms)
 - Connect Android chat to service
 - Standardize terminology
 - Fix blocking bugs
-- **Effort:** 5 days
 
-**Week 3: Feature Parity**
+**Phase 2: Feature Parity & Polish**
+
+**Step 3: Feature Completion**
 - Add Web QR scanner
 - Implement notifications
 - Wire up settings
 - Complete media features
-- **Effort:** 5 days
 
-**Week 4: Testing & Polish**
+**Step 4: Testing & Documentation**
 - Cross-platform testing
 - UI/UX review
 - Write documentation
 - Accessibility audit
 - Final testing
-- **Effort:** 5 days
 
 ---
 
 ## Priority Recommendations
 
 ### P0 - Must Fix (Blockers)
-1. **Data Persistence Integration** (1 week)
+1. **Data Persistence Integration** (Phase 1, Step 1)
    - All platforms lose data on restart
    - Critical for any real use
    
-2. **User Onboarding Flow** (3 days)
+2. **User Onboarding Flow** (Phase 1, Step 2)
    - Users are confused without guidance
    - Critical for adoption
 
-3. **Android Chat Integration** (2 days)
+3. **Android Chat Integration** (Phase 1, Step 2)
    - Can't send messages on Android
    - Blocking for Android users
 
-4. **Terminology Standardization** (1 day)
+4. **Terminology Standardization** (Phase 1, Step 2)
    - Inconsistent language confuses users
    - Quick fix, high impact
 
 ### P1 - Should Fix
-1. **Notification System** (3 days)
-2. **Web QR Scanner** (6 hours)
-3. **Settings Functionality** (2 days)
-4. **Privacy Explanation** (1 day)
-5. **Help System** (1 day)
+1. **Notification System** (Phase 2, Step 3)
+2. **Web QR Scanner** (Phase 2, Step 3)
+3. **Settings Functionality** (Phase 2, Step 3)
+4. **Privacy Explanation** (Phase 2, Step 4)
+5. **Help System** (Phase 2, Step 4)
 
 ### P2 - Nice to Have (Post V1)
 1. Video calling (web only)

@@ -12,7 +12,7 @@ This document breaks down the platform parity audit into actionable GitHub issue
 
 ### Issue #1: Integrate Data Persistence Across All Platforms
 **Priority:** P0 (Blocker)  
-**Effort:** 2-3 days per platform  
+**Phase:** Phase 1, Step 1  
 **Platforms:** Web, Android, iOS
 
 **Description:**
@@ -44,7 +44,7 @@ All platforms have database schemas defined but persistence is not integrated wi
 
 ### Issue #2: Implement User Onboarding Flow
 **Priority:** P0 (Critical UX)  
-**Effort:** 1-2 days per platform  
+**Phase:** Phase 1, Step 2  
 **Platforms:** Web, Android, iOS
 
 **Description:**
@@ -81,7 +81,7 @@ No onboarding flow exists. New users are confused and don't know how to use the 
 
 ### Issue #3: Integrate Android Chat UI with Service
 **Priority:** P0 (Blocker for Android)  
-**Effort:** 1-2 days  
+**Phase:** Phase 1, Step 2  
 **Platform:** Android
 
 **Description:**
@@ -114,7 +114,7 @@ ChatScreen UI exists but is not connected to MeshNetworkService. Cannot send or 
 
 ### Issue #4: Standardize Terminology Across Platforms
 **Priority:** P0 (UX Consistency)  
-**Effort:** 2-3 hours  
+**Phase:** Phase 1, Step 2  
 **Platforms:** Web, Android, iOS
 
 **Description:**
@@ -152,7 +152,7 @@ Inconsistent terminology across platforms causes confusion. Some screens say "Co
 
 ### Issue #5: Implement Notification System
 **Priority:** P1  
-**Effort:** 1 day per platform  
+**Phase:** Phase 2, Step 3  
 **Platforms:** Web, Android, iOS
 
 **Description:**
@@ -179,7 +179,7 @@ Users miss messages because there's no notification system. Need browser notific
 
 ### Issue #6: Add QR Code Scanner to Web
 **Priority:** P1  
-**Effort:** 4-6 hours  
+**Phase:** Phase 2, Step 3  
 **Platform:** Web
 
 **Description:**
@@ -203,7 +203,7 @@ Web app cannot scan QR codes. Mobile apps can. Need to add camera access and QR 
 
 ### Issue #7: Wire Up Settings Functionality
 **Priority:** P1  
-**Effort:** 1-2 days per platform  
+**Phase:** Phase 2, Step 3  
 **Platforms:** Web, Android, iOS
 
 **Description:**
@@ -232,7 +232,7 @@ Settings screens exist but most options don't actually do anything. Need to conn
 
 ### Issue #8: Add Privacy & Security Explanations
 **Priority:** P1  
-**Effort:** 1 day  
+**Phase:** Phase 2, Step 4  
 **Platforms:** Web, Android, iOS
 
 **Description:**
@@ -260,7 +260,7 @@ Users don't understand how encryption works or what makes the app secure. Need i
 
 ### Issue #9: Add In-App Help System
 **Priority:** P1  
-**Effort:** 1 day  
+**Phase:** Phase 2, Step 4  
 **Platforms:** Web, Android, iOS
 
 **Description:**
@@ -290,7 +290,7 @@ No help system. Users can't get assistance within the app. Need FAQ and troubles
 
 ### Issue #10: Complete Media Features
 **Priority:** P1  
-**Effort:** 2-3 days  
+**Phase:** Phase 2, Step 3  
 **Platforms:** Web, Android, iOS
 
 **Description:**
@@ -318,7 +318,7 @@ Media features (image upload, voice recording, file sharing) are partially imple
 
 ### Issue #11: Implement Read Receipts
 **Priority:** P2  
-**Effort:** 1 day  
+**Phase:** Phase 2, Step 4  
 **Platforms:** Web, Android, iOS
 
 **Description:**
@@ -334,7 +334,7 @@ Users can't tell if messages were read. Implement optional read receipts.
 
 ### Issue #12: Implement Typing Indicators
 **Priority:** P2  
-**Effort:** 1 day  
+**Phase:** Phase 2, Step 4  
 **Platforms:** Web, Android, iOS
 
 **Description:**
@@ -351,7 +351,7 @@ No typing indicators. Implement "X is typing..." feature.
 
 ### Issue #13: Add Emoji Picker
 **Priority:** P2  
-**Effort:** 1 day  
+**Phase:** Phase 2, Step 4  
 **Platforms:** Android, iOS (Web has partial)
 
 **Description:**
@@ -368,7 +368,7 @@ Mobile platforms lack emoji picker. Need native emoji selector.
 
 ### Issue #14: Implement Message Search
 **Priority:** P2  
-**Effort:** 1-2 days  
+**Phase:** Phase 2, Step 3  
 **Platforms:** Android, iOS (Web has component)
 
 **Description:**
@@ -385,7 +385,7 @@ Can't search message history on mobile. Implement full-text search.
 
 ### Issue #15: Add Message Reactions
 **Priority:** P2  
-**Effort:** 2 days  
+**Phase:** Phase 2  
 **Platforms:** Web, Android, iOS
 
 **Description:**
@@ -402,7 +402,7 @@ No message reactions. Add emoji reactions to messages.
 
 ### Issue #16: Implement Group Messaging
 **Priority:** P2  
-**Effort:** 1 week  
+**Phase:** Post V1  
 **Platforms:** Web, Android, iOS
 
 **Description:**
@@ -421,7 +421,7 @@ Only 1-on-1 messaging works. Implement group conversations.
 
 ### Issue #17: Add Video Calling
 **Priority:** P2  
-**Effort:** 1 week  
+**Phase:** Post V1  
 **Platform:** Web (initially)
 
 **Description:**
@@ -442,7 +442,7 @@ Web has video call components but not integrated. Complete implementation.
 
 ### Issue #18: Create Platform User Guides
 **Priority:** P1  
-**Effort:** 1 day
+**Phase:** Phase 2, Step 4
 
 **Description:**
 Need user guides for each platform explaining how to use the app.
@@ -460,7 +460,7 @@ Need user guides for each platform explaining how to use the app.
 
 ### Issue #19: Create Developer Guides
 **Priority:** P2  
-**Effort:** 2 days
+**Phase:** Phase 2
 
 **Description:**
 Need developer documentation for contributing and understanding architecture.
@@ -478,7 +478,7 @@ Need developer documentation for contributing and understanding architecture.
 
 ### Issue #20: Update README with Audit Findings
 **Priority:** P1  
-**Effort:** 1 hour
+**Phase:** Phase 2, Step 4
 
 **Description:**
 README should reference the platform parity audit and link to implementation status.
@@ -496,7 +496,7 @@ README should reference the platform parity audit and link to implementation sta
 
 ### Issue #21: Cross-Platform Integration Tests
 **Priority:** P1  
-**Effort:** 2 days
+**Phase:** Phase 2
 
 **Description:**
 Need automated tests for cross-platform messaging.
@@ -514,7 +514,7 @@ Need automated tests for cross-platform messaging.
 
 ### Issue #22: Accessibility Audit
 **Priority:** P1  
-**Effort:** 2 days
+**Phase:** Phase 2
 
 **Description:**
 No accessibility testing performed. Need to audit and fix.
@@ -532,7 +532,7 @@ No accessibility testing performed. Need to audit and fix.
 
 ### Issue #23: Performance Testing
 **Priority:** P2  
-**Effort:** 2 days
+**Phase:** Phase 2
 
 **Description:**
 No performance benchmarks. Need to measure and optimize.
@@ -592,19 +592,19 @@ gh issue create --title "Performance testing" --body-file issue_templates/issue_
 
 Use this checklist to track completion:
 
-### Week 1: Data Persistence (P0)
+### Phase 1, Step 1: Data Persistence (P0)
 - [ ] Issue #1: Data persistence (Web)
 - [ ] Issue #1: Data persistence (Android)
 - [ ] Issue #1: Data persistence (iOS)
 
-### Week 2: Core UX (P0)
+### Phase 1, Step 2: Core UX (P0)
 - [ ] Issue #2: Onboarding (Web)
 - [ ] Issue #2: Onboarding (Android)
 - [ ] Issue #2: Onboarding (iOS)
 - [ ] Issue #3: Android chat integration
 - [ ] Issue #4: Terminology standardization
 
-### Week 3: Feature Parity (P1)
+### Phase 2, Step 3: Feature Parity (P1)
 - [ ] Issue #5: Notifications (Web)
 - [ ] Issue #5: Notifications (Android)
 - [ ] Issue #5: Notifications (iOS)
@@ -612,7 +612,7 @@ Use this checklist to track completion:
 - [ ] Issue #7: Settings functionality
 - [ ] Issue #10: Media features
 
-### Week 4: Testing & Documentation (P1)
+### Phase 2, Step 4: Testing & Documentation (P1)
 - [ ] Issue #8: Privacy explanations
 - [ ] Issue #9: Help system
 - [ ] Issue #18: User guides
