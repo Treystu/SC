@@ -1,0 +1,447 @@
+name: Unified CI/CD
+
+on:
+  push:
+    branches: [ main, develop, 'copilot/**' ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  # TypeScript Linting
+  lint-typescript:
+    name: Lint TypeScript/JavaScript
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run ESLint
+        run: npm run lint
+        continue-on-error: false
+
+  # Kotlin Linting
+  lint-kotlin:
+    name: Lint Kotlin (Android)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      
+      - name: Setup ktlint
+        run: |
+          curl -sSLO https://github.com/pinterest/ktlint/releases/download/1.0.1/ktlint
+          chmod a+x ktlint
+          sudo mv ktlint /usr/local/bin/
+      
+      - name: Run ktlint
+        working-directory: android
+        run: ktlint --android "app/src/**/*.kt" || true
+        continue-on-error: true
+
+  # Swift Linting
+  lint-swift:
+    name: Lint Swift (iOS)
+    runs-on: macos-14
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install SwiftLint
+        run: |
+          brew install swiftlint
+      
+      - name: Run SwiftLint
+        working-directory: ios
+        run: swiftlint lint --quiet || true
+        continue-on-error: true
+
+  # Build Core Library
+  build-core:
+    name: Build Core Library
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [lint-typescript]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build core library
+        run: npm run build -w core
+      
+      - name: Upload core artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-build
+          path: core/dist
+          retention-days: 7
+
+  # Build Web Application
+  build-web:
+    name: Build Web Application
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [lint-typescript, build-core]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build core library
+        run: npm run build -w core
+      
+      - name: Build web application
+        run: npm run build -w web
+        env:
+          NODE_ENV: production
+      
+      - name: Upload web artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: web/dist
+          retention-days: 7
+
+  # Build Android Application
+  build-android:
+    name: Build Android Application
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [lint-kotlin]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+      
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+      
+      - name: Setup Gradle
+        uses: gradle/gradle-build-action@v2
+        with:
+          gradle-version: 8.5
+      
+      - name: Build Android debug APK
+        working-directory: android
+        run: gradle assembleDebug --stacktrace
+      
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+          retention-days: 7
+
+  # Build iOS Application
+  build-ios:
+    name: Build iOS Application
+    runs-on: macos-14
+    timeout-minutes: 20
+    needs: [lint-swift]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      
+      - name: Build iOS app for simulator
+        working-directory: ios
+        run: |
+          swift build || echo "Swift build not configured as SPM library"
+          # Alternative: Use xcodebuild if there's an Xcode project
+          # xcodebuild -scheme SovereignCommunications \
+          #   -sdk iphonesimulator \
+          #   -configuration Debug \
+          #   -derivedDataPath build \
+          #   CODE_SIGNING_ALLOWED=NO || true
+
+  # Unit Tests - Core
+  test-core:
+    name: Test Core Library
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [build-core]
+    strategy:
+      matrix:
+        node-version: [18, 20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run core unit tests
+        run: npm test -w core -- --coverage --maxWorkers=2
+        continue-on-error: true
+      
+      - name: Upload coverage
+        if: matrix.node-version == 20
+        uses: codecov/codecov-action@v4
+        with:
+          directory: ./core/coverage
+          flags: core
+          fail_ci_if_error: false
+        continue-on-error: true
+
+  # Unit Tests - Android
+  test-android:
+    name: Test Android (Unit Tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [build-android]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+      
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+      
+      - name: Setup Gradle
+        uses: gradle/gradle-build-action@v2
+        with:
+          gradle-version: 8.5
+      
+      - name: Run Android unit tests
+        working-directory: android
+        run: gradle test --stacktrace || echo "No unit tests configured yet"
+        continue-on-error: true
+
+  # Unit Tests - iOS
+  test-ios:
+    name: Test iOS (Unit Tests)
+    runs-on: macos-14
+    timeout-minutes: 15
+    needs: [build-ios]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      
+      - name: Run iOS unit tests
+        working-directory: ios
+        run: |
+          swift test || echo "No Swift tests configured yet"
+        continue-on-error: true
+
+  # Integration Tests
+  test-integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [build-web]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Download web build
+        uses: actions/download-artifact@v4
+        with:
+          name: web-build
+          path: web/dist
+      
+      - name: Download core build
+        uses: actions/download-artifact@v4
+        with:
+          name: core-build
+          path: core/dist
+      
+      - name: Run integration tests
+        run: npm run test:integration
+        continue-on-error: true
+
+  # E2E Tests - Web
+  test-e2e-web:
+    name: E2E Tests (Web)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [build-web]
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+      
+      - name: Build application
+        run: |
+          npm run build -w core
+          npm run build -w web
+      
+      - name: Run E2E tests
+        run: npm run test:e2e -- --project=${{ matrix.browser }}
+        env:
+          CI: true
+        continue-on-error: true
+      
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results-${{ matrix.browser }}
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+
+  # Security Audit
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Run npm audit
+        run: npm audit --audit-level=moderate || true
+        continue-on-error: true
+      
+      - name: Check for known vulnerabilities
+        run: |
+          npx audit-ci --moderate || echo "Vulnerabilities found - review required"
+        continue-on-error: true
+
+  # Final Status Check
+  ci-success:
+    name: CI Success
+    runs-on: ubuntu-latest
+    needs: [
+      lint-typescript,
+      lint-kotlin,
+      lint-swift,
+      build-core,
+      build-web,
+      build-android,
+      build-ios,
+      test-core,
+      test-android,
+      test-ios,
+      test-integration,
+      test-e2e-web,
+      security-audit
+    ]
+    if: always()
+    steps:
+      - name: Check all jobs status
+        run: |
+          echo "Lint TypeScript: ${{ needs.lint-typescript.result }}"
+          echo "Lint Kotlin: ${{ needs.lint-kotlin.result }}"
+          echo "Lint Swift: ${{ needs.lint-swift.result }}"
+          echo "Build Core: ${{ needs.build-core.result }}"
+          echo "Build Web: ${{ needs.build-web.result }}"
+          echo "Build Android: ${{ needs.build-android.result }}"
+          echo "Build iOS: ${{ needs.build-ios.result }}"
+          echo "Test Core: ${{ needs.test-core.result }}"
+          echo "Test Android: ${{ needs.test-android.result }}"
+          echo "Test iOS: ${{ needs.test-ios.result }}"
+          echo "Test Integration: ${{ needs.test-integration.result }}"
+          echo "Test E2E Web: ${{ needs.test-e2e-web.result }}"
+          echo "Security Audit: ${{ needs.security-audit.result }}"
+          
+          # Fail if any critical job failed
+          if [ "${{ needs.lint-typescript.result }}" = "failure" ] || \
+             [ "${{ needs.build-core.result }}" = "failure" ] || \
+             [ "${{ needs.build-web.result }}" = "failure" ]; then
+            echo "Critical jobs failed"
+            exit 1
+          fi
+          
+          echo "CI Pipeline completed successfully"

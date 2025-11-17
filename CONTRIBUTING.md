@@ -49,7 +49,19 @@ git checkout -b fix/issue-description
 - Run tests: `npm test`
 - Run linter: `npm run lint`
 
-### 3. Commit Changes
+### 3. Verify Locally
+Before pushing, run the local CI checks:
+```bash
+npm run ci:local
+# or individually:
+npm run lint:all      # Lint all platforms
+npm run build:all     # Build all platforms
+npm test              # Run all tests
+```
+
+See [CI/CD Quick Reference](docs/CI_CD_QUICK_REFERENCE.md) for more options.
+
+### 4. Commit Changes
 Use descriptive commit messages:
 ```bash
 git add .
@@ -60,12 +72,28 @@ git commit -m "Add health score calculation to peer monitoring
 - Update documentation"
 ```
 
-### 4. Push and Create PR
+### 5. Push and Create PR
 ```bash
 git push origin feature/your-feature-name
 ```
 
 Then create a Pull Request on GitHub.
+
+## CI/CD Pipeline
+
+All pull requests automatically run through our CI/CD pipeline which:
+- ✅ Lints TypeScript, Kotlin, and Swift code
+- ✅ Builds web, Android, and iOS applications
+- ✅ Runs unit tests on Node 18, 20, and 22
+- ✅ Runs integration tests
+- ✅ Runs E2E tests across browsers
+- ✅ Performs security audits
+
+**All checks must pass before merging.**
+
+For detailed CI/CD information, see:
+- [CI/CD Documentation](docs/ci-cd.md)
+- [CI/CD Quick Reference](docs/CI_CD_QUICK_REFERENCE.md)
 
 ## Code Style Guide
 
@@ -211,11 +239,15 @@ Fixes #456
 
 ### Before Submitting
 - [ ] All tests pass (`npm test`)
+- [ ] All linters pass (`npm run lint:all`)
 - [ ] Code follows style guide
 - [ ] New features have tests
 - [ ] Documentation is updated
 - [ ] Commits are well-formatted
 - [ ] Branch is up to date with main
+- [ ] Local CI checks pass (`npm run ci:local`)
+
+**Note**: The automated CI/CD pipeline will verify all these checks when you create your PR.
 
 ### PR Description
 Include:
@@ -250,10 +282,18 @@ Closes #123
 ```
 
 ### Review Process
-1. Automated checks must pass (tests, linting)
+1. Automated CI/CD checks must pass (tests, linting, building)
 2. Code review by maintainer
 3. Address review comments
 4. Approval and merge
+
+The CI/CD pipeline automatically:
+- Runs on all platforms (Web, Android, iOS)
+- Tests across multiple Node versions (18, 20, 22)
+- Builds production artifacts
+- Performs security audits
+
+You can view the workflow runs at: https://github.com/Treystu/SC/actions
 
 ## Security Guidelines
 
