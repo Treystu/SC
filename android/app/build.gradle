@@ -90,7 +90,7 @@ dependencies {
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3'
     
     // QR Code
-    implementation 'com.google.zxing:core:3.5.2'
+    implementation 'com.google.zxing:core:3.5.4'
     implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
     
     // Permissions
