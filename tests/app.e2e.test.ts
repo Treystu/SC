@@ -102,15 +102,19 @@ test.describe('Peer Discovery and Connection', () => {
     
     if (qrVisible) {
       await expect(qrOption).toBeVisible();
+    
+      const mockPeerData = {
+        publicKey: '1'.repeat(64),
+        name: 'Test Peer'
+      };
+    
+      await page.evaluate((data) => {
+        window.dispatchEvent(new CustomEvent('qr-scanned', { detail: data }));
+      }, mockPeerData);
+    
+      // Verify peer added
+      await expect(page.locator('[data-testid="peer-Test Peer"]')).toBeVisible();
     }
-  });
-    
-    await page.evaluate((data) => {
-      window.dispatchEvent(new CustomEvent('qr-scanned', { detail: data }));
-    }, mockPeerData);
-    
-    // Verify peer added
-    await expect(page.locator('[data-testid="peer-Test Peer"]')).toBeVisible();
   });
 
   test('should show peer connection status', async ({ page }) => {
