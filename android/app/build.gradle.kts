@@ -98,7 +98,8 @@ dependencies {
     kapt("androidx.room:room-compiler:2.6.1")
     
     // Security & Crypto
-    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    // Note: androidx.security:security-crypto alpha library removed
+    // Using KeystoreManager instead for production-ready key management
     implementation("org.bouncycastle:bcprov-jdk18on:1.78")
     
     // SQLCipher for database encryption
