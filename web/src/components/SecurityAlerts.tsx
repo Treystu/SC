@@ -10,7 +10,6 @@ import {
   SecurityAlert,
   SecurityAlertType,
   AlertSeverity,
-  PeerReputation,
   PeerSecurityAlertSystem,
 } from '../../../core/src/mesh/peer-security-alerts';
 
@@ -39,9 +38,9 @@ export const SecurityAlerts: React.FC<SecurityAlertsProps> = ({
     });
 
     // Load existing alerts
-    const stats = alertSystem.getStatistics();
     // Note: Would need to add a method to get all alerts
     // For now, we'll populate as they come in
+    // const stats = alertSystem.getStatistics(); // Uncomment when needed
 
     return unsubscribe;
   }, [alertSystem]);

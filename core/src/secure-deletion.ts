@@ -186,7 +186,7 @@ export function createSecureBlobURL(
   data: Uint8Array,
   mimeType: string
 ): { url: string; cleanup: () => void } {
-  const blob = new Blob([data], { type: mimeType });
+  const blob = new Blob([data as BlobPart], { type: mimeType });
   const url = URL.createObjectURL(blob);
   
   return {

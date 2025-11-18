@@ -339,7 +339,9 @@ export class DoubleRatchet {
       if (this.state.skippedMessageKeys.size >= this.config.maxSkippedMessageKeys) {
         // Remove oldest skipped key
         const firstKey = this.state.skippedMessageKeys.keys().next().value;
-        this.state.skippedMessageKeys.delete(firstKey);
+        if (firstKey !== undefined) {
+          this.state.skippedMessageKeys.delete(firstKey);
+        }
       }
       
       this.state.skippedMessageKeys.set(keyId, skippedMessageKey);
@@ -445,7 +447,11 @@ export class DoubleRatchet {
     // For now, just enforce the maximum
     while (this.state.skippedMessageKeys.size > this.config.maxSkippedMessageKeys) {
       const firstKey = this.state.skippedMessageKeys.keys().next().value;
-      this.state.skippedMessageKeys.delete(firstKey);
+      if (firstKey !== undefined) {
+        this.state.skippedMessageKeys.delete(firstKey);
+      } else {
+        break; // Safety check to prevent infinite loop
+      }
     }
     
     return before - this.state.skippedMessageKeys.size;

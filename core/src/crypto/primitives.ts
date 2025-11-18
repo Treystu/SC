@@ -532,7 +532,7 @@ export interface RatchetState {
  * @param isInitiator - True if we initiated the session
  * @returns Initial ratchet state
  */
-export function initializeRatchet(sharedSecret: Uint8Array, isInitiator: boolean): RatchetState {
+export function initializeRatchet(sharedSecret: Uint8Array, _isInitiator: boolean): RatchetState {
   // Derive root key and initial chain keys from shared secret
   const rootKey = hkdf(sha256, sharedSecret, new Uint8Array(32), new TextEncoder().encode('root'), 32);
   const sendChainKey = hkdf(sha256, sharedSecret, new Uint8Array(32), new TextEncoder().encode('send'), 32);
