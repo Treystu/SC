@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Base configuration: Prevent cleartext traffic -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <!-- Trust system CAs -->
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- 
+        Certificate Pinning Configuration
+        
+        IMPORTANT: Replace placeholder pins with actual certificate pins before production.
+        
+        To generate certificate pins:
+        1. For production server:
+           openssl s_client -servername api.sovereigncommunications.app -connect api.sovereigncommunications.app:443 | \
+             openssl x509 -pubkey -noout | \
+             openssl pkey -pubin -outform der | \
+             openssl dgst -sha256 -binary | \
+             openssl enc -base64
+        
+        2. For backup/intermediate certificate:
+           Extract intermediate cert and repeat the process
+        
+        Best Practices:
+        - Pin both leaf and intermediate certificates
+        - Set expiration date before certificate expires
+        - Test thoroughly before deploying
+        - Have a backup pin ready
+        - Monitor certificate expiration dates
+    -->
+    
+    <!-- Example: Pin for update/API server (when available) -->
+    <!--
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">api.sovereigncommunications.app</domain>
+        <pin-set expiration="2026-12-31">
+            <!- - Primary certificate pin - ->
+            <pin digest="SHA-256">AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</pin>
+            <!- - Backup certificate pin (intermediate or future cert) - ->
+            <pin digest="SHA-256">BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=</pin>
+        </pin-set>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+    -->
+    
+    <!-- Example: Pin for update server (when available) -->
+    <!--
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">updates.sovereigncommunications.app</domain>
+        <pin-set expiration="2026-12-31">
+            <pin digest="SHA-256">CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC=</pin>
+            <pin digest="SHA-256">DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD=</pin>
+        </pin-set>
+    </domain-config>
+    -->
+    
+    <!-- 
+        Development/Debug Configuration
+        
+        This allows user-installed CA certificates in debug builds for testing.
+        In production, this section is automatically disabled.
+    -->
+    <debug-overrides>
+        <trust-anchors>
+            <!-- Additionally trust user-added CAs (e.g., Charles Proxy, mitmproxy) -->
+            <certificates src="user" />
+            <certificates src="system" />
+        </trust-anchors>
+    </debug-overrides>
+</network-security-config>

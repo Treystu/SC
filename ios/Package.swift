@@ -13,7 +13,11 @@ let package = Package(
         )
     ],
     dependencies: [
-        .package(url: "https://github.com/stasel/WebRTC.git", from: "120.0.0")
+        // Updated to latest version for security patches
+        // Previous: 120.0.0 (M120, Nov 2023)
+        // Current: 125.0.0 (M125, latest stable)
+        // Check for updates: https://github.com/stasel/WebRTC/releases
+        .package(url: "https://github.com/stasel/WebRTC.git", from: "125.0.0")
     ],
     targets: [
         .target(
