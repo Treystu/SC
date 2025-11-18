@@ -99,7 +99,11 @@ dependencies {
     
     // Security & Crypto
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
-    implementation("org.bouncycastle:bcprov-jdk15on:1.70")
+    implementation("org.bouncycastle:bcprov-jdk18on:1.78")
+    
+    // SQLCipher for database encryption
+    implementation("net.zetetic:android-database-sqlcipher:4.5.6")
+    implementation("androidx.sqlite:sqlite-ktx:2.4.0")
     
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")

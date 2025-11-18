@@ -9,7 +9,30 @@ This document provides a security summary for the Sovereign Communications proje
 - **CodeQL Scan**: ✅ Passing (with documented exceptions)
 - **Dependency Audit**: ✅ No known vulnerabilities in production dependencies
 - **Cryptographic Libraries**: ✅ Using audited libraries (@noble/curves, @noble/ciphers)
-- **Last Security Review**: 2024-11-15
+- **Last Security Review**: 2025-11-18
+- **Critical Fixes Applied**: ✅ BouncyCastle updated, Keystore implemented, Database encrypted
+
+## Recent Security Improvements (2025-11-18)
+
+### Critical Issues Fixed
+
+1. **✅ BouncyCastle Updated (Android)**
+   - Updated from bcprov-jdk15on:1.70 to bcprov-jdk18on:1.78
+   - Fixed CVE-2023-33201, CVE-2024-30171, CVE-2024-30172
+   - No functionality changes, drop-in replacement
+
+2. **✅ Android Keystore Integration**
+   - Created KeystoreManager with hardware-backed key storage
+   - Supports StrongBox (hardware security module)
+   - Biometric authentication support
+   - Automatic key invalidation on security changes
+   - AES-256-GCM encryption
+
+3. **✅ SQLCipher Database Encryption (Android)**
+   - Added SQLCipher v4.5.6 dependency
+   - Database encrypted by default
+   - Passphrase secured with Keystore
+   - Protects message history on device
 
 ## Known Limitations
 
