@@ -11,7 +11,7 @@
     "dev": "tsc --watch"
   },
   "dependencies": {
-    "@noble/ciphers": "^0.4.1",
+    "@noble/ciphers": "^2.0.1",
     "@noble/curves": "^1.9.7",
     "@noble/hashes": "^1.8.0",
     "@types/node": "^24.10.0"
