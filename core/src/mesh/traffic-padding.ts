@@ -144,24 +144,26 @@ export class TrafficPadding {
     }
     
     switch (this.config.strategy) {
-      case 'random':
+      case 'random': {
         // Random padding (most secure but higher cost)
         const randomPadding = crypto.getRandomValues(new Uint8Array(paddingLength));
         padded.set(randomPadding, originalSize);
         break;
+      }
         
       case 'zero':
         // Zero padding (efficient but less secure)
         // Array is already zero-filled
         break;
         
-      case 'pkcs7':
+      case 'pkcs7': {
         // PKCS7-style padding (repeating padding length byte)
         const pkcs7Value = paddingLength & 0xFF;
         for (let i = originalSize; i < originalSize + paddingLength; i++) {
           padded[i] = pkcs7Value;
         }
         break;
+      }
     }
     
     // Store original size in last 2 bytes (big-endian)
