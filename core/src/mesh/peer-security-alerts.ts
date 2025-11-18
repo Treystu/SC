@@ -11,7 +11,7 @@
  * - Out-of-band verification recommended for critical alerts
  */
 
-import { signMessage, verifyMessage } from '../crypto/signatures';
+import { signMessage, verifySignature } from '../crypto/primitives';
 
 export enum SecurityAlertType {
   /** Identity keys compromised (device stolen, malware, etc.) */
@@ -211,7 +211,7 @@ export class PeerSecurityAlertSystem {
     const contentBytes = encoder.encode(alertContent);
     
     // Verify signature
-    const signatureValid = await verifyMessage(
+    const signatureValid = verifySignature(
       contentBytes,
       alert.signature,
       reporterPublicKey
