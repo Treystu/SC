@@ -6,12 +6,13 @@
 
 import { describe, it, expect } from '@jest/globals';
 import { 
-  generateKeyPair, 
+  generateIdentity, 
   signMessage, 
   verifySignature,
   encryptMessage,
   decryptMessage,
-  deriveSharedSecret
+  performKeyExchange,
+  generateSessionKey
 } from './primitives';
 
 // Performance thresholds (in milliseconds)
@@ -59,7 +60,7 @@ describe('Crypto Performance Tests', () => {
   describe('Key Generation Performance', () => {
     it('should generate keypair within threshold', () => {
       const avgTime = measureAverage(() => {
-        generateKeyPair();
+        generateIdentity();
       }, 100);
       
       console.log(`Key generation average: ${avgTime.toFixed(2)}ms`);
@@ -69,7 +70,7 @@ describe('Crypto Performance Tests', () => {
     it('should generate 100 keypairs in reasonable time', () => {
       const totalTime = measure(() => {
         for (let i = 0; i < 100; i++) {
-          generateKeyPair();
+          generateIdentity();
         }
       });
       
@@ -79,7 +80,7 @@ describe('Crypto Performance Tests', () => {
   });
 
   describe('Signature Performance', () => {
-    const keypair = generateKeyPair();
+    const keypair = generateIdentity();
     const message = new Uint8Array(1024); // 1KB message
 
     it('should sign message within threshold', () => {
@@ -115,12 +116,13 @@ describe('Crypto Performance Tests', () => {
   });
 
   describe('Encryption Performance', () => {
-    const keypair = generateKeyPair();
+    const keypair = generateIdentity();
+    const sessionKey = generateSessionKey();
     const message = new Uint8Array(1024); // 1KB message
 
     it('should encrypt message within threshold', () => {
       const avgTime = measureAverage(() => {
-        encryptMessage(message, keypair.publicKey);
+        encryptMessage(message, sessionKey.key, sessionKey.nonce);
       }, 100);
       
       console.log(`Encryption average: ${avgTime.toFixed(2)}ms`);
@@ -128,10 +130,10 @@ describe('Crypto Performance Tests', () => {
     });
 
     it('should decrypt message within threshold', () => {
-      const encrypted = encryptMessage(message, keypair.publicKey);
+      const encrypted = encryptMessage(message, sessionKey.key, sessionKey.nonce);
       
       const avgTime = measureAverage(() => {
-        decryptMessage(encrypted, keypair.privateKey);
+        decryptMessage(encrypted, sessionKey.key, sessionKey.nonce);
       }, 100);
       
       console.log(`Decryption average: ${avgTime.toFixed(2)}ms`);
@@ -140,12 +142,13 @@ describe('Crypto Performance Tests', () => {
   });
 
   describe('Bulk Encryption Performance', () => {
-    const keypair = generateKeyPair();
+    const keypair = generateIdentity();
+    const sessionKey = generateSessionKey();
     const largeMessage = new Uint8Array(1024 * 1024); // 1MB
 
     it('should encrypt 1MB within threshold', () => {
       const time = measure(() => {
-        encryptMessage(largeMessage, keypair.publicKey);
+        encryptMessage(largeMessage, sessionKey.key, sessionKey.nonce);
       });
       
       console.log(`Encrypt 1MB: ${time.toFixed(2)}ms`);
@@ -153,10 +156,10 @@ describe('Crypto Performance Tests', () => {
     });
 
     it('should decrypt 1MB within threshold', () => {
-      const encrypted = encryptMessage(largeMessage, keypair.publicKey);
+      const encrypted = encryptMessage(largeMessage, sessionKey.key, sessionKey.nonce);
       
       const time = measure(() => {
-        decryptMessage(encrypted, keypair.privateKey);
+        decryptMessage(encrypted, sessionKey.key, sessionKey.nonce);
       });
       
       console.log(`Decrypt 1MB: ${time.toFixed(2)}ms`);
@@ -167,8 +170,10 @@ describe('Crypto Performance Tests', () => {
       const times: number[] = [];
       
       for (let i = 0; i < 10; i++) {
+        // Generate new session key for each iteration
+        const sk = generateSessionKey();
         const time = measure(() => {
-          encryptMessage(largeMessage, keypair.publicKey);
+          encryptMessage(largeMessage, sk.key, sk.nonce);
         });
         times.push(time);
       }
@@ -182,12 +187,12 @@ describe('Crypto Performance Tests', () => {
   });
 
   describe('Key Exchange Performance', () => {
-    const kp1 = generateKeyPair();
-    const kp2 = generateKeyPair();
+    const kp1 = generateIdentity();
+    const kp2 = generateIdentity();
 
     it('should derive shared secret within threshold', () => {
       const avgTime = measureAverage(() => {
-        deriveSharedSecret(kp1.privateKey, kp2.publicKey);
+        performKeyExchange(kp1.privateKey, kp2.publicKey);
       }, 100);
       
       console.log(`Key exchange average: ${avgTime.toFixed(2)}ms`);
@@ -197,7 +202,7 @@ describe('Crypto Performance Tests', () => {
     it('should handle 1000 key exchanges/sec', () => {
       const totalTime = measure(() => {
         for (let i = 0; i < 1000; i++) {
-          deriveSharedSecret(kp1.privateKey, kp2.publicKey);
+          performKeyExchange(kp1.privateKey, kp2.publicKey);
         }
       });
       
@@ -208,21 +213,22 @@ describe('Crypto Performance Tests', () => {
 
   describe('Real-World Scenarios', () => {
     it('should handle typical messaging workload', () => {
-      const aliceKp = generateKeyPair();
-      const bobKp = generateKeyPair();
+      const aliceKp = generateIdentity();
+      const bobKp = generateIdentity();
       const messages = Array(100).fill(null).map((_, i) => 
         new Uint8Array(512).fill(i % 256)
       );
 
       const totalTime = measure(() => {
-        const aliceShared = deriveSharedSecret(aliceKp.privateKey, bobKp.publicKey);
+        const aliceShared = performKeyExchange(aliceKp.privateKey, bobKp.publicKey);
         
         messages.forEach(msg => {
           const signature = signMessage(msg, aliceKp.privateKey);
-          const encrypted = encryptMessage(msg, bobKp.publicKey);
+          const sk = generateSessionKey();
+          const encrypted = encryptMessage(msg, sk.key, sk.nonce);
           
           verifySignature(msg, signature, aliceKp.publicKey);
-          decryptMessage(encrypted, bobKp.privateKey);
+          decryptMessage(encrypted, sk.key, sk.nonce);
         });
       });
       
@@ -234,12 +240,12 @@ describe('Crypto Performance Tests', () => {
       const totalTime = measure(() => {
         // Simulate 10 peer handshakes
         for (let i = 0; i < 10; i++) {
-          const peer1 = generateKeyPair();
-          const peer2 = generateKeyPair();
+          const peer1 = generateIdentity();
+          const peer2 = generateIdentity();
           
           // Exchange keys
-          const shared1 = deriveSharedSecret(peer1.privateKey, peer2.publicKey);
-          const shared2 = deriveSharedSecret(peer2.privateKey, peer1.publicKey);
+          const shared1 = performKeyExchange(peer1.privateKey, peer2.publicKey);
+          const shared2 = performKeyExchange(peer2.privateKey, peer1.publicKey);
           
           // Challenge-response
           const challenge = new Uint8Array(32);
@@ -264,7 +270,7 @@ describe('Crypto Performance Tests', () => {
         
         // Perform many operations
         for (let i = 0; i < 1000; i++) {
-          const kp = generateKeyPair();
+          const kp = generateIdentity();
           const msg = new Uint8Array(1024);
           const sig = signMessage(msg, kp.privateKey);
           verifySignature(msg, sig, kp.publicKey);

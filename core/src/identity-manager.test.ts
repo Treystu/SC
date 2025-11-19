@@ -1,10 +1,24 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { IdentityManager, type Identity } from './identity-manager';
 
+// Mock localStorage for Node.js environment
+const localStorageMock = (() => {
+  let store: { [key: string]: string } = {};
+  return {
+    getItem: (key: string) => store[key] || null,
+    setItem: (key: string, value: string) => { store[key] = value; },
+    removeItem: (key: string) => { delete store[key]; },
+    clear: () => { store = {}; }
+  };
+})();
+
+global.localStorage = localStorageMock as any;
+
 describe('IdentityManager', () => {
   let manager: IdentityManager;
 
   beforeEach(() => {
+    localStorage.clear();
     manager = new IdentityManager();
   });
 
@@ -44,7 +58,7 @@ describe('IdentityManager', () => {
   describe('Identity Persistence', () => {
     it('should save identity to storage', async () => {
       const identity = await manager.generateIdentity('Bob');
-      await manager.saveIdentity();
+      // generateIdentity automatically saves, so we just need to load it back
 
       const loaded = await manager.loadIdentity();
       expect(loaded).toBeDefined();
@@ -53,7 +67,7 @@ describe('IdentityManager', () => {
 
     it('should load identity from storage', async () => {
       await manager.generateIdentity('Charlie');
-      await manager.saveIdentity();
+      // generateIdentity automatically saves
 
       const newManager = new IdentityManager();
       const loaded = await newManager.loadIdentity();
@@ -69,7 +83,7 @@ describe('IdentityManager', () => {
 
     it('should delete identity from storage', async () => {
       await manager.generateIdentity();
-      await manager.saveIdentity();
+      // generateIdentity automatically saves
       await manager.deleteIdentity();
 
       const loaded = await manager.loadIdentity();
