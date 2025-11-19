@@ -1,10 +1,13 @@
 /**
  * Types and interfaces for the sharing and invite system
+ * 
+ * This module defines the core data structures used throughout the invite
+ * and contact sharing system.
  */
 
 export interface InviteOptions {
-  ttl?: number; // Time-to-live in milliseconds
-  metadata?: Record<string, unknown>;
+  ttl?: number; // Time-to-live in milliseconds (default: 7 days)
+  metadata?: Record<string, unknown>; // Optional custom metadata
 }
 
 export interface PendingInvite {
