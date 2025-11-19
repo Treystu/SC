@@ -7,12 +7,12 @@ import { encodeMessage, decodeMessage, Message, MessageType } from '../../core/s
 describe('Crypto-Protocol Integration', () => {
   let identity: { publicKey: Uint8Array; privateKey: Uint8Array };
 
-  beforeAll(async () => {
-    identity = await generateIdentity();
+  beforeAll(() => {
+    identity = generateIdentity();
   });
 
   describe('Message signing and verification', () => {
-    it('should sign and verify a complete message', async () => {
+    it('should sign and verify a complete message', () => {
       const message: Message = {
         header: {
           version: 0x01,
@@ -30,7 +30,7 @@ describe('Crypto-Protocol Integration', () => {
       
       // Sign (excluding signature field)
       const dataToSign = encoded.slice(0, -65);
-      const signature = await signMessage(dataToSign, identity.privateKey);
+      const signature = signMessage(dataToSign, identity.privateKey);
       
       // Pad signature to 65 bytes
       const signature65 = new Uint8Array(65);
@@ -45,7 +45,7 @@ describe('Crypto-Protocol Integration', () => {
       
       // Verify
       const dataToVerify = encodedWithSig.slice(0, -65);
-      const isValid = await verifySignature(
+      const isValid = verifySignature(
         dataToVerify,
         decoded.header.signature.slice(0, 64),
         decoded.header.senderId
