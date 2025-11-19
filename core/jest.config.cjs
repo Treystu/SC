@@ -29,4 +29,6 @@ module.exports = {
   clearMocks: true,
   resetMocks: true,
   restoreMocks: true,
+  // Force exit after tests complete to prevent hanging
+  forceExit: true,
 };
