@@ -128,7 +128,7 @@ describe('db-schema', () => {
     });
 
     it('should have correct database version', () => {
-      expect(DB_VERSION).toBe(1);
+      expect(DB_VERSION).toBe(2);
     });
 
     it('should have all required store configurations', () => {
