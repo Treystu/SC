@@ -132,7 +132,7 @@ jobs:
           cd ../..
       
       - name: Upload web artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: web-release
           path: web-${{ needs.prepare-release.outputs.version }}.tar.gz
@@ -217,7 +217,7 @@ jobs:
              sovereign-communications-${VERSION}.apk
       
       - name: Upload Android APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: android-release
           path: android/sovereign-communications-*.apk
@@ -257,7 +257,7 @@ jobs:
           echo "Note: Full IPA requires code signing certificates" >> ios-build-info.txt
       
       - name: Upload iOS artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ios-release
           path: ios-build-info.txt
