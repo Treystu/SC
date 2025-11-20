@@ -6,7 +6,9 @@ import ConnectionStatus from './components/ConnectionStatus';
 import { SettingsPanel } from './components/SettingsPanel';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { OnboardingFlow } from './components/Onboarding/OnboardingFlow';
+import { QRCodeShare } from './components/QRCodeShare';
 import { useMeshNetwork } from './hooks/useMeshNetwork';
+import { useInvite } from './hooks/useInvite';
 import { announce } from './utils/accessibility';
 import { getDatabase } from './storage/database';
 
@@ -14,8 +16,23 @@ function App() {
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showShareApp, setShowShareApp] = useState(false);
   const [demoMessages, setDemoMessages] = useState<Array<{id: string; from: string; content: string; timestamp: number}>>([]);
   const { status, messages, sendMessage, connectToPeer } = useMeshNetwork();
+  
+  // Get identity keys for invite creation
+  // TODO: Replace with actual identity management
+  const [identityKeys, setIdentityKeys] = useState<{
+    publicKey: Uint8Array | null;
+    privateKey: Uint8Array | null;
+  }>({ publicKey: null, privateKey: null });
+  
+  const { invite, createInvite, clearInvite } = useInvite(
+    status.localPeerId,
+    identityKeys.publicKey,
+    identityKeys.privateKey,
+    'User' // TODO: Get from user profile
+  );
 
   // Check if onboarding has been completed
   useEffect(() => {
@@ -23,6 +40,9 @@ function App() {
     if (!onboardingComplete) {
       setShowOnboarding(true);
     }
+    
+    // Initialize identity keys (placeholder - should use actual identity management)
+    // For now, we'll create dummy keys when needed
   }, []);
 
   // Announce connection status changes to screen readers
@@ -123,6 +143,33 @@ function App() {
     }
   };
 
+  const handleShareApp = async () => {
+    // Initialize keys if not already done (placeholder implementation)
+    if (!identityKeys.publicKey || !identityKeys.privateKey) {
+      // Import crypto functions to generate keys
+      const { generateIdentity } = await import('@sc/core');
+      const identity = generateIdentity();
+      setIdentityKeys({
+        publicKey: identity.publicKey,
+        privateKey: identity.privateKey,
+      });
+      
+      // Wait for keys to be set before creating invite
+      setTimeout(async () => {
+        await createInvite();
+        setShowShareApp(true);
+      }, 100);
+    } else {
+      await createInvite();
+      setShowShareApp(true);
+    }
+  };
+
+  const handleCloseShareApp = () => {
+    setShowShareApp(false);
+    clearInvite();
+  };
+
   const displayMessages = selectedConversation === 'demo' ? demoMessages : messages;
 
   return (
@@ -132,6 +179,14 @@ function App() {
         <OnboardingFlow
           onComplete={() => setShowOnboarding(false)}
           localPeerId={status.localPeerId}
+        />
+      )}
+
+      {/* Share App Modal */}
+      {showShareApp && invite && (
+        <QRCodeShare
+          invite={invite}
+          onClose={handleCloseShareApp}
         />
       )}
 
@@ -166,6 +221,7 @@ function App() {
                 selectedId={selectedConversation}
                 onSelect={setSelectedConversation}
                 onAddContact={handleAddContact}
+                onShareApp={handleShareApp}
                 localPeerId={status.localPeerId}
               />
             </ErrorBoundary>

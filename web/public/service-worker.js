@@ -4,7 +4,11 @@ const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/manifest.json',
+  '/join.html',
 ];
+
+// Store for active invite shares
+let activeInvite = null;
 
 // Install event - cache assets
 self.addEventListener('install', (event) => {
@@ -40,6 +44,36 @@ self.addEventListener('activate', (event) => {
 
 // Fetch event - serve from cache, fallback to network
 self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+  
+  // Handle /join route with invite data
+  if (url.pathname === '/join' && activeInvite) {
+    event.respondWith(
+      caches.match('/join.html').then((response) => {
+        if (response) {
+          return response.clone().text().then((body) => {
+            // Inject invite data into the page
+            const modifiedBody = body.replace(
+              'const inviteCode = params.get(\'invite\') || hash;',
+              `const inviteCode = '${activeInvite.code}';`
+            ).replace(
+              'const inviterName = params.get(\'inviter\') || sessionStorage.getItem(\'inviterName\');',
+              `const inviterName = '${activeInvite.inviterName || 'A friend'}';`
+            );
+            
+            return new Response(modifiedBody, {
+              headers: {
+                'Content-Type': 'text/html',
+              },
+            });
+          });
+        }
+        return fetch('/join.html');
+      })
+    );
+    return;
+  }
+  
   event.respondWith(
     caches.match(event.request).then((response) => {
       // Return cached response if found
@@ -136,6 +170,17 @@ async function sendMessage(message) {
   // For now, just a placeholder
   console.log('Sending message:', message);
 }
+
+// Message handler for registering invite shares
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'REGISTER_INVITE') {
+    console.log('Service Worker: Registering invite share');
+    activeInvite = event.data.invite;
+  } else if (event.data && event.data.type === 'UNREGISTER_INVITE') {
+    console.log('Service Worker: Unregistering invite share');
+    activeInvite = null;
+  }
+});
 
 // Push notifications
 self.addEventListener('push', (event) => {

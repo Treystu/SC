@@ -15,6 +15,7 @@ interface ConversationListProps {
   selectedId: string | null;
   onSelect: (id: string) => void;
   onAddContact?: (peerId: string, name: string) => void;
+  onShareApp?: () => void;
   localPeerId?: string;
 }
 
@@ -61,7 +62,7 @@ const ConversationItem = memo(({
 
 ConversationItem.displayName = 'ConversationItem';
 
-function ConversationList({ selectedId, onSelect, onAddContact, localPeerId = '' }: ConversationListProps) {
+function ConversationList({ selectedId, onSelect, onAddContact, onShareApp, localPeerId = '' }: ConversationListProps) {
   // Mock data - will be replaced with actual state management
   const [conversations] = useState<Conversation[]>([]);
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -118,6 +119,9 @@ function ConversationList({ selectedId, onSelect, onAddContact, localPeerId = ''
               </button>
               <button onClick={() => { setShowSignalingExport(true); setShowMenu(false); }}>
                 Share My Info
+              </button>
+              <button onClick={() => { onShareApp?.(); setShowMenu(false); }}>
+                📤 Share App
               </button>
             </div>
           )}

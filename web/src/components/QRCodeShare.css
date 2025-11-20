@@ -1,0 +1,268 @@
+/* QR Code Share Modal Styles */
+
+.qr-modal {
+  max-width: 600px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.qr-share-container {
+  padding: 1rem;
+}
+
+.qr-share-container h2 {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  text-align: center;
+  color: #1a1a1a;
+}
+
+.qr-share-container h3 {
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  font-size: 1.1rem;
+  color: #333;
+}
+
+/* QR Code Section */
+.qr-code-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1rem;
+  background: #f5f5f5;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+}
+
+.qr-code-image {
+  width: 100%;
+  max-width: 300px;
+  height: auto;
+  border-radius: 4px;
+  background: white;
+  padding: 1rem;
+}
+
+.qr-instruction {
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+/* Share URL Section */
+.share-url-section {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.share-url-input {
+  flex: 1;
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 0.9rem;
+  background: #f9f9f9;
+}
+
+.copy-btn {
+  padding: 0.75rem 1.5rem;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.copy-btn:hover {
+  background: #059669;
+}
+
+.copy-btn:active {
+  transform: scale(0.98);
+}
+
+/* Copy Feedback */
+.copy-feedback {
+  padding: 0.5rem 1rem;
+  background: #10b981;
+  color: white;
+  border-radius: 4px;
+  text-align: center;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  animation: fadeIn 0.2s;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Share Options */
+.share-options {
+  border-top: 1px solid #eee;
+  padding-top: 1rem;
+}
+
+.share-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.share-btn {
+  flex: 1;
+  min-width: 140px;
+  padding: 0.75rem 1rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.95rem;
+  transition: all 0.2s;
+}
+
+.share-native {
+  background: #3b82f6;
+  color: white;
+}
+
+.share-native:hover {
+  background: #2563eb;
+}
+
+.share-download {
+  background: #8b5cf6;
+  color: white;
+}
+
+.share-download:hover {
+  background: #7c3aed;
+}
+
+.share-local {
+  background: #f59e0b;
+  color: white;
+}
+
+.share-local:hover {
+  background: #d97706;
+}
+
+.share-local-stop {
+  background: #ef4444;
+  color: white;
+}
+
+.share-local-stop:hover {
+  background: #dc2626;
+}
+
+.share-btn:active {
+  transform: scale(0.98);
+}
+
+/* Local Network Section */
+.local-network-section {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #fef3c7;
+  border-radius: 6px;
+  border: 1px solid #fbbf24;
+}
+
+.local-urls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+
+.local-url-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: white;
+  border-radius: 4px;
+}
+
+.local-url-item code {
+  flex: 1;
+  font-size: 0.85rem;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.copy-btn-small {
+  padding: 0.25rem 0.5rem;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background 0.2s;
+}
+
+.copy-btn-small:hover {
+  background: #059669;
+}
+
+.local-network-note {
+  margin-top: 0.75rem;
+  margin-bottom: 0;
+  font-size: 0.85rem;
+  color: #92400e;
+  line-height: 1.4;
+}
+
+/* Invite Info */
+.invite-info {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid #eee;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.invite-info p {
+  margin: 0.5rem 0;
+}
+
+.invite-info strong {
+  color: #333;
+}
+
+/* Responsive Design */
+@media (max-width: 600px) {
+  .qr-modal {
+    width: 95%;
+    max-height: 95vh;
+  }
+
+  .share-buttons {
+    flex-direction: column;
+  }
+
+  .share-btn {
+    width: 100%;
+  }
+
+  .qr-code-image {
+    max-width: 250px;
+  }
+}
