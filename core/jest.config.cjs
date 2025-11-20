@@ -31,4 +31,14 @@ module.exports = {
   restoreMocks: true,
   // Force exit after tests complete to prevent hanging
   forceExit: true,
+  // Transform ESM modules from @noble packages
+  transformIgnorePatterns: [
+    'node_modules/(?!(@noble)/)'
+  ],
+  extensionsToTreatAsEsm: ['.ts'],
+  globals: {
+    'ts-jest': {
+      useESM: true,
+    }
+  }
 };

@@ -7,8 +7,8 @@
  * - RFC 8439: ChaCha20-Poly1305
  */
 
-import { ed25519 } from '@noble/curves/ed25519';
-import { x25519 } from '@noble/curves/ed25519';
+import { ed25519 } from '@noble/curves/ed25519.js';
+import { x25519 } from '@noble/curves/ed25519.js';
 import { xchacha20poly1305 } from '@noble/ciphers/chacha.js';
 
 describe('RFC Test Vectors', () => {
