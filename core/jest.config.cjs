@@ -1,5 +1,4 @@
 module.exports = {
-  preset: 'ts-jest',
   testEnvironment: 'node',
   roots: ['<rootDir>/src'],
   testMatch: ['**/__tests__/**/*.ts', '**/?(*.)+(spec|test).ts'],
@@ -22,23 +21,29 @@ module.exports = {
   },
   testTimeout: 10000,
   maxWorkers: '50%',
-  // Fail fast on errors
   bail: false,
   verbose: true,
-  // Clear mocks between tests
   clearMocks: true,
   resetMocks: true,
   restoreMocks: true,
-  // Force exit after tests complete to prevent hanging
   forceExit: true,
-  // Transform ESM modules from @noble packages
+  // Configure transformers
+  transform: {
+    // Use ts-jest for TypeScript files
+    '^.+\\.ts$': ['ts-jest', {
+      tsconfig: {
+        allowSyntheticDefaultImports: true,
+      }
+    }],
+    // Use babel-jest for JS files including from node_modules
+    '^.+\\.m?js$': 'babel-jest',
+  },
+  // Allow transformation of @noble packages
   transformIgnorePatterns: [
-    'node_modules/(?!(@noble)/)'
+    'node_modules/(?!(@noble)/)',
   ],
-  extensionsToTreatAsEsm: ['.ts'],
-  globals: {
-    'ts-jest': {
-      useESM: true,
-    }
-  }
+  // Map .js extension imports to handle them correctly
+  moduleNameMapper: {
+    '^(\\.{1,2}/.*)\\.js$': '$1',
+  },
 };

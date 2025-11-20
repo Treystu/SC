@@ -298,7 +298,7 @@ export const GroupVideoCall: React.FC<GroupVideoCallProps> = ({ roomId, onLeave 
 interface ParticipantVideoProps {
   participant: Participant;
   isLocal: boolean;
-  videoRef?: React.RefObject<HTMLVideoElement>;
+  videoRef?: React.RefObject<HTMLVideoElement | null>;
 }
 
 const ParticipantVideo: React.FC<ParticipantVideoProps> = ({ participant, isLocal, videoRef }) => {
