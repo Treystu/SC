@@ -1,4 +1,4 @@
-module.exports = {
+export default {
   testEnvironment: 'node',
   roots: ['<rootDir>/src'],
   testMatch: ['**/__tests__/**/*.ts', '**/?(*.)+(spec|test).ts'],
@@ -27,23 +27,21 @@ module.exports = {
   resetMocks: true,
   restoreMocks: true,
   forceExit: true,
-  // Configure transformers
-  transform: {
-    // Use ts-jest for TypeScript files
-    '^.+\\.ts$': ['ts-jest', {
-      tsconfig: {
-        allowSyntheticDefaultImports: true,
-      }
-    }],
-    // Use babel-jest for JS files including from node_modules
-    '^.+\\.m?js$': 'babel-jest',
-  },
-  // Allow transformation of @noble packages
-  transformIgnorePatterns: [
-    'node_modules/(?!(@noble)/)',
-  ],
-  // Map .js extension imports to handle them correctly
+  preset: 'ts-jest/presets/default-esm',
+  extensionsToTreatAsEsm: ['.ts'],
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.mjs'],
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
   },
+  transform: {
+    '^.+\\.ts$': ['ts-jest', {
+      useESM: true,
+      tsconfig: {
+        module: 'ESNext',
+        moduleResolution: 'bundler',
+      }
+    }],
+  },
+  transformIgnorePatterns: [],
+  injectGlobals: true,
 };
