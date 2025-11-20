@@ -60,9 +60,9 @@ dependencies {
     // Kotlin
     implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
     implementation 'androidx.core:core-ktx:1.12.0'
-    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.6.2'
-    implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.2'
-    implementation 'androidx.lifecycle:lifecycle-livedata-ktx:2.6.2'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.9.4'
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.9.4'
+    implementation 'androidx.lifecycle:lifecycle-livedata-ktx:2.9.4'
     
     // Jetpack Compose
     implementation platform('androidx.compose:compose-bom:2023.10.01')
@@ -71,7 +71,7 @@ dependencies {
     implementation 'androidx.compose.ui:ui-tooling-preview'
     implementation 'androidx.compose.material3:material3'
     implementation 'androidx.activity:activity-compose:1.8.1'
-    implementation 'androidx.navigation:navigation-compose:2.7.5'
+    implementation 'androidx.navigation:navigation-compose:2.9.6'
     
     // Room Database
     implementation "androidx.room:room-runtime:$room_version"
@@ -82,23 +82,23 @@ dependencies {
     implementation "io.getstream:stream-webrtc-android:$webrtc_version"
     
     // Cryptography (libsodium for Android)
-    implementation 'com.goterl:lazysodium-android:5.1.0@aar'
-    implementation 'net.java.dev.jna:jna:5.13.0@aar'
+    implementation 'com.goterl:lazysodium-android:5.2.0@aar'
+    implementation 'net.java.dev.jna:jna:5.18.1@aar'
     
     // Coroutines
-    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
-    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2'
     
     // QR Code
-    implementation 'com.google.zxing:core:3.5.2'
+    implementation 'com.google.zxing:core:3.5.4'
     implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
     
     // Permissions
-    implementation 'com.google.accompanist:accompanist-permissions:0.32.0'
+    implementation 'com.google.accompanist:accompanist-permissions:0.37.3'
     
     // Testing
     testImplementation 'junit:junit:4.13.2'
-    testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3'
+    testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
     androidTestImplementation platform('androidx.compose:compose-bom:2023.10.01')

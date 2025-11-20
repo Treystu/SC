@@ -1,5 +1,4 @@
-module.exports = {
-  preset: 'ts-jest',
+export default {
   testEnvironment: 'node',
   roots: ['<rootDir>/src'],
   testMatch: ['**/__tests__/**/*.ts', '**/?(*.)+(spec|test).ts'],
@@ -22,13 +21,27 @@ module.exports = {
   },
   testTimeout: 10000,
   maxWorkers: '50%',
-  // Fail fast on errors
   bail: false,
   verbose: true,
-  // Clear mocks between tests
   clearMocks: true,
   resetMocks: true,
   restoreMocks: true,
-  // Force exit after tests complete to prevent hanging
   forceExit: true,
+  preset: 'ts-jest/presets/default-esm',
+  extensionsToTreatAsEsm: ['.ts'],
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.mjs'],
+  moduleNameMapper: {
+    '^(\\.{1,2}/.*)\\.js$': '$1',
+  },
+  transform: {
+    '^.+\\.ts$': ['ts-jest', {
+      useESM: true,
+      tsconfig: {
+        module: 'ESNext',
+        moduleResolution: 'bundler',
+      }
+    }],
+  },
+  transformIgnorePatterns: [],
+  injectGlobals: true,
 };

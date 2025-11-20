@@ -2,23 +2,26 @@
   "name": "@sc/core",
   "version": "0.1.0",
   "description": "Core cryptography and protocol implementation for Sovereign Communications",
-  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "test": "jest",
+    "test": "NODE_OPTIONS='--experimental-vm-modules --no-warnings' npx jest",
     "dev": "tsc --watch"
   },
   "dependencies": {
-    "@noble/ciphers": "^0.4.1",
-    "@noble/curves": "^1.9.7",
+    "@noble/ciphers": "^2.0.1",
+    "@noble/curves": "^2.0.1",
     "@noble/hashes": "^1.8.0",
     "@types/node": "^24.10.0"
   },
   "devDependencies": {
+    "@babel/core": "^7.28.5",
+    "@babel/preset-env": "^7.28.5",
+    "@babel/preset-typescript": "^7.28.5",
     "@types/jest": "^29.5.14",
-    "fast-check": "^3.15.0",
+    "babel-jest": "^30.2.0",
+    "fast-check": "^4.3.0",
     "jest": "^29.7.0",
     "ts-jest": "^29.4.5",
     "typescript": "^5.3.0"

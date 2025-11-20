@@ -16,11 +16,11 @@
  * - Nonce tracking and reuse prevention
  */
 
-import { ed25519 } from '@noble/curves/ed25519';
-import { x25519 } from '@noble/curves/ed25519';
+import { ed25519 } from '@noble/curves/ed25519.js';
+import { x25519 } from '@noble/curves/ed25519.js';
 import { sha256 } from '@noble/hashes/sha256';
 import { randomBytes } from '@noble/hashes/utils';
-import { xchacha20poly1305 } from '@noble/ciphers/chacha';
+import { xchacha20poly1305 } from '@noble/ciphers/chacha.js';
 import { hkdf } from '@noble/hashes/hkdf';
 
 /**
@@ -151,7 +151,7 @@ export function validateEntropy(data: Uint8Array): boolean {
  * @throws Error if entropy validation fails
  */
 export function generateIdentity(): IdentityKeyPair {
-  const privateKey = ed25519.utils.randomPrivateKey();
+  const privateKey = ed25519.utils.randomSecretKey();
   
   // Validate entropy quality
   if (!validateEntropy(privateKey)) {
@@ -281,7 +281,7 @@ export function performKeyExchange(
  * Used for forward secrecy - generate new keypair for each session
  */
 export function generateEphemeralKeyPair(): IdentityKeyPair {
-  const privateKey = x25519.utils.randomPrivateKey();
+  const privateKey = x25519.utils.randomSecretKey();
   const publicKey = x25519.getPublicKey(privateKey);
   
   if (!validateEntropy(privateKey)) {
