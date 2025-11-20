@@ -42,8 +42,20 @@ function App() {
     }
     
     // Initialize identity keys (placeholder - should use actual identity management)
-    // For now, we'll create dummy keys when needed
-  }, []);
+    // For now, we'll create keys on mount
+    const initKeys = async () => {
+      const { generateIdentity } = await import('@sc/core');
+      const identity = generateIdentity();
+      setIdentityKeys({
+        publicKey: identity.publicKey,
+        privateKey: identity.privateKey,
+      });
+    };
+    
+    if (!identityKeys.publicKey && !identityKeys.privateKey) {
+      initKeys();
+    }
+  }, [identityKeys]);
 
   // Announce connection status changes to screen readers
   useEffect(() => {
@@ -144,7 +156,7 @@ function App() {
   };
 
   const handleShareApp = async () => {
-    // Initialize keys if not already done (placeholder implementation)
+    // Ensure keys are initialized
     if (!identityKeys.publicKey || !identityKeys.privateKey) {
       // Import crypto functions to generate keys
       const { generateIdentity } = await import('@sc/core');
