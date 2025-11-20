@@ -146,6 +146,36 @@ export class IdentityManager {
     return this.identity;
   }
 
+  // Get current identity (alias for getIdentity)
+  getCurrentIdentity(): Identity | null {
+    return this.identity;
+  }
+
+  // Check if identity exists
+  hasIdentity(): boolean {
+    return this.identity !== null;
+  }
+
+  // Get public key
+  async getPublicKey(): Promise<CryptoKey> {
+    if (!this.identity) throw new Error('No identity loaded');
+    return this.identity.publicKey;
+  }
+
+  // Get public key as bytes
+  async getPublicKeyBytes(): Promise<Uint8Array> {
+    if (!this.identity) throw new Error('No identity loaded');
+    const exported = await crypto.subtle.exportKey('raw', this.identity.publicKey);
+    return new Uint8Array(exported);
+  }
+
+  // Get public key as hex string
+  async getPublicKeyHex(): Promise<string> {
+    if (!this.identity) throw new Error('No identity loaded');
+    const exported = await crypto.subtle.exportKey('raw', this.identity.publicKey);
+    return this.arrayBufferToHex(exported);
+  }
+
   // Sign data
   async sign(data: Uint8Array): Promise<Uint8Array> {
     if (!this.identity) throw new Error('No identity loaded');
@@ -159,12 +189,15 @@ export class IdentityManager {
     return new Uint8Array(signature);
   }
 
-  // Verify signature
-  async verify(data: Uint8Array, signature: Uint8Array, publicKey: CryptoKey): Promise<boolean> {
+  // Verify signature (overloaded - can use current identity's public key or provided key)
+  async verify(data: Uint8Array, signature: Uint8Array, publicKey?: CryptoKey): Promise<boolean> {
+    const keyToUse = publicKey || this.identity?.publicKey;
+    if (!keyToUse) throw new Error('No public key available');
+
     try {
       return await crypto.subtle.verify(
         { name: 'Ed25519' } as any,
-        publicKey,
+        keyToUse,
         signature.buffer as ArrayBuffer,
         data.buffer as ArrayBuffer
       );

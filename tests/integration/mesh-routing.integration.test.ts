@@ -150,14 +150,23 @@ describe('Mesh Network Integration', () => {
         reputation: 1.0,
         state: 'connected',
         metadata: {
-          latency: 50,
-          bandwidth: 1000000,
+          capabilities: {
+            maxBandwidth: 1000000,
+            supportedTransports: ['webrtc'],
+            protocolVersion: 1,
+            features: ['relay', 'file-transfer'],
+          },
+          reputation: 80,
+          blacklisted: false,
+          failureCount: 0,
+          successCount: 10,
         },
       });
 
       const peer = routingTable.getPeer(peerId);
-      expect(peer?.metadata.latency).toBe(50);
-      expect(peer?.metadata.bandwidth).toBe(1000000);
+      expect(peer?.metadata.reputation).toBe(80);
+      expect(peer?.metadata.successCount).toBe(10);
+      expect(peer?.metadata.capabilities.maxBandwidth).toBe(1000000);
     });
   });
 });

@@ -125,5 +125,8 @@ export {
   type RateLimitInfo,
 } from './rate-limiter-enhanced';
 
+// Sharing and invites
+export * from './sharing';
+
 // Version
 export const VERSION = '0.1.0';
