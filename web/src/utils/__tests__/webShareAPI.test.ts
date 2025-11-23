@@ -30,15 +30,6 @@ beforeEach(() => {
     writable: true,
     configurable: true,
   });
-
-  // Mock window.location
-  Object.defineProperty(window, 'location', {
-    value: {
-      origin: 'https://example.com',
-    },
-    writable: true,
-    configurable: true,
-  });
 });
 
 afterEach(() => {
@@ -75,7 +66,7 @@ describe('WebShareAPI', () => {
       expect(mockShare).toHaveBeenCalledWith({
         title: 'Join me on Sovereign Communications',
         text: 'Test User invited you to secure messaging',
-        url: 'https://example.com/join#test-invite-code-123',
+        url: 'http://localhost/join#test-invite-code-123',
       });
     });
 
@@ -103,7 +94,7 @@ describe('WebShareAPI', () => {
       expect(result.method).toBe('clipboard');
       expect(result.success).toBe(true);
       expect(mockWriteText).toHaveBeenCalledWith(
-        'https://example.com/join#test-invite-code-123'
+        'http://localhost/join#test-invite-code-123'
       );
     });
 

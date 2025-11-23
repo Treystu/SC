@@ -53,18 +53,6 @@ beforeEach(() => {
   // Mock RTCPeerConnection
   (global as any).RTCPeerConnection = MockRTCPeerConnection;
 
-  // Mock window.location
-  Object.defineProperty(window, 'location', {
-    value: {
-      protocol: 'https:',
-      hostname: 'example.com',
-      port: '443',
-      origin: 'https://example.com',
-    },
-    writable: true,
-    configurable: true,
-  });
-
   // Mock Service Worker
   Object.defineProperty(global.navigator, 'serviceWorker', {
     value: mockServiceWorker,
@@ -170,7 +158,7 @@ describe('LocalNetworkServer', () => {
       
       // Should fallback to current hostname
       expect(result.urls.length).toBeGreaterThan(0);
-      expect(result.urls[0]).toContain('example.com');
+      expect(result.urls[0]).toContain('localhost');
     });
   });
 
