@@ -1,6 +1,6 @@
 module.exports = {
   displayName: 'Integration Tests',
-  preset: 'ts-jest',
+  preset: 'ts-jest/presets/default-esm',
   testEnvironment: 'node',
   roots: ['<rootDir>/tests'],
   testMatch: ['**/*.integration.test.ts', '**/*.integration.spec.ts'],
@@ -24,19 +24,29 @@ module.exports = {
   // Timeouts for integration tests
   testTimeout: 30000,
   
+  // ESM support
+  extensionsToTreatAsEsm: ['.ts'],
+  
   // Module resolution
   moduleNameMapper: {
     '^@sc/core$': '<rootDir>/core/src',
     '^@sc/core/(.*)$': '<rootDir>/core/src/$1',
+    '^(\\.{1,2}/.*)\\.js$': '$1',
   },
   
   // Transform
   transform: {
     '^.+\\.tsx?$': ['ts-jest', {
+      useESM: true,
       tsconfig: {
         esModuleInterop: true,
         allowSyntheticDefaultImports: true,
+        module: 'ESNext',
+        moduleResolution: 'bundler',
       },
     }],
   },
+  
+  // Transform ES modules from node_modules
+  transformIgnorePatterns: [],
 };

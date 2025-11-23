@@ -13,6 +13,7 @@ describe('Crypto-Protocol Integration', () => {
 
   describe('Message signing and verification', () => {
     it('should sign and verify a complete message', () => {
+      // Create message with placeholder signature
       const message: Message = {
         header: {
           version: 0x01,
@@ -20,33 +21,44 @@ describe('Crypto-Protocol Integration', () => {
           ttl: 10,
           timestamp: Date.now(),
           senderId: identity.publicKey,
-          signature: new Uint8Array(65),
+          signature: new Uint8Array(65), // Zero placeholder
         },
         payload: new TextEncoder().encode('Test message'),
       };
 
-      // Encode message
-      const encoded = encodeMessage(message);
+      // Encode the entire message (including placeholder signature)
+      const messageBytes = encodeMessage(message);
       
-      // Sign (excluding signature field)
-      const dataToSign = encoded.slice(0, -65);
-      const signature = signMessage(dataToSign, identity.privateKey);
+      // Sign the entire encoded message
+      const signature = signMessage(messageBytes, identity.privateKey);
       
-      // Pad signature to 65 bytes
+      // Create 65-byte signature (Ed25519 signature is 64 bytes + 1 recovery byte)
       const signature65 = new Uint8Array(65);
       signature65.set(signature, 0);
+      signature65[64] = 0; // Recovery byte
+      
+      // Update message header with real signature
       message.header.signature = signature65;
 
-      // Re-encode with signature
-      const encodedWithSig = encodeMessage(message);
+      // Encode the final message with real signature
+      const encodedFinal = encodeMessage(message);
       
-      // Decode
-      const decoded = decodeMessage(encodedWithSig);
+      // Decode to verify we can read it back
+      const decoded = decodeMessage(encodedFinal);
       
-      // Verify
-      const dataToVerify = encodedWithSig.slice(0, -65);
+      // To verify: we need to reconstruct the message with placeholder signature
+      // and verify the signature was created from that
+      const verifyMessage: Message = {
+        header: {
+          ...decoded.header,
+          signature: new Uint8Array(65), // Use placeholder for verification
+        },
+        payload: decoded.payload,
+      };
+      const verifyBytes = encodeMessage(verifyMessage);
+      
       const isValid = verifySignature(
-        dataToVerify,
+        verifyBytes,
         decoded.header.signature.slice(0, 64),
         decoded.header.senderId
       );
@@ -56,7 +68,8 @@ describe('Crypto-Protocol Integration', () => {
       expect(new TextDecoder().decode(decoded.payload)).toBe('Test message');
     });
 
-    it('should detect tampered messages', async () => {
+    it('should detect tampered messages', () => {
+      // Create message with placeholder signature
       const message: Message = {
         header: {
           version: 0x01,
@@ -64,39 +77,57 @@ describe('Crypto-Protocol Integration', () => {
           ttl: 10,
           timestamp: Date.now(),
           senderId: identity.publicKey,
-          signature: new Uint8Array(65),
+          signature: new Uint8Array(65), // Zero placeholder
         },
         payload: new TextEncoder().encode('Original message'),
       };
 
       // Encode and sign
-      const encoded = encodeMessage(message);
-      const dataToSign = encoded.slice(0, -65);
-      const signature = await signMessage(dataToSign, identity.privateKey);
+      const messageBytes = encodeMessage(message);
+      const signature = signMessage(messageBytes, identity.privateKey);
       const signature65 = new Uint8Array(65);
       signature65.set(signature, 0);
+      signature65[64] = 0;
       message.header.signature = signature65;
       
-      const encodedWithSig = encodeMessage(message);
+      // Encode with real signature
+      let encodedFinal = encodeMessage(message);
       
-      // Tamper with the message (change TTL)
-      encodedWithSig[2] = 99; // Change TTL field
+      // Decode first to get the message
+      const decoded = decodeMessage(encodedFinal);
       
-      // Try to verify
-      const decoded = decodeMessage(encodedWithSig);
-      const dataToVerify = encodedWithSig.slice(0, -65);
-      const isValid = await verifySignature(
-        dataToVerify,
+      // Now tamper with the decoded message
+      const tamperedMessage: Message = {
+        header: {
+          ...decoded.header,
+          ttl: 99, // Change TTL
+        },
+        payload: decoded.payload,
+      };
+      
+      // Try to verify the tampered message (reconstruct with placeholder)
+      const verifyMessage: Message = {
+        header: {
+          ...tamperedMessage.header,
+          signature: new Uint8Array(65), // Placeholder
+        },
+        payload: tamperedMessage.payload,
+      };
+      const verifyBytes = encodeMessage(verifyMessage);
+      
+      const isValid = verifySignature(
+        verifyBytes,
         decoded.header.signature.slice(0, 64),
         decoded.header.senderId
       );
 
+      // Signature should be invalid because message was tampered
       expect(isValid).toBe(false);
     });
   });
 
   describe('End-to-end encryption flow', () => {
-    it('should handle full encryption/decryption cycle', async () => {
+    it('should handle full encryption/decryption cycle', () => {
       // This would test the full E2E encryption flow
       // Currently a placeholder for future implementation
       expect(true).toBe(true);
