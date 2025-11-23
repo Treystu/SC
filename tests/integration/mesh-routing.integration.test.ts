@@ -55,7 +55,9 @@ describe('Mesh Network Integration', () => {
       routingTable.updatePeerReputation(peerId, false);
       
       let retrievedPeer = routingTable.getPeer(peerId);
-      expect(retrievedPeer?.metadata.reputation).toBeLessThan(50);
+      // Default reputation is 50, negative update should decrease it
+      const DEFAULT_REPUTATION = 50;
+      expect(retrievedPeer?.metadata.reputation).toBeLessThan(DEFAULT_REPUTATION);
 
       // Update reputation positively
       routingTable.updatePeerReputation(peerId, true);
