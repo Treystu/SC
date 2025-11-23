@@ -9,6 +9,7 @@ import { OnboardingFlow } from './components/Onboarding/OnboardingFlow';
 import { QRCodeShare } from './components/QRCodeShare';
 import { useMeshNetwork } from './hooks/useMeshNetwork';
 import { useInvite } from './hooks/useInvite';
+import { usePendingInvite } from './hooks/usePendingInvite';
 import { announce } from './utils/accessibility';
 import { getDatabase } from './storage/database';
 
@@ -34,6 +35,9 @@ function App() {
     'User' // TODO: Get from user profile
   );
 
+  // Check for pending invite from join.html page
+  const pendingInvite = usePendingInvite();
+
   // Check if onboarding has been completed
   useEffect(() => {
     const onboardingComplete = localStorage.getItem('sc-onboarding-complete');
@@ -56,6 +60,67 @@ function App() {
       initKeys();
     }
   }, [identityKeys]);
+
+  // Handle pending invite from join.html page
+  useEffect(() => {
+    if (pendingInvite.code && identityKeys.publicKey && identityKeys.privateKey) {
+      // Process the pending invite
+      const processPendingInvite = async () => {
+        try {
+          // Import InviteManager from core
+          const { InviteManager } = await import('@sc/core');
+          const inviteManager = new InviteManager(
+            status.localPeerId,
+            identityKeys.publicKey!,
+            identityKeys.privateKey!,
+            'User'
+          );
+
+          // Redeem the invite (code is guaranteed to be non-null by the outer if check)
+          const result = await inviteManager.redeemInvite(
+            pendingInvite.code!,
+            status.localPeerId
+          );
+
+          if (result.success) {
+            // Convert publicKey Uint8Array to base64 string for storage
+            const publicKeyBase64 = btoa(String.fromCharCode(...result.contact.publicKey));
+            
+            // Save contact to database
+            const db = getDatabase();
+            await db.saveContact({
+              id: result.contact.peerId,
+              publicKey: publicKeyBase64,
+              displayName: result.contact.name || pendingInvite.inviterName || 'New Contact',
+              lastSeen: Date.now(),
+              createdAt: Date.now(),
+              fingerprint: publicKeyBase64.substring(0, 16), // Use first 16 chars as fingerprint
+              verified: true,
+              blocked: false,
+              endpoints: [],
+            });
+
+            // Connect to the inviter
+            await connectToPeer(result.contact.peerId);
+            setSelectedConversation(result.contact.peerId);
+            
+            announce.message(
+              `Joined from invite! Connected to ${result.contact.name || pendingInvite.inviterName || 'your friend'}`,
+              'assertive'
+            );
+          }
+        } catch (error) {
+          console.error('Failed to process pending invite:', error);
+          announce.message(
+            'Failed to process invite. The invite may be invalid or expired.',
+            'assertive'
+          );
+        }
+      };
+
+      processPendingInvite();
+    }
+  }, [pendingInvite.code, identityKeys.publicKey, identityKeys.privateKey, status.localPeerId, connectToPeer]);
 
   // Announce connection status changes to screen readers
   useEffect(() => {
