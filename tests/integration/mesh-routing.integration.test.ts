@@ -1,24 +1,22 @@
 /**
  * Integration tests for mesh network routing
  */
-import { RoutingTable } from '../../core/src/mesh/routing';
+import { RoutingTable, PeerState, createPeer } from '../../core/src/mesh/routing';
 import { MessageRelay } from '../../core/src/mesh/relay';
-import { Message, MessageType } from '../../core/src/protocol/message';
+import { Message, MessageType, encodeMessage } from '../../core/src/protocol/message';
 import { generateIdentity } from '../../core/src/crypto/primitives';
 
 describe('Mesh Network Integration', () => {
   let routingTable: RoutingTable;
   let relay: MessageRelay;
   let identity: { publicKey: Uint8Array; privateKey: Uint8Array };
+  let localPeerId: string;
 
   beforeEach(async () => {
     identity = await generateIdentity();
+    localPeerId = Buffer.from(identity.publicKey).toString('hex');
     routingTable = new RoutingTable();
-    relay = new MessageRelay(routingTable);
-  });
-
-  afterEach(() => {
-    relay.shutdown();
+    relay = new MessageRelay(localPeerId, routingTable);
   });
 
   describe('Peer routing', () => {
@@ -26,36 +24,22 @@ describe('Mesh Network Integration', () => {
       const peerId = 'peer-1';
       const peerPublicKey = new Uint8Array(32).fill(1);
       
-      // Add peer to routing table
-      routingTable.addPeer({
-        id: peerId,
-        publicKey: peerPublicKey,
-        transport: 'webrtc',
-        lastSeen: Date.now(),
-        reputation: 1.0,
-        state: 'connected',
-        metadata: {},
-      });
+      // Add peer to routing table using createPeer helper
+      const peer = createPeer(peerId, peerPublicKey, 'webrtc');
+      routingTable.addPeer(peer);
 
       // Verify peer exists
-      const peer = routingTable.getPeer(peerId);
-      expect(peer).toBeDefined();
-      expect(peer?.id).toBe(peerId);
+      const retrievedPeer = routingTable.getPeer(peerId);
+      expect(retrievedPeer).toBeDefined();
+      expect(retrievedPeer?.id).toBe(peerId);
     });
 
     it('should handle multi-hop routing', () => {
       // Add multiple peers in a chain
       const peers = ['peer-1', 'peer-2', 'peer-3'];
       peers.forEach((peerId, index) => {
-        routingTable.addPeer({
-          id: peerId,
-          publicKey: new Uint8Array(32).fill(index + 1),
-          transport: 'webrtc',
-          lastSeen: Date.now(),
-          reputation: 1.0,
-          state: 'connected',
-          metadata: {},
-        });
+        const peer = createPeer(peerId, new Uint8Array(32).fill(index + 1), 'webrtc');
+        routingTable.addPeer(peer);
       });
 
       // All peers should be in routing table
@@ -64,26 +48,21 @@ describe('Mesh Network Integration', () => {
 
     it('should update peer reputation based on behavior', () => {
       const peerId = 'peer-1';
-      routingTable.addPeer({
-        id: peerId,
-        publicKey: new Uint8Array(32).fill(1),
-        transport: 'webrtc',
-        lastSeen: Date.now(),
-        reputation: 1.0,
-        state: 'connected',
-        metadata: {},
-      });
+      const peer = createPeer(peerId, new Uint8Array(32).fill(1), 'webrtc');
+      routingTable.addPeer(peer);
 
       // Update reputation negatively
       routingTable.updatePeerReputation(peerId, false);
       
-      let peer = routingTable.getPeer(peerId);
-      expect(peer?.reputation).toBeLessThan(1.0);
+      let retrievedPeer = routingTable.getPeer(peerId);
+      // Default reputation is 50, negative update should decrease it
+      const DEFAULT_REPUTATION = 50;
+      expect(retrievedPeer?.metadata.reputation).toBeLessThan(DEFAULT_REPUTATION);
 
       // Update reputation positively
       routingTable.updatePeerReputation(peerId, true);
-      peer = routingTable.getPeer(peerId);
-      expect(peer?.reputation).toBeGreaterThanOrEqual(0);
+      retrievedPeer = routingTable.getPeer(peerId);
+      expect(retrievedPeer?.metadata.reputation).toBeGreaterThanOrEqual(0);
     });
   });
 
@@ -101,17 +80,16 @@ describe('Mesh Network Integration', () => {
         payload: new TextEncoder().encode('Test'),
       };
 
-      let relayCount = 0;
-      relay.onRelay((msg) => {
-        relayCount++;
-      });
+      // Encode the message
+      const encodedMessage = encodeMessage(message);
 
-      // Try to relay the same message twice
-      await relay.relayMessage(message, 'peer-1');
-      await relay.relayMessage(message, 'peer-1');
+      // Process the same message twice from the same peer
+      await relay.processMessage(encodedMessage, 'peer-1');
+      await relay.processMessage(encodedMessage, 'peer-1');
 
-      // Should only relay once due to deduplication
-      expect(relayCount).toBeLessThanOrEqual(1);
+      // Check that the message was marked as seen (deduplicated)
+      const stats = relay.getStats();
+      expect(stats.messagesDuplicate).toBeGreaterThanOrEqual(1);
     });
 
     it('should respect TTL limits', async () => {
@@ -127,46 +105,35 @@ describe('Mesh Network Integration', () => {
         payload: new TextEncoder().encode('Test'),
       };
 
-      let relayCount = 0;
-      relay.onRelay((msg) => {
-        relayCount++;
-      });
+      // Encode the message
+      const encodedMessage = encodeMessage(message);
 
-      await relay.relayMessage(message, 'peer-1');
+      await relay.processMessage(encodedMessage, 'peer-1');
 
-      // Should not relay expired message
-      expect(relayCount).toBe(0);
+      // Should not forward expired message
+      const stats = relay.getStats();
+      expect(stats.messagesExpired).toBeGreaterThanOrEqual(1);
+      expect(stats.messagesForwarded).toBe(0);
     });
   });
 
   describe('Network health', () => {
     it('should track peer health metrics', () => {
       const peerId = 'peer-1';
-      routingTable.addPeer({
-        id: peerId,
-        publicKey: new Uint8Array(32).fill(1),
-        transport: 'webrtc',
-        lastSeen: Date.now(),
-        reputation: 1.0,
-        state: 'connected',
-        metadata: {
-          capabilities: {
-            maxBandwidth: 1000000,
-            supportedTransports: ['webrtc'],
-            protocolVersion: 1,
-            features: ['relay', 'file-transfer'],
-          },
-          reputation: 80,
-          blacklisted: false,
-          failureCount: 0,
-          successCount: 10,
-        },
-      });
+      const peer = createPeer(peerId, new Uint8Array(32).fill(1), 'webrtc');
+      
+      // Update peer metadata
+      peer.metadata.reputation = 80;
+      peer.metadata.successCount = 10;
+      peer.metadata.capabilities.maxBandwidth = 1000000;
+      peer.metadata.capabilities.features = ['relay', 'file-transfer'];
+      
+      routingTable.addPeer(peer);
 
-      const peer = routingTable.getPeer(peerId);
-      expect(peer?.metadata.reputation).toBe(80);
-      expect(peer?.metadata.successCount).toBe(10);
-      expect(peer?.metadata.capabilities.maxBandwidth).toBe(1000000);
+      const retrievedPeer = routingTable.getPeer(peerId);
+      expect(retrievedPeer?.metadata.reputation).toBe(80);
+      expect(retrievedPeer?.metadata.successCount).toBe(10);
+      expect(retrievedPeer?.metadata.capabilities.maxBandwidth).toBe(1000000);
     });
   });
 });
