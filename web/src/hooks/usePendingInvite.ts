@@ -10,6 +10,12 @@ interface PendingInviteInfo {
   inviterName: string | null;
 }
 
+// Constants for invite URL parsing
+const INVITE_HASH_PREFIX = 'join=';
+const INVITE_HASH_PREFIX_LENGTH = INVITE_HASH_PREFIX.length;
+const PENDING_INVITE_STORAGE_KEY = 'pendingInvite';
+const INVITER_NAME_STORAGE_KEY = 'inviterName';
+
 export function usePendingInvite(): PendingInviteInfo {
   const [inviteInfo, setInviteInfo] = useState<PendingInviteInfo>({
     code: null,
@@ -19,28 +25,33 @@ export function usePendingInvite(): PendingInviteInfo {
   useEffect(() => {
     // Check URL hash for invite code (e.g., #join=INVITE_CODE)
     const hash = window.location.hash.slice(1);
-    if (hash.startsWith('join=')) {
-      const code = hash.substring(5);
+    if (hash.startsWith(INVITE_HASH_PREFIX)) {
+      const code = hash.substring(INVITE_HASH_PREFIX_LENGTH);
       if (code) {
         setInviteInfo({
           code,
-          inviterName: sessionStorage.getItem('inviterName'),
+          inviterName: sessionStorage.getItem(INVITER_NAME_STORAGE_KEY),
         });
-        // Clear hash after reading
-        window.location.hash = '';
+        // Clear hash after reading using replaceState to avoid browser history issues
+        if (window.history?.replaceState) {
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        } else {
+          // Fallback for older browsers
+          window.location.hash = '';
+        }
         return;
       }
     }
 
     // Check localStorage for pending invite (set by join.html)
-    const pendingInvite = localStorage.getItem('pendingInvite');
+    const pendingInvite = localStorage.getItem(PENDING_INVITE_STORAGE_KEY);
     if (pendingInvite) {
       setInviteInfo({
         code: pendingInvite,
-        inviterName: sessionStorage.getItem('inviterName'),
+        inviterName: sessionStorage.getItem(INVITER_NAME_STORAGE_KEY),
       });
       // Clear from localStorage after reading
-      localStorage.removeItem('pendingInvite');
+      localStorage.removeItem(PENDING_INVITE_STORAGE_KEY);
     }
   }, []);
 

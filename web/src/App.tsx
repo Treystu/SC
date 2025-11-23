@@ -77,14 +77,22 @@ function App() {
           );
 
           // Redeem the invite (code is guaranteed to be non-null by the outer if check)
+          const inviteCode = pendingInvite.code;
+          if (!inviteCode) return;
+          
           const result = await inviteManager.redeemInvite(
-            pendingInvite.code!,
+            inviteCode,
             status.localPeerId
           );
 
           if (result.success) {
             // Convert publicKey Uint8Array to base64 string for storage
-            const publicKeyBase64 = btoa(String.fromCharCode(...result.contact.publicKey));
+            // Use Array.from to avoid stack overflow with large arrays
+            const publicKeyArray = Array.from(result.contact.publicKey);
+            const publicKeyBase64 = btoa(String.fromCharCode.apply(null, publicKeyArray as any));
+            
+            // Use first 16 characters as fingerprint for display
+            const FINGERPRINT_LENGTH = 16;
             
             // Save contact to database
             const db = getDatabase();
@@ -94,7 +102,7 @@ function App() {
               displayName: result.contact.name || pendingInvite.inviterName || 'New Contact',
               lastSeen: Date.now(),
               createdAt: Date.now(),
-              fingerprint: publicKeyBase64.substring(0, 16), // Use first 16 chars as fingerprint
+              fingerprint: publicKeyBase64.substring(0, FINGERPRINT_LENGTH),
               verified: true,
               blocked: false,
               endpoints: [],
