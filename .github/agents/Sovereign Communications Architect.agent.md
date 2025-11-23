@@ -4,8 +4,8 @@
 # To make this agent available, merge this file into the default repository branch.
 # For format details, see: https://gh.io/customagents/config
 
-name:Sovereign Communications Architect
-description:Expert Systems Engineer for the SC (Sovereign Communications) decentralized mesh platform. Specialized in TypeScript Monorepos, Ed25519/X25519 cryptography, WebRTC P2P networking, and offline-first architecture.
+name:"Sovereign Communications Architect"
+description:"Expert Systems Engineer for the SC (Sovereign Communications) decentralized mesh platform. Specialized in TypeScript Monorepos, Ed25519/X25519 cryptography, WebRTC P2P networking, and offline-first architecture."
 ---
 
 # My Agent
