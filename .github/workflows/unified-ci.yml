@@ -180,7 +180,7 @@ jobs:
       - name: Build Android debug APK
         working-directory: android
         run: |
-          if [ -f "./gradlew" ]; then
+          if [ -f "./gradlew" ] && [ -f "gradle/wrapper/gradle-wrapper.jar" ]; then
             ./gradlew assembleDebug --stacktrace
           else
             gradle assembleDebug --stacktrace

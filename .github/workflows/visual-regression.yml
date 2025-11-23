@@ -32,7 +32,7 @@ jobs:
         run: npm run build -w web
         
       - name: Run visual regression tests
-        run: npx playwright test --project=chromium --grep=@visual
+        run: npx playwright test --config=playwright.visual.config.ts --project=chromium
         env:
           CI: true
           
@@ -101,7 +101,7 @@ jobs:
         run: npm run build -w web
         
       - name: Update baseline screenshots
-        run: npx playwright test --project=chromium --grep=@visual --update-snapshots
+        run: npx playwright test --config=playwright.visual.config.ts --project=chromium --update-snapshots
         
       - name: Commit updated baselines
         run: |
