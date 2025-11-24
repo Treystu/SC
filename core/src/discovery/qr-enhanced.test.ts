@@ -9,7 +9,7 @@ import {
   QR_FORMAT_VERSION,
   type QRPeerInfo,
 } from './qr-enhanced';
-import { hexToBytes } from '@noble/hashes/utils';
+import { hexToBytes } from '@noble/hashes/utils.js';
 
 describe('Enhanced QR Code Discovery', () => {
   const testPeerInfo: QRPeerInfo = {
@@ -141,7 +141,7 @@ describe('Enhanced QR Code Discovery', () => {
         // Calculate checksum for this invalid data
         const dataString = JSON.stringify(invalidData);
         const checksum = typeof require !== 'undefined' 
-          ? require('@noble/hashes/sha256').sha256(new TextEncoder().encode(dataString))
+          ? require('@noble/hashes/sha2.js').sha256(new TextEncoder().encode(dataString))
           : new Uint8Array(32);
         
         const checksumHex = Array.from(checksum).map((b: any) => b.toString(16).padStart(2, '0')).join('');
@@ -171,7 +171,7 @@ describe('Enhanced QR Code Discovery', () => {
         // Calculate checksum for this invalid data
         const dataString = JSON.stringify(invalidData);
         const checksum = typeof require !== 'undefined'
-          ? require('@noble/hashes/sha256').sha256(new TextEncoder().encode(dataString))
+          ? require('@noble/hashes/sha2.js').sha256(new TextEncoder().encode(dataString))
           : new Uint8Array(32);
         
         const checksumHex = Array.from(checksum).map((b: any) => b.toString(16).padStart(2, '0')).join('');
@@ -216,7 +216,7 @@ describe('Enhanced QR Code Discovery', () => {
         // Calculate checksum for this invalid data
         const dataString = JSON.stringify(invalidData);
         const checksum = typeof require !== 'undefined'
-          ? require('@noble/hashes/sha256').sha256(new TextEncoder().encode(dataString))
+          ? require('@noble/hashes/sha2.js').sha256(new TextEncoder().encode(dataString))
           : new Uint8Array(32);
         
         const checksumHex = Array.from(checksum).map((b: any) => b.toString(16).padStart(2, '0')).join('');

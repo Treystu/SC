@@ -14,8 +14,8 @@
  * - Task 32: NAT traversal with relay fallback
  */
 
-import { sha256 } from '@noble/hashes/sha256';
-import { bytesToHex } from '@noble/hashes/utils';
+import { sha256 } from '@noble/hashes/sha2.js';
+import { bytesToHex } from '@noble/hashes/utils.js';
 
 // ============================================================================
 // Types and Interfaces

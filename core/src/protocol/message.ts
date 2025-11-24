@@ -25,7 +25,7 @@
  * - Future versions will maintain backward compatibility where possible
  */
 
-import { sha256 } from '@noble/hashes/sha256';
+import { sha256 } from '@noble/hashes/sha2.js';
 
 export enum MessageType {
   // Data messages

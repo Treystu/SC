@@ -8,8 +8,8 @@
  * - Handle invite expiration
  */
 
-import { randomBytes } from '@noble/hashes/utils';
-import { sha256 } from '@noble/hashes/sha256';
+import { randomBytes } from '@noble/hashes/utils.js';
+import { sha256 } from '@noble/hashes/sha2.js';
 import { signMessage, verifySignature } from '../crypto/primitives';
 import { InviteOptions, PendingInvite, InviteRedemptionResult, Contact } from './types';
 

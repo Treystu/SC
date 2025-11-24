@@ -22,7 +22,7 @@
  * - Adaptive: Can increase during spam attacks
  */
 
-import { sha256 } from '@noble/hashes/sha256';
+import { sha256 } from '@noble/hashes/sha2.js';
 
 /**
  * Proof-of-Work challenge parameters
