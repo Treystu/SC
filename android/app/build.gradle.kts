@@ -2,6 +2,8 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("kotlin-kapt")
+    // Using serialization plugin version matching the Kotlin version from root build.gradle
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.0.21"
 }
 
 android {
@@ -121,6 +123,21 @@ dependencies {
     
     // Performance monitoring
     implementation("androidx.profileinstaller:profileinstaller:1.4.1")
+    
+    // QR Code & Camera
+    implementation("com.google.zxing:core:3.5.3")
+    implementation("androidx.camera:camera-camera2:1.3.1")
+    implementation("androidx.camera:camera-lifecycle:1.3.1")
+    implementation("androidx.camera:camera-view:1.3.1")
+    
+    // Permissions
+    implementation("com.google.accompanist:accompanist-permissions:0.34.0")
+    
+    // Google Play Services - Nearby Connections
+    implementation("com.google.android.gms:play-services-nearby:19.3.0")
+    
+    // Serialization for invite payloads
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
     
     // Testing
     testImplementation("junit:junit:4.13.2")
