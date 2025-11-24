@@ -17,7 +17,7 @@ export function hexToBuffer(hex: string): Uint8Array {
 
   const buffer = new Uint8Array(hex.length / 2);
   for (let i = 0; i < hex.length; i += 2) {
-    buffer[i / 2] = parseInt(hex.substr(i, 2), 16);
+    buffer[i / 2] = parseInt(hex.slice(i, i + 2), 16);
   }
   return buffer;
 }

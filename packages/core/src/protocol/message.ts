@@ -251,8 +251,13 @@ export function deserializeContent(buffer: Uint8Array): MessageContent {
   // Metadata
   let metadata: Record<string, unknown> | undefined;
   if (metadataLen > 0) {
-    const metadataStr = new TextDecoder().decode(buffer.slice(offset, offset + metadataLen));
-    metadata = JSON.parse(metadataStr);
+    try {
+      const metadataStr = new TextDecoder().decode(buffer.slice(offset, offset + metadataLen));
+      metadata = JSON.parse(metadataStr);
+    } catch {
+      // Invalid metadata, ignore it
+      metadata = undefined;
+    }
   }
 
   return {

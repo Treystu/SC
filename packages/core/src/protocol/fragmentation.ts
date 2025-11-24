@@ -32,7 +32,7 @@ export function fragmentMessage(data: Uint8Array, maxFragmentSize: number = MAX_
  */
 export class FragmentAssembler {
   private fragments: Map<string, Map<number, MessageFragment>> = new Map();
-  private timeouts: Map<string, number> = new Map();
+  private timeouts: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private readonly timeout: number = 60000; // 60 seconds
 
   /**
@@ -51,7 +51,7 @@ export class FragmentAssembler {
         this.timeouts.delete(messageIdStr);
       }, this.timeout);
       
-      this.timeouts.set(messageIdStr, timeoutId as unknown as number);
+      this.timeouts.set(messageIdStr, timeoutId);
     }
 
     const fragmentMap = this.fragments.get(messageIdStr)!;

@@ -8,7 +8,7 @@ export class DeduplicationCache {
   private cache: Map<string, number> = new Map();
   private readonly maxAge: number;
   private readonly maxSize: number;
-  private cleanupInterval: NodeJS.Timeout | null = null;
+  private cleanupInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(maxAge: number = 300000, maxSize: number = 10000) {
     this.maxAge = maxAge; // 5 minutes default

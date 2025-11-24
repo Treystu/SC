@@ -8,7 +8,7 @@ export class PeerHealthMonitor {
   private peerHealth: Map<string, PeerHealth> = new Map();
   private readonly heartbeatInterval: number;
   private readonly maxMissedHeartbeats: number;
-  private monitorInterval: NodeJS.Timeout | null = null;
+  private monitorInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     heartbeatInterval: number = 30000, // 30 seconds
