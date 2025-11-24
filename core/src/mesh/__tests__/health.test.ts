@@ -1,5 +1,5 @@
 import { PeerHealthMonitor } from '../health';
-import { generateIdentity } from '../../crypto';
+import { generateIdentity } from '../../crypto/primitives';
 
 describe('PeerHealthMonitor', () => {
   let monitor: PeerHealthMonitor;

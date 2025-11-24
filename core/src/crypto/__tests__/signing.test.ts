@@ -4,7 +4,7 @@ import {
   verifySignature,
   generateNonce,
   generateKey,
-} from '../signing';
+} from '../primitives';
 
 describe('Signing', () => {
   describe('generateIdentity', () => {

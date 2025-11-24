@@ -1,9 +1,9 @@
 import { MessageRouter, PriorityQueue, BandwidthScheduler, decrementTTL } from '../relay';
-import { RoutingTable } from '../routing';
+import { RoutingTable, Peer } from '../routing';
 import { DeduplicationCache } from '../deduplication';
-import { Message, MessageType, TransportType } from '../../types';
-import { generateIdentity } from '../../crypto';
-import { createMessageHeader } from '../../protocol';
+import { Message, MessageType } from '../../protocol/message';
+import { generateIdentity } from '../../crypto/primitives';
+import { createMessageHeader } from '../../protocol/message';
 
 describe('Relay', () => {
   describe('decrementTTL', () => {

@@ -4,8 +4,8 @@ import {
   createSessionKey,
   shouldRotateKey,
   rotateSessionKey,
-} from '../encryption';
-import { generateKey, generateNonce } from '../signing';
+} from '../primitives';
+import { generateKey, generateNonce } from '../primitives';
 
 describe('Encryption', () => {
   describe('encryptMessage and decryptMessage', () => {

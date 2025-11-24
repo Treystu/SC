@@ -2,7 +2,7 @@ import {
   generateECDHKeypair,
   computeSharedSecret,
   deriveSessionKey,
-} from '../keyexchange';
+} from '../primitives';
 
 describe('Key Exchange', () => {
   describe('generateECDHKeypair', () => {

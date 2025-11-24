@@ -1,6 +1,5 @@
-import { RoutingTable } from '../routing';
-import { Peer, TransportType } from '../../types';
-import { generateIdentity } from '../../crypto';
+import { RoutingTable, Peer } from '../routing';
+import { generateIdentity } from '../../crypto/primitives';
 
 describe('RoutingTable', () => {
   let routingTable: RoutingTable;
