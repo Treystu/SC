@@ -17,9 +17,16 @@ import kotlinx.coroutines.launch
 /**
  * SharingScreen - Demonstrates all Android sharing methods
  * Provides UI for QR codes, NFC, Nearby Connections, and Share Sheet
+ * 
+ * @param peerId The current user's peer ID
+ * @param publicKey The current user's public key
+ * @param displayName The current user's display name
  */
 @Composable
 fun SharingScreen(
+    peerId: String,
+    publicKey: ByteArray,
+    displayName: String?,
     onNavigateBack: () -> Unit,
     onNavigateToQRScanner: () -> Unit,
     onNavigateToQRDisplay: (String) -> Unit
@@ -27,7 +34,7 @@ fun SharingScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     
-    // Initialize managers
+    // Initialize managers with actual user data
     val shareManager = remember { ShareManager(context) }
     val nfcManager = remember { 
         if (context is Activity) NFCShareManager(context) else null 
@@ -35,7 +42,7 @@ fun SharingScreen(
     val nearbyManager = remember { NearbyShareManager(context) }
     val apkExtractor = remember { APKExtractor(context) }
     val inviteManager = remember { 
-        InviteManager(context, "peer123", ByteArray(32), "Test User")
+        InviteManager(context, peerId, publicKey, displayName)
     }
     
     var currentInvite by remember { mutableStateOf<Invite?>(null) }
@@ -325,6 +332,7 @@ fun SharingScreen(
             currentInvite = currentInvite,
             discoveredDevices = discoveredDevices,
             connectionState = connectionState,
+            userName = displayName ?: "SC User",
             onDismiss = {
                 showNearbyDialog = false
                 nearbyManager.disconnectAll()
@@ -339,6 +347,7 @@ fun NearbyConnectionsDialog(
     currentInvite: Invite?,
     discoveredDevices: List<NearbyShareManager.DiscoveredDevice>,
     connectionState: NearbyShareManager.ConnectionState,
+    userName: String = "SC User",
     onDismiss: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
@@ -382,7 +391,8 @@ fun NearbyConnectionsDialog(
                                     onClick = {
                                         nearbyManager.connectToDevice(
                                             device.endpointId,
-                                            device.name
+                                            device.name,
+                                            userName
                                         )
                                     }
                                 ) {
@@ -411,7 +421,7 @@ fun NearbyConnectionsDialog(
                 onClick = {
                     if (mode == "advertise") {
                         currentInvite?.let { invite ->
-                            nearbyManager.startAdvertising(invite, "SC User")
+                            nearbyManager.startAdvertising(invite, userName)
                         }
                     } else {
                         nearbyManager.startDiscovery { receivedInvite ->

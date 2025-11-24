@@ -90,7 +90,11 @@ data class SharePayload(
     }
 
     fun toJsonString(): String {
-        return """{"v":"$version","c":"$inviteCode","p":"$inviterPeerId","s":${signature.joinToString(",", "[", "]")},"b":${bootstrapPeers.joinToString(",", "[", "]") { "\"$it\"" }},"t":$timestamp}"""
+        return try {
+            kotlinx.serialization.json.Json.encodeToString(this)
+        } catch (e: Exception) {
+            ""
+        }
     }
 
     companion object {

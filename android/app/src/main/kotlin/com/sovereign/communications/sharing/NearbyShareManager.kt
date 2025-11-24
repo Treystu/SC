@@ -123,9 +123,9 @@ class NearbyShareManager(private val context: Context) {
     /**
      * Connect to a discovered device
      */
-    fun connectToDevice(endpointId: String, deviceName: String) {
+    fun connectToDevice(endpointId: String, deviceName: String, userName: String = "SC User") {
         connectionsClient.requestConnection(
-            "SC User", // Could be user's display name
+            userName,
             endpointId,
             connectionLifecycleCallback
         )

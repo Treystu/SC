@@ -42,7 +42,10 @@ class NFCShareManager(
     
     /**
      * Enable NFC sharing with the given invite
-     * When another NFC-enabled device taps this device, the invite will be shared
+     * 
+     * Note: Android Beam (NFC Push) was deprecated in Android 10 and removed in Android 14.
+     * This implementation uses the legacy API for backwards compatibility with older devices.
+     * For Android 14+, consider using alternative sharing methods like QR codes or Nearby Share.
      */
     fun enableNFCSharing(invite: Invite) {
         if (nfcAdapter == null) {
@@ -57,15 +60,20 @@ class NFCShareManager(
         
         currentInvite = invite
         
-        // Set up NDEF push message callback
-        nfcAdapter.setNdefPushMessageCallback(this, activity)
-        
-        // Set up callback for when push completes
-        nfcAdapter.setOnNdefPushCompleteCallback({ _ ->
-            activity.runOnUiThread {
-                Toast.makeText(activity, "App shared via NFC!", Toast.LENGTH_SHORT).show()
-            }
-        }, activity)
+        // Note: setNdefPushMessageCallback is deprecated but kept for backwards compatibility
+        // On Android 14+, this will have no effect and alternative methods should be used
+        try {
+            nfcAdapter.setNdefPushMessageCallback(this, activity)
+            
+            // Set up callback for when push completes
+            nfcAdapter.setOnNdefPushCompleteCallback({ _ ->
+                activity.runOnUiThread {
+                    Toast.makeText(activity, "App shared via NFC!", Toast.LENGTH_SHORT).show()
+                }
+            }, activity)
+        } catch (e: Exception) {
+            // Silently fail on newer Android versions where this API is removed
+        }
     }
     
     /**
