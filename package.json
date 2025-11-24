@@ -4,8 +4,9 @@
   "description": "Decentralized P2P messaging app with E2E encryption",
   "private": true,
   "workspaces": [
-    "packages/*",
-    "apps/*"
+    "core",
+    "web",
+    "shared"
   ],
   "scripts": {
     "build": "npm run build --workspaces",
