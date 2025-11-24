@@ -50,6 +50,9 @@ fun SharingScreen(
     val discoveredDevices by nearbyManager.discoveredDevices.collectAsState()
     val connectionState by nearbyManager.connectionState.collectAsState()
     
+    // Cache APK URI to avoid repeated file operations
+    var cachedAPKUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    
     // Create an invite when screen opens
     LaunchedEffect(Unit) {
         currentInvite = inviteManager.createInvite()
@@ -266,6 +269,10 @@ fun SharingScreen(
                     modifier = Modifier.fillMaxWidth(),
                     onClick = {
                         currentInvite?.let { invite ->
+                            // Use cached URI or extract and cache on first use
+                            if (cachedAPKUri == null) {
+                                cachedAPKUri = apkExtractor.getCachedAPKUri()
+                            }
                             shareManager.shareApp(invite, includeAPK = true)
                         }
                     }

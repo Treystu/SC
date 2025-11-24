@@ -93,7 +93,8 @@ data class SharePayload(
         return try {
             kotlinx.serialization.json.Json.encodeToString(this)
         } catch (e: Exception) {
-            ""
+            android.util.Log.e("SharePayload", "Serialization failed", e)
+            throw e
         }
     }
 

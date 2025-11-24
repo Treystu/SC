@@ -2,7 +2,8 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("kotlin-kapt")
-    id("org.jetbrains.kotlin.plugin.serialization") version "1.9.23"
+    // Using serialization plugin version matching the Kotlin version from root build.gradle
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.0.21"
 }
 
 android {

@@ -31,6 +31,9 @@ class NearbyShareManager(private val context: Context) {
         private const val TAG = "NearbyShareManager"
         private const val SERVICE_ID = "com.sovereign.communications"
         private const val STRATEGY = Strategy.P2P_CLUSTER
+        
+        // Invite expiration duration (7 days) - matches InviteManager.DEFAULT_INVITE_TTL
+        private const val INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000L
     }
     
     data class DiscoveredDevice(
@@ -231,7 +234,7 @@ class NearbyShareManager(private val context: Context) {
                                 inviterPeerId = sharePayload.inviterPeerId,
                                 inviterPublicKey = ByteArray(0), // Will be fetched
                                 createdAt = sharePayload.timestamp,
-                                expiresAt = sharePayload.timestamp + (7 * 24 * 60 * 60 * 1000),
+                                expiresAt = sharePayload.timestamp + INVITE_TTL_MS,
                                 signature = sharePayload.signature,
                                 bootstrapPeers = sharePayload.bootstrapPeers
                             )

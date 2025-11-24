@@ -44,6 +44,27 @@ class APKExtractor(private val context: Context) {
     }
     
     /**
+     * Get cached APK URI if the file already exists, otherwise extract and cache it
+     * This avoids repeated file copy operations
+     */
+    fun getCachedAPKUri(): Uri {
+        val cacheDir = context.externalCacheDir ?: context.cacheDir
+        val outputFile = File(cacheDir, APK_CACHE_NAME)
+        
+        // Only copy if the cached file doesn't exist
+        if (!outputFile.exists()) {
+            val apkFile = File(context.applicationInfo.sourceDir)
+            apkFile.copyTo(outputFile, overwrite = false)
+        }
+        
+        return FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            outputFile
+        )
+    }
+    
+    /**
      * Create a shareable APK with embedded invite data
      * Note: This creates a modified APK which will have a different signature
      * For production, consider alternative methods like embedding data in assets

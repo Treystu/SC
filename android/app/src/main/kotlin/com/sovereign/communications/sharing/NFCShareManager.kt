@@ -71,8 +71,15 @@ class NFCShareManager(
                     Toast.makeText(activity, "App shared via NFC!", Toast.LENGTH_SHORT).show()
                 }
             }, activity)
+        } catch (e: NoSuchMethodError) {
+            // API removed in Android 14+
+            android.util.Log.w(TAG, "NFC Beam API not available on this Android version", e)
+        } catch (e: UnsupportedOperationException) {
+            // API not supported on this device
+            android.util.Log.w(TAG, "NFC Beam not supported on this device", e)
         } catch (e: Exception) {
-            // Silently fail on newer Android versions where this API is removed
+            // Log other unexpected errors for debugging
+            android.util.Log.e(TAG, "Unexpected error enabling NFC sharing", e)
         }
     }
     

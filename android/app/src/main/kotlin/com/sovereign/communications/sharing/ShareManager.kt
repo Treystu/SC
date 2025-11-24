@@ -92,7 +92,7 @@ class ShareManager(private val context: Context) {
      */
     private fun getAPKUri(): Uri {
         val apkFile = File(context.applicationInfo.sourceDir)
-        val outputFile = File(context.externalCacheDir, "SC.apk")
+        val outputFile = File(context.externalCacheDir ?: context.cacheDir, "SC.apk")
         
         // Copy APK to cache directory
         apkFile.copyTo(outputFile, overwrite = true)

@@ -42,6 +42,8 @@ class InviteManager(
         val expiresAt = createdAt + ttl
         
         // Generate placeholder signature (in production, use actual signing)
+        // WARNING: Using random bytes instead of Ed25519 signatures.
+        // Ensure signature verification is implemented before production use.
         val signature = ByteArray(64).apply {
             random.nextBytes(this)
         }
