@@ -1,112 +1,374 @@
-import { PeerHealth } from '../types';
+/**
+ * Peer Health Monitoring with Heartbeat
+ */
+
+import { RoutingTable, Peer } from './routing';
+import { Message, MessageType, encodeMessage } from '../protocol/message';
+import { signMessage } from '../crypto/primitives';
+
+export interface HeartbeatConfig {
+  interval: number; // Base heartbeat interval in ms
+  timeout: number; // Peer timeout in ms
+  maxMissed: number; // Max missed heartbeats before removing peer
+  adaptiveInterval?: boolean; // Enable adaptive intervals
+  minInterval?: number; // Minimum interval for adaptive
+  maxInterval?: number; // Maximum interval for adaptive
+}
+
+export interface PeerHealth {
+  peerId: string;
+  lastHeartbeat: number;
+  missedHeartbeats: number;
+  rtt: number; // Round-trip time in ms
+  isHealthy: boolean;
+  packetLoss: number; // 0-1, packet loss rate
+  latencyHistory: number[]; // Recent latency measurements
+  healthScore: number; // 0-100, computed health score
+  adaptiveInterval: number; // Current adaptive interval
+}
 
 /**
- * Task 17: Implement peer health monitoring (heartbeat)
- * Task 18: Create peer timeout and removal
+ * Peer Health Monitor
+ * Implements heartbeat-based health monitoring
  */
 export class PeerHealthMonitor {
+  private routingTable: RoutingTable;
+  private config: HeartbeatConfig;
   private peerHealth: Map<string, PeerHealth> = new Map();
-  private readonly heartbeatInterval: number;
-  private readonly maxMissedHeartbeats: number;
-  private monitorInterval: ReturnType<typeof setInterval> | null = null;
+  private heartbeatIntervals: Map<string, ReturnType<typeof setInterval>> = new Map();
+  private onPeerUnhealthyCallback?: (peerId: string) => void;
+  private onPeerHealthyCallback?: (peerId: string) => void;
+  private onSendMessageCallback?: (peerId: string, message: Uint8Array) => void;
+  private localPeerId: string;
+  private identityPrivateKey: Uint8Array;
 
   constructor(
-    heartbeatInterval: number = 30000, // 30 seconds
-    maxMissedHeartbeats: number = 3
+    localPeerId: string,
+    identityPrivateKey: Uint8Array,
+    routingTable: RoutingTable,
+    config: Partial<HeartbeatConfig> = {}
   ) {
-    this.heartbeatInterval = heartbeatInterval;
-    this.maxMissedHeartbeats = maxMissedHeartbeats;
-    this.startMonitoring();
+    this.localPeerId = localPeerId;
+    this.identityPrivateKey = identityPrivateKey;
+    this.routingTable = routingTable;
+    this.config = {
+      interval: config.interval || 30000, // 30 seconds
+      timeout: config.timeout || 90000, // 90 seconds
+      maxMissed: config.maxMissed || 3,
+      adaptiveInterval: config.adaptiveInterval !== false,
+      minInterval: config.minInterval || 10000, // 10 seconds
+      maxInterval: config.maxInterval || 60000, // 60 seconds
+    };
   }
 
   /**
-   * Records a heartbeat from a peer
+   * Start monitoring a peer
    */
-  recordHeartbeat(peerId: Uint8Array): void {
-    const peerIdStr = this.bufferToHex(peerId);
-    const existing = this.peerHealth.get(peerIdStr);
-
-    if (existing) {
-      existing.lastHeartbeat = Date.now();
-      existing.missedHeartbeats = 0;
-      existing.isHealthy = true;
-    } else {
-      this.peerHealth.set(peerIdStr, {
-        peerId,
-        lastHeartbeat: Date.now(),
-        missedHeartbeats: 0,
-        isHealthy: true,
-      });
+  startMonitoring(peerId: string): void {
+    if (this.heartbeatIntervals.has(peerId)) {
+      return; // Already monitoring
     }
+
+    // Initialize health tracking
+    this.peerHealth.set(peerId, {
+      peerId,
+      lastHeartbeat: Date.now(),
+      missedHeartbeats: 0,
+      rtt: 0,
+      isHealthy: true,
+      packetLoss: 0,
+      latencyHistory: [],
+      healthScore: 100,
+      adaptiveInterval: this.config.interval,
+    });
+
+    // Start sending heartbeats
+    this.scheduleNextHeartbeat(peerId);
   }
 
   /**
-   * Checks if a peer is healthy
+   * Schedule next heartbeat with adaptive interval
    */
-  isHealthy(peerId: Uint8Array): boolean {
-    const health = this.peerHealth.get(this.bufferToHex(peerId));
-    return health?.isHealthy ?? false;
+  private scheduleNextHeartbeat(peerId: string): void {
+    const health = this.peerHealth.get(peerId);
+    if (!health) return;
+
+    const interval = this.config.adaptiveInterval 
+      ? health.adaptiveInterval 
+      : this.config.interval;
+
+    const timeout = setTimeout(() => {
+      this.sendHeartbeat(peerId);
+      this.checkPeerHealth(peerId);
+      this.scheduleNextHeartbeat(peerId);
+    }, interval);
+
+    this.heartbeatIntervals.set(peerId, timeout as any);
   }
 
   /**
-   * Gets unhealthy peers that should be removed
+   * Stop monitoring a peer
    */
-  getUnhealthyPeers(): Uint8Array[] {
-    return Array.from(this.peerHealth.values())
-      .filter(health => !health.isHealthy)
-      .map(health => health.peerId);
+  stopMonitoring(peerId: string): void {
+    const interval = this.heartbeatIntervals.get(peerId);
+    if (interval) {
+      clearInterval(interval);
+      this.heartbeatIntervals.delete(peerId);
+    }
+    this.peerHealth.delete(peerId);
   }
 
   /**
-   * Removes a peer from health monitoring
+   * Send heartbeat (PING) to peer
    */
-  removePeer(peerId: Uint8Array): void {
-    this.peerHealth.delete(this.bufferToHex(peerId));
+  private sendHeartbeat(peerId: string): void {
+    const payload = new TextEncoder().encode(JSON.stringify({
+      timestamp: Date.now(),
+      peerId: this.localPeerId,
+    }));
+
+    const message: Message = {
+      header: {
+        version: 0x01,
+        type: MessageType.CONTROL_PING,
+        ttl: 1, // Direct message, no forwarding
+        timestamp: Date.now(),
+        senderId: new Uint8Array(32), // Will be filled with actual public key
+        signature: new Uint8Array(65),
+      },
+      payload,
+    };
+
+    // Create a temporary message for signing
+    const tempMessage = {
+      ...message,
+      header: {
+        ...message.header,
+        signature: new Uint8Array(65), // Placeholder for encoding
+      }
+    };
+
+    // Encode and sign
+    const messageBytes = encodeMessage(tempMessage);
+    const sig64 = signMessage(messageBytes, this.identityPrivateKey);
+    
+    // Pad signature to 65 bytes (compact signature with recovery byte)
+    const sig65 = new Uint8Array(65);
+    sig65.set(sig64, 0);
+    sig65[64] = 0; // Recovery byte placeholder
+    message.header.signature = sig65;
+
+    // Send to peer
+    const encodedMessage = encodeMessage(message);
+    this.onSendMessageCallback?.(peerId, encodedMessage);
   }
 
   /**
-   * Monitors peer health and marks unhealthy peers
+   * Process received heartbeat response (PONG)
    */
-  private monitor(): void {
+  processHeartbeatResponse(peerId: string, timestamp: number): void {
+    const health = this.peerHealth.get(peerId);
+    if (!health) {
+      return;
+    }
+
+    // Calculate RTT
+    const rtt = Date.now() - timestamp;
+    health.rtt = rtt;
+    
+    // Update latency history (keep last 10)
+    health.latencyHistory.push(rtt);
+    if (health.latencyHistory.length > 10) {
+      health.latencyHistory.shift();
+    }
+    
+    health.lastHeartbeat = Date.now();
+    
+    // Update packet loss (exponential moving average)
+    const alpha = 0.3;
+    health.packetLoss = alpha * 0 + (1 - alpha) * health.packetLoss;
+    health.missedHeartbeats = 0;
+
+    // Calculate health score
+    this.updateHealthScore(peerId);
+
+    // Adapt heartbeat interval based on connection quality
+    if (this.config.adaptiveInterval) {
+      this.adaptHeartbeatInterval(peerId);
+    }
+
+    // Check if peer became healthy
+    if (!health.isHealthy) {
+      health.isHealthy = true;
+      this.onPeerHealthyCallback?.(peerId);
+    }
+
+    // Update peer last seen in routing table
+    this.routingTable.updatePeerLastSeen(peerId);
+  }
+
+  /**
+   * Calculate health score based on multiple metrics
+   */
+  private updateHealthScore(peerId: string): void {
+    const health = this.peerHealth.get(peerId);
+    if (!health) return;
+
+    // Base score
+    let score = 100;
+
+    // Penalty for high latency
+    const avgLatency = health.latencyHistory.length > 0
+      ? health.latencyHistory.reduce((a, b) => a + b, 0) / health.latencyHistory.length
+      : health.rtt;
+    
+    if (avgLatency > 1000) score -= 30;
+    else if (avgLatency > 500) score -= 20;
+    else if (avgLatency > 200) score -= 10;
+
+    // Penalty for packet loss
+    score -= health.packetLoss * 50;
+
+    // Penalty for missed heartbeats
+    score -= health.missedHeartbeats * 10;
+
+    health.healthScore = Math.max(0, Math.min(100, score));
+  }
+
+  /**
+   * Adapt heartbeat interval based on connection quality
+   */
+  private adaptHeartbeatInterval(peerId: string): void {
+    const health = this.peerHealth.get(peerId);
+    if (!health) return;
+
+    const { minInterval = 10000, maxInterval = 60000 } = this.config;
+
+    // Good connection (score > 80): less frequent heartbeats
+    if (health.healthScore > 80) {
+      health.adaptiveInterval = Math.min(maxInterval, health.adaptiveInterval * 1.2);
+    }
+    // Poor connection (score < 50): more frequent heartbeats
+    else if (health.healthScore < 50) {
+      health.adaptiveInterval = Math.max(minInterval, health.adaptiveInterval * 0.8);
+    }
+    // Moderate connection: reset to default
+    else {
+      health.adaptiveInterval = this.config.interval;
+    }
+
+    health.adaptiveInterval = Math.max(minInterval, Math.min(maxInterval, health.adaptiveInterval));
+  }
+
+  /**
+   * Check peer health based on missed heartbeats
+   */
+  private checkPeerHealth(peerId: string): void {
+    const health = this.peerHealth.get(peerId);
+    if (!health) {
+      return;
+    }
+
     const now = Date.now();
+    const timeSinceLastHeartbeat = now - health.lastHeartbeat;
 
-    for (const health of this.peerHealth.values()) {
-      const timeSinceLastHeartbeat = now - health.lastHeartbeat;
+    // Check if heartbeat is overdue
+    if (timeSinceLastHeartbeat > health.adaptiveInterval * 1.5) {
+      health.missedHeartbeats++;
+      
+      // Update packet loss
+      const alpha = 0.3;
+      health.packetLoss = alpha * 1 + (1 - alpha) * health.packetLoss;
+      
+      // Update health score
+      this.updateHealthScore(peerId);
 
-      if (timeSinceLastHeartbeat > this.heartbeatInterval) {
-        health.missedHeartbeats++;
-
-        if (health.missedHeartbeats >= this.maxMissedHeartbeats) {
+      // Check if peer is unhealthy
+      if (health.missedHeartbeats >= this.config.maxMissed) {
+        if (health.isHealthy) {
           health.isHealthy = false;
+          this.onPeerUnhealthyCallback?.(peerId);
+        }
+
+        // Check if peer should be removed
+        if (timeSinceLastHeartbeat > this.config.timeout) {
+          this.stopMonitoring(peerId);
+          this.routingTable.removePeer(peerId);
         }
       }
     }
   }
 
   /**
-   * Starts periodic health monitoring
+   * Get health status for a peer
    */
-  private startMonitoring(): void {
-    this.monitorInterval = setInterval(
-      () => this.monitor(),
-      this.heartbeatInterval
-    );
+  getPeerHealth(peerId: string): PeerHealth | undefined {
+    return this.peerHealth.get(peerId);
   }
 
   /**
-   * Stops monitoring and cleans up
+   * Get all peer health statuses
    */
-  destroy(): void {
-    if (this.monitorInterval) {
-      clearInterval(this.monitorInterval);
-      this.monitorInterval = null;
-    }
-    this.peerHealth.clear();
+  getAllPeerHealth(): PeerHealth[] {
+    return Array.from(this.peerHealth.values());
   }
 
-  private bufferToHex(buffer: Uint8Array): string {
-    return Array.from(buffer)
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
+  /**
+   * Register callback for peer becoming unhealthy
+   */
+  onPeerUnhealthy(callback: (peerId: string) => void): void {
+    this.onPeerUnhealthyCallback = callback;
+  }
+
+  /**
+   * Register callback for peer becoming healthy
+   */
+  onPeerHealthy(callback: (peerId: string) => void): void {
+    this.onPeerHealthyCallback = callback;
+  }
+
+  /**
+   * Register callback for sending messages
+   */
+  onSendMessage(callback: (peerId: string, message: Uint8Array) => void): void {
+    this.onSendMessageCallback = callback;
+  }
+
+  /**
+   * Get health statistics
+   */
+  getStats() {
+    const healthy = Array.from(this.peerHealth.values()).filter(h => h.isHealthy).length;
+    const unhealthy = this.peerHealth.size - healthy;
+
+    return {
+      totalPeers: this.peerHealth.size,
+      healthy,
+      unhealthy,
+      averageRtt: this.calculateAverageRtt(),
+    };
+  }
+
+  /**
+   * Calculate average RTT across all healthy peers
+   */
+  private calculateAverageRtt(): number {
+    const healthyPeers = Array.from(this.peerHealth.values()).filter(h => h.isHealthy);
+    if (healthyPeers.length === 0) {
+      return 0;
+    }
+
+    const totalRtt = healthyPeers.reduce((sum, h) => sum + h.rtt, 0);
+    return totalRtt / healthyPeers.length;
+  }
+
+  /**
+   * Shutdown health monitor
+   */
+  shutdown(): void {
+    // Clear all intervals
+    this.heartbeatIntervals.forEach(interval => clearInterval(interval));
+    this.heartbeatIntervals.clear();
+    this.peerHealth.clear();
   }
 }

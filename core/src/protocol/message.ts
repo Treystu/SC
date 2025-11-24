@@ -1,19 +1,172 @@
+/**
+ * Binary Message Format for Sovereign Communications
+ * 
+ * Wire Protocol Documentation:
+ * ===========================
+ * 
+ * Endianness: All multi-byte integers use Big Endian (network byte order)
+ * 
+ * Header Structure (fixed 109 bytes):
+ * Offset | Size | Field      | Description
+ * -------|------|------------|------------------------------------------
+ * 0      | 1    | Version    | Protocol version (current: 0x01)
+ * 1      | 1    | Type       | Message type (see MessageType enum)
+ * 2      | 1    | TTL        | Time-to-live for mesh routing (max: 255)
+ * 3      | 1    | Reserved   | Reserved for future use (must be 0x00)
+ * 4      | 8    | Timestamp  | Unix timestamp in milliseconds (big-endian)
+ * 12     | 32   | Sender ID  | Ed25519 public key of sender
+ * 44     | 65   | Signature  | Compact Ed25519 signature of message
+ * 
+ * Body:
+ * - Encrypted payload (variable length, max: MAX_PAYLOAD_SIZE)
+ * 
+ * Version Migration:
+ * - v1 (0x01): Initial protocol version
+ * - Future versions will maintain backward compatibility where possible
+ */
+
 import { sha256 } from '@noble/hashes/sha256';
-import {
-  Message,
-  MessageHeader,
-  MessageContent,
-  MessageType,
-  PROTOCOL_VERSION,
-  HEADER_SIZE,
-} from '../types';
-import { signMessage, verifySignature } from '../crypto';
+
+export enum MessageType {
+  // Data messages
+  TEXT = 0x01,
+  FILE_METADATA = 0x02,
+  FILE_CHUNK = 0x03,
+  VOICE = 0x04,
+  // Control messages
+  CONTROL_ACK = 0x10,
+  CONTROL_PING = 0x11,
+  CONTROL_PONG = 0x12,
+  // Peer management
+  PEER_DISCOVERY = 0x20,
+  PEER_INTRODUCTION = 0x21,
+  // Cryptographic
+  KEY_EXCHANGE = 0x30,
+  SESSION_KEY = 0x31,
+}
+
+// Protocol constants
+export const PROTOCOL_VERSION = 0x01;
+export const MIN_SUPPORTED_VERSION = 0x01;
+export const MAX_SUPPORTED_VERSION = 0x01;
+export const HEADER_SIZE = 109; // 1 + 1 + 1 + 1 + 8 + 32 + 65 (compact signature)
+export const MAX_PAYLOAD_SIZE = 1024 * 1024; // 1 MB max payload
+export const MAX_TTL = 255;
+
+export interface MessageHeader {
+  version: number;
+  type: MessageType;
+  ttl: number;
+  timestamp: number;
+  senderId: Uint8Array;
+  signature: Uint8Array;
+}
+
+export interface Message {
+  header: MessageHeader;
+  payload: Uint8Array;
+}
 
 /**
- * Task 1: Define binary message format
- * Serializes a message header to binary format
+ * Validation error with detailed context
  */
-export function serializeHeader(header: MessageHeader): Uint8Array {
+export class MessageValidationError extends Error {
+  constructor(
+    message: string,
+    public readonly field?: string,
+    public readonly value?: unknown
+  ) {
+    super(message);
+    this.name = 'MessageValidationError';
+  }
+}
+
+/**
+ * Validate message header fields
+ * @throws {MessageValidationError} if validation fails
+ */
+export function validateHeader(header: MessageHeader): void {
+  // Validate version
+  if (header.version < MIN_SUPPORTED_VERSION || header.version > MAX_SUPPORTED_VERSION) {
+    throw new MessageValidationError(
+      `Unsupported protocol version: ${header.version}. Supported: ${MIN_SUPPORTED_VERSION}-${MAX_SUPPORTED_VERSION}`,
+      'version',
+      header.version
+    );
+  }
+
+  // Validate message type
+  const validTypes = Object.values(MessageType).filter(v => typeof v === 'number');
+  if (!validTypes.includes(header.type)) {
+    throw new MessageValidationError(
+      `Invalid message type: 0x${header.type.toString(16).padStart(2, '0')}`,
+      'type',
+      header.type
+    );
+  }
+
+  // Validate TTL
+  if (header.ttl < 0 || header.ttl > MAX_TTL) {
+    throw new MessageValidationError(
+      `Invalid TTL: ${header.ttl}. Must be 0-${MAX_TTL}`,
+      'ttl',
+      header.ttl
+    );
+  }
+
+  // Validate timestamp
+  if (!Number.isSafeInteger(header.timestamp) || header.timestamp < 0) {
+    throw new MessageValidationError(
+      `Invalid timestamp: ${header.timestamp}`,
+      'timestamp',
+      header.timestamp
+    );
+  }
+
+  // Validate sender ID size
+  if (header.senderId.length !== 32) {
+    throw new MessageValidationError(
+      `Invalid sender ID length: ${header.senderId.length}. Expected: 32`,
+      'senderId',
+      header.senderId.length
+    );
+  }
+
+  // Validate signature size
+  if (header.signature.length !== 65) {
+    throw new MessageValidationError(
+      `Invalid signature length: ${header.signature.length}. Expected: 65`,
+      'signature',
+      header.signature.length
+    );
+  }
+}
+
+/**
+ * Validate complete message
+ * @throws {MessageValidationError} if validation fails
+ */
+export function validateMessage(message: Message): void {
+  validateHeader(message.header);
+
+  // Validate payload size
+  if (message.payload.length > MAX_PAYLOAD_SIZE) {
+    throw new MessageValidationError(
+      `Payload too large: ${message.payload.length} bytes. Max: ${MAX_PAYLOAD_SIZE}`,
+      'payload',
+      message.payload.length
+    );
+  }
+}
+
+/**
+ * Encode a message header to binary format (Big Endian)
+ * @throws {MessageValidationError} if header is invalid
+ */
+export function encodeHeader(header: MessageHeader): Uint8Array {
+  // Validate before encoding
+  validateHeader(header);
+
   const buffer = new Uint8Array(HEADER_SIZE);
   let offset = 0;
 
@@ -26,32 +179,36 @@ export function serializeHeader(header: MessageHeader): Uint8Array {
   // TTL (1 byte)
   buffer[offset++] = header.ttl;
 
+  // Reserved (1 byte)
+  buffer[offset++] = 0;
+
   // Timestamp (8 bytes, big-endian)
-  const view = new DataView(buffer.buffer);
-  view.setBigUint64(offset, BigInt(header.timestamp), false);
-  offset += 8;
+  const timestamp = BigInt(header.timestamp);
+  for (let i = 7; i >= 0; i--) {
+    buffer[offset++] = Number((timestamp >> BigInt(i * 8)) & BigInt(0xff));
+  }
 
   // Sender ID (32 bytes)
   buffer.set(header.senderId, offset);
   offset += 32;
 
-  // Signature (64 bytes)
+  // Signature (65 bytes - compact format)
   buffer.set(header.signature, offset);
-  offset += 64;
-
-  // Payload length (4 bytes, big-endian)
-  view.setUint32(offset, header.payloadLength, false);
 
   return buffer;
 }
 
 /**
- * Task 1: Define binary message format
- * Deserializes a message header from binary format
+ * Decode a message header from binary format (Big Endian)
+ * @throws {MessageValidationError} if buffer is invalid or too small
  */
-export function deserializeHeader(buffer: Uint8Array): MessageHeader {
+export function decodeHeader(buffer: Uint8Array): MessageHeader {
   if (buffer.length < HEADER_SIZE) {
-    throw new Error(`Invalid header size: expected ${HEADER_SIZE}, got ${buffer.length}`);
+    throw new MessageValidationError(
+      `Invalid header size: ${buffer.length} bytes. Expected: ${HEADER_SIZE} bytes`,
+      'buffer',
+      buffer.length
+    );
   }
 
   let offset = 0;
@@ -59,35 +216,45 @@ export function deserializeHeader(buffer: Uint8Array): MessageHeader {
   const version = buffer[offset++];
   const type = buffer[offset++] as MessageType;
   const ttl = buffer[offset++];
+  offset++; // Skip reserved byte
 
-  const view = new DataView(buffer.buffer, buffer.byteOffset);
-  const timestamp = Number(view.getBigUint64(offset, false));
-  offset += 8;
+  // Timestamp (8 bytes, big-endian)
+  let timestamp = 0;
+  for (let i = 0; i < 8; i++) {
+    timestamp = (timestamp * 256) + buffer[offset++];
+  }
 
+  // Sender ID (32 bytes)
   const senderId = buffer.slice(offset, offset + 32);
   offset += 32;
 
-  const signature = buffer.slice(offset, offset + 64);
-  offset += 64;
+  // Signature (65 bytes)
+  const signature = buffer.slice(offset, offset + 65);
 
-  const payloadLength = view.getUint32(offset, false);
-
-  return {
+  const header: MessageHeader = {
     version,
     type,
     ttl,
     timestamp,
     senderId,
     signature,
-    payloadLength,
   };
+
+  // Validate decoded header
+  validateHeader(header);
+
+  return header;
 }
 
 /**
- * Serializes a complete message
+ * Encode a complete message (header + payload)
+ * @throws {MessageValidationError} if message is invalid
  */
-export function serializeMessage(message: Message): Uint8Array {
-  const headerBytes = serializeHeader(message.header);
+export function encodeMessage(message: Message): Uint8Array {
+  // Validate before encoding
+  validateMessage(message);
+
+  const headerBytes = encodeHeader(message.header);
   const result = new Uint8Array(headerBytes.length + message.payload.length);
   result.set(headerBytes, 0);
   result.set(message.payload, headerBytes.length);
@@ -95,183 +262,66 @@ export function serializeMessage(message: Message): Uint8Array {
 }
 
 /**
- * Deserializes a complete message
+ * Decode a complete message (header + payload)
+ * @throws {MessageValidationError} if buffer is invalid
  */
-export function deserializeMessage(buffer: Uint8Array): Message {
-  const header = deserializeHeader(buffer.slice(0, HEADER_SIZE));
-  const payload = buffer.slice(HEADER_SIZE, HEADER_SIZE + header.payloadLength);
-
-  if (payload.length !== header.payloadLength) {
-    throw new Error(
-      `Payload size mismatch: expected ${header.payloadLength}, got ${payload.length}`
+export function decodeMessage(buffer: Uint8Array): Message {
+  if (buffer.length < HEADER_SIZE) {
+    throw new MessageValidationError(
+      `Buffer too small: ${buffer.length} bytes. Minimum: ${HEADER_SIZE} bytes`,
+      'buffer',
+      buffer.length
     );
   }
 
-  return { header, payload };
+  const header = decodeHeader(buffer.slice(0, HEADER_SIZE));
+  const payload = buffer.slice(HEADER_SIZE);
+
+  const message: Message = { header, payload };
+
+  // Validate complete message
+  validateMessage(message);
+
+  return message;
 }
 
 /**
- * Creates a message header and signs it
+ * Create a cryptographically secure message hash for deduplication
+ * Uses SHA-256 for collision resistance
  */
-export function createMessageHeader(
-  type: MessageType,
-  ttl: number,
-  senderId: Uint8Array,
-  privateKey: Uint8Array,
-  payloadLength: number
-): MessageHeader {
-  const header: MessageHeader = {
-    version: PROTOCOL_VERSION,
-    type,
-    ttl,
-    timestamp: Date.now(),
-    senderId,
-    signature: new Uint8Array(64), // Placeholder
-    payloadLength,
-  };
-
-  // Create data to sign (everything except signature)
-  const dataToSign = new Uint8Array(HEADER_SIZE - 64);
-  let offset = 0;
-  dataToSign[offset++] = header.version;
-  dataToSign[offset++] = header.type;
-  dataToSign[offset++] = header.ttl;
-
-  const view = new DataView(dataToSign.buffer);
-  view.setBigUint64(offset, BigInt(header.timestamp), false);
-  offset += 8;
-
-  dataToSign.set(header.senderId, offset);
-  offset += 32;
-
-  view.setUint32(offset, header.payloadLength, false);
-
-  // Sign the header
-  header.signature = signMessage(dataToSign, privateKey);
-
-  return header;
-}
-
-/**
- * Verifies a message header signature
- */
-export function verifyMessageHeader(header: MessageHeader): boolean {
-  const dataToVerify = new Uint8Array(HEADER_SIZE - 64);
-  let offset = 0;
-  dataToVerify[offset++] = header.version;
-  dataToVerify[offset++] = header.type;
-  dataToVerify[offset++] = header.ttl;
-
-  const view = new DataView(dataToVerify.buffer);
-  view.setBigUint64(offset, BigInt(header.timestamp), false);
-  offset += 8;
-
-  dataToVerify.set(header.senderId, offset);
-  offset += 32;
-
-  view.setUint32(offset, header.payloadLength, false);
-
-  return verifySignature(dataToVerify, header.signature, header.senderId);
-}
-
-/**
- * Serializes message content to bytes
- */
-export function serializeContent(content: MessageContent): Uint8Array {
-  const recipientIdLen = content.recipientId ? content.recipientId.length : 0;
-  const contentTypeBytes = new TextEncoder().encode(content.contentType);
-  const metadataBytes = content.metadata
-    ? new TextEncoder().encode(JSON.stringify(content.metadata))
-    : new Uint8Array(0);
-
-  const totalLen =
-    1 + recipientIdLen + 2 + contentTypeBytes.length + content.data.length + 4 + metadataBytes.length;
-  const buffer = new Uint8Array(totalLen);
-  const view = new DataView(buffer.buffer);
-  let offset = 0;
-
-  // Recipient ID presence flag and data
-  if (content.recipientId) {
-    buffer[offset++] = 1;
-    buffer.set(content.recipientId, offset);
-    offset += recipientIdLen;
-  } else {
-    buffer[offset++] = 0;
-  }
-
-  // Content type length and data
-  view.setUint16(offset, contentTypeBytes.length, false);
-  offset += 2;
-  buffer.set(contentTypeBytes, offset);
-  offset += contentTypeBytes.length;
-
-  // Message data
-  buffer.set(content.data, offset);
-  offset += content.data.length;
-
-  // Metadata length and data
-  view.setUint32(offset, metadataBytes.length, false);
-  offset += 4;
-  if (metadataBytes.length > 0) {
-    buffer.set(metadataBytes, offset);
-  }
-
-  return buffer;
-}
-
-/**
- * Deserializes message content from bytes
- */
-export function deserializeContent(buffer: Uint8Array): MessageContent {
-  const view = new DataView(buffer.buffer, buffer.byteOffset);
-  let offset = 0;
-
-  // Recipient ID
-  const hasRecipient = buffer[offset++] === 1;
-  const recipientId = hasRecipient ? buffer.slice(offset, offset + 32) : undefined;
-  if (hasRecipient) offset += 32;
-
-  // Content type
-  const contentTypeLen = view.getUint16(offset, false);
-  offset += 2;
-  const contentType = new TextDecoder().decode(buffer.slice(offset, offset + contentTypeLen));
-  offset += contentTypeLen;
-
-  // Metadata length
-  const metadataLen = view.getUint32(buffer.length - 4, false);
+export function messageHash(message: Message): string {
+  const messageBytes = encodeMessage(message);
+  const hash = sha256(messageBytes);
   
-  // Message data (everything between content type and metadata)
-  const dataLen = buffer.length - offset - 4 - metadataLen;
-  const data = buffer.slice(offset, offset + dataLen);
-  offset += dataLen;
-
-  // Skip metadata length field
-  offset += 4;
-
-  // Metadata
-  let metadata: Record<string, unknown> | undefined;
-  if (metadataLen > 0) {
-    try {
-      const metadataStr = new TextDecoder().decode(buffer.slice(offset, offset + metadataLen));
-      metadata = JSON.parse(metadataStr);
-    } catch {
-      // Invalid metadata, ignore it
-      metadata = undefined;
-    }
-  }
-
-  return {
-    recipientId,
-    contentType,
-    data,
-    metadata,
-  };
+  // Convert to hex string
+  return Array.from(hash)
+    .map((b: number) => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 /**
- * Computes hash of a message for deduplication
+ * Check if a version is supported
  */
-export function hashMessage(message: Message): Uint8Array {
-  const serialized = serializeMessage(message);
-  return sha256(serialized);
+export function isVersionSupported(version: number): boolean {
+  return version >= MIN_SUPPORTED_VERSION && version <= MAX_SUPPORTED_VERSION;
+}
+
+/**
+ * Get human-readable message type name
+ */
+export function getMessageTypeName(type: MessageType): string {
+  const typeNames: Record<number, string> = {
+    [MessageType.TEXT]: 'TEXT',
+    [MessageType.FILE_METADATA]: 'FILE_METADATA',
+    [MessageType.FILE_CHUNK]: 'FILE_CHUNK',
+    [MessageType.VOICE]: 'VOICE',
+    [MessageType.CONTROL_ACK]: 'CONTROL_ACK',
+    [MessageType.CONTROL_PING]: 'CONTROL_PING',
+    [MessageType.CONTROL_PONG]: 'CONTROL_PONG',
+    [MessageType.PEER_DISCOVERY]: 'PEER_DISCOVERY',
+    [MessageType.PEER_INTRODUCTION]: 'PEER_INTRODUCTION',
+    [MessageType.KEY_EXCHANGE]: 'KEY_EXCHANGE',
+    [MessageType.SESSION_KEY]: 'SESSION_KEY',
+  };
+  return typeNames[type] || `UNKNOWN(0x${type.toString(16).padStart(2, '0')})`;
 }

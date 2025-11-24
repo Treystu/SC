@@ -1,0 +1,46 @@
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background-color: var(--bg-tertiary);
+  border-radius: 20px;
+  font-size: 0.9rem;
+}
+
+.status-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+.connection-status.online .status-indicator {
+  background-color: var(--accent-primary);
+}
+
+.connection-status.offline .status-indicator {
+  background-color: #ff4444;
+}
+
+.connection-status.connecting .status-indicator {
+  background-color: #ffaa00;
+}
+
+.status-text {
+  font-weight: 500;
+}
+
+.peer-count {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}

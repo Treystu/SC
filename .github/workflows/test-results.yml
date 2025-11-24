@@ -1,0 +1,87 @@
+name: Test Results Dashboard
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
+
+permissions:
+  checks: write
+  pull-requests: write
+
+jobs:
+  report:
+    name: Publish Test Results
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion != 'cancelled' }}
+    
+    steps:
+      - name: Download test results
+        uses: actions/download-artifact@v3
+        with:
+          name: test-results
+          path: test-results/
+          
+      - name: Publish test results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          files: |
+            test-results/**/*.xml
+            test-results/**/*.json
+          check_name: Test Results
+          comment_title: Test Results Summary
+          
+      - name: Generate test report
+        if: always()
+        run: |
+          cat > test-summary.md << 'EOF'
+          # Test Results Summary
+          
+          ## Overall Results
+          
+          | Metric | Value |
+          |--------|-------|
+          | Total Tests | ${{ env.TOTAL_TESTS }} |
+          | Passed | ${{ env.PASSED_TESTS }} |
+          | Failed | ${{ env.FAILED_TESTS }} |
+          | Skipped | ${{ env.SKIPPED_TESTS }} |
+          | Duration | ${{ env.TEST_DURATION }} |
+          
+          ## Coverage
+          
+          | Type | Coverage |
+          |------|----------|
+          | Lines | ${{ env.LINE_COVERAGE }}% |
+          | Branches | ${{ env.BRANCH_COVERAGE }}% |
+          | Functions | ${{ env.FUNCTION_COVERAGE }}% |
+          | Statements | ${{ env.STATEMENT_COVERAGE }}% |
+          
+          ## Detailed Results
+          
+          View full results in the [Actions tab](https://github.com/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }})
+          EOF
+          
+      - name: Comment PR with results
+        if: github.event.workflow_run.event == 'pull_request'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            const summary = fs.readFileSync('test-summary.md', 'utf8');
+            
+            const { data: pullRequests } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.payload.workflow_run.head_sha
+            });
+            
+            for (const pr of pullRequests) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                body: summary
+              });
+            }

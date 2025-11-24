@@ -1,220 +1,609 @@
-import { Message, MessageType, MessagePriority } from '../types';
-import { RoutingTable } from './routing';
-import { DeduplicationCache } from './deduplication';
-
 /**
- * Task 13: Implement message TTL decrement and expiration
+ * Message Relay and Flood Routing Implementation
  */
-export function decrementTTL(message: Message): boolean {
-  if (message.header.ttl <= 0) {
-    return false; // Message expired
-  }
-  message.header.ttl--;
-  return message.header.ttl > 0;
+
+import { Message, MessageType, messageHash, decodeMessage } from '../protocol/message';
+import { RoutingTable } from './routing';
+
+export interface RelayStats {
+  messagesReceived: number;
+  messagesForwarded: number;
+  messagesDuplicate: number;
+  messagesExpired: number;
+  messagesForSelf: number;
+  messagesStored: number;
+  relayFailures: number;
+  loopsDetected: number;
+}
+
+export interface StoredMessage {
+  message: Message;
+  destinationPeerId: string;
+  attempts: number;
+  lastAttempt: number;
+  expiresAt: number;
+}
+
+export interface RelayConfig {
+  maxStoredMessages?: number;
+  storeTimeout?: number;
+  maxRetries?: number;
+  retryBackoff?: number;
+  floodRateLimit?: number; // messages per second per peer
+  selectiveFlooding?: boolean;
 }
 
 /**
- * Task 15: Implement flood routing (forward to all peers except sender)
- * Task 16: Create message relay logic
+ * Message Relay Engine
+ * Implements flood routing with TTL, deduplication, and store-and-forward
  */
-export class MessageRouter {
-  constructor(
-    private routingTable: RoutingTable,
-    private deduplicationCache: DeduplicationCache
-  ) {}
+export class MessageRelay {
+  private routingTable: RoutingTable;
+  private localPeerId: string;
+  private stats: RelayStats = {
+    messagesReceived: 0,
+    messagesForwarded: 0,
+    messagesDuplicate: 0,
+    messagesExpired: 0,
+    messagesForSelf: 0,
+    messagesStored: 0,
+    relayFailures: 0,
+    loopsDetected: 0,
+  };
+  
+  private storedMessages: Map<string, StoredMessage> = new Map();
+  private messageRoutes: Map<string, string[]> = new Map(); // messageHash -> path of peer IDs
+  private peerFloodCounter: Map<string, number[]> = new Map(); // peerId -> timestamps
+  private config: RelayConfig;
+  
+  // Callbacks
+  private onMessageForSelfCallback?: (message: Message) => void;
+  private onForwardMessageCallback?: (message: Message, excludePeerId: string) => void;
+
+  constructor(localPeerId: string, routingTable: RoutingTable, config: RelayConfig = {}) {
+    this.localPeerId = localPeerId;
+    this.routingTable = routingTable;
+    this.config = {
+      maxStoredMessages: config.maxStoredMessages || 1000,
+      storeTimeout: config.storeTimeout || 300000, // 5 minutes
+      maxRetries: config.maxRetries || 3,
+      retryBackoff: config.retryBackoff || 5000, // 5 seconds
+      floodRateLimit: config.floodRateLimit || 100, // 100 msg/sec per peer
+      selectiveFlooding: config.selectiveFlooding !== false,
+    };
+  }
 
   /**
-   * Determines if message should be relayed
+   * Process incoming message and decide whether to forward, deliver, or drop
    */
-  shouldRelay(message: Message): boolean {
-    // Check if already seen
-    if (this.deduplicationCache.hasSeen(message)) {
-      return false;
+  async processMessage(messageData: Uint8Array, fromPeerId: string): Promise<void> {
+    this.stats.messagesReceived++;
+
+    let message: Message;
+    try {
+      message = decodeMessage(messageData);
+    } catch (error) {
+      console.error('Failed to decode message:', error);
+      return;
     }
 
-    // Check TTL
-    if (message.header.ttl <= 0) {
-      return false;
+    // Step 1: Check if we've seen this message before (deduplication)
+    const hash = messageHash(message);
+    if (this.routingTable.hasSeenMessage(hash)) {
+      this.stats.messagesDuplicate++;
+      return; // Drop duplicate
     }
 
+    // Step 2: Check for routing loops
+    if (this.detectLoop(hash, fromPeerId)) {
+      this.stats.loopsDetected++;
+      return; // Drop looped message
+    }
+
+    // Mark as seen
+    this.routingTable.markMessageSeen(hash);
+
+    // Step 3: Check TTL
+    if (message.header.ttl === 0) {
+      this.stats.messagesExpired++;
+      return; // Drop expired message
+    }
+
+    // Step 4: Check flood rate limit
+    if (!this.checkFloodRateLimit(fromPeerId)) {
+      return; // Drop if flooding too fast
+    }
+
+    // Step 5: Check if message is for us
+    if (this.isMessageForSelf(message)) {
+      this.stats.messagesForSelf++;
+      this.onMessageForSelfCallback?.(message);
+      
+      // Don't forward messages addressed to us
+      return;
+    }
+
+    // Step 6: Decrement TTL for forwarding
+    const forwardMessage: Message = {
+      header: {
+        ...message.header,
+        ttl: message.header.ttl - 1,
+      },
+      payload: message.payload,
+    };
+
+    // Step 7: Forward to all peers except sender (flood routing)
+    if (forwardMessage.header.ttl > 0) {
+      if (this.shouldForwardMessage(forwardMessage)) {
+        this.stats.messagesForwarded++;
+        this.onForwardMessageCallback?.(forwardMessage, fromPeerId);
+      }
+    }
+  }
+
+  /**
+   * Detect routing loops based on message path
+   */
+  private detectLoop(messageHash: string, fromPeerId: string): boolean {
+    if (!this.messageRoutes.has(messageHash)) {
+      this.messageRoutes.set(messageHash, []);
+    }
+    
+    const path = this.messageRoutes.get(messageHash)!;
+    
+    // Check if we've seen this peer in the path
+    if (path.includes(fromPeerId)) {
+      return true; // Loop detected
+    }
+    
+    // Add to path
+    path.push(fromPeerId);
+    
+    // Limit path tracking (cleanup old entries)
+    if (this.messageRoutes.size > 10000) {
+      const keys = Array.from(this.messageRoutes.keys());
+      for (let i = 0; i < 1000; i++) {
+        this.messageRoutes.delete(keys[i]);
+      }
+    }
+    
+    return false;
+  }
+
+  /**
+   * Check flood rate limit for a peer
+   */
+  private checkFloodRateLimit(peerId: string): boolean {
+    const now = Date.now();
+    
+    if (!this.peerFloodCounter.has(peerId)) {
+      this.peerFloodCounter.set(peerId, []);
+    }
+    
+    const timestamps = this.peerFloodCounter.get(peerId)!;
+    
+    // Remove timestamps older than 1 second
+    const recentTimestamps = timestamps.filter(t => now - t < 1000);
+    
+    // Check rate limit
+    if (recentTimestamps.length >= this.config.floodRateLimit!) {
+      return false; // Rate limit exceeded
+    }
+    
+    // Add current timestamp
+    recentTimestamps.push(now);
+    this.peerFloodCounter.set(peerId, recentTimestamps);
+    
     return true;
   }
 
   /**
-   * Gets peers to relay message to (flood routing excluding sender)
+   * Determine if message should be forwarded (selective flooding)
    */
-  getRelayPeers(message: Message, excludePeerId?: Uint8Array): Uint8Array[] {
-    const allPeers = this.routingTable.getAllPeers();
-    const excludeIdStr = excludePeerId ? this.bufferToHex(excludePeerId) : null;
-
-    return allPeers
-      .filter(peer => {
-        const peerIdStr = this.bufferToHex(peer.id);
-        // Don't relay back to sender
-        if (excludeIdStr && peerIdStr === excludeIdStr) {
-          return false;
-        }
-        // Don't relay back to original sender
-        if (peerIdStr === this.bufferToHex(message.header.senderId)) {
-          return false;
-        }
-        return true;
-      })
-      .map(peer => peer.id);
+  private shouldForwardMessage(message: Message): boolean {
+    if (!this.config.selectiveFlooding) {
+      return true; // Forward all messages
+    }
+    
+    // Always forward control messages
+    if (this.isControlMessage(message.header.type)) {
+      return true;
+    }
+    
+    // For other messages, use selective criteria
+    // (Can be extended with topic-based filtering, etc.)
+    return true;
   }
 
   /**
-   * Marks message as seen
+   * Check if message type is control
    */
-  markSeen(message: Message): void {
-    this.deduplicationCache.markSeen(message);
-  }
-
-  private bufferToHex(buffer: Uint8Array): string {
-    return Array.from(buffer)
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
-  }
-}
-
-/**
- * Task 21: Implement message priority queue (control > voice > text > file)
- */
-export class PriorityQueue {
-  private queues: Map<MessagePriority, Message[]> = new Map([
-    [MessagePriority.CONTROL, []],
-    [MessagePriority.VOICE, []],
-    [MessagePriority.TEXT, []],
-    [MessagePriority.FILE, []],
-  ]);
-
-  /**
-   * Adds message to appropriate priority queue
-   */
-  enqueue(message: Message): void {
-    const priority = this.getMessagePriority(message.header.type);
-    const queue = this.queues.get(priority)!;
-    queue.push(message);
+  private isControlMessage(type: MessageType): boolean {
+    return (
+      type === MessageType.CONTROL_PING ||
+      type === MessageType.CONTROL_PONG ||
+      type === MessageType.CONTROL_ACK
+    );
   }
 
   /**
-   * Dequeues highest priority message
+   * Check if message is addressed to this peer
    */
-  dequeue(): Message | null {
-    // Check queues in priority order
-    for (const priority of [
-      MessagePriority.CONTROL,
-      MessagePriority.VOICE,
-      MessagePriority.TEXT,
-      MessagePriority.FILE,
-    ]) {
-      const queue = this.queues.get(priority)!;
-      if (queue.length > 0) {
-        return queue.shift()!;
+  private isMessageForSelf(message: Message): boolean {
+    // For broadcast messages (PEER_DISCOVERY, etc.), everyone processes them
+    if (this.isBroadcastMessage(message.header.type)) {
+      return true;
+    }
+
+    // For directed messages, check if we're the recipient
+    // This would require destination field in payload (to be implemented)
+    return false;
+  }
+
+  /**
+   * Check if message type is broadcast
+   */
+  private isBroadcastMessage(type: MessageType): boolean {
+    return (
+      type === MessageType.PEER_DISCOVERY ||
+      type === MessageType.PEER_INTRODUCTION ||
+      type === MessageType.CONTROL_PING ||
+      type === MessageType.CONTROL_PONG
+    );
+  }
+
+  /**
+   * Store message for offline peer (store-and-forward)
+   */
+  storeMessage(message: Message, destinationPeerId: string): void {
+    if (this.storedMessages.size >= this.config.maxStoredMessages!) {
+      // Remove oldest message
+      const oldest = Array.from(this.storedMessages.entries())
+        .sort((a, b) => a[1].lastAttempt - b[1].lastAttempt)[0];
+      if (oldest) {
+        this.storedMessages.delete(oldest[0]);
       }
     }
-    return null;
+
+    const hash = messageHash(message);
+    this.storedMessages.set(hash, {
+      message,
+      destinationPeerId,
+      attempts: 0,
+      lastAttempt: Date.now(),
+      expiresAt: Date.now() + this.config.storeTimeout!,
+    });
+    
+    this.stats.messagesStored++;
   }
 
   /**
-   * Gets total number of queued messages
+   * Retry forwarding stored messages
    */
-  size(): number {
-    return Array.from(this.queues.values()).reduce((sum, q) => sum + q.length, 0);
-  }
+  retryStoredMessages(): void {
+    const now = Date.now();
+    const toDelete: string[] = [];
 
-  /**
-   * Checks if queue is empty
-   */
-  isEmpty(): boolean {
-    return this.size() === 0;
-  }
+    for (const [hash, stored] of this.storedMessages.entries()) {
+      // Check expiry
+      if (stored.expiresAt < now) {
+        toDelete.push(hash);
+        continue;
+      }
 
-  /**
-   * Clears all queues
-   */
-  clear(): void {
-    for (const queue of this.queues.values()) {
-      queue.length = 0;
+      // Check if peer is now available
+      const peer = this.routingTable.getPeer(stored.destinationPeerId);
+      if (!peer) {
+        continue; // Peer still offline
+      }
+
+      // Check retry backoff
+      const timeSinceLastAttempt = now - stored.lastAttempt;
+      const backoffTime = this.config.retryBackoff! * Math.pow(2, stored.attempts);
+      
+      if (timeSinceLastAttempt < backoffTime) {
+        continue; // Not time to retry yet
+      }
+
+      // Attempt to forward
+      stored.attempts++;
+      stored.lastAttempt = now;
+
+      if (stored.attempts > this.config.maxRetries!) {
+        toDelete.push(hash);
+        this.stats.relayFailures++;
+      } else {
+        // Try forwarding again
+        this.onForwardMessageCallback?.(stored.message, '');
+      }
     }
+
+    // Clean up
+    toDelete.forEach(hash => this.storedMessages.delete(hash));
   }
 
   /**
-   * Maps message type to priority
+   * Get stored messages statistics
    */
-  private getMessagePriority(type: MessageType): MessagePriority {
-    switch (type) {
-      case MessageType.CONTROL:
-      case MessageType.HEARTBEAT:
-      case MessageType.ACK:
-        return MessagePriority.CONTROL;
-      case MessageType.VOICE:
-        return MessagePriority.VOICE;
-      case MessageType.TEXT:
-        return MessagePriority.TEXT;
-      case MessageType.FILE:
-        return MessagePriority.FILE;
-      default:
-        return MessagePriority.TEXT;
-    }
+  getStoredMessagesStats() {
+    return {
+      total: this.storedMessages.size,
+      byDestination: Array.from(this.storedMessages.values())
+        .reduce((acc, msg) => {
+          acc[msg.destinationPeerId] = (acc[msg.destinationPeerId] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>),
+    };
+  }
+
+  /**
+   * Register callback for messages addressed to this peer
+   */
+  onMessageForSelf(callback: (message: Message) => void): void {
+    this.onMessageForSelfCallback = callback;
+  }
+
+  /**
+   * Register callback for forwarding messages
+   */
+  onForwardMessage(callback: (message: Message, excludePeerId: string) => void): void {
+    this.onForwardMessageCallback = callback;
+  }
+
+  /**
+   * Get relay statistics
+   */
+  getStats(): RelayStats {
+    return { ...this.stats };
+  }
+
+  /**
+   * Reset statistics
+   */
+  resetStats(): void {
+    this.stats = {
+      messagesReceived: 0,
+      messagesForwarded: 0,
+      messagesDuplicate: 0,
+      messagesExpired: 0,
+      messagesForSelf: 0,
+      messagesStored: 0,
+      relayFailures: 0,
+      loopsDetected: 0,
+    };
   }
 }
 
 /**
- * Task 22: Create bandwidth-aware message scheduling
+ * Message Fragmentation for Large Messages
  */
-export class BandwidthScheduler {
-  private bytesPerSecond: number;
-  private windowStart: number = Date.now();
-  private bytesInWindow: number = 0;
-  private readonly windowSize: number = 1000; // 1 second window
+export interface MessageFragment {
+  messageId: string;
+  fragmentIndex: number;
+  totalFragments: number;
+  data: Uint8Array;
+  timestamp: number;
+}
 
-  constructor(maxBytesPerSecond: number = 1024 * 1024) {
-    this.bytesPerSecond = maxBytesPerSecond;
+export const MAX_FRAGMENT_SIZE = 16384; // 16KB per fragment
+export const MIN_FRAGMENT_SIZE = 512; // 512 bytes minimum
+
+/**
+ * Calculate optimal fragment size based on MTU and network conditions
+ */
+export function calculateFragmentSize(mtu: number = 1500, overhead: number = 100): number {
+  const optimalSize = mtu - overhead;
+  return Math.max(MIN_FRAGMENT_SIZE, Math.min(MAX_FRAGMENT_SIZE, optimalSize));
+}
+
+/**
+ * Fragment a large message into smaller chunks
+ */
+export function fragmentMessage(
+  message: Uint8Array, 
+  messageId: string,
+  fragmentSize: number = MAX_FRAGMENT_SIZE
+): MessageFragment[] {
+  const fragments: MessageFragment[] = [];
+  const totalFragments = Math.ceil(message.length / fragmentSize);
+
+  for (let i = 0; i < totalFragments; i++) {
+    const start = i * fragmentSize;
+    const end = Math.min(start + fragmentSize, message.length);
+    const data = message.slice(start, end);
+
+    fragments.push({
+      messageId,
+      fragmentIndex: i,
+      totalFragments,
+      data,
+      timestamp: Date.now(),
+    });
+  }
+
+  return fragments;
+}
+
+/**
+ * Calculate fragmentation overhead
+ */
+export function calculateFragmentationOverhead(
+  messageSize: number,
+  fragmentSize: number = MAX_FRAGMENT_SIZE
+): number {
+  const totalFragments = Math.ceil(messageSize / fragmentSize);
+  const headerOverhead = 50; // Approximate header size per fragment
+  return totalFragments * headerOverhead;
+}
+
+/**
+ * Message Reassembly Engine with timeout and memory limits
+ */
+export class MessageReassembler {
+  private fragments: Map<string, Map<number, Uint8Array>> = new Map();
+  private totalFragments: Map<string, number> = new Map();
+  private fragmentTimestamps: Map<string, number> = new Map();
+  private onCompleteCallback?: (messageId: string, message: Uint8Array) => void;
+  private readonly REASSEMBLY_TIMEOUT = 60000; // 60 seconds
+  private readonly MAX_REASSEMBLY_BUFFER = 100 * 1024 * 1024; // 100 MB
+  private currentBufferSize = 0;
+
+  /**
+   * Add a fragment to the reassembly buffer
+   */
+  addFragment(fragment: MessageFragment): boolean {
+    const { messageId, fragmentIndex, totalFragments, data } = fragment;
+
+    // Check for duplicate fragments
+    if (this.fragments.has(messageId)) {
+      const messageFragments = this.fragments.get(messageId)!;
+      if (messageFragments.has(fragmentIndex)) {
+        return false; // Duplicate fragment
+      }
+    }
+
+    // Initialize fragment map for this message if needed
+    if (!this.fragments.has(messageId)) {
+      this.fragments.set(messageId, new Map());
+      this.totalFragments.set(messageId, totalFragments);
+      this.fragmentTimestamps.set(messageId, Date.now());
+    }
+
+    // Check memory limits
+    if (this.currentBufferSize + data.length > this.MAX_REASSEMBLY_BUFFER) {
+      this.cleanupOldest();
+    }
+
+    // Add fragment
+    const messageFragments = this.fragments.get(messageId)!;
+    messageFragments.set(fragmentIndex, data);
+    this.currentBufferSize += data.length;
+
+    // Check if we have all fragments
+    if (messageFragments.size === totalFragments) {
+      this.reassembleMessage(messageId);
+      return true; // Message complete
+    }
+
+    return false; // Still waiting for more fragments
   }
 
   /**
-   * Checks if we can send a message of given size
+   * Reassemble complete message from fragments (handles out-of-order)
    */
-  canSend(messageSize: number): boolean {
-    this.updateWindow();
-    return this.bytesInWindow + messageSize <= this.bytesPerSecond;
+  private reassembleMessage(messageId: string): void {
+    const messageFragments = this.fragments.get(messageId);
+    const totalFragments = this.totalFragments.get(messageId);
+
+    if (!messageFragments || !totalFragments) {
+      return;
+    }
+
+    // Calculate total size
+    let totalSize = 0;
+    for (let i = 0; i < totalFragments; i++) {
+      const fragment = messageFragments.get(i);
+      if (!fragment) {
+        console.error(`Missing fragment ${i} for message ${messageId}`);
+        return;
+      }
+      totalSize += fragment.length;
+    }
+
+    // Reassemble in correct order
+    const completeMessage = new Uint8Array(totalSize);
+    let offset = 0;
+
+    for (let i = 0; i < totalFragments; i++) {
+      const fragment = messageFragments.get(i)!;
+      completeMessage.set(fragment, offset);
+      offset += fragment.length;
+    }
+
+    // Update buffer size
+    this.currentBufferSize -= totalSize;
+
+    // Clean up
+    this.fragments.delete(messageId);
+    this.totalFragments.delete(messageId);
+    this.fragmentTimestamps.delete(messageId);
+
+    // Notify completion
+    this.onCompleteCallback?.(messageId, completeMessage);
   }
 
   /**
-   * Records that bytes were sent
+   * Register callback for completed messages
    */
-  recordSent(bytes: number): void {
-    this.updateWindow();
-    this.bytesInWindow += bytes;
+  onComplete(callback: (messageId: string, message: Uint8Array) => void): void {
+    this.onCompleteCallback = callback;
   }
 
   /**
-   * Gets available bandwidth in current window
+   * Clean up expired incomplete messages
    */
-  getAvailableBandwidth(): number {
-    this.updateWindow();
-    return Math.max(0, this.bytesPerSecond - this.bytesInWindow);
-  }
-
-  /**
-   * Updates the bandwidth window
-   */
-  private updateWindow(): void {
+  cleanup(maxAgeMs: number = this.REASSEMBLY_TIMEOUT): number {
     const now = Date.now();
-    const elapsed = now - this.windowStart;
+    const toDelete: string[] = [];
 
-    if (elapsed >= this.windowSize) {
-      // Reset window
-      this.windowStart = now;
-      this.bytesInWindow = 0;
+    for (const [messageId, timestamp] of this.fragmentTimestamps.entries()) {
+      if (now - timestamp > maxAgeMs) {
+        toDelete.push(messageId);
+      }
+    }
+
+    let freedBytes = 0;
+    for (const messageId of toDelete) {
+      const messageFragments = this.fragments.get(messageId);
+      if (messageFragments) {
+        for (const fragment of messageFragments.values()) {
+          freedBytes += fragment.length;
+        }
+      }
+      this.fragments.delete(messageId);
+      this.totalFragments.delete(messageId);
+      this.fragmentTimestamps.delete(messageId);
+    }
+
+    this.currentBufferSize -= freedBytes;
+    return toDelete.length;
+  }
+
+  /**
+   * Clean up oldest incomplete message to free memory
+   */
+  private cleanupOldest(): void {
+    if (this.fragmentTimestamps.size === 0) return;
+
+    const oldest = Array.from(this.fragmentTimestamps.entries())
+      .sort((a, b) => a[1] - b[1])[0];
+
+    if (oldest) {
+      const [messageId] = oldest;
+      const messageFragments = this.fragments.get(messageId);
+      
+      if (messageFragments) {
+        for (const fragment of messageFragments.values()) {
+          this.currentBufferSize -= fragment.length;
+        }
+      }
+      
+      this.fragments.delete(messageId);
+      this.totalFragments.delete(messageId);
+      this.fragmentTimestamps.delete(messageId);
     }
   }
 
   /**
-   * Sets maximum bytes per second
+   * Get reassembly statistics
    */
-  setMaxBytesPerSecond(bytes: number): void {
-    this.bytesPerSecond = bytes;
+  getStats() {
+    return {
+      incompleteMessages: this.fragments.size,
+      fragmentsWaiting: Array.from(this.fragments.values())
+        .reduce((sum, map) => sum + map.size, 0),
+      bufferUsage: this.currentBufferSize,
+      bufferLimit: this.MAX_REASSEMBLY_BUFFER,
+    };
   }
 }

@@ -1,0 +1,114 @@
+name: Visual Regression Testing
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  push:
+    branches: [ main, develop ]
+
+jobs:
+  visual-tests:
+    name: Visual Regression Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Install Playwright with dependencies
+        run: npx playwright install --with-deps chromium
+        
+      - name: Build application
+        run: npm run build -w web
+        
+      - name: Run visual regression tests
+        run: npx playwright test --config=playwright.visual.config.ts --project=chromium
+        env:
+          CI: true
+          
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: visual-regression-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 30
+          
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: visual-screenshots
+          path: screenshots/
+          retention-days: 30
+          
+      - name: Comment on PR with visual diff
+        if: github.event_name == 'pull_request' && failure()
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            let comment = '## Visual Regression Test Failures\n\n';
+            comment += 'Visual differences detected. Please review the screenshots:\n\n';
+            
+            // Add link to artifacts
+            comment += `[View Visual Regression Report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})\n`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+  # Update baseline screenshots on main branch
+  update-baselines:
+    name: Update Visual Baselines
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Install Playwright
+        run: npx playwright install --with-deps chromium
+        
+      - name: Build application
+        run: npm run build -w web
+        
+      - name: Update baseline screenshots
+        run: npx playwright test --config=playwright.visual.config.ts --project=chromium --update-snapshots
+        
+      - name: Commit updated baselines
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+          git add tests/visual-baselines/
+          git diff --quiet && git diff --staged --quiet || git commit -m "chore: update visual regression baselines [skip ci]"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

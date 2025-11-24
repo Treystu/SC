@@ -1,0 +1,226 @@
+// Message Input Component - Compose and send messages
+// Task 219: Message input with file attachments and formatting
+
+import React, { useState, useRef, KeyboardEvent } from 'react';
+
+interface MessageInputProps {
+  onSendMessage: (content: string, attachments?: File[]) => void;
+  onTyping: () => void;
+  disabled?: boolean;
+  placeholder?: string;
+}
+
+export const MessageInput: React.FC<MessageInputProps> = ({
+  onSendMessage,
+  onTyping,
+  disabled = false,
+  placeholder = 'Type a message...',
+}) => {
+  const [message, setMessage] = useState('');
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [isRecording, setIsRecording] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
+
+  const handleMessageChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setMessage(e.target.value);
+
+    // Auto-resize textarea
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 150)}px`;
+    }
+
+    // Emit typing indicator
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    onTyping();
+    typingTimeoutRef.current = setTimeout(() => {
+      // Stop typing indicator
+    }, 1000);
+  };
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  const handleSend = () => {
+    const trimmedMessage = message.trim();
+    if (!trimmedMessage && attachments.length === 0) return;
+
+    onSendMessage(trimmedMessage, attachments.length > 0 ? attachments : undefined);
+    setMessage('');
+    setAttachments([]);
+
+    // Reset textarea height
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    setAttachments((prev) => [...prev, ...files]);
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const handleVoiceRecord = () => {
+    setIsRecording(!isRecording);
+    // Voice recording logic would go here
+  };
+
+  return (
+    <div style={{ background: '#1f2937', borderTop: '1px solid #374151', padding: '16px' }}>
+      {/* Attachments Preview */}
+      {attachments.length > 0 && (
+        <div style={{ marginBottom: '12px', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+          {attachments.map((file, index) => (
+            <div
+              key={index}
+              style={{
+                background: '#374151',
+                borderRadius: '6px',
+                padding: '8px 12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '12px',
+                color: '#f9fafb',
+              }}
+            >
+              <span>📎</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: '500', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '150px', whiteSpace: 'nowrap' }}>
+                  {file.name}
+                </div>
+                <div style={{ color: '#9ca3af' }}>{formatFileSize(file.size)}</div>
+              </div>
+              <button
+                onClick={() => removeAttachment(index)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#ef4444',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  fontSize: '16px',
+                }}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Input Area */}
+      <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end' }}>
+        {/* Action Buttons */}
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={disabled}
+            style={{
+              background: '#374151',
+              border: 'none',
+              borderRadius: '6px',
+              padding: '10px',
+              cursor: disabled ? 'not-allowed' : 'pointer',
+              color: '#f9fafb',
+              fontSize: '18px',
+              opacity: disabled ? 0.5 : 1,
+            }}
+            title="Attach file"
+          >
+            📎
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            onChange={handleFileSelect}
+            style={{ display: 'none' }}
+          />
+
+          <button
+            onClick={handleVoiceRecord}
+            disabled={disabled}
+            style={{
+              background: isRecording ? '#ef4444' : '#374151',
+              border: 'none',
+              borderRadius: '6px',
+              padding: '10px',
+              cursor: disabled ? 'not-allowed' : 'pointer',
+              color: '#f9fafb',
+              fontSize: '18px',
+              opacity: disabled ? 0.5 : 1,
+            }}
+            title={isRecording ? 'Stop recording' : 'Start voice recording'}
+          >
+            🎤
+          </button>
+        </div>
+
+        {/* Text Input */}
+        <textarea
+          ref={textareaRef}
+          value={message}
+          onChange={handleMessageChange}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          disabled={disabled}
+          rows={1}
+          style={{
+            flex: 1,
+            background: '#374151',
+            border: '1px solid #4b5563',
+            borderRadius: '6px',
+            padding: '10px 12px',
+            color: '#f9fafb',
+            fontSize: '14px',
+            resize: 'none',
+            maxHeight: '150px',
+            fontFamily: 'inherit',
+          }}
+        />
+
+        {/* Send Button */}
+        <button
+          onClick={handleSend}
+          disabled={disabled || (!message.trim() && attachments.length === 0)}
+          style={{
+            background: disabled || (!message.trim() && attachments.length === 0) ? '#4b5563' : '#10b981',
+            border: 'none',
+            borderRadius: '6px',
+            padding: '10px 20px',
+            cursor: disabled || (!message.trim() && attachments.length === 0) ? 'not-allowed' : 'pointer',
+            color: 'white',
+            fontSize: '14px',
+            fontWeight: '500',
+          }}
+        >
+          Send
+        </button>
+      </div>
+
+      {/* Helper Text */}
+      <div style={{ marginTop: '8px', color: '#9ca3af', fontSize: '12px' }}>
+        Press Enter to send, Shift+Enter for new line
+      </div>
+    </div>
+  );
+};

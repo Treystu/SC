@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Sovereign Communications - Decentralized Mesh Networking" />
+    <meta name="theme-color" content="#10b981" />
+    
+    <!-- Security Headers -->
+    <!-- Content Security Policy -->
+    <meta http-equiv="Content-Security-Policy" content="
+      default-src 'self';
+      script-src 'self' 'wasm-unsafe-eval';
+      style-src 'self' 'unsafe-inline';
+      connect-src 'self' wss: https:;
+      img-src 'self' data: blob:;
+      font-src 'self';
+      object-src 'none';
+      base-uri 'self';
+      form-action 'self';
+      frame-ancestors 'none';
+      upgrade-insecure-requests;
+    ">
+    
+    <!-- 
+      Certificate Pinning via Expect-CT (deprecated but informative)
+      Note: For production certificate pinning on web, use:
+      1. Server-side HTTP headers (Public-Key-Pins or Expect-CT)
+      2. Service Worker integrity checks
+      3. Subresource Integrity (SRI) for critical assets
+      
+      IMPORTANT: Configure actual certificate pins on your web server:
+      
+      Nginx example:
+      add_header Public-Key-Pins 'pin-sha256="base64+primary+pin"; pin-sha256="base64+backup+pin"; max-age=2592000; includeSubDomains';
+      
+      To generate pins:
+      openssl s_client -servername api.example.com -connect api.example.com:443 | \
+        openssl x509 -pubkey -noout | \
+        openssl pkey -pubin -outform der | \
+        openssl dgst -sha256 -binary | \
+        openssl enc -base64
+    -->
+    
+    <!-- Referrer Policy -->
+    <meta name="referrer" content="no-referrer" />
+    
+    <!-- Permissions Policy -->
+    <meta http-equiv="Permissions-Policy" content="
+      geolocation=(),
+      microphone=(self),
+      camera=(self),
+      payment=(),
+      usb=()
+    ">
+    
+    <!-- PWA Meta Tags -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="SovComm" />
+    
+    <!-- Performance Optimization -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
+    
+    <title>Sovereign Communications</title>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

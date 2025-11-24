@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App name -->
+    <string name="app_name">Sovereign Communications</string>
+    
+    <!-- Navigation -->
+    <string name="conversations">Conversations</string>
+    <string name="contacts">Contacts</string>
+    <string name="settings">Settings</string>
+    
+    <!-- Conversation list -->
+    <string name="no_conversations">No conversations yet</string>
+    <string name="add_contact_hint">Add a contact to start messaging</string>
+    <string name="unread_messages">%1$d unread messages</string>
+    <string name="pinned_conversation">Pinned conversation</string>
+    
+    <!-- Messages -->
+    <string name="type_message">Type a message...</string>
+    <string name="send">Send</string>
+    <string name="message_pending">Sending</string>
+    <string name="message_sent">Sent</string>
+    <string name="message_delivered">Delivered</string>
+    <string name="message_read">Read</string>
+    <string name="message_failed">Failed to send</string>
+    
+    <!-- Connection status -->
+    <string name="connected">Connected</string>
+    <string name="offline">Offline</string>
+    <string name="searching_peers">Searching for peers...</string>
+    <string name="connected_to_peers">Connected to %1$d peer(s)</string>
+    
+    <!-- Permissions -->
+    <string name="permission_required">Permission Required</string>
+    <string name="bluetooth_permission_rationale">Bluetooth permissions are required for mesh networking</string>
+    <string name="location_permission_rationale">Location permission is required for Bluetooth Low Energy scanning</string>
+    <string name="notification_permission_rationale">Notification permission is needed to alert you of new messages</string>
+    <string name="camera_permission_rationale">Camera permission is needed to scan QR codes for adding contacts</string>
+    <string name="audio_permission_rationale">Audio permission is needed to record voice messages</string>
+    
+    <!-- Notifications -->
+    <string name="notification_channel_messages">Messages</string>
+    <string name="notification_channel_service">Background Service</string>
+    <string name="notification_channel_alerts">Alerts</string>
+    <string name="notification_new_message">New message from %1$s</string>
+    <string name="notification_reply">Reply</string>
+    <string name="notification_mark_read">Mark as Read</string>
+    
+    <!-- Media -->
+    <string name="record_voice_message">Record voice message</string>
+    <string name="stop_recording">Stop recording</string>
+    <string name="cancel_recording">Cancel</string>
+    <string name="play_voice_message">Play voice message</string>
+    <string name="pause_voice_message">Pause</string>
+    <string name="select_image">Select image</string>
+    <string name="select_file">Select file</string>
+    <string name="recording_duration">Recording: %1$s</string>
+    
+    <!-- File operations -->
+    <string name="file_too_large">File is too large (max %1$s)</string>
+    <string name="file_type_not_supported">File type not supported</string>
+    <string name="attachment_downloading">Downloading...</string>
+    <string name="attachment_failed">Download failed</string>
+    
+    <!-- Settings -->
+    <string name="theme_settings">Theme</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="theme_system">System default</string>
+    <string name="notification_settings">Notifications</string>
+    <string name="backup_restore">Backup &amp; Restore</string>
+    <string name="create_backup">Create Backup</string>
+    <string name="restore_backup">Restore Backup</string>
+    <string name="clear_cache">Clear Cache</string>
+    <string name="cache_size">Cache size: %1$s</string>
+    
+    <!-- Accessibility -->
+    <string name="accessibility_send_message">Send message</string>
+    <string name="accessibility_attach_file">Attach file</string>
+    <string name="accessibility_record_audio">Record audio message</string>
+    <string name="accessibility_message_bubble">Message bubble</string>
+    <string name="accessibility_conversation_item">Conversation with %1$s</string>
+    <string name="accessibility_message_status">Message status: %1$s</string>
+    
+    <!-- Errors -->
+    <string name="error_generic">An error occurred</string>
+    <string name="error_network">Network error. Please check your connection.</string>
+    <string name="error_permission_denied">Permission denied</string>
+    <string name="error_file_not_found">File not found</string>
+    <string name="error_recording_failed">Recording failed</string>
+    
+    <!-- Actions -->
+    <string name="action_retry">Retry</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_ok">OK</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_share">Share</string>
+    <string name="action_copy">Copy</string>
+</resources>

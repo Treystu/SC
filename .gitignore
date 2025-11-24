@@ -1,33 +1,81 @@
 # Dependencies
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+bower_components/
 
 # Build outputs
 dist/
 build/
-*.tsbuildinfo
+out/
+*.app
+*.apk
+*.ipa
 
-# Testing
-coverage/
-
-# IDEs
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-
-# OS
 .DS_Store
-Thumbs.db
 
-# Env files
+# Platform-specific
+# Android
+android/local.properties
+android/.gradle/
+android/.idea/
+android/build/
+android/app/build/
+*.iml
+
+# iOS
+ios/Pods/
+ios/*.xcworkspace
+ios/build/
+ios/DerivedData/
+
+# Web
+web/.cache/
+web/coverage/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test coverage
+coverage/
+.nyc_output/
+core/coverage/
+
+# Test artifacts
+test-results/
+playwright-report/
+screenshots/
+.stryker-tmp/
+benchmark-results.json
+junit.xml
+
+# Test results
+test-results/
+playwright-report/
+screenshots/
+visual-diff/
+performance-results/
+reports/
+
+# Stryker mutation testing
+.stryker-tmp/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Environment
 .env
 .env.local
 .env.*.local
 
-# Temporary files
-*.tmp
-.cache/
+# OS
+Thumbs.db
