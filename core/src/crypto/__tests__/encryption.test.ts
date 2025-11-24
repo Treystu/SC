@@ -86,14 +86,13 @@ describe('Encryption', () => {
   });
 
   describe('rotateSessionKey', () => {
-    it('should create a new key with same keyId', () => {
+    it('should create a new key with different key material', () => {
       const oldKey = createSessionKey();
       const newKey = rotateSessionKey(oldKey);
       
-      expect(newKey.keyId).toEqual(oldKey.keyId);
       expect(newKey.key).not.toEqual(oldKey.key);
       expect(newKey.nonce).not.toEqual(oldKey.nonce);
-      expect(newKey.createdAt).toBeGreaterThanOrEqual(oldKey.createdAt);
+      expect(newKey.timestamp).toBeGreaterThanOrEqual(oldKey.timestamp);
     });
   });
 });

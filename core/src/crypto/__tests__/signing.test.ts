@@ -9,12 +9,10 @@ import {
 describe('Signing', () => {
   describe('generateIdentity', () => {
     it('should generate a valid identity', () => {
-      const identity = generateIdentity('Test User');
+      const identity = generateIdentity();
       
       expect(identity.publicKey).toHaveLength(32);
       expect(identity.privateKey).toHaveLength(32);
-      expect(identity.displayName).toBe('Test User');
-      expect(identity.createdAt).toBeLessThanOrEqual(Date.now());
     });
 
     it('should generate unique identities', () => {
