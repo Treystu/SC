@@ -10,8 +10,8 @@
 
 import { randomBytes } from '@noble/hashes/utils.js';
 
-import { signMessage, verifySignature } from '../crypto/primitives';
-import { InviteOptions, PendingInvite, InviteRedemptionResult, Contact } from './types';
+import { signMessage, verifySignature } from '../crypto/primitives.js';
+import { InviteOptions, PendingInvite, InviteRedemptionResult, Contact } from './types.js';
 
 const DEFAULT_INVITE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
 

@@ -12,7 +12,7 @@ test.describe('Messaging Interface', () => {
   test('should show conversations section', async ({ page }) => {
     const conversationList = page.locator('.conversation-list');
     await expect(conversationList).toBeVisible();
-    
+
     const header = conversationList.locator('h2');
     await expect(header).toHaveText('Conversations');
   });
@@ -38,11 +38,11 @@ test.describe('Messaging Interface', () => {
     const emptyState = page.locator('.empty-state');
     await expect(emptyState).toBeVisible();
     await expect(emptyState).toContainText(/Welcome to Sovereign Communications/i);
-    
+
     // Check for feature highlights
     const features = page.locator('.features .feature');
     expect(await features.count()).toBeGreaterThan(0);
-    
+
     // Should mention encryption
     await expect(page.locator('.features')).toContainText(/encrypted/i);
     await expect(page.locator('.features')).toContainText(/mesh/i);
@@ -57,7 +57,7 @@ test.describe('Connection Status', () => {
 
   test('should display peer information', async ({ page }) => {
     const peerInfo = page.locator('.peer-info');
-    
+
     // Wait for peer info to appear
     if (await peerInfo.count() > 0) {
       await expect(peerInfo).toBeVisible();
@@ -69,7 +69,7 @@ test.describe('Connection Status', () => {
   test('should show connection status in header', async ({ page }) => {
     const header = page.locator('.app-header');
     await expect(header).toBeVisible();
-    
+
     // ConnectionStatus component should be present
     // It shows either online/offline or peer count
   });
@@ -97,7 +97,7 @@ test.describe('Conversation List', () => {
   test('should be in sidebar', async ({ page }) => {
     const sidebar = page.locator('.sidebar');
     await expect(sidebar).toBeVisible();
-    
+
     const conversationList = sidebar.locator('.conversation-list');
     await expect(conversationList).toBeVisible();
   });
@@ -110,82 +110,114 @@ test.describe('Message Sending', () => {
   });
 
   test('should send a text message', async ({ page }) => {
-    const messageInput = page.locator('[data-testid="message-input"]');
-    if (await messageInput.count() === 0) {
-      test.skip();
-      return;
+    // Create demo contact first
+    const addContactBtn = page.locator('[data-testid="add-contact-btn"]');
+    if (await addContactBtn.count() > 0) {
+      await addContactBtn.click();
+      const quickAdd = page.locator('[data-testid="quick-add-btn"]');
+      if (await quickAdd.isVisible()) {
+        await quickAdd.click();
+      }
     }
 
+    const messageInput = page.locator('[data-testid="message-input"]');
+    await expect(messageInput).toBeVisible();
+
     await messageInput.fill('Hello, world!');
-    
+
     const sendButton = page.locator('[data-testid="send-message-btn"]');
     await sendButton.click();
-    
+
     // Message should appear in the chat
     await expect(page.locator('text=Hello, world!')).toBeVisible();
   });
 
   test('should display message timestamp', async ({ page }) => {
-    const messageInput = page.locator('[data-testid="message-input"]');
-    if (await messageInput.count() === 0) {
-      test.skip();
-      return;
+    // Create demo contact first
+    const addContactBtn = page.locator('[data-testid="add-contact-btn"]');
+    if (await addContactBtn.count() > 0) {
+      await addContactBtn.click();
+      const quickAdd = page.locator('[data-testid="quick-add-btn"]');
+      if (await quickAdd.isVisible()) {
+        await quickAdd.click();
+      }
     }
+
+    const messageInput = page.locator('[data-testid="message-input"]');
+    await expect(messageInput).toBeVisible();
 
     await messageInput.fill('Test message');
     await page.locator('[data-testid="send-message-btn"]').click();
-    
+
     // Look for timestamp
     const timestamp = page.locator('[data-testid^="message-timestamp-"]').first();
-    if (await timestamp.count() > 0) {
-      await expect(timestamp).toBeVisible();
-    }
+    await expect(timestamp).toBeVisible();
   });
 
   test('should support emoji in messages', async ({ page }) => {
-    const messageInput = page.locator('[data-testid="message-input"]');
-    if (await messageInput.count() === 0) {
-      test.skip();
-      return;
+    // Create demo contact first
+    const addContactBtn = page.locator('[data-testid="add-contact-btn"]');
+    if (await addContactBtn.count() > 0) {
+      await addContactBtn.click();
+      const quickAdd = page.locator('[data-testid="quick-add-btn"]');
+      if (await quickAdd.isVisible()) {
+        await quickAdd.click();
+      }
     }
+
+    const messageInput = page.locator('[data-testid="message-input"]');
+    await expect(messageInput).toBeVisible();
 
     const emojiMessage = 'Hello 👋 World 🌍';
     await messageInput.fill(emojiMessage);
     await page.locator('[data-testid="send-message-btn"]').click();
-    
+
     await expect(page.locator(`text=${emojiMessage}`)).toBeVisible();
   });
 
   test('should handle long messages', async ({ page }) => {
-    const messageInput = page.locator('[data-testid="message-input"]');
-    if (await messageInput.count() === 0) {
-      test.skip();
-      return;
+    // Create demo contact first
+    const addContactBtn = page.locator('[data-testid="add-contact-btn"]');
+    if (await addContactBtn.count() > 0) {
+      await addContactBtn.click();
+      const quickAdd = page.locator('[data-testid="quick-add-btn"]');
+      if (await quickAdd.isVisible()) {
+        await quickAdd.click();
+      }
     }
+
+    const messageInput = page.locator('[data-testid="message-input"]');
+    await expect(messageInput).toBeVisible();
 
     const longMessage = 'A'.repeat(1000);
     await messageInput.fill(longMessage);
     await page.locator('[data-testid="send-message-btn"]').click();
-    
+
     // Message should be sent (might be truncated in display)
     await page.waitForTimeout(500);
+    await expect(page.locator(`text=${longMessage.substring(0, 100)}`)).toBeVisible();
   });
 
   test('should show message delivery status', async ({ page }) => {
-    const messageInput = page.locator('[data-testid="message-input"]');
-    if (await messageInput.count() === 0) {
-      test.skip();
-      return;
+    // Create demo contact first
+    const addContactBtn = page.locator('[data-testid="add-contact-btn"]');
+    if (await addContactBtn.count() > 0) {
+      await addContactBtn.click();
+      const quickAdd = page.locator('[data-testid="quick-add-btn"]');
+      if (await quickAdd.isVisible()) {
+        await quickAdd.click();
+      }
     }
+
+    const messageInput = page.locator('[data-testid="message-input"]');
+    await expect(messageInput).toBeVisible();
 
     await messageInput.fill('Status test');
     await page.locator('[data-testid="send-message-btn"]').click();
-    
+
     // Look for delivery status indicator
     const statusIndicator = page.locator('[data-testid^="message-status-"]').first();
-    if (await statusIndicator.count() > 0) {
-      await expect(statusIndicator).toBeVisible();
-    }
+    await expect(statusIndicator).toBeVisible();
   });
 });
 
@@ -206,11 +238,11 @@ test.describe.skip('Message History', () => {
     await messageInput.fill('Persistent message');
     await page.locator('[data-testid="send-message-btn"]').click();
     await page.waitForTimeout(500);
-    
+
     // Reload page
     await page.reload();
     await page.waitForLoadState('networkidle');
-    
+
     // Message should still be there
     const message = page.locator('text=Persistent message');
     if (await message.count() > 0) {
@@ -231,7 +263,7 @@ test.describe.skip('Message History', () => {
       await page.locator('[data-testid="send-message-btn"]').click();
       await page.waitForTimeout(100);
     }
-    
+
     // Latest message should be visible
     await expect(page.locator('text=Message 4')).toBeVisible();
   });
@@ -251,15 +283,15 @@ test.describe.skip('Contact Management', () => {
     }
 
     await addContactBtn.click();
-    
+
     const nameInput = page.locator('[data-testid="contact-name-input"]');
     await nameInput.fill('Alice');
-    
+
     const pubKeyInput = page.locator('[data-testid="contact-publickey-input"]');
     await pubKeyInput.fill('A'.repeat(64));
-    
+
     await page.locator('[data-testid="save-contact-btn"]').click();
-    
+
     // Contact should appear in list
     await expect(page.locator('[data-testid="contact-Alice"]')).toBeVisible();
   });
@@ -273,7 +305,7 @@ test.describe.skip('Contact Management', () => {
     }
 
     await firstContact.click();
-    
+
     // Contact should be selected
     await expect(firstContact).toHaveClass(/selected|active/);
   });

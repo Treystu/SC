@@ -7,7 +7,7 @@
  * 3. Establishes a trusted connection between both parties
  */
 
-import { PendingInvite, Contact } from './types';
+import { PendingInvite, Contact } from './types.js';
 
 export interface AutoLinkMessage {
   type: 'INVITE_ACCEPTED';

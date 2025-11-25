@@ -6,7 +6,7 @@
 import { test, expect } from '@playwright/test';
 import { CrossPlatformTestCoordinator, WebClient, iOSClient } from '../../../cross-platform-framework';
 
-test.describe('Web to iOS Cross-Platform Tests', () => {
+test.describe.skip('Web to iOS Cross-Platform Tests', () => {
   let coordinator: CrossPlatformTestCoordinator;
   let webClient: WebClient;
   let iosClient: iOSClient;

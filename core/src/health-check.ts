@@ -2,6 +2,7 @@
  * Health Check System
  * Provides comprehensive health monitoring for the application
  */
+import { MeshNetwork } from './mesh/network.js';
 
 export interface HealthCheckResult {
   healthy: boolean;
@@ -29,9 +30,11 @@ export class HealthChecker {
   private lastCheckTime: number = 0;
   private checkInterval: number = 30000; // 30 seconds
   private checkResults: Map<string, ComponentHealth> = new Map();
+  private meshNetwork?: MeshNetwork;
 
-  constructor() {
+  constructor(meshNetwork?: MeshNetwork) {
     this.startTime = Date.now();
+    this.meshNetwork = meshNetwork;
   }
 
   /**
@@ -83,7 +86,7 @@ export class HealthChecker {
       const start = performance.now();
       
       // Test basic crypto operations
-      const { generateIdentity, signMessage, verifySignature } = await import('./crypto/primitives');
+      const { generateIdentity, signMessage, verifySignature } = await import('./crypto/primitives.js');
       
       const identity = generateIdentity();
       const message = new Uint8Array([1, 2, 3, 4, 5]);
@@ -177,17 +180,27 @@ export class HealthChecker {
    * Check network health
    */
   private async checkNetwork(): Promise<ComponentHealth> {
-    try {
-      // This will be implemented by the mesh network manager
-      // For now, return a basic check
-      
+    if (!this.meshNetwork) {
       return {
         healthy: true,
         status: 'ok',
-        details: 'Network subsystem available',
+        details: 'Network subsystem not initialized',
+        lastCheck: Date.now(),
+      };
+    }
+
+    try {
+      const stats = this.meshNetwork.getStats();
+      const peerCount = this.meshNetwork.getPeerCount();
+      const isHealthy = peerCount > 0;
+
+      return {
+        healthy: isHealthy,
+        status: isHealthy ? 'ok' : 'warning',
+        details: isHealthy ? `${peerCount} peers connected` : 'No peers connected',
         metrics: {
-          activePeers: 0,
-          totalPeers: 0,
+          activePeers: peerCount,
+          totalPeers: stats.routing.peerCount,
         },
         lastCheck: Date.now(),
       };

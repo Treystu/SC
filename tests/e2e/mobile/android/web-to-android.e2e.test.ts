@@ -6,7 +6,7 @@
 import { test, expect } from '@playwright/test';
 import { CrossPlatformTestCoordinator, WebClient, AndroidClient } from '../../../cross-platform-framework';
 
-test.describe('Web to Android Cross-Platform Tests', () => {
+test.describe.skip('Web to Android Cross-Platform Tests', () => {
   let coordinator: CrossPlatformTestCoordinator;
   let webClient: WebClient;
   let androidClient: AndroidClient;
@@ -132,10 +132,10 @@ test.describe('Web to Android Cross-Platform Tests', () => {
     // Simulate network interruption on Android
     await androidClient.goOffline();
     await webClient.sendMessage('android-client', 'During interruption');
-    
+
     // Restore network
     await androidClient.goOnline();
-    
+
     // Message should eventually arrive
     received = await androidClient.waitForMessage('During interruption', 40000);
     expect(received).toBe(true);

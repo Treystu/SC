@@ -15,6 +15,21 @@ A decentralized, end-to-end encrypted mesh networking communication platform tha
 - **Perfect Forward Secrecy**: Session keys rotate automatically to protect past communications
 - **Multi-Transport**: Uses WebRTC, Bluetooth Low Energy, and local network discovery
 
+## 📊 V1.0 Status
+
+**Current Version**: 0.1.0 → 1.0.0 (Release Candidate)
+
+| Component | Status | Tests | Notes |
+|-----------|--------|-------|-------|
+| Core Library | ✅ Ready | 786/786 passing | All cryptographic and networking primitives complete |
+| Web App | ✅ Ready | ~90% passing | File transfer implemented, E2E tests being finalized |
+| Android App | ⚙️ Configured | Pending | Builds successfully, needs SDK setup |
+| iOS App | ⏸️ Pending | Pending | Needs Xcode configuration |
+| Documentation | ✅ Complete | N/A | API docs, architecture, and guides complete |
+
+**See [V1.0 Release Checklist](docs/V1_RELEASE_CHECKLIST.md) for detailed status.**
+
+
 ## 🏗️ Architecture
 
 The project is organized as a monorepo with the following structure:
@@ -284,6 +299,13 @@ Tagged releases automatically:
 - `v1.0.0-alpha.1` - Alpha release
 
 For detailed CI/CD documentation, see [docs/ci-cd.md](./docs/ci-cd.md).
+
+## Documentation
+
+- [**Documentation Index**](docs/INDEX.md)
+- [**Architecture**](docs/ARCHITECTURE.md)
+- [**API Reference**](docs/API.md)
+- [**V1 Rollout Tasks**](docs/V1_ROLLOUT_TODO.md) 🚀
 
 ## 📖 Protocol Specification
 

@@ -11,7 +11,7 @@ export interface StoredMessage {
   senderId: string;
   recipientId: string;
   type: 'text' | 'file' | 'voice';
-  status: 'pending' | 'sent' | 'delivered' | 'read';
+  status: 'pending' | 'sent' | 'delivered' | 'read' | 'queued' | 'failed';
   metadata?: any;
 }
 
@@ -557,7 +557,7 @@ export class DatabaseManager {
 
       request.onsuccess = () => {
         const allPeers = request.result as PersistedPeer[];
-        const activePeers = allPeers.filter(peer => 
+        const activePeers = allPeers.filter(peer =>
           peer.lastSeen >= fiveMinutesAgo && !peer.isBlacklisted
         );
         resolve(activePeers);
@@ -1051,12 +1051,12 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     const stores = [
-      'messages', 
-      'contacts', 
-      'conversations', 
-      'identities', 
-      'persistedPeers', 
-      'routes', 
+      'messages',
+      'contacts',
+      'conversations',
+      'identities',
+      'persistedPeers',
+      'routes',
       'sessionKeys'
     ];
     const promises = stores.map(storeName => {

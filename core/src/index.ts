@@ -3,20 +3,20 @@
  */
 
 // Protocol
-export * from './protocol/message';
+export * from './protocol/message.js';
 
 // Crypto
-export * from './crypto/primitives';
-export * from './crypto/storage';
+export * from './crypto/primitives.js';
+export * from './crypto/storage.js';
 
 // Mesh networking
-export * from './mesh/routing';
-export * from './mesh/relay';
-export * from './mesh/network';
-export * from './mesh/health';
+export * from './mesh/routing.js';
+export * from './mesh/relay.js';
+export * from './mesh/network.js';
+export * from './mesh/health.js';
 
 // Transport
-export * from './transport/webrtc';
+export * from './transport/webrtc.js';
 export { 
   WebRTCPeerEnhanced, 
   WebRTCConnectionPool,
@@ -27,10 +27,10 @@ export {
   ICEServerConfig,
   SignalingMessage,
   SignalingMessageType,
-} from './transport/webrtc-enhanced';
+} from './transport/webrtc-enhanced.js';
 
 // Discovery
-export * from './discovery/peer';
+export * from './discovery/peer.js';
 export { 
   MDNSBroadcaster, 
   MDNSDiscoverer, 
@@ -41,14 +41,14 @@ export {
   type MDNSCapabilities,
   type MDNSBroadcasterOptions,
   type MDNSDiscoveryOptions,
-} from './discovery/mdns';
+} from './discovery/mdns.js';
 export { 
   QRCodeDiscoveryV2, 
   QR_FORMAT_VERSION,
   type QRPeerInfo,
   type QRDataV2,
   type QRValidationResult,
-} from './discovery/qr-enhanced';
+} from './discovery/qr-enhanced.js';
 export { 
   ReachabilityVerifier, 
   testPeerReachability,
@@ -57,13 +57,13 @@ export {
   type ReachabilityResult,
   type ReachabilityMethod,
   type ReachabilityOptions,
-} from './discovery/reachability';
-export { AudioTonePairing, pairViaDTMF, type AudioPairingOptions } from './discovery/audio-pairing';
-export { ProximityPairing, type ProximityDevice, type ProximityPairingOptions } from './discovery/proximity';
-export { PeerAnnouncementManager, type PeerCapabilities as AnnouncementCapabilities } from './discovery/announcement';
+} from './discovery/reachability.js';
+export { AudioTonePairing, pairViaDTMF, type AudioPairingOptions } from './discovery/audio-pairing.js';
+export { ProximityPairing, type ProximityDevice, type ProximityPairingOptions } from './discovery/proximity.js';
+export { PeerAnnouncementManager, type PeerCapabilities as AnnouncementCapabilities } from './discovery/announcement.js';
 
 // File transfer
-export * from './transfer/file';
+export * from './transfer/file.js';
 
 // Health check
 export {
@@ -73,7 +73,7 @@ export {
   getHealthStatus,
   type HealthCheckResult,
   type ComponentHealth,
-} from './health-check';
+} from './health-check.js';
 
 // Validation
 export {
@@ -111,7 +111,7 @@ export {
   validateArray,
   compose,
   optional,
-} from './validation';
+} from './validation.js';
 
 // Rate limiting
 export {
@@ -123,10 +123,10 @@ export {
   RateLimiters,
   type RateLimitConfig,
   type RateLimitInfo,
-} from './rate-limiter-enhanced';
+} from './rate-limiter-enhanced.js';
 
 // Sharing and invites
-export * from './sharing';
+export * from './sharing/index.js';
 
 // Version
 export const VERSION = '0.1.0';

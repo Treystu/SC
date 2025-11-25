@@ -2,8 +2,8 @@
  * Message Relay and Flood Routing Implementation
  */
 
-import { Message, MessageType, messageHash, decodeMessage } from '../protocol/message';
-import { RoutingTable } from './routing';
+import { Message, MessageType, messageHash, decodeMessage } from '../protocol/message.js';
+import { RoutingTable } from './routing.js';
 
 export interface RelayStats {
   messagesReceived: number;

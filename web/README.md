@@ -54,7 +54,7 @@ web/
 - **Message History**: Persistent storage with IndexedDB
 - **Dark Theme**: Modern, responsive dark UI
 
-### Network Diagnostics 🆕
+### NetworkDiagnostics 🆕
 
 The `NetworkDiagnostics` component provides real-time monitoring:
 - Connected peer count (BLE and WebRTC breakdown)
@@ -65,7 +65,7 @@ The `NetworkDiagnostics` component provides real-time monitoring:
 - Connection distribution visualization
 - Configurable refresh intervals (0.5s to 5s)
 
-**Usage**: Access via diagnostics route (implementation-dependent)
+**Usage**: Accessible via the signal icon (📶) in the header.
 
 ### IndexedDB Storage
 

@@ -20,7 +20,7 @@ import {
   deriveSessionKey,
   rotateSessionKey,
   batchVerifySignatures,
-} from './primitives';
+} from './primitives.js';
 
 interface BenchmarkResult {
   operation: string;

@@ -30,7 +30,7 @@ export function AddContactDialog({ isOpen, onClose, onAdd }: AddContactDialogPro
           <h3>Add Contact</h3>
           <button className="dialog-close" onClick={onClose}>&times;</button>
         </div>
-        
+
         <form onSubmit={handleSubmit} className="dialog-form">
           <div className="form-group">
             <label htmlFor="contact-name">Contact Name</label>
@@ -41,9 +41,10 @@ export function AddContactDialog({ isOpen, onClose, onAdd }: AddContactDialogPro
               onChange={(e) => setName(e.target.value)}
               placeholder="Enter a name"
               autoFocus
+              data-testid="contact-name-input"
             />
           </div>
-          
+
           <div className="form-group">
             <label htmlFor="peer-id">Peer ID</label>
             <input
@@ -52,6 +53,7 @@ export function AddContactDialog({ isOpen, onClose, onAdd }: AddContactDialogPro
               value={peerId}
               onChange={(e) => setPeerId(e.target.value)}
               placeholder="Enter peer ID or use 'demo' for testing"
+              data-testid="contact-publickey-input"
             />
           </div>
 
@@ -59,7 +61,7 @@ export function AddContactDialog({ isOpen, onClose, onAdd }: AddContactDialogPro
             <button type="button" onClick={onClose} className="btn-secondary">
               Cancel
             </button>
-            <button type="submit" className="btn-primary" disabled={!peerId.trim() || !name.trim()}>
+            <button type="submit" className="btn-primary" disabled={!peerId.trim() || !name.trim()} data-testid="save-contact-btn">
               Add Contact
             </button>
           </div>

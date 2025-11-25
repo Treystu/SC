@@ -2,9 +2,9 @@
  * Peer Health Monitoring with Heartbeat
  */
 
-import { RoutingTable } from './routing';
-import { Message, MessageType, encodeMessage } from '../protocol/message';
-import { signMessage } from '../crypto/primitives';
+import { RoutingTable } from './routing.js';
+import { Message, MessageType, encodeMessage } from '../protocol/message.js';
+import { signMessage } from '../crypto/primitives.js';
 
 export interface HeartbeatConfig {
   interval: number; // Base heartbeat interval in ms

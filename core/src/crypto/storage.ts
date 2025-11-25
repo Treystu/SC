@@ -14,7 +14,7 @@
  * - Automatic key wiping on deletion
  */
 
-import { encryptMessage, decryptMessage, generateSessionKey, secureWipe } from './primitives';
+import { encryptMessage, decryptMessage, generateSessionKey, secureWipe } from './primitives.js';
 
 export interface KeyStorage {
   /**
@@ -103,7 +103,7 @@ export class WebKeyStorage implements KeyStorage {
       const sessionKey = generateSessionKey();
       this.masterKey = sessionKey.key;
     }
-    return this.masterKey;
+    return this.masterKey!;
   }
 
   async init(): Promise<void> {

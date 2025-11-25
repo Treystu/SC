@@ -4,6 +4,24 @@
 
 The Android application for Sovereign Communications provides a native mobile experience for secure, decentralized messaging with Material Design 3 UI and comprehensive features.
 
+## 🚀 Quick Start
+
+**See [BUILD_SETUP.md](BUILD_SETUP.md) for detailed build instructions and troubleshooting.**
+
+### Prerequisites
+- Android Studio Arctic Fox or later
+- JDK 17+
+- Android SDK (API 26+)
+
+### Build
+```bash
+cd android
+./gradlew assembleDebug
+```
+
+**Note**: You need to configure your Android SDK location. See [BUILD_SETUP.md](BUILD_SETUP.md) for details.
+
+
 ## Architecture
 
 ### Technology Stack

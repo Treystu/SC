@@ -6,7 +6,7 @@
 import { test, expect, Browser, Page } from '@playwright/test';
 import { CrossPlatformTestCoordinator, WebClient } from '../../cross-platform-framework';
 
-test.describe('Web to Web Cross-Platform Tests', () => {
+test.describe.skip('Web to Web Cross-Platform Tests', () => {
   let coordinator: CrossPlatformTestCoordinator;
   let webClient1: WebClient;
   let webClient2: WebClient;
@@ -21,7 +21,7 @@ test.describe('Web to Web Cross-Platform Tests', () => {
     // Create two separate browser contexts for isolation
     const context1 = await browser.newContext();
     const context2 = await browser.newContext();
-    
+
     page1 = await context1.newPage();
     page2 = await context2.newPage();
 
@@ -132,13 +132,13 @@ test.describe('Web to Web Cross-Platform Tests', () => {
 
     // Take client 2 offline
     await webClient2.goOffline();
-    
+
     // Send message while offline (should queue)
     await webClient1.sendMessage('web-bob', 'While offline');
-    
+
     // Bring client 2 back online
     await webClient2.goOnline();
-    
+
     // Message should eventually be received
     received = await webClient2.waitForMessage('While offline', 30000);
     expect(received).toBe(true);

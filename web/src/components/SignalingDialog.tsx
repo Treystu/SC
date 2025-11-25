@@ -1,26 +1,32 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import './SignalingDialog.css';
 
 interface SignalingExportDialogProps {
   isOpen: boolean;
   onClose: () => void;
   localPeerId: string;
+  generateOffer?: () => Promise<string>;
 }
 
-export function SignalingExportDialog({ isOpen, onClose, localPeerId }: SignalingExportDialogProps) {
+export function SignalingExportDialog({ isOpen, onClose, localPeerId, generateOffer }: SignalingExportDialogProps) {
   const [copied, setCopied] = useState(false);
+  const [signalingJSON, setSignalingJSON] = useState('Generating connection info...');
+
+  useEffect(() => {
+    if (isOpen && generateOffer) {
+      generateOffer()
+        .then(offer => setSignalingJSON(offer))
+        .catch(err => {
+          console.error('Failed to generate offer:', err);
+          setSignalingJSON('Error: Could not generate connection info.');
+        });
+    } else if (isOpen) {
+      // Fallback for when generateOffer is not provided (e.g. in tests or storybook)
+      setSignalingJSON(JSON.stringify({ peerId: localPeerId, error: "Offer generation not available" }, null, 2));
+    }
+  }, [isOpen, generateOffer, localPeerId]);
 
   if (!isOpen) return null;
-
-  // Generate signaling data (in real implementation, this would include SDP/ICE)
-  const signalingData = {
-    peerId: localPeerId,
-    type: 'offer',
-    timestamp: Date.now(),
-    // In production, add actual WebRTC SDP offer here
-  };
-
-  const signalingJSON = JSON.stringify(signalingData, null, 2);
 
   const handleCopy = async () => {
     try {
@@ -72,7 +78,7 @@ export function SignalingExportDialog({ isOpen, onClose, localPeerId }: Signalin
 interface SignalingImportDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onImport: (peerId: string, name: string) => void;
+  onImport: (code: string, name: string) => void;
 }
 
 export function SignalingImportDialog({ isOpen, onClose, onImport }: SignalingImportDialogProps) {
@@ -93,7 +99,7 @@ export function SignalingImportDialog({ isOpen, onClose, onImport }: SignalingIm
         return;
       }
 
-      onImport(data.peerId, name.trim() || 'Unknown Contact');
+      onImport(code, name.trim() || 'Unknown Contact');
       setCode('');
       setName('');
       setError('');

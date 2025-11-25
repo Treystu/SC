@@ -5,8 +5,8 @@
  * and contains all the information needed to redeem an invite
  */
 
-import { verifySignature as _verifySignature } from '../crypto/primitives';
-import { SharePayload, PendingInvite } from './types';
+import { verifySignature as _verifySignature } from '../crypto/primitives.js';
+import { SharePayload, PendingInvite } from './types.js';
 
 const APP_VERSION = '0.1.0';
 const MAX_TIMESTAMP_SKEW = 5 * 60 * 1000; // 5 minutes

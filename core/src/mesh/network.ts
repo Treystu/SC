@@ -3,11 +3,11 @@
  * Orchestrates routing, relay, and WebRTC connections
  */
 
-import { Message, MessageType, encodeMessage } from '../protocol/message';
-import { RoutingTable, Peer, createPeer } from './routing';
-import { MessageRelay } from './relay';
-import { PeerConnectionPool } from '../transport/webrtc';
-import { generateIdentity, IdentityKeyPair, signMessage } from '../crypto/primitives';
+import { Message, MessageType, encodeMessage } from '../protocol/message.js';
+import { RoutingTable, Peer, createPeer } from './routing.js';
+import { MessageRelay } from './relay.js';
+import { PeerConnectionPool } from '../transport/webrtc.js';
+import { generateIdentity, IdentityKeyPair, signMessage } from '../crypto/primitives.js';
 
 export interface MeshNetworkConfig {
   identity?: IdentityKeyPair;
@@ -42,7 +42,7 @@ export class MeshNetwork {
     // Initialize identity
     this.identity = config.identity || generateIdentity();
     this.localPeerId = Array.from(this.identity.publicKey)
-      .map(b => b.toString(16).padStart(2, '0'))
+      .map((b: number) => b.toString(16).padStart(2, '0'))
       .join('');
 
     // Configuration
@@ -62,14 +62,14 @@ export class MeshNetwork {
    */
   private setupMessageHandlers(): void {
     // Handle messages addressed to this peer
-    this.messageRelay.onMessageForSelf((message) => {
+    this.messageRelay.onMessageForSelf((message: Message) => {
       this.messagesReceived++;
       this.bytesTransferred += message.payload.byteLength;
       this.onMessageCallback?.(message);
     });
 
     // Handle message forwarding (flood routing)
-    this.messageRelay.onForwardMessage((message, excludePeerId) => {
+    this.messageRelay.onForwardMessage((message: Message, excludePeerId: string) => {
       const encodedMessage = encodeMessage(message);
       this.messagesSent++;
       this.bytesTransferred += encodedMessage.byteLength;
@@ -77,7 +77,7 @@ export class MeshNetwork {
     });
 
     // Handle incoming messages from peers
-    this.peerPool.onMessage((peerId, data) => {
+    this.peerPool.onMessage((peerId: string, data: Uint8Array) => {
       this.messageRelay.processMessage(data, peerId);
     });
   }
@@ -113,7 +113,7 @@ export class MeshNetwork {
     console.log('Offer created for peer:', peerId);
 
     // Set up state change handler
-    peer.onStateChange((state) => {
+    peer.onStateChange((state: string) => {
       if (state === 'connected') {
         this.handlePeerConnected(peerId);
       } else if (state === 'disconnected' || state === 'failed' || state === 'closed') {
@@ -194,7 +194,7 @@ export class MeshNetwork {
    */
   private sendPeerAnnouncement(): void {
     const payload = new TextEncoder().encode(JSON.stringify({
-      publicKey: Array.from(this.identity.publicKey).map(b => b.toString(16).padStart(2, '0')).join(''),
+      publicKey: Array.from(this.identity.publicKey).map((b: number) => b.toString(16).padStart(2, '0')).join(''),
       endpoints: [
         { type: 'webrtc', signaling: this.localPeerId },
       ],
@@ -265,7 +265,7 @@ export class MeshNetwork {
    */
   shutdown(): void {
     this.peerPool.closeAll();
-    this.routingTable.getAllPeers().forEach(peer => {
+    this.routingTable.getAllPeers().forEach((peer: Peer) => {
       this.routingTable.removePeer(peer.id);
     });
   }

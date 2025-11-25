@@ -2,7 +2,7 @@
  * Mesh networking core - routing table and peer management
  */
 
-import { MessageType } from '../protocol/message';
+import { MessageType } from '../protocol/message.js';
 
 export enum PeerState {
   CONNECTING = 'connecting',

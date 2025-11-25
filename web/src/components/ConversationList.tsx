@@ -12,26 +12,31 @@ interface Conversation {
 }
 
 interface ConversationListProps {
+  conversations: Conversation[];
+  loading: boolean;
   selectedId: string | null;
   onSelect: (id: string) => void;
   onAddContact?: (peerId: string, name: string) => void;
+  onImportContact?: (code: string, name: string) => void;
   onShareApp?: () => void;
   localPeerId?: string;
+  generateConnectionOffer?: () => Promise<string>;
 }
 
 // Memoized conversation item component
-const ConversationItem = memo(({ 
-  conv, 
-  isSelected, 
-  onSelect 
-}: { 
-  conv: Conversation; 
-  isSelected: boolean; 
+const ConversationItem = memo(({
+  conv,
+  isSelected,
+  onSelect
+}: {
+  conv: Conversation;
+  isSelected: boolean;
   onSelect: (id: string) => void;
 }) => (
   <div
     className={`conversation-item ${isSelected ? 'selected' : ''}`}
     onClick={() => onSelect(conv.id)}
+    data-testid={`contact-${conv.name}`}
   >
     <div className="conversation-avatar">
       {conv.name.charAt(0).toUpperCase()}
@@ -41,9 +46,9 @@ const ConversationItem = memo(({
         <span className="conversation-name">{conv.name}</span>
         {conv.timestamp && (
           <span className="conversation-time">
-            {new Date(conv.timestamp).toLocaleTimeString([], { 
-              hour: '2-digit', 
-              minute: '2-digit' 
+            {new Date(conv.timestamp).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit'
             })}
           </span>
         )}
@@ -62,9 +67,7 @@ const ConversationItem = memo(({
 
 ConversationItem.displayName = 'ConversationItem';
 
-function ConversationList({ selectedId, onSelect, onAddContact, onShareApp, localPeerId = '' }: ConversationListProps) {
-  // Mock data - will be replaced with actual state management
-  const [conversations] = useState<Conversation[]>([]);
+function ConversationList({ conversations, loading, selectedId, onSelect, onAddContact, onImportContact, onShareApp, localPeerId = '', generateConnectionOffer }: ConversationListProps) {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showSignalingExport, setShowSignalingExport] = useState(false);
@@ -79,6 +82,10 @@ function ConversationList({ selectedId, onSelect, onAddContact, onShareApp, loca
     onAddContact?.(peerId, name);
   }, [onAddContact]);
 
+  const handleImportContact = useCallback((code: string, name: string) => {
+    onImportContact?.(code, name);
+  }, [onImportContact]);
+
   return (
     <div className="conversation-list">
       <AddContactDialog
@@ -86,32 +93,34 @@ function ConversationList({ selectedId, onSelect, onAddContact, onShareApp, loca
         onClose={() => setShowAddDialog(false)}
         onAdd={handleAddContact}
       />
-      
+
       <SignalingExportDialog
         isOpen={showSignalingExport}
         onClose={() => setShowSignalingExport(false)}
         localPeerId={localPeerId}
+        generateOffer={generateConnectionOffer}
       />
-      
+
       <SignalingImportDialog
         isOpen={showSignalingImport}
         onClose={() => setShowSignalingImport(false)}
-        onImport={handleAddContact}
+        onImport={handleImportContact}
       />
-      
+
       <div className="list-header">
         <h2>Conversations</h2>
         <div className="header-actions">
-          <button 
-            className="add-button" 
+          <button
+            className="add-button"
             title="Add Options"
             onClick={() => setShowMenu(!showMenu)}
+            data-testid="add-contact-btn"
           >
             +
           </button>
           {showMenu && (
             <div className="add-menu">
-              <button onClick={() => { setShowAddDialog(true); setShowMenu(false); }}>
+              <button onClick={() => { setShowAddDialog(true); setShowMenu(false); }} data-testid="quick-add-btn">
                 Quick Add (Demo/Testing)
               </button>
               <button onClick={() => { setShowSignalingImport(true); setShowMenu(false); }}>
@@ -127,9 +136,11 @@ function ConversationList({ selectedId, onSelect, onAddContact, onShareApp, loca
           )}
         </div>
       </div>
-      
+
       <div className="list-content">
-        {conversations.length === 0 ? (
+        {loading ? (
+          <div className="loading-spinner">Loading contacts...</div>
+        ) : conversations.length === 0 ? (
           <div className="empty-list">
             <p>No conversations yet</p>
             <p className="hint">Add a contact to start messaging</p>

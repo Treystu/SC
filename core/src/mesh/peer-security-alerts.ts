@@ -11,7 +11,7 @@
  * - Out-of-band verification recommended for critical alerts
  */
 
-import { signMessage, verifySignature } from '../crypto/primitives';
+import { signMessage, verifySignature } from '../crypto/primitives.js';
 
 export enum SecurityAlertType {
   /** Identity keys compromised (device stolen, malware, etc.) */

@@ -1,12 +1,13 @@
-import { useState, useRef, useEffect, useMemo, useCallback, memo } from 'react';
+import { useRef, useEffect, useMemo, memo } from 'react';
 import './ChatView.css';
+import { MessageInput } from './MessageInput';
 
 interface Message {
   id: string;
   content: string;
   timestamp: number;
   isSent: boolean;
-  status: 'pending' | 'sent' | 'delivered' | 'read';
+  status: 'pending' | 'sent' | 'delivered' | 'read' | 'queued' | 'failed';
 }
 
 interface ChatViewProps {
@@ -17,44 +18,26 @@ interface ChatViewProps {
     content: string;
     timestamp: number;
   }>;
-  onSendMessage?: (content: string) => void;
+  onSendMessage?: (content: string, attachments?: File[]) => void;
 }
 
 function ChatView({ conversationId: _conversationId, messages: receivedMessages = [], onSendMessage }: ChatViewProps) {
-  const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Memoize message transformation to prevent unnecessary recalculations
-  const messages: Message[] = useMemo(() => 
+  const messages: Message[] = useMemo(() =>
     receivedMessages.map(msg => ({
       id: msg.id,
       content: msg.content,
       timestamp: msg.timestamp,
       isSent: msg.from === 'me',
-      status: 'sent' as const,
+      status: (msg as any).status || 'sent',
     })), [receivedMessages]);
 
   useEffect(() => {
     // Scroll to bottom when messages change
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
-
-  const handleSend = useCallback(() => {
-    if (!inputValue.trim()) return;
-
-    if (onSendMessage) {
-      onSendMessage(inputValue);
-    }
-    
-    setInputValue('');
-  }, [inputValue, onSendMessage]);
-
-  const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  }, [handleSend]);
 
   return (
     <div className="chat-view">
@@ -81,18 +64,23 @@ function ChatView({ conversationId: _conversationId, messages: receivedMessages 
               <div className="message-bubble">
                 <div className="message-content">{message.content}</div>
                 <div className="message-meta">
-                  <span className="message-time">
+                  <span className="message-time" data-testid={`message-timestamp-${message.id}`}>
                     {new Date(message.timestamp).toLocaleTimeString([], {
                       hour: '2-digit',
                       minute: '2-digit',
                     })}
                   </span>
                   {message.isSent && (
-                    <span className={`message-status status-${message.status}`}>
+                    <span
+                      className={`message-status status-${message.status}`}
+                      data-testid={`message-status-${message.status}`}
+                    >
                       {message.status === 'pending' && '○'}
+                      {message.status === 'queued' && '🕒'}
                       {message.status === 'sent' && '✓'}
                       {message.status === 'delivered' && '✓✓'}
                       {message.status === 'read' && '✓✓'}
+                      {message.status === 'failed' && '❌'}
                     </span>
                   )}
                 </div>
@@ -104,21 +92,14 @@ function ChatView({ conversationId: _conversationId, messages: receivedMessages 
       </div>
 
       <div className="chat-input-container">
-        <textarea
-          className="chat-input"
-          placeholder="Type a message..."
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          onKeyPress={handleKeyPress}
-          rows={1}
+        <MessageInput
+          onSendMessage={(content, attachments) => {
+            if (onSendMessage) {
+              onSendMessage(content, attachments);
+            }
+          }}
+          onTyping={() => { }}
         />
-        <button 
-          className="send-button" 
-          onClick={handleSend}
-          disabled={!inputValue.trim()}
-        >
-          Send
-        </button>
       </div>
     </div>
   );

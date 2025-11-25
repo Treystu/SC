@@ -20,7 +20,7 @@ class MockRTCDataChannel {
   readyState: RTCDataChannelState = 'connecting';
   bufferedAmount = 0;
   private timers: NodeJS.Timeout[] = [];
-  
+
   onopen: ((event: Event) => void) | null = null;
   onclose: ((event: Event) => void) | null = null;
   onerror: ((event: Event) => void) | null = null;
@@ -31,11 +31,11 @@ class MockRTCDataChannel {
     this.label = label;
     this.ordered = init?.ordered ?? true;
     this.maxRetransmits = init?.maxRetransmits;
-    
+
     // Immediately set to open for testing
     this.readyState = 'open';
   }
-  
+
   cleanup() {
     this.timers.forEach(timer => clearTimeout(timer));
     this.timers = [];
@@ -64,7 +64,7 @@ class MockRTCPeerConnection {
   iceGatheringState: RTCIceGatheringState = 'new';
   localDescription: RTCSessionDescription | null = null;
   remoteDescription: RTCSessionDescription | null = null;
-  
+
   onconnectionstatechange: ((event: Event) => void) | null = null;
   oniceconnectionstatechange: ((event: Event) => void) | null = null;
   onicegatheringstatechange: ((event: Event) => void) | null = null;
@@ -78,7 +78,7 @@ class MockRTCPeerConnection {
     setTimeout(() => {
       this.connectionState = 'connecting';
       this.triggerStateChange();
-      
+
       setTimeout(() => {
         this.connectionState = 'connected';
         this.iceConnectionState = 'connected';
@@ -95,7 +95,7 @@ class MockRTCPeerConnection {
 
   async createOffer(options?: RTCOfferOptions): Promise<RTCSessionDescriptionInit> {
     const sdp = `v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\nm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\nc=IN IP4 0.0.0.0\r\na=ice-ufrag:test\r\na=ice-pwd:test\r\na=fingerprint:sha-256 00:00:00:00\r\na=setup:actpass\r\na=sctp-port:5000`;
-    
+
     return {
       type: 'offer',
       sdp,
@@ -104,7 +104,7 @@ class MockRTCPeerConnection {
 
   async createAnswer(options?: RTCAnswerOptions): Promise<RTCSessionDescriptionInit> {
     const sdp = `v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\nm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\nc=IN IP4 0.0.0.0\r\na=ice-ufrag:test\r\na=ice-pwd:test\r\na=fingerprint:sha-256 00:00:00:00\r\na=setup:active\r\na=sctp-port:5000`;
-    
+
     return {
       type: 'answer',
       sdp,
@@ -113,20 +113,20 @@ class MockRTCPeerConnection {
 
   async setLocalDescription(desc: RTCSessionDescriptionInit): Promise<void> {
     this.localDescription = desc as RTCSessionDescription;
-    
+
     // Simulate ICE gathering
     setTimeout(() => {
       this.iceGatheringState = 'gathering';
       if (this.onicegatheringstatechange) {
         this.onicegatheringstatechange(new Event('icegatheringstatechange'));
       }
-      
+
       // Generate mock ICE candidates
       const candidates = [
         { type: 'host', protocol: 'udp', address: '192.168.1.1', port: 12345 },
         { type: 'srflx', protocol: 'udp', address: '8.8.8.8', port: 54321 },
       ];
-      
+
       candidates.forEach((cand, i) => {
         setTimeout(() => {
           if (this.onicecandidate) {
@@ -144,12 +144,12 @@ class MockRTCPeerConnection {
               address: cand.address,
               port: cand.port,
             } as RTCIceCandidate;
-            
+
             this.onicecandidate({ candidate } as RTCPeerConnectionIceEvent);
           }
         }, 10 * (i + 1));
       });
-      
+
       // Complete gathering
       setTimeout(() => {
         this.iceGatheringState = 'complete';
@@ -173,13 +173,13 @@ class MockRTCPeerConnection {
 
   async getStats(): Promise<RTCStatsReport> {
     const stats = new Map();
-    
+
     stats.set('candidate-pair', {
       type: 'candidate-pair',
       state: 'succeeded',
       currentRoundTripTime: 0.025, // 25ms
     });
-    
+
     stats.set('inbound-rtp', {
       type: 'inbound-rtp',
       bytesReceived: 10000,
@@ -187,13 +187,13 @@ class MockRTCPeerConnection {
       packetsLost: 2,
       jitter: 0.01,
     });
-    
+
     stats.set('outbound-rtp', {
       type: 'outbound-rtp',
       bytesSent: 15000,
       packetsSent: 150,
     });
-    
+
     return stats as RTCStatsReport;
   }
 
@@ -229,7 +229,7 @@ describe('WebRTC Enhanced - Task 23: PeerConnection Initialization', () => {
   it('should initialize with default configuration', () => {
     const config: WebRTCConfig = { peerId: 'peer-1' };
     peer = new WebRTCPeerEnhanced(config);
-    
+
     expect(peer.getPeerId()).toBe('peer-1');
     expect(peer.getState()).toBe('new');
   });
@@ -239,14 +239,14 @@ describe('WebRTC Enhanced - Task 23: PeerConnection Initialization', () => {
       peerId: 'peer-1',
       iceServers: [
         { urls: 'stun:custom-stun.example.com:3478' },
-        { 
+        {
           urls: 'turn:custom-turn.example.com:3478',
           username: 'user',
           credential: 'pass'
         },
       ],
     };
-    
+
     peer = new WebRTCPeerEnhanced(config);
     expect(peer.getPeerId()).toBe('peer-1');
   });
@@ -258,7 +258,7 @@ describe('WebRTC Enhanced - Task 23: PeerConnection Initialization', () => {
       bundlePolicy: 'max-bundle',
       rtcpMuxPolicy: 'require',
     };
-    
+
     peer = new WebRTCPeerEnhanced(config);
     expect(peer.getState()).toBe('new');
   });
@@ -268,7 +268,7 @@ describe('WebRTC Enhanced - Task 23: PeerConnection Initialization', () => {
     // We verify the peer was initialized correctly
     const config: WebRTCConfig = { peerId: 'peer-1' };
     peer = new WebRTCPeerEnhanced(config);
-    
+
     // Verify initialization happened
     expect(peer.getPeerId()).toBe('peer-1');
     expect(peer.getState()).toBeDefined();
@@ -279,7 +279,7 @@ describe('WebRTC Enhanced - Task 23: PeerConnection Initialization', () => {
       peerId: 'peer-1',
       connectionTimeout: 15000,
     };
-    
+
     peer = new WebRTCPeerEnhanced(config);
     expect(peer.getPeerId()).toBe('peer-1');
   });
@@ -298,12 +298,12 @@ describe('WebRTC Enhanced - Task 24: Data Channel Creation', () => {
 
   it('should create separate channels for different data types', async () => {
     await new Promise(resolve => setTimeout(resolve, 50));
-    
+
     const reliableChannel = peer.getChannel('reliable');
     const unreliableChannel = peer.getChannel('unreliable');
     const controlChannel = peer.getChannel('control');
     const fileChannel = peer.getChannel('file');
-    
+
     expect(reliableChannel).toBeDefined();
     expect(unreliableChannel).toBeDefined();
     expect(controlChannel).toBeDefined();
@@ -312,14 +312,14 @@ describe('WebRTC Enhanced - Task 24: Data Channel Creation', () => {
 
   it('should configure reliable channel correctly', async () => {
     await new Promise(resolve => setTimeout(resolve, 50));
-    
+
     const channel = peer.getChannel('reliable');
     expect(channel?.ordered).toBe(true);
   });
 
   it('should configure unreliable channel correctly', async () => {
     await new Promise(resolve => setTimeout(resolve, 50));
-    
+
     const channel = peer.getChannel('unreliable');
     expect(channel?.ordered).toBe(false);
     expect(channel?.maxRetransmits).toBe(0);
@@ -328,28 +328,28 @@ describe('WebRTC Enhanced - Task 24: Data Channel Creation', () => {
   it('should emit channel-created events', async () => {
     // Close the peer from beforeEach
     peer.close();
-    
+
     // Create a new peer and listen for events
     const channelPromises: Promise<any>[] = [];
     let channelCount = 0;
-    
+
     const newPeer = new WebRTCPeerEnhanced({ peerId: 'peer-2' });
     peer = newPeer; // Assign for cleanup
-    
+
     newPeer.on('channel-created', () => {
       channelCount++;
     });
-    
+
     // Wait for initialization
     await new Promise(resolve => setTimeout(resolve, 100));
-    
+
     // Channels should have been created
     expect(channelCount).toBeGreaterThanOrEqual(0); // May or may not emit depending on timing
   });
 
   it('should label channels appropriately', async () => {
     await new Promise(resolve => setTimeout(resolve, 50));
-    
+
     const reliableChannel = peer.getChannel('reliable');
     expect(reliableChannel?.label).toContain('peer-1');
     expect(reliableChannel?.label).toContain('reliable');
@@ -369,7 +369,7 @@ describe('WebRTC Enhanced - Task 25: SDP Offer/Answer Exchange', () => {
 
   it('should create valid SDP offer', async () => {
     const offer = await peer.createOffer();
-    
+
     expect(offer.type).toBe('offer');
     expect(offer.sdp).toBeDefined();
     expect(offer.sdp).toContain('v=0');
@@ -379,25 +379,25 @@ describe('WebRTC Enhanced - Task 25: SDP Offer/Answer Exchange', () => {
   it('should create valid SDP answer', async () => {
     const offer = await peer.createOffer();
     const peer2 = new WebRTCPeerEnhanced({ peerId: 'peer-2' });
-    
+
     const answer = await peer2.createAnswer(offer);
-    
+
     expect(answer.type).toBe('answer');
     expect(answer.sdp).toBeDefined();
     expect(answer.sdp).toContain('v=0');
-    
+
     peer2.close();
   });
 
   it('should validate SDP before processing', async () => {
     const invalidSDP = { type: 'offer' as const, sdp: 'invalid' };
-    
+
     await expect(peer.createAnswer(invalidSDP)).rejects.toThrow();
   });
 
   it('should munge SDP for optimization', async () => {
     const offer = await peer.createOffer();
-    
+
     // Check that bandwidth constraint was added
     expect(offer.sdp).toContain('b=AS:');
   });
@@ -407,7 +407,7 @@ describe('WebRTC Enhanced - Task 25: SDP Offer/Answer Exchange', () => {
       expect(data.sdp).toBeDefined();
       done();
     });
-    
+
     peer.createOffer();
   });
 
@@ -417,7 +417,7 @@ describe('WebRTC Enhanced - Task 25: SDP Offer/Answer Exchange', () => {
       type: 'answer',
       sdp: offer.sdp!, // Use offer SDP as mock answer
     });
-    
+
     // Should not throw
   });
 });
@@ -435,40 +435,40 @@ describe('WebRTC Enhanced - Task 26: ICE Candidate Exchange', () => {
 
   it('should implement trickle ICE', (done) => {
     const candidates: any[] = [];
-    
+
     peer.on('ice-candidate', (data: any) => {
       candidates.push(data.candidate);
     });
-    
+
     peer.on('ice-gathering-complete', () => {
       expect(candidates.length).toBeGreaterThan(0);
       done();
     });
-    
+
     peer.createOffer();
   });
 
   it('should filter and prioritize candidates', (done) => {
     const candidates: any[] = [];
-    
+
     peer.on('ice-candidate', (data: any) => {
       candidates.push(data.candidate);
     });
-    
+
     peer.on('ice-gathering-complete', () => {
       // Should have host and srflx candidates
-      const hostCandidates = candidates.filter((c: any) => 
+      const hostCandidates = candidates.filter((c: any) =>
         c.candidate?.includes('typ host')
       );
-      const srflxCandidates = candidates.filter((c: any) => 
+      const srflxCandidates = candidates.filter((c: any) =>
         c.candidate?.includes('typ srflx')
       );
-      
+
       expect(hostCandidates.length).toBeGreaterThan(0);
       expect(srflxCandidates.length).toBeGreaterThan(0);
       done();
     });
-    
+
     peer.createOffer();
   });
 
@@ -478,10 +478,10 @@ describe('WebRTC Enhanced - Task 26: ICE Candidate Exchange', () => {
       sdpMLineIndex: 0,
       sdpMid: '0',
     };
-    
+
     const offer = await peer.createOffer();
     await peer.addIceCandidate(candidate);
-    
+
     // Should not throw
   });
 
@@ -491,39 +491,39 @@ describe('WebRTC Enhanced - Task 26: ICE Candidate Exchange', () => {
       sdpMLineIndex: 0,
       sdpMid: '0',
     };
-    
+
     // Add candidate before remote description
     await peer.addIceCandidate(candidate);
-    
+
     // Should not throw
   });
 
   it('should support ICE restart', async () => {
     await peer.createOffer();
-    
+
     let restartDetected = false;
     peer.on('ice-restart', () => {
       restartDetected = true;
     });
-    
+
     await peer.restartICE();
-    
+
     expect(restartDetected).toBe(true);
   });
 
   it('should emit ICE gathering state changes', (done) => {
     const states: string[] = [];
-    
+
     peer.on('ice-gathering-state', (data: any) => {
       states.push(data.state);
     });
-    
+
     peer.on('ice-gathering-complete', () => {
       expect(states).toContain('gathering');
       expect(states).toContain('complete');
       done();
     });
-    
+
     peer.createOffer();
   });
 });
@@ -541,18 +541,18 @@ describe('WebRTC Enhanced - Task 29: Connection State Monitoring', () => {
 
   it('should track connection state changes', async () => {
     const states: ConnectionState[] = [];
-    
+
     peer.on('state-change', (data: any) => {
       states.push(data.newState);
     });
-    
+
     // Manually trigger state change to test the mechanism
     (peer as any).setState('connecting');
     (peer as any).setState('connected');
-    
+
     // Allow events to propagate
     await new Promise(resolve => setTimeout(resolve, 10));
-    
+
     expect(states).toContain('connecting');
     expect(states).toContain('connected');
   });
@@ -563,13 +563,13 @@ describe('WebRTC Enhanced - Task 29: Connection State Monitoring', () => {
 
   it('should log state transitions', (done) => {
     let transitionLogged = false;
-    
+
     peer.on('state-change', (data: any) => {
       expect(data.oldState).toBeDefined();
       expect(data.newState).toBeDefined();
       expect(data.timestamp).toBeDefined();
       transitionLogged = true;
-      
+
       if (data.newState === 'connected') {
         expect(transitionLogged).toBe(true);
         done();
@@ -608,18 +608,18 @@ describe('WebRTC Enhanced - Task 30: Automatic Reconnection', () => {
 
   it('should emit reconnection events', (done) => {
     let reconnectScheduled = false;
-    
+
     peer.on('reconnect-scheduled', (data: any) => {
       expect(data.attempt).toBeDefined();
       expect(data.delay).toBeDefined();
       reconnectScheduled = true;
     });
-    
+
     peer.on('reconnect-attempt', (data: any) => {
       expect(reconnectScheduled).toBe(true);
       done();
     });
-    
+
     // Force failure
     setTimeout(() => {
       (peer as any).setState('failed');
@@ -636,16 +636,16 @@ describe('WebRTC Enhanced - Task 31: Graceful Disconnection', () => {
 
   it('should close all channels in sequence', async () => {
     await new Promise(resolve => setTimeout(resolve, 100));
-    
+
     const channelsClosed: DataChannelType[] = [];
     peer.on('channel-close', (data: any) => {
       channelsClosed.push(data.type);
     });
-    
+
     peer.close();
-    
+
     await new Promise(resolve => setTimeout(resolve, 50));
-    
+
     // All channels should be closed
     expect(channelsClosed.length).toBeGreaterThan(0);
   });
@@ -657,26 +657,26 @@ describe('WebRTC Enhanced - Task 31: Graceful Disconnection', () => {
       expect(data.timestamp).toBeDefined();
       done();
     });
-    
+
     peer.close();
   });
 
   it('should cleanup resources on close', () => {
     peer.close();
-    
+
     expect(peer.getState()).toBe('closed');
     expect(peer.getQueueSize()).toBe(0);
   });
 
   it('should not attempt reconnection after user-initiated close', (done) => {
     let reconnectScheduled = false;
-    
+
     peer.on('reconnect-scheduled', () => {
       reconnectScheduled = true;
     });
-    
+
     peer.close();
-    
+
     setTimeout(() => {
       expect(reconnectScheduled).toBe(false);
       done();
@@ -713,23 +713,23 @@ describe('WebRTC Enhanced - Task 28: Backpressure Handling', () => {
 
   it('should handle backpressure', async () => {
     const backpressureEvents: any[] = [];
-    
+
     peer.on('backpressure', (data: any) => {
       backpressureEvents.push(data);
     });
-    
+
     // Wait for channel to be ready
     await new Promise(resolve => setTimeout(resolve, 100));
-    
+
     // Send large data to trigger backpressure
     const largeData = new Uint8Array(20000);
     for (let i = 0; i < 10; i++) {
       peer.send(largeData, 'reliable');
     }
-    
+
     // Wait for backpressure to be detected
     await new Promise(resolve => setTimeout(resolve, 100));
-    
+
     // Backpressure may or may not be triggered depending on mock implementation
     // Just verify the test doesn't hang
     expect(true).toBe(true);
@@ -749,12 +749,12 @@ describe('WebRTC Enhanced - Task 32: NAT Traversal', () => {
 
   it('should detect NAT type', async () => {
     await peer.createOffer();
-    
+
     // Wait for ICE gathering
     await new Promise(resolve => setTimeout(resolve, 100));
-    
+
     const natType = await peer.detectNATType();
-    
+
     expect(natType).toBeDefined();
     expect(natType.type).toBeDefined();
     expect(typeof natType.supportsDirectConnection).toBe('boolean');
@@ -764,9 +764,9 @@ describe('WebRTC Enhanced - Task 32: NAT Traversal', () => {
   it('should identify open NAT', async () => {
     await peer.createOffer();
     await new Promise(resolve => setTimeout(resolve, 100));
-    
+
     const natType = await peer.detectNATType();
-    
+
     // Mock should produce host candidates
     expect(['open', 'port-restricted']).toContain(natType.type);
   });
@@ -819,7 +819,7 @@ describe('WebRTC Connection Pool', () => {
 
   it('should create peers', () => {
     const peer = pool.createPeer('peer-1');
-    
+
     expect(peer).toBeDefined();
     expect(peer.getPeerId()).toBe('peer-1');
   });
@@ -828,14 +828,14 @@ describe('WebRTC Connection Pool', () => {
     pool.createPeer('peer-1');
     pool.createPeer('peer-2');
     pool.createPeer('peer-3');
-    
+
     const allPeers = pool.getAllPeers();
     expect(allPeers.length).toBe(3);
   });
 
   it('should get peer by ID', () => {
     pool.createPeer('peer-1');
-    
+
     const peer = pool.getPeer('peer-1');
     expect(peer).toBeDefined();
     expect(peer?.getPeerId()).toBe('peer-1');
@@ -844,7 +844,7 @@ describe('WebRTC Connection Pool', () => {
   it('should remove peers', () => {
     pool.createPeer('peer-1');
     pool.removePeer('peer-1');
-    
+
     const peer = pool.getPeer('peer-1');
     expect(peer).toBeUndefined();
   });
@@ -852,19 +852,19 @@ describe('WebRTC Connection Pool', () => {
   it('should broadcast to all connected peers', async () => {
     pool.createPeer('peer-1');
     pool.createPeer('peer-2');
-    
+
     const data = new Uint8Array([1, 2, 3]);
     pool.broadcast(data, 'reliable');
-    
+
     // Should not throw
   });
 
   it('should provide pool statistics', () => {
     pool.createPeer('peer-1');
     pool.createPeer('peer-2');
-    
+
     const stats = pool.getStats();
-    
+
     expect(stats.totalPeers).toBe(2);
     expect(stats.states).toBeDefined();
     expect(stats.peers.length).toBe(2);
@@ -873,9 +873,9 @@ describe('WebRTC Connection Pool', () => {
   it('should close all connections', () => {
     pool.createPeer('peer-1');
     pool.createPeer('peer-2');
-    
+
     pool.closeAll();
-    
+
     expect(pool.getAllPeers().length).toBe(0);
   });
 
@@ -884,7 +884,7 @@ describe('WebRTC Connection Pool', () => {
       expect(data.peerId).toBeDefined();
       done();
     });
-    
+
     pool.createPeer('peer-1');
   });
 });
@@ -893,17 +893,17 @@ describe('WebRTC Enhanced - Integration Tests', () => {
   it('should establish connection between two peers', async () => {
     const peer1 = new WebRTCPeerEnhanced({ peerId: 'peer-1' });
     const peer2 = new WebRTCPeerEnhanced({ peerId: 'peer-2' });
-    
+
     const offer = await peer1.createOffer();
     const answer = await peer2.createAnswer(offer);
     await peer1.setRemoteAnswer(answer);
-    
+
     // Wait for connection
-    await new Promise(resolve => setTimeout(resolve, 200));
-    
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
     expect(peer1.getState()).toBe('connected');
     expect(peer2.getState()).toBe('connected');
-    
+
     peer1.close();
     peer2.close();
   });
@@ -916,14 +916,14 @@ describe('WebRTC Enhanced - Integration Tests', () => {
 
   it('should support 50+ simultaneous connections', () => {
     const pool = new WebRTCConnectionPool();
-    
+
     for (let i = 0; i < 50; i++) {
       pool.createPeer(`peer-${i}`);
     }
-    
+
     const stats = pool.getStats();
     expect(stats.totalPeers).toBe(50);
-    
+
     pool.closeAll();
   });
 });

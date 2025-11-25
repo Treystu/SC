@@ -7,7 +7,7 @@ export const test = base.extend({
 export { expect };
 
 export class E2ETestFramework {
-  constructor(private page: Page) {}
+  constructor(private page: Page) { }
 
   async navigateToApp() {
     await this.page.goto('http://localhost:5173');
@@ -16,6 +16,13 @@ export class E2ETestFramework {
 
   async createNewContact(name: string, publicKey: string) {
     await this.page.click('[data-testid="add-contact-btn"]');
+
+    // Click Quick Add if available (for demo/testing)
+    const quickAdd = this.page.locator('[data-testid="quick-add-btn"]');
+    if (await quickAdd.isVisible()) {
+      await quickAdd.click();
+    }
+
     await this.page.fill('[data-testid="contact-name-input"]', name);
     await this.page.fill('[data-testid="contact-publickey-input"]', publicKey);
     await this.page.click('[data-testid="save-contact-btn"]');
@@ -156,49 +163,4 @@ export class E2ETestFramework {
   }
 }
 
-// Example E2E test using the framework
-test.describe('Sovereign Communications E2E Tests', () => {
-  let framework: E2ETestFramework;
 
-  test.beforeEach(async ({ page }) => {
-    framework = new E2ETestFramework(page);
-    await framework.navigateToApp();
-  });
-
-  test('should send and receive messages', async () => {
-    await framework.createNewContact('Alice', 'public-key-alice');
-    await framework.sendMessage('Alice', 'Hello Alice!');
-    await framework.waitForMessageReceived('Hello Alice!');
-    
-    const messageCount = await framework.getMessageCount();
-    expect(messageCount).toBeGreaterThan(0);
-  });
-
-  test('should transfer files between peers', async () => {
-    await framework.createNewContact('Bob', 'public-key-bob');
-    await framework.sendFile('Bob', 'test-file.txt');
-    await framework.waitForFileTransferComplete('test-file.txt');
-  });
-
-  test('should handle offline/online transitions', async () => {
-    await framework.createNewContact('Charlie', 'public-key-charlie');
-    
-    await framework.enableOfflineMode();
-    await framework.sendMessage('Charlie', 'Offline message');
-    
-    await framework.disableOfflineMode();
-    await framework.waitForMessageReceived('Offline message');
-  });
-
-  test('should maintain peer connections', async () => {
-    await framework.waitForPeerConnection(1);
-    const peerCount = await framework.getPeerCount();
-    expect(peerCount).toBeGreaterThanOrEqual(1);
-  });
-
-  test('should measure performance', async () => {
-    const perf = await framework.measurePerformance();
-    expect(perf.loadTime).toBeLessThan(3000);
-    expect(perf.domContentLoaded).toBeLessThan(2000);
-  });
-});

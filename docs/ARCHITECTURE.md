@@ -90,12 +90,41 @@ The core library is a TypeScript package that provides:
    - Resumable transfers
    - Integrity verification
 
-6. **Peer Discovery** (`discovery/`)
-   - QR code exchange
-   - Manual IP:port entry
-   - Peer introduction relay
-   - Reachability verification
-   - mDNS/Bonjour broadcasting
+
+6.  **Peer Discovery** (`discovery/`)
+    -   QR code exchange
+    -   Manual IP:port entry
+    -   Peer introduction relay
+    -   Reachability verification
+    -   mDNS/Bonjour broadcasting
+
+### Invite Flow
+
+```
+┌─────────────┐                      ┌─────────────┐
+│   Inviter   │                      │   Invitee   │
+│   (Alice)   │                      │    (Bob)    │
+└─────┬───────┘                      └──────┬──────┘
+      │                                     │
+      │ 1. Generate Invite                  │
+      │    (Sign(PeerID + Exp))             │
+      │                                     │
+      │ 2. Share Link (QR/URL)              │
+      │────────────────────────────────────▶│
+      │                                     │
+      │                                     │ 3. Validate Invite
+      │                                     │    (Check Sig & Exp)
+      │                                     │
+      │        4. Connect (WebRTC)          │
+      │◀────────────────────────────────────│
+      │                                     │
+      │ 5. Accept Connection                │
+      │    (Verify Identity)                │
+      │                                     │
+      │        6. Secure Channel            │
+      │◄═══════════════════════════════════►│
+      │                                     │
+```
 
 ## Data Flow
 
@@ -486,6 +515,19 @@ CREATE TABLE session_keys (
 - **Network Health**: Check peer connectivity
 - **Storage Health**: Verify database integrity
 - **Performance Health**: Monitor FPS, memory, latency
+
+
+```
+┌─────────────┐       ┌───────────────┐       ┌────────────────┐
+│   Monitor   │──────▶│ HealthChecker │──────▶│   Components   │
+└─────────────┘       └───────┬───────┘       │ (Crypto, Mesh) │
+                              │               └────────────────┘
+                              │
+                              ▼
+                      ┌───────────────┐
+                      │ HealthStatus  │
+                      └───────────────┘
+```
 
 ## Future Architecture Enhancements
 

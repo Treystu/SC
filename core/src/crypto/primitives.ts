@@ -55,13 +55,13 @@ export class NonceManager {
    */
   markUsed(nonce: Uint8Array): void {
     const nonceStr = Array.from(nonce).join(',');
-    
+
     if (this.usedNonces.has(nonceStr)) {
       throw new Error('Nonce reuse detected! This is a critical security violation.');
     }
-    
+
     this.usedNonces.add(nonceStr);
-    
+
     // Prevent memory bloat
     if (this.usedNonces.size > this.maxTracked) {
       // Remove oldest entries (first 1000)
@@ -95,12 +95,12 @@ export function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) {
     return false;
   }
-  
+
   let result = 0;
   for (let i = 0; i < a.length; i++) {
     result |= a[i] ^ b[i];
   }
-  
+
   return result === 0;
 }
 
@@ -118,23 +118,23 @@ export function secureWipe(data: Uint8Array): void {
  */
 export function validateEntropy(data: Uint8Array): boolean {
   if (data.length < 32) return false;
-  
+
   // Check for all zeros
   if (data.every(b => b === 0)) return false;
-  
+
   // Check for all same value
   const first = data[0];
   if (data.every(b => b === first)) return false;
-  
+
   // Check for simple patterns
   let patternCount = 0;
   for (let i = 1; i < data.length; i++) {
     if (data[i] === data[i - 1]) patternCount++;
   }
-  
+
   // If more than 80% are sequential duplicates, likely bad entropy
   if (patternCount > data.length * 0.8) return false;
-  
+
   return true;
 }
 
@@ -152,14 +152,14 @@ export function validateEntropy(data: Uint8Array): boolean {
  */
 export function generateIdentity(): IdentityKeyPair {
   const privateKey = ed25519.utils.randomSecretKey();
-  
+
   // Validate entropy quality
   if (!validateEntropy(privateKey)) {
     throw new Error('Insufficient entropy for key generation');
   }
-  
+
   const publicKey = ed25519.getPublicKey(privateKey);
-  
+
   return {
     publicKey,
     privateKey,
@@ -182,7 +182,7 @@ export function signMessage(message: Uint8Array, privateKey: Uint8Array): Uint8A
   if (privateKey.length !== 32) {
     throw new Error('Private key must be 32 bytes');
   }
-  
+
   return ed25519.sign(message, privateKey);
 }
 
@@ -203,7 +203,7 @@ export function verifySignature(
   try {
     if (publicKey.length !== 32) return false;
     if (signature.length !== 64) return false;
-    
+
     return ed25519.verify(signature, message, publicKey);
   } catch {
     return false;
@@ -257,10 +257,10 @@ export function performKeyExchange(
   if (peerPublicKey.length !== 32) {
     throw new Error('Peer public key must be 32 bytes');
   }
-  
+
   // Perform ECDH
   const sharedSecret = x25519.getSharedSecret(privateKey, peerPublicKey);
-  
+
   // Use HKDF to derive proper key from shared secret
   const derivedKey = hkdf(
     sha256,
@@ -269,10 +269,10 @@ export function performKeyExchange(
     info || new Uint8Array(0),  // Info/context
     32 // Output length
   );
-  
+
   // Wipe shared secret from memory
   secureWipe(sharedSecret);
-  
+
   return derivedKey;
 }
 
@@ -283,11 +283,11 @@ export function performKeyExchange(
 export function generateEphemeralKeyPair(): IdentityKeyPair {
   const privateKey = x25519.utils.randomSecretKey();
   const publicKey = x25519.getPublicKey(privateKey);
-  
+
   if (!validateEntropy(privateKey)) {
     throw new Error('Insufficient entropy for ephemeral key generation');
   }
-  
+
   return {
     publicKey,
     privateKey,
@@ -302,11 +302,11 @@ export function generateEphemeralKeyPair(): IdentityKeyPair {
  */
 export function generateSessionKey(counter?: number): SessionKey {
   const key = randomBytes(32);
-  
+
   if (!validateEntropy(key)) {
     throw new Error('Insufficient entropy for session key generation');
   }
-  
+
   return {
     key,
     nonce: randomBytes(24),
@@ -326,17 +326,17 @@ export function generateSessionKey(counter?: number): SessionKey {
 export function incrementNonce(sessionKey: SessionKey): Uint8Array {
   const counter = (sessionKey.counter || 0) + 1;
   sessionKey.counter = counter;
-  
+
   // Generate deterministic nonce from base nonce + counter
   const nonce = new Uint8Array(24);
   nonce.set(sessionKey.nonce.slice(0, 16), 0);
-  
+
   // Encode counter in last 8 bytes (big-endian)
   const counterBigInt = BigInt(counter);
   for (let i = 7; i >= 0; i--) {
     nonce[16 + (7 - i)] = Number((counterBigInt >> BigInt(i * 8)) & BigInt(0xff));
   }
-  
+
   return nonce;
 }
 
@@ -372,7 +372,7 @@ export function encryptMessage(
   if (nonce.length !== 24) {
     throw new Error('Nonce must be 24 bytes for XChaCha20-Poly1305');
   }
-  
+
   const cipher = xchacha20poly1305(key, nonce);
   return cipher.encrypt(plaintext, associatedData);
 }
@@ -402,7 +402,7 @@ export function decryptMessage(
   if (ciphertext.length < 16) {
     throw new Error('Ciphertext too short (must include 16-byte auth tag)');
   }
-  
+
   try {
     const cipher = xchacha20poly1305(key, nonce);
     return cipher.decrypt(ciphertext, associatedData);
@@ -478,11 +478,11 @@ export function rotateSessionKey(currentKey: SessionKey, reason?: string): Sessi
     info,
     32
   );
-  
+
   // Wipe old key material from memory
   secureWipe(currentKey.key);
   secureWipe(currentKey.nonce);
-  
+
   return {
     key: newKeyMaterial,
     nonce: randomBytes(24),
@@ -507,7 +507,7 @@ export function shouldRotateKey(
 ): boolean {
   const age = Date.now() - sessionKey.timestamp;
   const messageCount = sessionKey.messageCount || 0;
-  
+
   return age >= maxAge || messageCount >= maxMessages;
 }
 
@@ -537,9 +537,9 @@ export function initializeRatchet(sharedSecret: Uint8Array, _isInitiator: boolea
   const rootKey = hkdf(sha256, sharedSecret, new Uint8Array(32), new TextEncoder().encode('root'), 32);
   const sendChainKey = hkdf(sha256, sharedSecret, new Uint8Array(32), new TextEncoder().encode('send'), 32);
   const receiveChainKey = hkdf(sha256, sharedSecret, new Uint8Array(32), new TextEncoder().encode('receive'), 32);
-  
+
   const dhRatchetKey = generateEphemeralKeyPair();
-  
+
   return {
     rootKey,
     sendChainKey,
@@ -562,22 +562,22 @@ export function initializeRatchet(sharedSecret: Uint8Array, _isInitiator: boolea
 export function ratchetStep(state: RatchetState, peerPublicKey: Uint8Array): RatchetState {
   // Perform DH with peer's public key
   const dhOutput = performKeyExchange(state.dhRatchetKey.privateKey, peerPublicKey);
-  
+
   // Derive new root key and chain keys
   const newRootKey = hkdf(sha256, dhOutput, state.rootKey, new TextEncoder().encode('ratchet'), 32);
   const newSendChainKey = hkdf(sha256, dhOutput, state.rootKey, new TextEncoder().encode('send'), 32);
   const newReceiveChainKey = hkdf(sha256, dhOutput, state.rootKey, new TextEncoder().encode('receive'), 32);
-  
+
   // Generate new DH keypair for next ratchet
   const newDHKey = generateEphemeralKeyPair();
-  
+
   // Wipe old keys
   secureWipe(state.rootKey);
   secureWipe(state.sendChainKey);
   secureWipe(state.receiveChainKey);
   secureWipe(state.dhRatchetKey.privateKey);
   secureWipe(dhOutput);
-  
+
   return {
     rootKey: newRootKey,
     sendChainKey: newSendChainKey,
@@ -599,9 +599,9 @@ export function ratchetStep(state: RatchetState, peerPublicKey: Uint8Array): Rat
 export function deriveMessageKey(chainKey: Uint8Array): { messageKey: Uint8Array; nextChainKey: Uint8Array } {
   const messageKey = hkdf(sha256, chainKey, new Uint8Array(1).fill(0x01), new TextEncoder().encode('message'), 32);
   const nextChainKey = hkdf(sha256, chainKey, new Uint8Array(1).fill(0x02), new TextEncoder().encode('chain'), 32);
-  
+
   // Wipe old chain key
   secureWipe(chainKey);
-  
+
   return { messageKey, nextChainKey };
 }

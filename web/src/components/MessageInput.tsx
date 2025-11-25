@@ -134,6 +134,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={disabled}
+            data-testid="attach-file-btn"
             style={{
               background: '#374151',
               border: 'none',
@@ -154,11 +155,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             multiple
             onChange={handleFileSelect}
             style={{ display: 'none' }}
+            data-testid="file-input"
           />
 
           <button
             onClick={handleVoiceRecord}
             disabled={disabled}
+            data-testid="voice-record-btn"
             style={{
               background: isRecording ? '#ef4444' : '#374151',
               border: 'none',
@@ -184,6 +187,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           placeholder={placeholder}
           disabled={disabled}
           rows={1}
+          data-testid="message-input"
           style={{
             flex: 1,
             background: '#374151',
@@ -202,6 +206,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         <button
           onClick={handleSend}
           disabled={disabled || (!message.trim() && attachments.length === 0)}
+          data-testid="send-message-btn"
           style={{
             background: disabled || (!message.trim() && attachments.length === 0) ? '#4b5563' : '#10b981',
             border: 'none',

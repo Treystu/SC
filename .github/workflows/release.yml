@@ -2,392 +2,56 @@ name: Release
 
 on:
   push:
+    branches:
+      - main
     tags:
-      - 'v*.*.*'           # Production releases (v1.0.0)
-      - 'v*.*.*-beta.*'    # Beta releases (v1.0.0-beta.1)
-      - 'v*.*.*-alpha.*'   # Alpha releases (v1.0.0-alpha.1)
-  workflow_dispatch:
-    inputs:
-      release_type:
-        description: 'Release type'
-        required: true
-        default: 'beta'
-        type: choice
-        options:
-          - alpha
-          - beta
-          - release
-      version:
-        description: 'Version number (e.g., 1.0.0)'
-        required: true
-        type: string
+      - 'v*'
 
 permissions:
   contents: write
-  packages: write
+  pull-requests: read
 
 jobs:
-  # Determine release type and version
-  prepare-release:
-    name: Prepare Release
+  release:
     runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-      is_prerelease: ${{ steps.version.outputs.is_prerelease }}
-      release_name: ${{ steps.version.outputs.release_name }}
+    if: "!contains(github.event.head_commit.message, 'chore(release)')"
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
-      - name: Determine version
-        id: version
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ github.event.inputs.version }}"
-            RELEASE_TYPE="${{ github.event.inputs.release_type }}"
-            
-            if [ "$RELEASE_TYPE" = "alpha" ]; then
-              VERSION="${VERSION}-alpha.$(date +%Y%m%d%H%M%S)"
-              IS_PRERELEASE="true"
-              RELEASE_NAME="Alpha Release ${VERSION}"
-            elif [ "$RELEASE_TYPE" = "beta" ]; then
-              VERSION="${VERSION}-beta.$(date +%Y%m%d%H%M%S)"
-              IS_PRERELEASE="true"
-              RELEASE_NAME="Beta Release ${VERSION}"
-            else
-              IS_PRERELEASE="false"
-              RELEASE_NAME="Release ${VERSION}"
-            fi
-          else
-            VERSION="${GITHUB_REF#refs/tags/v}"
-            if [[ "$VERSION" == *"alpha"* ]] || [[ "$VERSION" == *"beta"* ]]; then
-              IS_PRERELEASE="true"
-              if [[ "$VERSION" == *"alpha"* ]]; then
-                RELEASE_NAME="Alpha Release v${VERSION}"
-              else
-                RELEASE_NAME="Beta Release v${VERSION}"
-              fi
-            else
-              IS_PRERELEASE="false"
-              RELEASE_NAME="Release v${VERSION}"
-            fi
-          fi
-          
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "is_prerelease=${IS_PRERELEASE}" >> $GITHUB_OUTPUT
-          echo "release_name=${RELEASE_NAME}" >> $GITHUB_OUTPUT
-          
-          echo "Version: ${VERSION}"
-          echo "Is Prerelease: ${IS_PRERELEASE}"
-          echo "Release Name: ${RELEASE_NAME}"
 
-  # Build all platforms
-  build-all:
-    name: Build All Platforms
-    needs: [prepare-release]
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v6
-      
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-      
+
       - name: Install dependencies
         run: npm ci
-      
-      - name: Update version in package.json files
-        run: |
-          VERSION="${{ needs.prepare-release.outputs.version }}"
-          
-          # Update root package.json
-          npm version $VERSION --no-git-tag-version --allow-same-version
-          
-          # Update core package.json
-          cd core
-          npm version $VERSION --no-git-tag-version --allow-same-version
-          cd ..
-          
-          # Update web package.json
-          cd web
-          npm version $VERSION --no-git-tag-version --allow-same-version
-          cd ..
-      
-      - name: Build core library
-        run: npm run build -w core
-      
-      - name: Build web application
-        run: npm run build -w web
-        env:
-          NODE_ENV: production
-      
-      - name: Create web distribution package
-        run: |
-          cd web/dist
-          tar -czf ../../web-${{ needs.prepare-release.outputs.version }}.tar.gz .
-          cd ../..
-      
-      - name: Upload web artifacts
-        uses: actions/upload-artifact@v5
-        with:
-          name: web-release
-          path: web-${{ needs.prepare-release.outputs.version }}.tar.gz
-          retention-days: 90
 
-  # Build Android APK/Bundle
-  build-android:
-    name: Build Android
-    needs: [prepare-release]
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v6
-      
-      - name: Setup Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-      
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-      
-      - name: Cache Gradle packages
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-      
-      - name: Update Android version
-        working-directory: android/app
+      - name: Configure Git User
         run: |
-          VERSION="${{ needs.prepare-release.outputs.version }}"
-          VERSION_CODE=$(date +%Y%m%d%H%M)
-          
-          # Update build.gradle with new version
-          sed -i "s/versionName \".*\"/versionName \"${VERSION}\"/" build.gradle
-          sed -i "s/versionCode [0-9]*/versionCode ${VERSION_CODE}/" build.gradle
-      
-      - name: Setup Gradle
-        uses: gradle/gradle-build-action@v3
-        with:
-          gradle-version: 8.5
-      
-      - name: Build Android Release APK
-        working-directory: android
-        run: |
-          if [ -f "./gradlew" ]; then
-            ./gradlew assembleRelease --stacktrace
-          else
-            gradle assembleRelease --stacktrace
-          fi
-      
-      - name: Build Android App Bundle
-        working-directory: android
-        run: |
-          if [ -f "./gradlew" ]; then
-            ./gradlew bundleRelease --stacktrace || echo "Bundle build failed, continuing with APK only"
-          else
-            gradle bundleRelease --stacktrace || echo "Bundle build failed, continuing with APK only"
-          fi
-        continue-on-error: true
-      
-      - name: Sign APK (if keystore available)
-        working-directory: android
-        run: |
-          # This would sign the APK if keystore is configured
-          # For now, we'll use the unsigned APK
-          echo "APK signing would happen here with proper keystore"
-      
-      - name: Rename APK
-        working-directory: android
-        run: |
-          VERSION="${{ needs.prepare-release.outputs.version }}"
-          cp app/build/outputs/apk/release/app-release-unsigned.apk \
-             sovereign-communications-${VERSION}.apk || \
-          cp app/build/outputs/apk/release/app-release.apk \
-             sovereign-communications-${VERSION}.apk
-      
-      - name: Upload Android APK
-        uses: actions/upload-artifact@v5
-        with:
-          name: android-release
-          path: android/sovereign-communications-*.apk
-          retention-days: 90
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-  # Build iOS IPA
-  build-ios:
-    name: Build iOS
-    needs: [prepare-release]
-    runs-on: macos-14
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v6
-      
-      - name: Setup Xcode
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: latest-stable
-      
-      - name: Update iOS version
-        working-directory: ios
-        run: |
-          VERSION="${{ needs.prepare-release.outputs.version }}"
-          # Update version in appropriate plist or Swift files
-          echo "Would update version to ${VERSION}"
-      
-      - name: Build iOS Archive
-        working-directory: ios
-        run: |
-          # Build for simulator as we don't have signing certificates
-          swift build -c release || echo "iOS build requires Xcode project setup"
-        continue-on-error: true
-      
-      - name: Create iOS Archive Info
-        run: |
-          echo "iOS release build for version ${{ needs.prepare-release.outputs.version }}" > ios-build-info.txt
-          echo "Note: Full IPA requires code signing certificates" >> ios-build-info.txt
-      
-      - name: Upload iOS artifacts
-        uses: actions/upload-artifact@v5
-        with:
-          name: ios-release
-          path: ios-build-info.txt
-          retention-days: 90
-
-  # Run tests before release
-  test-release:
-    name: Test Release Build
-    needs: [build-all, build-android]
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v6
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '20'
-          cache: 'npm'
-      
-      - name: Install dependencies
-        run: npm ci
-      
-      - name: Run core tests
-        run: npm test -w core -- --coverage
-      
-      - name: Run integration tests
-        run: npm run test:integration || true
-        continue-on-error: true
-
-  # Create GitHub Release
-  create-release:
-    name: Create GitHub Release
-    needs: [prepare-release, build-all, build-android, build-ios, test-release]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      
-      - name: Download all artifacts
-        uses: actions/download-artifact@v6
-        with:
-          path: release-artifacts
-      
-      - name: Generate changelog
-        id: changelog
-        run: |
-          VERSION="${{ needs.prepare-release.outputs.version }}"
-          
-          # Get commits since last tag
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          if [ -z "$LAST_TAG" ]; then
-            COMMITS=$(git log --pretty=format:"- %s (%h)" --no-merges)
-          else
-            COMMITS=$(git log ${LAST_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
-          fi
-          
-          # Create changelog
-          cat > CHANGELOG.md << EOF
-          # ${{ needs.prepare-release.outputs.release_name }}
-          
-          ## What's Changed
-          
-          ${COMMITS}
-          
-          ## Downloads
-          
-          - **Web Application**: \`web-${VERSION}.tar.gz\`
-          - **Android APK**: \`sovereign-communications-${VERSION}.apk\`
-          - **iOS**: See iOS release notes
-          
-          ## Installation
-          
-          ### Web
-          Extract the web archive and serve the files with any static web server.
-          
-          ### Android
-          Download and install the APK file. You may need to enable "Install from Unknown Sources" in your Android settings.
-          
-          ### iOS
-          iOS installation requires TestFlight or App Store distribution.
-          
-          ---
-          
-          **Full Changelog**: https://github.com/${{ github.repository }}/compare/${LAST_TAG}...v${VERSION}
-          EOF
-          
-          echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          cat CHANGELOG.md >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-      
       - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: ${{ needs.prepare-release.outputs.release_name }}
-          tag_name: v${{ needs.prepare-release.outputs.version }}
-          body: ${{ steps.changelog.outputs.changelog }}
-          draft: false
-          prerelease: ${{ needs.prepare-release.outputs.is_prerelease == 'true' }}
-          files: |
-            release-artifacts/web-release/*.tar.gz
-            release-artifacts/android-release/*.apk
-            release-artifacts/ios-release/*
+        if: github.ref == 'refs/heads/main'
+        run: npm run release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Publish to npm (if configured)
-        run: |
-          echo "Would publish @sc/core to npm if NPM_TOKEN is configured"
-          # npm config set //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          # cd core && npm publish --access public
-        continue-on-error: true
 
-  # Notification on completion
-  notify-completion:
-    name: Notify Release Completion
-    needs: [create-release, prepare-release]
-    runs-on: ubuntu-latest
-    if: always()
-    steps:
-      - name: Release Status
-        run: |
-          echo "Release: ${{ needs.prepare-release.outputs.release_name }}"
-          echo "Version: ${{ needs.prepare-release.outputs.version }}"
-          echo "Status: ${{ needs.create-release.result }}"
-          
-          if [ "${{ needs.create-release.result }}" = "success" ]; then
-            echo "✅ Release created successfully!"
-          else
-            echo "❌ Release failed!"
-            exit 1
-          fi
+      - name: Push Changes
+        if: github.ref == 'refs/heads/main'
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.ref }}
+          tags: true
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: CHANGELOG.md
+          token: ${{ secrets.GITHUB_TOKEN }}

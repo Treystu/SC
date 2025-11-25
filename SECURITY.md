@@ -193,6 +193,12 @@ Sovereign Communications implements multiple security layers:
 - **Memory Wiping**: Sensitive data cleared from memory
 - **No Metadata Logging**: Minimal metadata collection
 
+### Sharing & Invite Security
+- **Signed Invites**: Invite links are cryptographically signed by the issuer
+- **Expiration**: Short-lived tokens to prevent replay or later abuse
+- **One-Time Use**: Tokens can be configured for single redemption
+- **Out-of-Band Verification**: Recommended to verify invite links via separate channel
+
 ## Known Limitations
 
 We document known security limitations transparently:

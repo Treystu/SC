@@ -15,18 +15,26 @@ export interface Contact {
   verified: boolean;
 }
 
-// Placeholder functions for ContactManager
+import { getDatabase, StoredContact } from './database';
+
+// Re-export common types
+export interface Contact extends StoredContact {}
+
+// ContactManager functions implemented with DatabaseManager
 export async function getContacts(): Promise<Contact[]> {
-  // TODO: Implement using DatabaseManager
-  return [];
+  const db = getDatabase();
+  await db.init();
+  return db.getContacts();
 }
 
 export async function saveContact(contact: Contact): Promise<void> {
-  // TODO: Implement using DatabaseManager
-  console.log('Saving contact:', contact);
+  const db = getDatabase();
+  await db.init();
+  return db.saveContact(contact);
 }
 
 export async function deleteContact(contactId: string): Promise<void> {
-  // TODO: Implement using DatabaseManager
-  console.log('Deleting contact:', contactId);
+  const db = getDatabase();
+  await db.init();
+  return db.deleteContact(contactId);
 }
