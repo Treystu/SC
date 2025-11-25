@@ -34,7 +34,7 @@ export function compressMessage(data: Uint8Array): CompressionResult {
   
   /* TODO: Enable when fflate is installed
   // Don't compress small messages
-  if (originalSize < COMPRESSION_THRESHOLD) {
+  if (originalSize < _COMPRESSION_THRESHOLD) {
     return {
       data,
       compressed: false,
