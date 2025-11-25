@@ -60,7 +60,7 @@ export class SyncEngine {
         const conflictMap = this.detectConflicts(localChanges, remoteChanges);
         
         // Resolve conflicts
-        for (const [id, conflict] of conflictMap) {
+        for (const [_id, conflict] of conflictMap) {
           const resolution = await this.onConflict(conflict);
           await this.applyResolution(conflict, resolution);
           conflicts++;
@@ -138,14 +138,14 @@ export class SyncEngine {
   }
 
   // Fetch changes from remote peer
-  private async fetchRemoteChanges(peerId: string, since: number): Promise<SyncItem[]> {
+  private async fetchRemoteChanges(_peerId: string, _since: number): Promise<SyncItem[]> {
     // Implementation would use mesh network to request changes
     // Placeholder for actual network call
     return [];
   }
 
   // Send changes to peer
-  private async sendChangesToPeer(peerId: string, changes: SyncItem[]): Promise<void> {
+  private async sendChangesToPeer(_peerId: string, _changes: SyncItem[]): Promise<void> {
     // Implementation would use mesh network to send changes
     // Placeholder for actual network call
   }

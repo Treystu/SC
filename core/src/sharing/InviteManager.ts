@@ -115,7 +115,7 @@ export class InviteManager {
    * Redeem an invite code
    * Validates the code and creates a contact entry for the inviter
    */
-  async redeemInvite(code: string, recipientPeerId: string): Promise<InviteRedemptionResult> {
+  async redeemInvite(code: string, _recipientPeerId: string): Promise<InviteRedemptionResult> {
     const validation = await this.validateInvite(code);
 
     if (!validation.valid || !validation.invite) {

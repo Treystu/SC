@@ -324,7 +324,7 @@ export class WebRTCPeerEnhanced {
     }
   }
 
-  private handleChannelError(type: DataChannelType, error: Event): void {
+  private handleChannelError(type: DataChannelType, _error: Event): void {
     // Attempt to recreate the channel
     setTimeout(() => {
       if (this.state === 'connected' && !this.dataChannels.has(type)) {
@@ -437,7 +437,7 @@ export class WebRTCPeerEnhanced {
     };
   }
 
-  private preferCodecs(sdp: string, codecs: string[]): string {
+  private preferCodecs(sdp: string, _codecs: string[]): string {
     // Reorder codec preferences in SDP
     // This is a simplified version - production code would be more sophisticated
     return sdp;

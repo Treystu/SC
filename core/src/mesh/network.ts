@@ -107,7 +107,7 @@ export class MeshNetwork {
     });
 
     // Create and send offer
-    const offer = await peer.createOffer();
+    const _offer = await peer.createOffer();
     
     // In a real implementation, this would be sent via mesh signaling
     console.log('Offer created for peer:', peerId);

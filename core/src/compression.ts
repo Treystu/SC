@@ -8,7 +8,7 @@
 // TODO: Install fflate library
 // import { gunzipSync, gzipSync } from 'fflate';
 
-const COMPRESSION_THRESHOLD = 1024; // Compress messages larger than 1KB
+const _COMPRESSION_THRESHOLD = 1024; // Compress messages larger than 1KB
 
 export interface CompressionResult {
   data: Uint8Array;

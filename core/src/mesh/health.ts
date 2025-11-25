@@ -2,7 +2,7 @@
  * Peer Health Monitoring with Heartbeat
  */
 
-import { RoutingTable, Peer } from './routing';
+import { RoutingTable } from './routing';
 import { Message, MessageType, encodeMessage } from '../protocol/message';
 import { signMessage } from '../crypto/primitives';
 

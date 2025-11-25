@@ -161,8 +161,9 @@ export class WebKeyStorage implements KeyStorage {
       const keyStore = transaction.objectStore(this.storeName);
       const metaStore = transaction.objectStore(this.metadataStore);
       
-      const keyRequest = keyStore.put(storedKey, keyId);
-      const metaRequest = metaStore.put(storedKey.metadata, keyId);
+      // The put requests are needed to trigger the transaction, but we don't need their results
+      keyStore.put(storedKey, keyId);
+      metaStore.put(storedKey.metadata, keyId);
 
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error);

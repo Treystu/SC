@@ -5,7 +5,7 @@
  * and contains all the information needed to redeem an invite
  */
 
-import { verifySignature } from '../crypto/primitives';
+import { verifySignature as _verifySignature } from '../crypto/primitives';
 import { SharePayload, PendingInvite } from './types';
 
 const APP_VERSION = '0.1.0';
