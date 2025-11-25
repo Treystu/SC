@@ -8,6 +8,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.sovereign.communications.data.SettingsRepository
+import com.sovereign.communications.ui.viewmodel.SettingsViewModel
+import com.sovereign.communications.ui.viewmodel.SettingsViewModelFactory
 
 /**
  * Settings screen
@@ -15,7 +19,14 @@ import androidx.compose.ui.unit.dp
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(
+    settingsViewModel: SettingsViewModel = viewModel(
+        factory = SettingsViewModelFactory(SettingsRepository(context = applicationContext))
+    )
+) {
+    val bleEnabled by settingsViewModel.bleEnabled.collectAsState()
+    val webrtcEnabled by settingsViewModel.webrtcEnabled.collectAsState()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -66,7 +77,7 @@ fun SettingsScreen() {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("Enable BLE")
-                    Switch(checked = true, onCheckedChange = {})
+                    Switch(checked = bleEnabled, onCheckedChange = { settingsViewModel.setBleEnabled(it) })
                 }
                 
                 Row(
@@ -75,7 +86,7 @@ fun SettingsScreen() {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("Enable WebRTC")
-                    Switch(checked = true, onCheckedChange = {})
+                    Switch(checked = webrtcEnabled, onCheckedChange = { settingsViewModel.setWebrtcEnabled(it) })
                 }
             }
         }

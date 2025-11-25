@@ -26,7 +26,11 @@ export class WebNotificationManager {
       icon: '/icon-192.png',
       badge: '/badge-72.png',
       tag: conversationId,
-      requireInteraction: false
+      requireInteraction: false,
+      actions: [
+        { action: 'reply', title: 'Reply' },
+        { action: 'mark-read', title: 'Mark as Read' },
+      ]
     });
 
     notification.onclick = () => {
@@ -35,9 +39,25 @@ export class WebNotificationManager {
       window.location.hash = `#/chat/${conversationId}`;
       notification.close();
     };
-
-    // Auto-close after 5 seconds
-    setTimeout(() => notification.close(), 5000);
+    
+    notification.onclose = () => {
+      // Handle notification close
+    };
+    
+    notification.onerror = () => {
+      // Handle notification error
+    };
+    
+    window.addEventListener('notificationclick', (event) => {
+      if (event.action === 'reply') {
+        // Handle reply action
+      } else if (event.action === 'mark-read') {
+        // Handle mark as read action
+      }
+    });
+    
+    // Auto-close after 10 seconds
+    setTimeout(() => notification.close(), 10000);
   }
 
   async showConnectionNotification(peerName: string, connected: boolean) {

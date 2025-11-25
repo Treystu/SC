@@ -10,6 +10,7 @@ import android.os.IBinder
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import com.sovereign.communications.R
+import com.sovereign.communications.data.SCDatabase
 import com.sovereign.communications.notifications.NotificationManager
 import com.sovereign.communications.ui.MainActivity
 import kotlinx.coroutines.*
@@ -27,6 +28,7 @@ class MeshNetworkService : Service() {
     private var connectedPeers = 0
     private var wakeLock: PowerManager.WakeLock? = null
     private lateinit var notificationManager: NotificationManager
+    private lateinit var meshNetworkManager: MeshNetworkManager
     
     companion object {
         const val NOTIFICATION_ID = NotificationManager.NOTIFICATION_ID_SERVICE
@@ -51,6 +53,10 @@ class MeshNetworkService : Service() {
         notificationManager = NotificationManager(this)
         notificationManager.createNotificationChannels()
         isRunning = true
+        
+        // Initialize the MeshNetworkManager
+        val database = SCDatabase.getDatabase(this)
+        meshNetworkManager = MeshNetworkManager(this, database)
         
         // Acquire partial wake lock for network operations
         // This is battery-optimized and only keeps CPU awake, not screen
@@ -147,30 +153,25 @@ class MeshNetworkService : Service() {
      */
     private fun startMeshNetwork() {
         serviceScope.launch {
-            // TODO: Initialize mesh network
-            // - Load identity from secure storage
-            // - Start WebRTC connections
-            // - Start BLE scanning/advertising with duty cycling
-            // - Initialize routing table
-            // - Start peer health monitoring
-            
+            meshNetworkManager.start()
+    
             var heartbeatInterval = 30000L // Start with 30 seconds
-            
+    
             while (isActive && isRunning) {
                 // Mesh network heartbeat
                 delay(heartbeatInterval)
-                
+    
                 // Adaptive heartbeat: increase interval if no peers connected
                 // to save battery, decrease when peers are active
                 heartbeatInterval = when {
                     connectedPeers > 0 -> 30000L  // 30 seconds when active
                     else -> 60000L                // 60 seconds when idle
                 }
-                
+    
                 // Update connected peers count
-                // connectedPeers = meshNetwork.getConnectedPeerCount()
+                connectedPeers = meshNetworkManager.getConnectedPeerCount()
                 updateNotification()
-                
+    
                 // Renew wake lock periodically
                 if (wakeLock?.isHeld == false) {
                     acquireWakeLock()
@@ -180,10 +181,7 @@ class MeshNetworkService : Service() {
     }
     
     private fun stopMeshNetwork() {
-        // TODO: Clean shutdown
-        // - Close all peer connections
-        // - Stop BLE operations
-        // - Save state
+        meshNetworkManager.stop()
     }
     
     fun updatePeerCount(count: Int) {

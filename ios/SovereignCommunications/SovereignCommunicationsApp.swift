@@ -8,6 +8,9 @@ struct SovereignCommunicationsApp: App {
         // Register background tasks
         BackgroundTaskManager.shared.registerBackgroundTasks()
         
+        // Start the mesh network
+        MeshNetworkManager.shared.start()
+        
         // Request notification permissions
         NotificationManager.shared.requestAuthorization { granted, error in
             if granted {

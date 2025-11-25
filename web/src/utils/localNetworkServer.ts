@@ -130,20 +130,20 @@ export class LocalNetworkServer {
    * Stop sharing and clean up
    */
   async stopSharing(): Promise<void> {
-    if (!('serviceWorker' in navigator)) {
-      return;
-    }
-
-    try {
-      const registration = await navigator.serviceWorker.ready;
-      
-      if (registration.active) {
-        registration.active.postMessage({
-          type: 'UNREGISTER_INVITE',
-        });
+      if (!('serviceWorker' in navigator) || !navigator.serviceWorker) {
+        return;
       }
-    } catch (error) {
-      console.error('Failed to unregister share route:', error);
+  
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        
+        if (registration && registration.active) {
+          registration.active.postMessage({
+            type: 'UNREGISTER_INVITE',
+          });
+        }
+      } catch (error) {
+        console.error('Failed to unregister share route:', error);
+      }
     }
-  }
 }

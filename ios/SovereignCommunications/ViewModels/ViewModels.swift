@@ -214,14 +214,12 @@ class ChatViewModel: ObservableObject {
         // Save to Core Data
         CoreDataStack.shared.save(context: context)
         
-        // TODO: Send through mesh network
-        // For now, just mark as sent
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            message.status = "sent"
-            self?.context.refresh(message, mergeChanges: true)
-            self?.isSending = false
-            self?.messageText = ""
-        }
+        // Send through mesh network
+        MeshNetworkManager.shared.sendMessage(recipientId: conversation.contact.id, message: messageText)
+        
+        // Update UI
+        self.isSending = false
+        self.messageText = ""
         
         logger.info("Sent message: \(message.id ?? "unknown")")
     }
