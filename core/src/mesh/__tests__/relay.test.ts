@@ -1,5 +1,5 @@
 import { MessageRouter, PriorityQueue, BandwidthScheduler, decrementTTL } from '../relay';
-import { RoutingTable, Peer } from '../routing';
+import { RoutingTable } from '../routing';
 import { DeduplicationCache } from '../deduplication';
 import { Message, MessageType } from '../../protocol/message';
 import { generateIdentity } from '../../crypto/primitives';
