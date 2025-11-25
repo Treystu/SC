@@ -97,7 +97,7 @@ jobs:
         run: npm run build -w core
       
       - name: Upload core artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: core-build
           path: core/dist
@@ -130,7 +130,7 @@ jobs:
           NODE_ENV: production
       
       - name: Upload web artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: web-build
           path: web/dist
@@ -187,7 +187,7 @@ jobs:
           fi
       
       - name: Upload Android APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: android-debug-apk
           path: android/app/build/outputs/apk/debug/*.apk
@@ -410,7 +410,7 @@ jobs:
       
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: e2e-results-${{ matrix.browser }}
           path: |
