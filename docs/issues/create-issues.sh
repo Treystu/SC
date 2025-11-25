@@ -1,23 +1,50 @@
 #!/bin/bash
-# Bulk create GitHub issues from PR #4 exported JSON
-set -euo pipefail
-REPO="${REPO:-Treystu/SC}"
-JSON="docs/issues/all-issues.json"
-REMOTE_SHA="c2ffcc56459e8432d70982492741c4dc4c1b7112"
-REMOTE_URL="https://raw.githubusercontent.com/Treystu/SC/${REMOTE_SHA}/docs/issues/all-issues.json"
-for dep in gh jq curl; do command -v $dep >/dev/null || { echo "Missing $dep"; exit 1; }; done
-gh auth status >/dev/null || { echo "Not authenticated. Run: gh auth login"; exit 1; }
-[ -f "$JSON" ] || { echo "Downloading issue data..."; curl -fsSL "$REMOTE_URL" -o "$JSON"; }
-count=$(jq length "$JSON")
-echo "Creating $count issues in $REPO..."
-for i in $(seq 0 $((count-1))); do
-  title=$(jq -r ".[$i].title" "$JSON")
-  body=$(jq -r ".[$i].body" "$JSON")
-  mapfile -t labels < <(jq -r ".[$i].labels[]" "$JSON")
-  args=(gh issue create --repo "$REPO" --title "$title" --body "$body")
-  for l in "${labels[@]}"; do args+=(--label "$l"); done
-  echo "→ $((i+1))/$count: $title"
-  "${args[@]}"
-  sleep 0.5
+# Script to create all GitHub issues using gh CLI
+# Usage: ./create-issues.sh
+
+set -e
+
+REPO="Treystu/SC"
+ISSUES_FILE="all-issues.json"
+
+echo "Creating GitHub issues for $REPO..."
+echo ""
+
+# Check if gh CLI is installed and authenticated
+if ! command -v gh &> /dev/null; then
+    echo "❌ GitHub CLI (gh) is not installed."
+    echo "Install it from: https://cli.github.com/"
+    exit 1
+fi
+
+if ! gh auth status &> /dev/null; then
+    echo "❌ Not authenticated with GitHub CLI."
+    echo "Run: gh auth login"
+    exit 1
+fi
+
+# Read the JSON file and create issues
+issue_count=$(jq length "$ISSUES_FILE")
+
+for i in $(seq 0 $((issue_count - 1))); do
+    title=$(jq -r ".[$i].title" "$ISSUES_FILE")
+    body=$(jq -r ".[$i].body" "$ISSUES_FILE")
+    labels=$(jq -r ".[$i].labels | join(\",\")" "$ISSUES_FILE")
+    
+    echo "Creating issue $((i + 1))/$issue_count: $title"
+    
+    # Create the issue
+    gh issue create \
+        --repo "$REPO" \
+        --title "$title" \
+        --body "$body" \
+        --label "$labels"
+    
+    echo "✅ Created"
+    echo ""
+    
+    # Small delay to avoid rate limiting
+    sleep 1
 done
-echo "Done." 
+
+echo "🎉 All $issue_count issues created successfully!"
