@@ -8,8 +8,8 @@
  * - Multiple simultaneous transfers
  */
 
-import { MessageType } from '../protocol/message.js';
-import { sha256 as computeSHA256 } from '@noble/hashes/sha256';
+import { MessageType as _MessageType } from '../protocol/message.js';
+import { sha256 as computeSHA256 } from '@noble/hashes/sha2.js';
 
 // Helper to convert hash output to Uint8Array
 const sha256 = (data: Uint8Array): Uint8Array => {

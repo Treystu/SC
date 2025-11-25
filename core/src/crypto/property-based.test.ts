@@ -10,7 +10,7 @@ import {
   encryptMessage,
   decryptMessage,
 } from './primitives';
-import { randomBytes } from '@noble/hashes/utils';
+import { randomBytes } from '@noble/hashes/utils.js';
 
 describe.skip('Crypto Property-Based Tests', () => {
   describe('Identity generation', () => {

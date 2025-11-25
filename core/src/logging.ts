@@ -113,7 +113,7 @@ export class Logger {
     }
   }
 
-  private outputToStorage(entry: LogEntry): void {
+  private outputToStorage(_entry: LogEntry): void {
     // Platform-specific storage implementation
     // Can be overridden by platform-specific logger
   }

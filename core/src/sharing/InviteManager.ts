@@ -8,8 +8,8 @@
  * - Handle invite expiration
  */
 
-import { randomBytes } from '@noble/hashes/utils';
-import { sha256 } from '@noble/hashes/sha256';
+import { randomBytes } from '@noble/hashes/utils.js';
+
 import { signMessage, verifySignature } from '../crypto/primitives';
 import { InviteOptions, PendingInvite, InviteRedemptionResult, Contact } from './types';
 
@@ -115,7 +115,7 @@ export class InviteManager {
    * Redeem an invite code
    * Validates the code and creates a contact entry for the inviter
    */
-  async redeemInvite(code: string, recipientPeerId: string): Promise<InviteRedemptionResult> {
+  async redeemInvite(code: string, _recipientPeerId: string): Promise<InviteRedemptionResult> {
     const validation = await this.validateInvite(code);
 
     if (!validation.valid || !validation.invite) {

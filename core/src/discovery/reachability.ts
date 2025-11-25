@@ -140,7 +140,7 @@ export class ReachabilityVerifier {
         await onSendPing(peerId, ping);
 
         // Wait for pong
-        const pong = await this.waitForPong(ping.id, this.options.timeout);
+        const _pong = await this.waitForPong(ping.id, this.options.timeout);
         const receiveTime = Date.now();
 
         // Calculate latency
@@ -420,7 +420,7 @@ export class ReachabilityVerifier {
    */
   cleanup(): void {
     // Clear all pending pings
-    for (const [id, pending] of this.pendingPings.entries()) {
+    for (const [_id, pending] of this.pendingPings.entries()) {
       clearTimeout(pending.timeout);
       pending.reject(new Error('Verifier cleanup'));
     }

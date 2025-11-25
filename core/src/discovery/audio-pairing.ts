@@ -147,7 +147,7 @@ export class AudioTonePairing {
    * Note: This is a placeholder - full implementation would require
    * actual audio analysis/FFT to detect DTMF frequencies
    */
-  async listenForPeerId(durationMs: number): Promise<string | null> {
+  async listenForPeerId(_durationMs: number): Promise<string | null> {
     // This would require getUserMedia and audio analysis
     // For now, return null (not implemented in browser without microphone permission)
     console.warn('Audio listening requires microphone permission and FFT analysis');

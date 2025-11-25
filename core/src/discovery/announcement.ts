@@ -60,7 +60,7 @@ export class PeerAnnouncementManager {
    */
   async broadcastAnnouncement(announcement: PeerAnnouncement): Promise<void> {
     // Encode announcement as message
-    const message = this.encodeAnnouncement(announcement);
+    const _message = this.encodeAnnouncement(announcement);
     
     // Send message through network (it will be relayed)
     // Note: This should use the network's send method if available

@@ -136,7 +136,7 @@ export class BandwidthScheduler {
   /**
    * Record successful message transmission
    */
-  recordSend(messageSize: number): void {
+  recordSend(_messageSize: number): void {
     const now = Date.now();
     this.sendingWindow.push(now);
     

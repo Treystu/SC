@@ -119,10 +119,10 @@ export class ManualDiscovery {
       // Format: peer_id@ip:port
       const parts = entry.split('@');
       let address: string;
-      let peerId: string | undefined;
+      let _peerId: string | undefined;
 
       if (parts.length === 2) {
-        peerId = parts[0];
+        _peerId = parts[0];
         address = parts[1];
       } else {
         address = entry;
@@ -134,7 +134,7 @@ export class ManualDiscovery {
         return null;
       }
 
-      const ip = addressParts[0];
+      const _ip = addressParts[0];
       const port = parseInt(addressParts[1], 10);
 
       // Basic validation
