@@ -22,7 +22,7 @@
  * - Adaptive: Can increase during spam attacks
  */
 
-import { sha256 } from '@noble/hashes/sha256';
+import { sha256 } from '@noble/hashes/sha2.js';
 
 /**
  * Proof-of-Work challenge parameters
@@ -398,7 +398,7 @@ export class ProofOfWork {
 /**
  * Helper to convert number to bytes (big-endian)
  */
-function numberToBytes(num: number, bytes: number = 4): Uint8Array {
+function _numberToBytes(num: number, bytes: number = 4): Uint8Array {
   const result = new Uint8Array(bytes);
   const view = new DataView(result.buffer);
   

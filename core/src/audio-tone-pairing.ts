@@ -93,7 +93,7 @@ export class AudioTonePairing {
     return detected.join('');
   }
   
-  private detectDTMFTone(frequencyData: Uint8Array, sampleRate: number): string | null {
+  private detectDTMFTone(frequencyData: Uint8Array, _sampleRate: number): string | null {
     // Simplified DTMF detection
     // In production, implement Goertzel algorithm for accurate detection
     const threshold = 50;

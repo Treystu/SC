@@ -302,7 +302,7 @@ export class CompositeRateLimiter {
    * Check if request is allowed (all limiters must allow)
    */
   tryRequest(key: string): RateLimitInfo {
-    for (const { name, limiter } of this.limiters) {
+    for (const { name: _name, limiter } of this.limiters) {
       const result = limiter instanceof TokenBucketRateLimiter
         ? limiter.tryConsume(key)
         : limiter.tryRequest(key);
