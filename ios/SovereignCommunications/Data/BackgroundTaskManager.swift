@@ -195,12 +195,14 @@ private class RefreshOperation: Operation {
         
         logger.info("Starting refresh operation")
         
-        // Check for new messages
-        // Update peer status
-        // Refresh UI data
-        
-        // Simulate work
-        Thread.sleep(forTimeInterval: 2)
+        // Trigger mesh network refresh
+        MeshNetworkManager.shared.refreshState { success in
+            if success {
+                self.logger.info("Mesh network state refreshed")
+            } else {
+                self.logger.error("Failed to refresh mesh network state")
+            }
+        }
         
         logger.info("Refresh operation completed")
     }
@@ -252,13 +254,35 @@ private class SyncOperation: Operation {
         
         logger.info("Starting sync operation")
         
-        // Sync with iCloud if enabled
-        // Sync message status
-        // Update contact information
-        
-        // Simulate work
-        Thread.sleep(forTimeInterval: 3)
+        // Perform mesh synchronization
+        MeshNetworkManager.shared.performSync { result in
+            switch result {
+            case .success(let count):
+                self.logger.info("Sync completed. Synced \(count) items")
+            case .failure(let error):
+                self.logger.error("Sync failed: \(error.localizedDescription)")
+            }
+        }
         
         logger.info("Sync operation completed")
+    }
+}
+
+/// Manager for Mesh Network interactions
+class MeshNetworkManager {
+    static let shared = MeshNetworkManager()
+    
+    private init() {}
+    
+    func refreshState(completion: @escaping (Bool) -> Void) {
+        // Bridge to Core Mesh Library
+        // In a real implementation, this calls into the C++/Rust core
+        completion(true)
+    }
+    
+    func performSync(completion: @escaping (Result<Int, Error>) -> Void) {
+        // Bridge to Core Mesh Library
+        // In a real implementation, this triggers the sync engine
+        completion(.success(0))
     }
 }

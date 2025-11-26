@@ -59,7 +59,7 @@ export class HealthChecker {
     // Determine overall health
     const allHealthy = Object.values(checks).every(c => c.healthy);
     const anyWarning = Object.values(checks).some(c => c.status === 'warning');
-    
+
     let status: 'healthy' | 'degraded' | 'critical';
     if (allHealthy) {
       status = 'healthy';
@@ -84,15 +84,15 @@ export class HealthChecker {
   private async checkCrypto(): Promise<ComponentHealth> {
     try {
       const start = performance.now();
-      
+
       // Test basic crypto operations
       const { generateIdentity, signMessage, verifySignature } = await import('./crypto/primitives.js');
-      
+
       const identity = generateIdentity();
       const message = new Uint8Array([1, 2, 3, 4, 5]);
       const signature = signMessage(message, identity.privateKey);
       const isValid = verifySignature(message, signature, identity.publicKey);
-      
+
       const duration = performance.now() - start;
 
       if (!isValid) {
@@ -132,18 +132,18 @@ export class HealthChecker {
   private async checkStorage(): Promise<ComponentHealth> {
     try {
       const start = performance.now();
-      
+
       // Test storage operations
       const testKey = 'health-check-test';
       const testData = { timestamp: Date.now() };
-      
+
       // This will vary based on platform
       // For now, we'll just check if localStorage is available
       if (typeof localStorage !== 'undefined') {
         localStorage.setItem(testKey, JSON.stringify(testData));
         const retrieved = localStorage.getItem(testKey);
         localStorage.removeItem(testKey);
-        
+
         if (!retrieved) {
           return {
             healthy: false,
@@ -153,7 +153,7 @@ export class HealthChecker {
           };
         }
       }
-      
+
       const duration = performance.now() - start;
       const status = duration > 50 ? 'warning' : 'ok';
 
@@ -190,7 +190,7 @@ export class HealthChecker {
     }
 
     try {
-      const stats = this.meshNetwork.getStats();
+      const stats = await this.meshNetwork.getStats();
       const peerCount = this.meshNetwork.getPeerCount();
       const isHealthy = peerCount > 0;
 
@@ -220,23 +220,23 @@ export class HealthChecker {
   private async checkPerformance(): Promise<ComponentHealth> {
     try {
       const metrics: Record<string, number> = {};
-      
+
       // Memory usage (if available)
       if (typeof performance !== 'undefined' && (performance as any).memory) {
         const memory = (performance as any).memory;
         const usedMB = memory.usedJSHeapSize / (1024 * 1024);
         const limitMB = memory.jsHeapSizeLimit / (1024 * 1024);
         const percentage = (usedMB / limitMB) * 100;
-        
+
         metrics.memoryUsedMB = Math.round(usedMB * 100) / 100;
         metrics.memoryLimitMB = Math.round(limitMB * 100) / 100;
         metrics.memoryPercentage = Math.round(percentage * 100) / 100;
       }
-      
+
       // Determine status based on metrics
       let status: 'ok' | 'warning' | 'error' = 'ok';
       let details = 'Performance within acceptable range';
-      
+
       if (metrics.memoryPercentage > 90) {
         status = 'error';
         details = 'Critical memory usage';
@@ -338,11 +338,11 @@ export async function getHealthStatus(): Promise<{
 }> {
   const checker = getHealthChecker();
   const result = await checker.performHealthCheck();
-  
+
   // Map health status to HTTP status codes
   const statusCode = result.status === 'healthy' ? 200 :
-                    result.status === 'degraded' ? 503 :
-                    500;
+    result.status === 'degraded' ? 503 :
+      500;
 
   return {
     status: statusCode,

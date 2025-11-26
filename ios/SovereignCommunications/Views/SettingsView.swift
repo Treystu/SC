@@ -10,6 +10,7 @@ struct SettingsView: View {
     
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
     @State private var showingKeyBackup = false
+    @State private var showingQRCode = false
     
     var body: some View {
         NavigationView {
@@ -32,7 +33,7 @@ struct SettingsView: View {
                     }
                     
                     Button("View QR Code") {
-                        // TODO: Show QR code
+                        showingQRCode = true
                     }
                     
                     Button("Backup Identity Keys") {
@@ -136,6 +137,9 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showingKeyBackup) {
                 KeyBackupView()
+            }
+            .sheet(isPresented: $showingQRCode) {
+                QRCodeDisplayView(peerInfo: PeerInfo(id: localPeerId, publicKey: "placeholder_public_key", endpoints: ["placeholder_endpoint"]))
             }
         }
     }

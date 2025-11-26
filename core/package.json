@@ -14,12 +14,16 @@
     "@noble/ciphers": "^2.0.1",
     "@noble/curves": "^2.0.1",
     "@noble/hashes": "^2.0.1",
-    "@types/node": "^24.10.0"
+    "@types/node": "^24.10.0",
+    "dompurify": "^3.1.5",
+    "fflate": "^0.8.2",
+    "multicast-dns": "^7.2.5"
   },
   "devDependencies": {
     "@babel/core": "^7.28.5",
     "@babel/preset-env": "^7.28.5",
     "@babel/preset-typescript": "^7.28.5",
+    "@types/dompurify": "^2.4.0",
     "@types/jest": "^30.0.0",
     "babel-jest": "^30.2.0",
     "fast-check": "^4.3.0",

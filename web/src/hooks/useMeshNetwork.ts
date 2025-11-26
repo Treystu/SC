@@ -236,17 +236,41 @@ export function useMeshNetwork() {
         };
 
         try {
-          // TODO: Implement actual file chunking and sending
-          // For now, we just send metadata as a text message with a special prefix
-          // In a real implementation, we would use meshNetworkRef.current.sendFile(recipientId, file)
+          // Send file start metadata
           const payload = JSON.stringify({
-            type: 'file',
+            type: 'file_start',
             metadata: fileMetadata
           });
 
           await meshNetworkRef.current.sendMessage(recipientId, payload);
+
+          // Chunking logic
+          const CHUNK_SIZE = 16 * 1024; // 16KB chunks
+          const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+          const fileIdBytes = new TextEncoder().encode(fileId.padEnd(36, ' ').substring(0, 36));
+          const buffer = await file.arrayBuffer();
+
+          for (let i = 0; i < totalChunks; i++) {
+            const start = i * CHUNK_SIZE;
+            const end = Math.min(start + CHUNK_SIZE, file.size);
+            const chunkData = new Uint8Array(buffer.slice(start, end));
+
+            // Construct chunk payload: [FileID (36)][Index (4)][Total (4)][Data]
+            const chunkPayload = new Uint8Array(36 + 4 + 4 + chunkData.length);
+            const view = new DataView(chunkPayload.buffer);
+
+            chunkPayload.set(fileIdBytes, 0);
+            view.setUint32(36, i, false); // Big endian
+            view.setUint32(40, totalChunks, false);
+            chunkPayload.set(chunkData, 44);
+
+            await meshNetworkRef.current.sendBinaryMessage(recipientId, chunkPayload);
+
+            // Optional: minimal delay to prevent flooding
+            if (i % 10 === 0) await new Promise(r => setTimeout(r, 10));
+          }
         } catch (error) {
-          console.error('Failed to send file metadata:', error);
+          console.error('Failed to send file:', error);
           messageStatus = 'queued';
         }
 
@@ -340,12 +364,12 @@ export function useMeshNetwork() {
   }, []);
 
   // Get network stats
-  const getStats = useCallback(() => {
+  const getStats = useCallback(async () => {
     if (!meshNetworkRef.current) {
       return null;
     }
 
-    return meshNetworkRef.current.getStats();
+    return await meshNetworkRef.current.getStats();
   }, []);
 
   const generateConnectionOffer = useCallback(async (): Promise<string> => {

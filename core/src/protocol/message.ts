@@ -6,7 +6,7 @@
  * 
  * Endianness: All multi-byte integers use Big Endian (network byte order)
  * 
- * Header Structure (fixed 109 bytes):
+ * Header Structure (fixed 108 bytes):
  * Offset | Size | Field      | Description
  * -------|------|------------|------------------------------------------
  * 0      | 1    | Version    | Protocol version (current: 0x01)
@@ -15,7 +15,7 @@
  * 3      | 1    | Reserved   | Reserved for future use (must be 0x00)
  * 4      | 8    | Timestamp  | Unix timestamp in milliseconds (big-endian)
  * 12     | 32   | Sender ID  | Ed25519 public key of sender
- * 44     | 65   | Signature  | Compact Ed25519 signature of message
+ * 44     | 64   | Signature  | Compact Ed25519 signature of message
  * 
  * Body:
  * - Encrypted payload (variable length, max: MAX_PAYLOAD_SIZE)
@@ -49,7 +49,7 @@ export enum MessageType {
 export const PROTOCOL_VERSION = 0x01;
 export const MIN_SUPPORTED_VERSION = 0x01;
 export const MAX_SUPPORTED_VERSION = 0x01;
-export const HEADER_SIZE = 109; // 1 + 1 + 1 + 1 + 8 + 32 + 65 (compact signature)
+export const HEADER_SIZE = 108; // 1 + 1 + 1 + 1 + 8 + 32 + 64 (compact signature)
 export const MAX_PAYLOAD_SIZE = 1024 * 1024; // 1 MB max payload
 export const MAX_TTL = 255;
 
@@ -133,9 +133,9 @@ export function validateHeader(header: MessageHeader): void {
   }
 
   // Validate signature size
-  if (header.signature.length !== 65) {
+  if (header.signature.length !== 64) {
     throw new MessageValidationError(
-      `Invalid signature length: ${header.signature.length}. Expected: 65`,
+      `Invalid signature length: ${header.signature.length}. Expected: 64`,
       'signature',
       header.signature.length
     );
@@ -228,8 +228,8 @@ export function decodeHeader(buffer: Uint8Array): MessageHeader {
   const senderId = buffer.slice(offset, offset + 32);
   offset += 32;
 
-  // Signature (65 bytes)
-  const signature = buffer.slice(offset, offset + 65);
+  // Signature (64 bytes)
+  const signature = buffer.slice(offset, offset + 64);
 
   const header: MessageHeader = {
     version,

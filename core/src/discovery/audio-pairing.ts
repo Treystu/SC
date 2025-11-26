@@ -49,15 +49,15 @@ export class AudioTonePairing {
   encodePeerIdToDTMF(peerId: string): string {
     // Take first 16 chars of peer ID (hex) and convert to DTMF-safe format
     const hexChars = peerId.substring(0, 16);
-    
+
     // Convert hex to decimal digits for DTMF transmission
     let dtmfSequence = '#';  // Start marker
-    
+
     for (const char of hexChars) {
       const value = parseInt(char, 16);
       dtmfSequence += value.toString();
     }
-    
+
     dtmfSequence += '#';  // End marker
     return dtmfSequence;
   }
@@ -69,16 +69,16 @@ export class AudioTonePairing {
     if (!dtmfSequence.startsWith('#') || !dtmfSequence.endsWith('#')) {
       return null;  // Invalid format
     }
-    
+
     const digits = dtmfSequence.slice(1, -1);  // Remove markers
-    
+
     // Convert decimal digits back to hex
     let peerId = '';
     for (const digit of digits) {
       const hexValue = parseInt(digit).toString(16);
       peerId += hexValue;
     }
-    
+
     return peerId;
   }
 
@@ -102,7 +102,7 @@ export class AudioTonePairing {
     for (const char of dtmfSequence) {
       if (char in DTMF_FREQUENCIES) {
         const [freq1, freq2] = DTMF_FREQUENCIES[char];
-        
+
         // Generate DTMF tone (sum of two sine waves)
         for (let i = 0; i < toneSamples; i++) {
           const t = i / sampleRate;
@@ -112,7 +112,7 @@ export class AudioTonePairing {
             Math.sin(2 * Math.PI * freq2 * t)
           ) / 2;
         }
-        
+
         offset += toneSamples + pauseSamples;
       }
     }
@@ -126,7 +126,7 @@ export class AudioTonePairing {
   async playPeerId(peerId: string): Promise<void> {
     const dtmfSequence = this.encodePeerIdToDTMF(peerId);
     const audioBuffer = await this.generateTones(dtmfSequence);
-    
+
     if (!this.audioContext) {
       throw new Error('Audio context not initialized');
     }
@@ -144,14 +144,10 @@ export class AudioTonePairing {
 
   /**
    * Listen for incoming DTMF tones and decode peer ID
-   * Note: This is a placeholder - full implementation would require
-   * actual audio analysis/FFT to detect DTMF frequencies
+   * Currently not implemented. Requires microphone permission and FFT/Goertzel algorithm.
    */
   async listenForPeerId(_durationMs: number): Promise<string | null> {
-    // This would require getUserMedia and audio analysis
-    // For now, return null (not implemented in browser without microphone permission)
-    console.warn('Audio listening requires microphone permission and FFT analysis');
-    return null;
+    throw new Error('Audio listening not implemented');
   }
 
   /**

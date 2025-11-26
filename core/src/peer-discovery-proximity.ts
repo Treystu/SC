@@ -57,12 +57,12 @@ export class ProximityDiscovery {
    */
   stop(): void {
     this.scanning = false;
-    
+
     if (this.scanTimer) {
       clearInterval(this.scanTimer);
       this.scanTimer = undefined;
     }
-    
+
     if (this.cleanupTimer) {
       clearInterval(this.cleanupTimer);
       this.cleanupTimer = undefined;
@@ -72,10 +72,36 @@ export class ProximityDiscovery {
   /**
    * Start periodic scanning
    */
-  private startScanning(): void {
+  private async startScanning(): Promise<void> {
+    // @ts-ignore
+    if (typeof navigator !== 'undefined' && navigator.bluetooth) {
+      try {
+        // @ts-ignore - Web Bluetooth API types might not be fully available
+        if (navigator.bluetooth.requestLEScan) {
+          console.log('Starting BLE scan...');
+          // @ts-ignore
+          const scan = await navigator.bluetooth.requestLEScan({
+            acceptAllAdvertisements: true, // For broad discovery, or use filters
+            keepRepeatedDevices: true
+          });
+
+          // @ts-ignore
+          navigator.bluetooth.addEventListener('advertisementreceived', (event: any) => {
+            this.handleAdvertisement(event);
+          });
+
+          console.log('BLE scan started successfully');
+          return;
+        }
+      } catch (error) {
+        console.error('Failed to start BLE scan:', error);
+      }
+    }
+
+    // Fallback to periodic polling if LE Scan is not supported or fails
     // Initial scan
     this.performScan();
-    
+
     // Periodic scans
     this.scanTimer = setInterval(() => {
       this.performScan();
@@ -83,38 +109,53 @@ export class ProximityDiscovery {
   }
 
   /**
+   * Handle BLE advertisement packet
+   */
+  private handleAdvertisement(event: any): void {
+    const peer: ProximityPeer = {
+      peerId: event.device.id,
+      rssi: event.rssi,
+      distance: this.rssiToDistance(event.rssi),
+      lastSeen: Date.now(),
+      deviceName: event.device.name,
+      // In a real app, we'd extract the public key from manufacturer data or service data
+      // publicKey: event.manufacturerData...
+    };
+
+    this.updatePeer(peer);
+  }
+
+  /**
    * Perform a single scan
    */
   private async performScan(): Promise<void> {
     try {
-      // In a real implementation, this would use platform-specific BLE APIs
-      // For now, we simulate discovery
-      
-      // This would be replaced with actual BLE scanning:
-      // - Android: BluetoothLeScanner
-      // - iOS: CBCentralManager
-      // - Web: Web Bluetooth API (limited)
-      
       const discovered = await this.scanForPeers();
-      
+
       discovered.forEach(peer => {
         this.updatePeer(peer);
       });
-      
+
     } catch (error) {
       console.error('Proximity scan error:', error);
     }
   }
 
   /**
-   * Simulate BLE peer scanning (replace with actual BLE implementation)
+   * Fallback peer scanning for environments without Web Bluetooth LE Scan support
+   * or when manual scanning is required (e.g. via requestDevice)
    */
   private async scanForPeers(): Promise<ProximityPeer[]> {
-    // This is a placeholder - actual implementation would use:
-    // - BLE advertisements
-    // - Service UUIDs
-    // - Manufacturer data containing peer info
-    
+    // If we are using the event listener approach (requestLEScan), this might be empty
+    // or used for a different fallback strategy (e.g. requestDevice)
+
+    // @ts-ignore
+    if (typeof navigator !== 'undefined' && navigator.bluetooth) {
+      // requestDevice requires user gesture, so we can't call it automatically in a loop.
+      // This method is kept for manual triggering or fallback.
+      return [];
+    }
+
     return [];
   }
 
@@ -123,26 +164,26 @@ export class ProximityDiscovery {
    */
   private updatePeer(peer: ProximityPeer): void {
     const distance = this.rssiToDistance(peer.rssi);
-    
+
     // Check if peer meets criteria
     if (peer.rssi < this.config.rssiThreshold || distance > this.config.maxDistance) {
       return;
     }
-    
+
     const existing = this.peers.get(peer.peerId);
     const isNew = !existing;
-    
+
     const updated: ProximityPeer = {
       ...peer,
       distance,
       lastSeen: Date.now()
     };
-    
+
     this.peers.set(peer.peerId, updated);
-    
+
     if (isNew) {
       this.emit('peer-discovered', updated);
-      
+
       if (this.config.autoConnect) {
         this.emit('should-connect', updated);
       }
@@ -159,11 +200,11 @@ export class ProximityDiscovery {
     // Calibration values
     const txPower = -59; // RSSI at 1 meter
     const pathLossExponent = 2.0; // environment factor (free space = 2)
-    
+
     if (rssi === 0) {
       return -1; // invalid
     }
-    
+
     const ratio = (txPower - rssi) / (10 * pathLossExponent);
     return Math.pow(10, ratio);
   }
@@ -183,13 +224,13 @@ export class ProximityDiscovery {
   private cleanupStalePeers(): void {
     const now = Date.now();
     const stale: string[] = [];
-    
+
     this.peers.forEach((peer, peerId) => {
       if (now - peer.lastSeen > this.config.discoveryTimeout) {
         stale.push(peerId);
       }
     });
-    
+
     stale.forEach(peerId => {
       const peer = this.peers.get(peerId);
       this.peers.delete(peerId);
@@ -240,7 +281,7 @@ export class ProximityDiscovery {
    */
   updateConfig(config: Partial<ProximityConfig>): void {
     this.config = { ...this.config, ...config };
-    
+
     // Restart scanning with new config
     if (this.scanning) {
       this.stop();
@@ -298,11 +339,11 @@ export class ProximityDiscovery {
   getStats() {
     const peers = this.getPeers();
     const distances = peers.map(p => p.distance);
-    
+
     return {
       totalPeers: peers.length,
-      averageDistance: distances.length > 0 
-        ? distances.reduce((a, b) => a + b, 0) / distances.length 
+      averageDistance: distances.length > 0
+        ? distances.reduce((a, b) => a + b, 0) / distances.length
         : 0,
       closestPeer: Math.min(...distances, Infinity),
       furthestPeer: Math.max(...distances, -Infinity),

@@ -5,6 +5,7 @@
  * users to report security incidents.
  */
 
+import { getDatabase } from '../storage/database';
 import React, { useState, useEffect } from 'react';
 import {
   SecurityAlert,
@@ -30,7 +31,7 @@ export const SecurityAlerts: React.FC<SecurityAlertsProps> = ({
     // Subscribe to new alerts
     const unsubscribe = alertSystem.onAlertReceived((alert) => {
       setAlerts((prev) => [alert, ...prev]);
-      
+
       // Show notification for high/critical alerts
       if (alert.severity === AlertSeverity.HIGH || alert.severity === AlertSeverity.CRITICAL) {
         showNotification(alert);
@@ -89,13 +90,13 @@ export const SecurityAlerts: React.FC<SecurityAlertsProps> = ({
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / 60000);
-    
+
     if (diffMins < 1) return 'Just now';
     if (diffMins < 60) return `${diffMins}m ago`;
-    
+
     const diffHours = Math.floor(diffMins / 60);
     if (diffHours < 24) return `${diffHours}h ago`;
-    
+
     const diffDays = Math.floor(diffHours / 24);
     return `${diffDays}d ago`;
   };
@@ -196,9 +197,15 @@ const ReportSecurityIssueDialog: React.FC<ReportDialogProps> = ({
     setSubmitting(true);
 
     try {
-      // In real app, would get private key from secure storage
-      // For now, this is a placeholder
-      const privateKey = new Uint8Array(32); // Placeholder
+      // Get private key from secure storage
+      const db = getDatabase();
+      const identity = await db.getPrimaryIdentity();
+
+      if (!identity) {
+        throw new Error('No identity found to sign alert');
+      }
+
+      const privateKey = identity.privateKey;
 
       await alertSystem.createAlert(
         alertType,
@@ -223,7 +230,7 @@ const ReportSecurityIssueDialog: React.FC<ReportDialogProps> = ({
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 max-w-md w-full">
         <h3 className="text-xl font-bold mb-4">Report Security Issue</h3>
-        
+
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
             <label className="block text-sm font-medium mb-1">

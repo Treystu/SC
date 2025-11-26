@@ -24,6 +24,7 @@ export class WebRTCPeer {
   private dataChannels: Map<string, RTCDataChannel> = new Map();
   private onMessageCallback?: (data: Uint8Array) => void;
   private onStateChangeCallback?: (state: ConnectionState) => void;
+  private onSignalCallback?: (signal: any) => void;
   private peerId: string;
 
   constructor(config: PeerConnectionConfig) {
@@ -86,7 +87,7 @@ export class WebRTCPeer {
 
     const channel = this.peerConnection.createDataChannel(config.label, channelConfig);
     this.setupDataChannel(channel);
-    
+
     return channel;
   }
 
@@ -173,9 +174,11 @@ export class WebRTCPeer {
    * Handle ICE candidate (to be sent via mesh signaling)
    */
   private handleIceCandidate(candidate: RTCIceCandidate): void {
-    // This would be sent via mesh signaling to the peer
-    // For now, we just log it
-    console.log('ICE candidate:', candidate.toJSON());
+    if (this.onSignalCallback) {
+      this.onSignalCallback({ type: 'candidate', candidate: candidate.toJSON() });
+    } else {
+      console.log('ICE candidate generated but no signal handler:', candidate.toJSON());
+    }
   }
 
   /**
@@ -183,7 +186,7 @@ export class WebRTCPeer {
    */
   private async handleConnectionFailure(): Promise<void> {
     console.log('Connection failed, attempting reconnection...');
-    
+
     // Close existing connection
     this.close();
 
@@ -197,7 +200,7 @@ export class WebRTCPeer {
    */
   send(data: Uint8Array, channelLabel: string = 'reliable'): void {
     const channel = this.dataChannels.get(channelLabel);
-    
+
     if (!channel || channel.readyState !== 'open') {
       throw new Error(`Data channel ${channelLabel} not ready`);
     }
@@ -221,6 +224,13 @@ export class WebRTCPeer {
   }
 
   /**
+   * Register callback for signaling messages (ICE candidates, etc.)
+   */
+  onSignal(callback: (signal: any) => void): void {
+    this.onSignalCallback = callback;
+  }
+
+  /**
    * Get current connection state
    */
   getState(): ConnectionState {
@@ -232,6 +242,16 @@ export class WebRTCPeer {
    */
   getPeerId(): string {
     return this.peerId;
+  }
+
+  /**
+   * Get connection statistics
+   */
+  async getStats(): Promise<RTCStatsReport | null> {
+    if (!this.peerConnection) {
+      return null;
+    }
+    return this.peerConnection.getStats();
   }
 
   /**
@@ -257,16 +277,17 @@ export class WebRTCPeer {
 export class PeerConnectionPool {
   private peers: Map<string, WebRTCPeer> = new Map();
   private onMessageCallback?: (peerId: string, data: Uint8Array) => void;
+  private onSignalCallback?: (peerId: string, signal: any) => void;
 
   /**
    * Create or get peer connection
    */
   getOrCreatePeer(peerId: string, config?: PeerConnectionConfig): WebRTCPeer {
     let peer = this.peers.get(peerId);
-    
+
     if (!peer) {
       peer = new WebRTCPeer(config || { peerId });
-      
+
       // Set up message handler
       peer.onMessage((data) => {
         this.onMessageCallback?.(peerId, data);
@@ -277,6 +298,11 @@ export class PeerConnectionPool {
         if (state === 'closed' || state === 'failed') {
           this.peers.delete(peerId);
         }
+      });
+
+      // Set up signal handler
+      peer.onSignal((signal) => {
+        this.onSignalCallback?.(peerId, signal);
       });
 
       this.peers.set(peerId, peer);
@@ -335,6 +361,13 @@ export class PeerConnectionPool {
   }
 
   /**
+   * Register callback for signaling messages from any peer
+   */
+  onSignal(callback: (peerId: string, signal: any) => void): void {
+    this.onSignalCallback = callback;
+  }
+
+  /**
    * Close all connections
    */
   closeAll(): void {
@@ -345,14 +378,22 @@ export class PeerConnectionPool {
   /**
    * Get connection statistics
    */
-  getStats() {
+  async getStats() {
+    const peerStats = await Promise.all(
+      Array.from(this.peers.entries()).map(async ([peerId, peer]) => {
+        const stats = await peer.getStats();
+        return {
+          peerId,
+          state: peer.getState(),
+          stats,
+        };
+      })
+    );
+
     return {
       totalPeers: this.peers.size,
       connectedPeers: this.getConnectedPeers().length,
-      peers: Array.from(this.peers.entries()).map(([peerId, peer]) => ({
-        peerId,
-        state: peer.getState(),
-      })),
+      peers: peerStats,
     };
   }
 }

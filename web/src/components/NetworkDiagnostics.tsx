@@ -2,6 +2,7 @@
  * Real-time network diagnostics panel
  */
 import { useState, useEffect } from 'react';
+import { useMeshNetwork } from '../hooks/useMeshNetwork';
 
 interface NetworkStats {
   connectedPeers: number;
@@ -20,9 +21,11 @@ interface NetworkStats {
   uptime: number;
   bleConnections: number;
   webrtcConnections: number;
+  error?: string;
 }
 
 export const NetworkDiagnostics: React.FC = () => {
+  const { getStats } = useMeshNetwork();
   const [stats, setStats] = useState<NetworkStats>({
     connectedPeers: 0,
     messagesSent: 0,
@@ -36,32 +39,81 @@ export const NetworkDiagnostics: React.FC = () => {
   });
 
   const [refreshInterval, setRefreshInterval] = useState(1000);
+  const [lastUpload, setLastUpload] = useState(0);
+  const [lastDownload, setLastDownload] = useState(0);
+  const [lastTimestamp, setLastTimestamp] = useState(0);
+  const [startTime] = useState(Date.now());
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      // Mock data - replace with actual network stats
-      setStats({
-        connectedPeers: Math.floor(Math.random() * 10),
-        messagesSent: Math.floor(Math.random() * 1000),
-        messagesReceived: Math.floor(Math.random() * 1000),
-        bandwidth: {
-          upload: Math.random() * 1024 * 1024,
-          download: Math.random() * 1024 * 1024
-        },
-        latency: {
-          average: Math.random() * 100,
-          min: Math.random() * 50,
-          max: Math.random() * 200
-        },
-        packetLoss: Math.random() * 5,
-        uptime: Date.now(),
-        bleConnections: Math.floor(Math.random() * 5),
-        webrtcConnections: Math.floor(Math.random() * 5)
-      });
+    const interval = setInterval(async () => {
+      const newStats = await getStats();
+      if (newStats) {
+        let totalBytesSent = 0;
+        let totalBytesReceived = 0;
+        let totalPacketsLost = 0;
+        let totalRoundTripTime = 0;
+        let roundTripTimeSamples = 0;
+        let minLatency = Infinity;
+        let maxLatency = 0;
+        let webrtcConnections = 0;
+        
+        newStats.peers.peers.forEach(peer => {
+          if (peer.state === 'connected') {
+            webrtcConnections++;
+            if (peer.stats) {
+              peer.stats.forEach(report => {
+                if (report.type === 'transport') {
+                  totalBytesSent += report.bytesSent || 0;
+                  totalBytesReceived += report.bytesReceived || 0;
+                }
+                if (report.type === 'remote-inbound-rtp') {
+                  totalPacketsLost += report.packetsLost || 0;
+                  totalRoundTripTime += report.roundTripTime || 0;
+                  if (report.roundTripTime) {
+                    roundTripTimeSamples++;
+                    minLatency = Math.min(minLatency, report.roundTripTime * 1000);
+                    maxLatency = Math.max(maxLatency, report.roundTripTime * 1000);
+                  }
+                }
+              });
+            }
+          }
+        });
+
+        const now = Date.now();
+        const deltaTime = (now - lastTimestamp) / 1000; // in seconds
+        const uptime = now - startTime;
+
+        const uploadBw = deltaTime > 0 ? (totalBytesSent - lastUpload) / deltaTime : 0;
+        const downloadBw = deltaTime > 0 ? (totalBytesReceived - lastDownload) / deltaTime : 0;
+
+        setStats({
+          connectedPeers: newStats.peers.connectedPeers,
+          messagesSent: newStats.relay.messagesForwarded,
+          messagesReceived: newStats.relay.messagesReceived,
+          bandwidth: {
+            upload: uploadBw,
+            download: downloadBw,
+          },
+          latency: {
+            average: roundTripTimeSamples > 0 ? (totalRoundTripTime / roundTripTimeSamples) * 1000 : 0,
+            min: minLatency === Infinity ? 0 : minLatency,
+            max: maxLatency,
+          },
+          packetLoss: totalPacketsLost,
+          uptime: uptime,
+          bleConnections: 0, // Assuming no BLE connections for now
+          webrtcConnections: webrtcConnections,
+        });
+
+        setLastUpload(totalBytesSent);
+        setLastDownload(totalBytesReceived);
+        setLastTimestamp(now);
+      }
     }, refreshInterval);
 
     return () => clearInterval(interval);
-  }, [refreshInterval]);
+  }, [refreshInterval, getStats, lastTimestamp, lastUpload, lastDownload, startTime]);
 
   const formatBytes = (bytes: number): string => {
     if (bytes === 0) return '0 B';

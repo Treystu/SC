@@ -8,6 +8,8 @@ struct ContactListView: View {
         animation: .default)
     private var contacts: FetchedResults<ContactEntity>
     
+    @State private var showingScanner = false
+    
     var body: some View {
         NavigationView {
             Group {
@@ -37,7 +39,7 @@ struct ContactListView: View {
             .navigationTitle("Contacts")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {}) {
+                    Button(action: { showingScanner = true }) {
                         Image(systemName: "qrcode.viewfinder")
                     }
                 }
@@ -47,6 +49,28 @@ struct ContactListView: View {
                     }
                 }
             }
+            .sheet(isPresented: $showingScanner) {
+                QRCodeScannerView { scannedCode in
+                    if let peerInfo = PeerInfo.fromQRString(scannedCode) {
+                        addContact(from: peerInfo)
+                    }
+                }
+            }
+        }
+    }
+
+    private func addContact(from peerInfo: PeerInfo) {
+        let newContact = ContactEntity(context: viewContext)
+        newContact.id = peerInfo.id
+        newContact.displayName = "Scanned Peer" // Placeholder
+        newContact.publicKey = peerInfo.publicKey
+        newContact.lastSeen = Date()
+        
+        do {
+            try viewContext.save()
+        } catch {
+            let nsError = error as NSError
+            fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
         }
     }
 }
@@ -60,7 +84,7 @@ struct ContactRow: View {
                 .fill(Color.blue)
                 .frame(width: 50, height: 50)
                 .overlay(
-                    Text(contact.displayName.prefix(1).uppercased())
+                    Text(contact.displayName?.prefix(1).uppercased() ?? "U")
                         .foregroundColor(.white)
                         .font(.title3)
                         .fontWeight(.semibold)
@@ -68,7 +92,7 @@ struct ContactRow: View {
             
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text(contact.displayName)
+                    Text(contact.displayName ?? "Unknown")
                         .font(.headline)
                     
                     if contact.isVerified {
@@ -78,7 +102,7 @@ struct ContactRow: View {
                     }
                 }
                 
-                Text(String(contact.publicKey.prefix(16)) + "...")
+                Text(String(contact.publicKey?.prefix(16) ?? "No public key") + "...")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .fontDesign(.monospaced)

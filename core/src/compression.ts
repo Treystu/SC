@@ -5,8 +5,7 @@
  * Note: fflate library not installed. Install with: npm install fflate
  */
 
-// TODO: Install fflate library
-// import { gunzipSync, gzipSync } from 'fflate';
+import { gunzipSync, gzipSync } from 'fflate';
 
 const _COMPRESSION_THRESHOLD = 1024; // Compress messages larger than 1KB
 
@@ -19,20 +18,10 @@ export interface CompressionResult {
 
 /**
  * Compress data if it exceeds the threshold
- * Currently disabled until fflate is installed
  */
 export function compressMessage(data: Uint8Array): CompressionResult {
   const originalSize = data.length;
 
-  // Compression disabled - return uncompressed
-  return {
-    data,
-    compressed: false,
-    originalSize,
-    compressedSize: originalSize,
-  };
-  
-  /* TODO: Enable when fflate is installed
   // Don't compress small messages
   if (originalSize < _COMPRESSION_THRESHOLD) {
     return {
@@ -67,12 +56,10 @@ export function compressMessage(data: Uint8Array): CompressionResult {
     originalSize,
     compressedSize: originalSize,
   };
-  */
 }
 
 /**
  * Decompress data if it was compressed
- * Currently disabled until fflate is installed
  */
 export function decompressMessage(
   data: Uint8Array,
@@ -82,17 +69,12 @@ export function decompressMessage(
     return data;
   }
 
-  // Decompression disabled - should not be called
-  throw new Error('Decompression not available: fflate library not installed');
-  
-  /* TODO: Enable when fflate is installed
   try {
     return gunzipSync(data);
   } catch (error) {
     console.error('Decompression failed:', error);
     throw new Error('Failed to decompress message');
   }
-  */
 }
 
 /**

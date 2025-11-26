@@ -27,11 +27,19 @@ struct MainView: View {
                     }
                     .tag(1)
                 
+                NavigationView {
+                    PeerDiscoveryView()
+                }
+                .tabItem {
+                    Label("Peers", systemImage: "person.3.fill")
+                }
+                .tag(2)
+
                 SettingsView()
                     .tabItem {
                         Label("Settings", systemImage: "gearshape.fill")
                     }
-                    .tag(2)
+                    .tag(3)
             }
             .accentColor(.green)
         }

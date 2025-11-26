@@ -29,7 +29,7 @@ export class MeshNetwork {
   private maxPeers: number;
 
   // Callbacks
-  private onMessageCallback?: (message: Message) => void;
+  private messageListeners: Set<(message: Message) => void> = new Set();
   private onPeerConnectedCallback?: (peerId: string) => void;
   private onPeerDisconnectedCallback?: (peerId: string) => void;
 
@@ -65,7 +65,15 @@ export class MeshNetwork {
     this.messageRelay.onMessageForSelf((message: Message) => {
       this.messagesReceived++;
       this.bytesTransferred += message.payload.byteLength;
-      this.onMessageCallback?.(message);
+
+      // Notify all listeners
+      this.messageListeners.forEach(listener => {
+        try {
+          listener(message);
+        } catch (error) {
+          console.error('Error in message listener:', error);
+        }
+      });
     });
 
     // Handle message forwarding (flood routing)
@@ -79,6 +87,16 @@ export class MeshNetwork {
     // Handle incoming messages from peers
     this.peerPool.onMessage((peerId: string, data: Uint8Array) => {
       this.messageRelay.processMessage(data, peerId);
+    });
+
+    // Handle signaling messages from peers (ICE candidates, offers, answers)
+    this.peerPool.onSignal((peerId: string, signal: any) => {
+      // Send signal to peer via mesh
+      // We wrap it in a special text message for now
+      this.sendMessage(peerId, JSON.stringify({
+        type: 'SIGNAL',
+        signal
+      })).catch(err => console.error('Failed to send signal:', err));
     });
   }
 
@@ -107,10 +125,13 @@ export class MeshNetwork {
     });
 
     // Create and send offer
-    const _offer = await peer.createOffer();
-    
-    // In a real implementation, this would be sent via mesh signaling
-    console.log('Offer created for peer:', peerId);
+    const offer = await peer.createOffer();
+
+    // Send offer via mesh signaling
+    this.sendMessage(peerId, JSON.stringify({
+      type: 'SIGNAL',
+      signal: { type: 'offer', sdp: offer }
+    })).catch(err => console.error('Failed to send offer:', err));
 
     // Set up state change handler
     peer.onStateChange((state: string) => {
@@ -224,7 +245,14 @@ export class MeshNetwork {
    * Register callback for incoming messages
    */
   onMessage(callback: (message: Message) => void): void {
-    this.onMessageCallback = callback;
+    this.messageListeners.add(callback);
+  }
+
+  /**
+   * Unregister callback for incoming messages
+   */
+  offMessage(callback: (message: Message) => void): void {
+    this.messageListeners.delete(callback);
   }
 
   /**
@@ -251,12 +279,12 @@ export class MeshNetwork {
   /**
    * Get network statistics
    */
-  getStats() {
+  async getStats() {
     return {
       localPeerId: this.localPeerId,
       routing: this.routingTable.getStats(),
       relay: this.messageRelay.getStats(),
-      peers: this.peerPool.getStats(),
+      peers: await this.peerPool.getStats(),
     };
   }
 
@@ -324,8 +352,19 @@ export class MeshNetwork {
     const messageBytes = encodeMessage(message);
     message.header.signature = signMessage(messageBytes, this.identity.privateKey);
     const encodedMessage = encodeMessage(message);
-    
-    this.peerPool.broadcast(encodedMessage);
+
+    const nextHop = this.routingTable.getNextHop(recipientId);
+
+    if (nextHop) {
+      // Direct route available
+      const peer = this.peerPool.getPeer(nextHop);
+      if (peer && peer.getState() === 'connected') {
+        peer.send(encodedMessage);
+      }
+    } else {
+      // Broadcast to all peers (flood routing)
+      this.peerPool.broadcast(encodedMessage);
+    }
   }
 
   /**
@@ -348,7 +387,7 @@ export class MeshNetwork {
     const messageBytes = encodeMessage(message);
     message.header.signature = signMessage(messageBytes, this.identity.privateKey);
     const encodedMessage = encodeMessage(message);
-    
+
     this.peerPool.broadcast(encodedMessage);
   }
 

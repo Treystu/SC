@@ -137,7 +137,7 @@ struct CompleteSettingsView: View {
                             Text("Debug Logs")
                         }
                         
-                        NavigationLink(destination: Text("Network Diagnostics")) {
+                        NavigationLink(destination: NetworkDiagnosticsView()) {
                             Text("Network Diagnostics")
                         }
                         
