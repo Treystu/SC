@@ -31,6 +31,7 @@ android/app/build/
 ios/Pods/
 ios/*.xcworkspace
 ios/build/
+ios/.build/
 ios/DerivedData/
 
 # Web
