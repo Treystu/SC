@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.1.15](https://github.com/Treystu/SC/compare/v0.1.14...v0.1.15) (2025-11-27)
+
+
+### Features
+
+* Introduce database schema migration to version 3 with new persistence stores, enhance DB initialization, and remove offline message retry. ([51a046e](https://github.com/Treystu/SC/commit/51a046eba17eee0f3b46b11d6c26f4104b1a3f78))
+
 ### [0.1.14](https://github.com/Treystu/SC/compare/v0.1.13...v0.1.14) (2025-11-27)
 
 ### [0.1.13](https://github.com/Treystu/SC/compare/v0.1.12...v0.1.13) (2025-11-27)
