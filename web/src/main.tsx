@@ -2,16 +2,8 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { ErrorTracker } from '@sc/core/error-tracking';
+import './sentry'; // Sentry is initialized in sentry.ts
 import './index.css';
-
-// Initialize Sentry for error tracking in production
-if (import.meta.env.PROD) {
-  ErrorTracker.initialize(
-    import.meta.env.VITE_SENTRY_DSN || '',
-    import.meta.env.MODE
-  );
-}
 
 // Register service worker for PWA support
 if ('serviceWorker' in navigator) {

@@ -8,7 +8,14 @@ export * from './protocol/message.js';
 // Crypto
 export * from './crypto/primitives.js';
 export * from './crypto/storage.js';
-export * from './utils/fingerprint.js';
+export {
+  generateFullFingerprint,
+  formatFingerprint,
+  isValidPublicKey,
+  publicKeyToBase64,
+  base64ToPublicKey,
+  compareFingerprints
+} from './utils/fingerprint.js';
 
 // Mesh networking
 export * from './mesh/routing.js';
@@ -18,8 +25,8 @@ export * from './mesh/health.js';
 
 // Transport
 export * from './transport/webrtc.js';
-export { 
-  WebRTCPeerEnhanced, 
+export {
+  WebRTCPeerEnhanced,
   WebRTCConnectionPool,
   WebRTCConfig,
   DataChannelType,
@@ -32,26 +39,26 @@ export {
 
 // Discovery
 export * from './discovery/peer.js';
-export { 
-  MDNSBroadcaster, 
-  MDNSDiscoverer, 
-  createServiceType, 
-  validateServiceName, 
+export {
+  MDNSBroadcaster,
+  MDNSDiscoverer,
+  createServiceType,
+  validateServiceName,
   formatServiceInstanceName,
   type MDNSServiceInfo,
   type MDNSCapabilities,
   type MDNSBroadcasterOptions,
   type MDNSDiscoveryOptions,
 } from './discovery/mdns.js';
-export { 
-  QRCodeDiscoveryV2, 
+export {
+  QRCodeDiscoveryV2,
   QR_FORMAT_VERSION,
   type QRPeerInfo,
   type QRDataV2,
   type QRValidationResult,
 } from './discovery/qr-enhanced.js';
-export { 
-  ReachabilityVerifier, 
+export {
+  ReachabilityVerifier,
   testPeerReachability,
   type PingMessage,
   type PongMessage,
@@ -78,41 +85,23 @@ export {
 
 // Validation
 export {
+  sanitizeHTML,
+  sanitizeUserInput,
+  validateMessageContent,
+} from './validation.js';
+
+export * from './file-validation.js';
+
+// TODO: Many validation functions listed here don't exist in validation.ts
+// They need to be implemented or removed from this export list
+/*
+export {
   ValidationError,
   required,
   validateStringLength,
-  validateNumberRange,
-  validateArrayLength,
-  validatePublicKey,
-  validatePrivateKey,
-  validateSignature,
-  validateProtocolVersion,
-  validateTTL,
-  validateTimestamp,
-  validatePeerId,
-  validateConversationId,
-  validateMessageContent,
-  validateEmail,
-  validateUrl,
-  validateIPAddress,
-  validatePort,
-  validateFileSize,
-  validateFileName,
-  validateMimeType,
-  sanitizeHtml,
-  sanitizeInput,
-  validateRateLimitToken,
-  validateToken,
-  validateSessionKey,
-  validateNonce,
-  validateUsername,
-  validateDisplayName,
-  validateRequiredFields,
-  validateEnum,
-  validateArray,
-  compose,
-  optional,
+  // ... other missing exports
 } from './validation.js';
+*/
 
 // Rate limiting
 export {
@@ -129,7 +118,10 @@ export {
 // Sharing and invites
 export * from './sharing/index.js';
 export { InviteManager } from './sharing/InviteManager.js';
-export { parseConnectionOffer, hexToBytes } from './sharing/utils.js';
+export { parseConnectionOffer, hexToBytes } from './sharing/util.js';
+
+// Error tracking
+export { ErrorTracker, type ErrorContext } from './error-tracking.js';
 
 // Identity
 export { IdentityManager } from './identity-manager.js';

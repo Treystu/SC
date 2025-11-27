@@ -74,15 +74,15 @@ export class ErrorTracker {
 // Use typeof check to support both Vite (import.meta.env) and Node.js (process.env)
 const isProd = typeof process !== 'undefined'
   ? process.env.NODE_ENV === 'production'
-  : (typeof import.meta !== 'undefined' && import.meta.env?.PROD);
+  : (typeof import.meta !== 'undefined' && (import.meta as any).env?.PROD);
 
 const sentryDsn = typeof process !== 'undefined'
   ? process.env.VITE_SENTRY_DSN
-  : (typeof import.meta !== 'undefined' ? import.meta.env?.VITE_SENTRY_DSN : undefined);
+  : (typeof import.meta !== 'undefined' ? (import.meta as any).env?.VITE_SENTRY_DSN : undefined);
 
 const environment = typeof process !== 'undefined'
   ? process.env.NODE_ENV
-  : (typeof import.meta !== 'undefined' ? import.meta.env?.MODE : undefined);
+  : (typeof import.meta !== 'undefined' ? (import.meta as any).env?.MODE : undefined);
 
 if (isProd && sentryDsn && environment) {
   ErrorTracker.initialize(sentryDsn, environment);

@@ -1,9 +1,14 @@
+
 import { useRef, useEffect, useMemo, memo, useState } from 'react';
+import DOMPurify from 'dompurify';
 import './ChatView.css';
 import { MessageInput } from './MessageInput';
 import { LoadingState } from './LoadingState';
-import { sanitizeHTML } from '@sc/core/validation';
-import { validateFileList } from '@sc/core/file-validation';
+import { validateFileList } from '@sc/core';
+
+const sanitizeHTML = (html: string) => {
+  return DOMPurify.sanitize(html);
+};
 
 interface Message {
   id: string;
@@ -65,12 +70,12 @@ function ChatView({ conversationId: _conversationId, messages: receivedMessages 
             messages.map((message) => (
               <div
                 key={message.id}
-                className={`message ${message.isSent ? 'sent' : 'received'}`}
+                className={`message ${message.isSent ? 'sent' : 'received'} `}
               >
                 <div className="message-bubble">
                   <div className="message-content" dangerouslySetInnerHTML={{ __html: sanitizeHTML(message.content) }}></div>
                   <div className="message-meta">
-                    <span className="message-time" data-testid={`message-timestamp-${message.id}`}>
+                    <span className="message-time" data-testid={`message - timestamp - ${message.id} `}>
                       {new Date(message.timestamp).toLocaleTimeString([], {
                         hour: '2-digit',
                         minute: '2-digit',
@@ -78,8 +83,8 @@ function ChatView({ conversationId: _conversationId, messages: receivedMessages 
                     </span>
                     {message.isSent && (
                       <span
-                        className={`message-status status-${message.status}`}
-                        data-testid={`message-status-${message.status}`}
+                        className={`message - status status - ${message.status} `}
+                        data-testid={`message - status - ${message.status} `}
                       >
                         {message.status === 'pending' && '○'}
                         {message.status === 'queued' && '🕒'}

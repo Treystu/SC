@@ -21,7 +21,7 @@ export async function generateFingerprint(publicKey: Uint8Array | string): Promi
     }
 
     // Hash the public key
-    const hashBuffer = await crypto.subtle.digest('SHA-256', keyBytes);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', keyBytes as any);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
 
     // Convert to hex and take first 16 characters for display
@@ -45,7 +45,7 @@ export async function generateFullFingerprint(publicKey: Uint8Array | string): P
         keyBytes = publicKey;
     }
 
-    const hashBuffer = await crypto.subtle.digest('SHA-256', hashBytes);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', keyBytes as any);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
 }
@@ -120,6 +120,6 @@ function base64ToBytes(base64: string): Uint8Array {
 /**
  * Compare two fingerprints for equality
  */
-export function compareFinger prints(fp1: string, fp2: string): boolean {
+export function compareFingerprints(fp1: string, fp2: string): boolean {
     return fp1.toUpperCase().replace(/\s/g, '') === fp2.toUpperCase().replace(/\s/g, '');
 }

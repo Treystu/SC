@@ -1,5 +1,4 @@
-import { IdentityManager } from '@sc/core';
-import { generateFingerprint, publicKeyToBase64 } from '@sc/core/utils/fingerprint';
+import { IdentityManager, generateFingerprint, publicKeyToBase64 } from '@sc/core';
 
 export interface UserProfile {
   displayName: string;
@@ -14,7 +13,7 @@ export interface UserProfile {
 
 export class ProfileManager {
   private static readonly STORAGE_KEY = 'user_profile';
-  
+
   async getProfile(): Promise<UserProfile> {
     const stored = localStorage.getItem(ProfileManager.STORAGE_KEY);
     if (stored) {
@@ -22,7 +21,7 @@ export class ProfileManager {
     }
     return this.createDefaultProfile();
   }
-  
+
   async updateProfile(updates: Partial<UserProfile>): Promise<UserProfile> {
     const current = await this.getProfile();
     const updated = {
@@ -30,23 +29,23 @@ export class ProfileManager {
       ...updates,
       updatedAt: Date.now()
     };
-    
+
     // Validate
     if (updates.displayName && !this.isValidDisplayName(updates.displayName)) {
       throw new Error('Invalid display name');
     }
-    
+
     localStorage.setItem(ProfileManager.STORAGE_KEY, JSON.stringify(updated));
     return updated;
   }
-  
+
   private async createDefaultProfile(): Promise<UserProfile> {
     const identityManager = new IdentityManager();
     await identityManager.loadIdentity();
     const publicKeyBytes = await identityManager.getPublicKeyBytes();
     const publicKey = publicKeyToBase64(publicKeyBytes);
     const fingerprint = await generateFingerprint(publicKeyBytes);
-    
+
     const profile: UserProfile = {
       displayName: 'User',
       publicKey,
@@ -54,11 +53,11 @@ export class ProfileManager {
       createdAt: Date.now(),
       updatedAt: Date.now()
     };
-    
+
     localStorage.setItem(ProfileManager.STORAGE_KEY, JSON.stringify(profile));
     return profile;
   }
-  
+
   private isValidDisplayName(name: string): boolean {
     return name.length >= 1 && name.length <= 50 && /^[a-zA-Z0-9\s\-_]+$/.test(name);
   }

@@ -1,4 +1,4 @@
-import { ErrorTracker } from './error-tracking';
+import { ErrorTracker } from './error-tracking.js';
 
 /**
  * Error Handler - Centralized error management system
@@ -61,7 +61,7 @@ export class ErrorHandler {
   private maxLogSize = 1000;
   private errorListeners: Array<(error: ErrorContext) => void> = [];
 
-  private constructor() {}
+  private constructor() { }
 
   static getInstance(): ErrorHandler {
     if (!ErrorHandler.instance) {
@@ -75,7 +75,7 @@ export class ErrorHandler {
    */
   handle(error: Error | AppError, additionalContext?: Partial<ErrorContext>): void {
     const context = this.createErrorContext(error, additionalContext);
-    
+
     // Log the error
     this.logError(context);
 
@@ -213,7 +213,7 @@ export class ErrorHandler {
    */
   onError(listener: (error: ErrorContext) => void): () => void {
     this.errorListeners.push(listener);
-    
+
     // Return unsubscribe function
     return () => {
       const index = this.errorListeners.indexOf(listener);

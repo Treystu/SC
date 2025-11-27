@@ -17,10 +17,10 @@ import { useContacts } from './hooks/useContacts';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { announce } from './utils/accessibility';
 import { getDatabase } from './storage/database';
-import { generateFingerprint, publicKeyToBase64, isValidPublicKey } from '../../core/src/utils/fingerprint';
-import { IdentityManager, parseConnectionOffer, hexToBytes } from '../../core/src';
+import { generateFingerprint, publicKeyToBase64, isValidPublicKey } from '@sc/core';
+import { IdentityManager, parseConnectionOffer, hexToBytes } from '@sc/core';
 import { ProfileManager, UserProfile } from './managers/ProfileManager';
-import { validateMessageContent } from '../../core/src/validation';
+import { validateMessageContent } from '@sc/core';
 import { rateLimiter } from '../../core/src/rate-limiter';
 
 function App() {
@@ -184,11 +184,11 @@ function App() {
     if (!publicKeyHex || !isValidPublicKey(publicKeyHex)) {
       throw new Error('Valid public key required for contact');
     }
-    
+
     const publicKeyBytes = hexToBytes(publicKeyHex);
     const publicKeyBase64 = publicKeyToBase64(publicKeyBytes);
     const fingerprint = await generateFingerprint(publicKeyBytes);
-    
+
     await addContact({
       id: peerId,
       publicKey: publicKeyBase64, // ACTUAL PUBLIC KEY
@@ -205,17 +205,17 @@ function App() {
   const handleImportContact = async (code: string, name: string) => {
     try {
       const offer = parseConnectionOffer(code);
-      
+
       if (!offer.publicKey || !isValidPublicKey(offer.publicKey)) {
         throw new Error('Invalid connection offer - missing public key');
       }
-      
+
       const publicKeyBytes = hexToBytes(offer.publicKey);
       const publicKeyBase64 = publicKeyToBase64(publicKeyBytes);
       const fingerprint = await generateFingerprint(publicKeyBytes);
-      
+
       const remotePeerId = await acceptConnectionOffer(code);
-      
+
       await addContact({
         id: remotePeerId,
         publicKey: publicKeyBase64, // ACTUAL PUBLIC KEY FROM OFFER

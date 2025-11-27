@@ -1,4 +1,4 @@
-import { OfflineQueue, QueuedMessage } from './offline-queue';
+import { OfflineQueue, QueuedMessage } from './offline-queue.js';
 
 // Mock the database module
 jest.mock('./database', () => ({
@@ -35,7 +35,7 @@ describe('OfflineQueue', () => {
   describe('enqueue', () => {
     it('should add message to queue', async () => {
       mockOfflineQueueStore.toArray.mockResolvedValue([]);
-      
+
       const message = {
         recipientId: 'recipient1',
         content: 'Hello',
