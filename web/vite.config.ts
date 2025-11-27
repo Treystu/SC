@@ -21,6 +21,11 @@ export default defineConfig({
   server: {
     port: 3000,
   },
+  define: {
+    'process.env': {},
+    'process.platform': JSON.stringify('browser'),
+    'process.version': JSON.stringify(''),
+  },
   build: {
     target: 'es2020',
     sourcemap: false,

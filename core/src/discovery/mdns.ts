@@ -1,5 +1,5 @@
 // @ts-ignore
-import mDNS from 'multicast-dns';
+// import mDNS from 'multicast-dns'; // Converted to dynamic import for browser compatibility
 
 export interface MDNSServiceInfo {
   name: string;           // Service instance name
@@ -71,6 +71,10 @@ export class MDNSBroadcaster {
     // Initialize mDNS if in Node.js environment
     if (typeof window === 'undefined') {
       try {
+        // Dynamic import to avoid bundling in browser
+        // @ts-ignore
+        const mDNSModule = await import('multicast-dns');
+        const mDNS = (mDNSModule as any).default || mDNSModule;
         this.mdns = mDNS();
 
         this.mdns.on('query', (query: any) => {
@@ -301,6 +305,10 @@ export class MDNSDiscoverer {
 
     if (typeof window === 'undefined') {
       try {
+        // Dynamic import to avoid bundling in browser
+        // @ts-ignore
+        const mDNSModule = await import('multicast-dns');
+        const mDNS = (mDNSModule as any).default || mDNSModule;
         this.mdns = mDNS();
 
         this.mdns.on('response', (response: any) => {
