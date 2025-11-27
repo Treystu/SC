@@ -38,15 +38,9 @@ export default defineConfig({
     },
     rollupOptions: {
       output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom'],
-          'crypto-vendor': ['@sc/core'],
-        },
+        // Let Vite handle chunking automatically
       },
     },
-    chunkSizeWarningLimit: 600,
-  },
-  optimizeDeps: {
-    include: ['react', 'react-dom', '@sc/core'],
+    chunkSizeWarningLimit: 1000,
   },
 })

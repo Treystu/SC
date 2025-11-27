@@ -72,5 +72,9 @@
     "@sentry/react": "^7.91.0",
     "@types/dompurify": "^3.0.5",
     "dompurify": "^3.3.0"
+  },
+  "overrides": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
   }
 }
