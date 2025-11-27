@@ -6,17 +6,16 @@ import './sentry'; // Sentry is initialized in sentry.ts
 import './index.css';
 
 // Register service worker for PWA support
+// Unregister service worker to clear cache issues
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js')
-      .then(registration => {
-        console.log('SW registered:', registration);
-      })
-      .catch(error => {
-        console.log('SW registration failed:', error);
-      });
+  navigator.serviceWorker.ready.then(registration => {
+    registration.unregister();
+    console.log('Service Worker unregistered');
   });
 }
+
+console.log('Main.tsx executing...');
+// alert('Main.tsx executing'); // Visual confirmation
 
 const rootElement = document.getElementById('root');
 console.log('Root element:', rootElement);

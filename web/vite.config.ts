@@ -22,9 +22,8 @@ export default defineConfig({
     port: 3000,
   },
   define: {
-    'process.env': {},
-    'process.platform': JSON.stringify('browser'),
-    'process.version': JSON.stringify(''),
+    // 'process.env': {}, // Let Vite handle this
+    'global': 'window', // Polyfill global for some older libs if needed
   },
   build: {
     target: 'es2020',
