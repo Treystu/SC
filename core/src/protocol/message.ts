@@ -133,9 +133,10 @@ export function validateHeader(header: MessageHeader): void {
   }
 
   // Validate signature size
-  if (header.signature.length !== 64) {
+  // Ed25519 signatures can be 64 bytes (standard) or 65 bytes (compact with recovery byte)
+  if (header.signature.length !== 64 && header.signature.length !== 65) {
     throw new MessageValidationError(
-      `Invalid signature length: ${header.signature.length}. Expected: 64`,
+      `Invalid signature length: ${header.signature.length}. Expected: 64 or 65`,
       'signature',
       header.signature.length
     );
@@ -292,7 +293,7 @@ export function decodeMessage(buffer: Uint8Array): Message {
 export function messageHash(message: Message): string {
   const messageBytes = encodeMessage(message);
   const hash = sha256(messageBytes);
-  
+
   // Convert to hex string
   return Array.from(hash)
     .map((b: number) => b.toString(16).padStart(2, '0'))

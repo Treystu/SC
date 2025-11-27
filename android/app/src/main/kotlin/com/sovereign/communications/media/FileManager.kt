@@ -20,14 +20,42 @@ class FileManager(private val context: Context) {
         private const val CACHE_DIR = "file_cache"
         private const val MAX_CACHE_SIZE_MB = 100L
         private const val CACHE_EXPIRY_DAYS = 7L
+
+        // Define allowed MIME types and max file size for validation
+        private val ALLOWED_MIME_TYPES = setOf(
+            "image/jpeg", "image/png", "image/gif", "video/mp4", "audio/mp3", "application/pdf"
+        )
+        private const val MAX_FILE_SIZE_MB = 25L
     }
     
     /**
      * Save a file from URI to app storage
      * @return Saved file or null if failed
      */
+    /**
+     * Validate a file based on its size and MIME type.
+     * @return True if the file is valid, false otherwise.
+     */
+    fun validateFile(uri: Uri): Boolean {
+        val mimeType = getMimeTypeFromUri(uri)
+        val fileSize = getFileSizeFromUri(uri)
+
+        if (mimeType == null || !ALLOWED_MIME_TYPES.contains(mimeType)) {
+            return false // Invalid MIME type
+        }
+
+        if (fileSize > MAX_FILE_SIZE_MB * 1024 * 1024) {
+            return false // File size exceeds the limit
+        }
+
+        return true
+    }
+
     suspend fun saveFile(uri: Uri, fileName: String? = null): File? = withContext(Dispatchers.IO) {
         try {
+            if (!validateFile(uri)) {
+                return@withContext null // File validation failed
+            }
             val inputStream = context.contentResolver.openInputStream(uri) ?: return@withContext null
             
             val finalFileName = fileName ?: getFileNameFromUri(uri) ?: "file_${System.currentTimeMillis()}"

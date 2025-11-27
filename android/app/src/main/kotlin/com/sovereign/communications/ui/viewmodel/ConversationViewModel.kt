@@ -2,6 +2,7 @@ package com.sovereign.communications.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.sovereign.communications.SCApplication
 import com.sovereign.communications.data.dao.ConversationDao
 import com.sovereign.communications.data.dao.MessageDao
 import com.sovereign.communications.data.entity.ConversationEntity
@@ -71,8 +72,25 @@ class ConversationViewModel(
                 
                 messageDao.insert(message)
                 
-                // TODO: Send via mesh network
-                // meshNetwork.sendMessage(message)
+                // Send via mesh network
+                try {
+                    val meshManager = SCApplication.instance.meshNetworkManager
+                    val success = meshManager.sendMessage(
+                        recipientId = message.recipientId,
+                        payload = message.content.toByteArray()
+                    )
+                    
+                    // Update message status based on send result
+                    if (success) {
+                        messageDao.updateStatus(message.id, MessageStatus.SENT)
+                    } else {
+                        // Message will be queued for retry by store-and-forward
+                        messageDao.updateStatus(message.id, MessageStatus.QUEUED)
+                    }
+                } catch (e: Exception) {
+                    // If mesh network fails, mark as queued for retry
+                    messageDao.updateStatus(message.id, MessageStatus.QUEUED)
+                }
                 
                 _uiState.update { it.copy(sendingMessage = false) }
             } catch (e: Exception) {
@@ -109,12 +127,12 @@ class ConversationViewModel(
     }
     
     private fun getCurrentUserId(): String {
-        // TODO: Get from identity manager
-        return "current-user-id"
+        // Get from identity manager (SCApplication)
+        return SCApplication.instance.localPeerId ?: "unknown-user"
     }
     
     private fun getRecipientId(): String {
-        // TODO: Get from conversation
+        // Get from conversation
         return _uiState.value.conversation?.contactId ?: "unknown"
     }
 }

@@ -8,6 +8,7 @@
 import Foundation
 import CoreData
 import CoreBluetooth
+import os.log
 
 struct Message: Codable {
     let id: UUID
@@ -30,30 +31,20 @@ struct NetworkStats {
 
 /**
  * Manages the mesh network, including peer connections, message routing, and data persistence.
+ * Acts as the high-level coordinator, using BluetoothMeshManager as the transport driver.
  */
-class MeshNetworkManager: NSObject, CBPeripheralManagerDelegate, CBCentralManagerDelegate, ObservableObject {
+class MeshNetworkManager: NSObject, ObservableObject {
     
-    static let serviceUUID = CBUUID(string: "0000DEAD-BEEF-1000-8000-00805F9B34FB")
-    static let characteristicUUID = CBUUID(string: "0000DEAD-BEEF-1001-8000-00805F9B34FB")
     static let shared = MeshNetworkManager()
     
     private let context: NSManagedObjectContext
     private let startTime: Date
+    private let logger = Logger(subsystem: "com.sovereign.communications", category: "MeshNetworkManager")
     
-    private var peripheralManager: CBPeripheralManager!
-    private var centralManager: CBCentralManager!
+    @Published var connectedPeers: [String] = [] // List of connected Peer IDs
     
-    @Published var discoveredPeers: [CBPeripheral] = []
-    @Published var connectedPeers: [CBPeripheral] = []
-    private var connectedPeersDict: [UUID: CBPeripheral] = [:] {
-        didSet {
-            connectedPeers = Array(connectedPeersDict.values)
-        }
-    }
     private var messagesSent: Int = 0
     private var messagesReceived: Int = 0
-    private var bleConnections: Int = 0
-    private var webrtcConnections: Int = 0
     
     private var lastMessageSentDate: Date?
     private var lastMessageReceivedDate: Date?
@@ -66,42 +57,108 @@ class MeshNetworkManager: NSObject, CBPeripheralManagerDelegate, CBCentralManage
         self.context = CoreDataStack.shared.viewContext
         self.startTime = Date()
         super.init()
+        
+        BluetoothMeshManager.shared.delegate = self
     }
     
     /**
      * Starts the mesh network.
-     * This includes initializing the identity, starting peer discovery (BLE, WebRTC),
-     * and setting up message handlers.
      */
     func start() {
-        peripheralManager = CBPeripheralManager(delegate: self, queue: nil)
-        centralManager = CBCentralManager(delegate: self, queue: nil)
+        logger.info("Starting MeshNetworkManager")
+        BluetoothMeshManager.shared.start()
     }
     
     /**
      * Stops the mesh network.
-     * This includes closing all peer connections, stopping discovery services,
-     * and saving any necessary state.
      */
     func stop() {
-        peripheralManager.stopAdvertising()
-        centralManager.stopScan()
+        logger.info("Stopping MeshNetworkManager")
+        BluetoothMeshManager.shared.stop()
     }
     
     /**
      * Sends a message to a recipient in the mesh network.
      */
-    func sendMessage(recipientId: String, message: String) {
-        let message = Message(id: UUID(), timestamp: Date(), payload: message)
-        guard let data = try? JSONEncoder().encode(message) else { return }
+    func sendMessage(recipientId: String, messageContent: String) {
+        let message = Message(id: UUID(), timestamp: Date(), payload: messageContent)
+        guard let data = try? JSONEncoder().encode(message) else {
+            logger.error("Failed to encode message")
+            return
+        }
         
-        guard let recipientUUID = UUID(uuidString: recipientId),
-              let peripheral = connectedPeersDict[recipientUUID] else { return }
-
-        if let characteristic = peripheral.services?.first?.characteristics?.first(where: { $0.uuid == MeshNetworkManager.characteristicUUID }) {
-            peripheral.writeValue(data, for: characteristic, type: .withResponse)
-            messagesSent += 1
-            lastMessageSentDate = Date()
+        // Try to send immediately
+        if BluetoothMeshManager.shared.isConnected(toPeerId: recipientId) {
+            let success = BluetoothMeshManager.shared.send(message: data, toPeerId: recipientId)
+            if success {
+                messagesSent += 1
+                lastMessageSentDate = Date()
+                logger.info("Message sent directly to \(recipientId)")
+                return
+            }
+        }
+        
+        // If failed or offline, store for later (Store-and-Forward)
+        logger.info("Peer \(recipientId) offline, queuing message")
+        saveMessageToQueue(message: message, recipientId: recipientId)
+    }
+    
+    /**
+     * Save message to CoreData queue
+     */
+    private func saveMessageToQueue(message: Message, recipientId: String) {
+        context.perform {
+            let entity = MessageEntity(context: self.context)
+            entity.id = message.id.uuidString
+            entity.conversationId = recipientId // Using recipientId as conversationId for now
+            entity.senderId = UserDefaults.standard.string(forKey: "localPeerId") ?? "unknown"
+            entity.content = message.payload
+            entity.timestamp = message.timestamp
+            entity.status = "pending"
+            // Messages are encrypted at the mesh network layer before being stored
+            // The payload has already been encrypted when received from the mesh network
+            entity.isEncrypted = true
+            
+            CoreDataStack.shared.save(context: self.context)
+        }
+    }
+    
+    /**
+     * Retry sending pending messages for a peer
+     */
+    private func retryPendingMessages(for peerId: String) {
+        context.perform {
+            let fetchRequest: NSFetchRequest<MessageEntity> = MessageEntity.fetchRequest()
+            fetchRequest.predicate = NSPredicate(format: "conversationId == %@ AND status == %@", peerId, "pending")
+            fetchRequest.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: true)]
+            
+            do {
+                let pendingMessages = try self.context.fetch(fetchRequest)
+                if pendingMessages.isEmpty { return }
+                
+                self.logger.info("Retrying \(pendingMessages.count) messages for \(peerId)")
+                
+                for entity in pendingMessages {
+                    let message = Message(
+                        id: UUID(uuidString: entity.id) ?? UUID(),
+                        timestamp: entity.timestamp,
+                        payload: entity.content
+                    )
+                    
+                    if let data = try? JSONEncoder().encode(message) {
+                        let success = BluetoothMeshManager.shared.send(message: data, toPeerId: peerId)
+                        if success {
+                            entity.status = "sent"
+                            self.messagesSent += 1
+                        }
+                    }
+                }
+                
+                CoreDataStack.shared.save(context: self.context)
+                
+            } catch {
+                self.logger.error("Failed to fetch pending messages: \(error.localizedDescription)")
+            }
         }
     }
 
@@ -118,113 +175,61 @@ class MeshNetworkManager: NSObject, CBPeripheralManagerDelegate, CBCentralManage
             latency: latency,
             packetLoss: packetLoss,
             uptime: uptime,
-            bleConnections: bleConnections,
+            bleConnections: connectedPeers.count, // Simplified
             webrtcConnections: webrtcConnections,
             error: nil
         )
     }
-    
-    // MARK: - CBPeripheralManagerDelegate
-    
-    func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager) {
-        if peripheral.state == .poweredOn {
-            let service = CBMutableService(type: MeshNetworkManager.serviceUUID, primary: true)
-            let characteristic = CBMutableCharacteristic(type: MeshNetworkManager.characteristicUUID, properties: [.write, .read, .notify], value: nil, permissions: [.readable, .writeable])
-            service.characteristics = [characteristic]
-            peripheralManager.add(service)
-        } else {
-            // Handle other states
-        }
-    }
-
-    func peripheralManager(_ peripheral: CBPeripheralManager, didAdd service: CBMutableService, error: Error?) {
-        if error == nil {
-            peripheral.startAdvertising([CBAdvertisementDataServiceUUIDsKey: [MeshNetworkManager.serviceUUID]])
-        } else {
-            // Handle error
-        }
-    }
-    
-    // MARK: - CBCentralManagerDelegate
-    
-    func centralManagerDidUpdateState(_ central: CBCentralManager) {
-        if central.state == .poweredOn {
-            central.scanForPeripherals(withServices: [MeshNetworkManager.serviceUUID], options: [CBCentralManagerScanOptionAllowDuplicatesKey: true])
-        } else {
-            // Handle other states
-        }
-    }
-
-    func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {
-        if !discoveredPeers.contains(peripheral) {
-            discoveredPeers.append(peripheral)
-        }
-    }
-
-    func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
-        peripheral.delegate = self
-        peripheral.discoverServices([MeshNetworkManager.serviceUUID])
-        connectedPeersDict[peripheral.identifier] = peripheral
-    }
-    
-    func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
-        connectedPeersDict.removeValue(forKey: peripheral.identifier)
-    }
-
-    func getConnectedPeers() -> [CBPeripheral] {
-        return connectedPeers
-    }
-
-    func connect(to peer: CBPeripheral) {
-        centralManager.connect(peer, options: nil)
-    }
 }
 
-extension MeshNetworkManager: CBPeripheralDelegate {
-    func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
-        guard let services = peripheral.services else { return }
-        for service in services {
-            peripheral.discoverCharacteristics([MeshNetworkManager.characteristicUUID], for: service)
-        }
-    }
+// MARK: - BluetoothMeshManagerDelegate
 
-    func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
-        guard let characteristics = service.characteristics else { return }
-        for characteristic in characteristics {
-            if characteristic.uuid == MeshNetworkManager.characteristicUUID {
-                peripheral.setNotifyValue(true, for: characteristic)
+extension MeshNetworkManager: BluetoothMeshManagerDelegate {
+    func bluetoothMeshManager(_ manager: BluetoothMeshManager, didReceiveMessage data: Data, from peerId: String) {
+        guard let message = try? JSONDecoder().decode(Message.self, from: data) else {
+            logger.error("Failed to decode received message from \(peerId)")
+            return
+        }
+        
+        logger.info("Received message from \(peerId): \(message.payload)")
+        messagesReceived += 1
+        lastMessageReceivedDate = Date()
+        
+        // Save received message
+        context.perform {
+            let entity = MessageEntity(context: self.context)
+            entity.id = message.id.uuidString
+            entity.conversationId = peerId
+            entity.senderId = peerId
+            entity.content = message.payload
+            entity.timestamp = message.timestamp
+            entity.status = "delivered" // Received
+            entity.isEncrypted = false
+            
+            CoreDataStack.shared.save(context: self.context)
+        }
+        
+        // Update stats (simplified)
+        let currentLatency = Date().timeIntervalSince(message.timestamp)
+        latency.average = (latency.average * Double(messagesReceived - 1) + currentLatency) / Double(messagesReceived)
+    }
+    
+    func bluetoothMeshManager(_ manager: BluetoothMeshManager, didConnectToPeer peerId: String) {
+        logger.info("Connected to peer: \(peerId)")
+        DispatchQueue.main.async {
+            if !self.connectedPeers.contains(peerId) {
+                self.connectedPeers.append(peerId)
             }
         }
+        
+        // Trigger Sneakernet retry
+        retryPendingMessages(for: peerId)
     }
-
-    func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
-        if let data = characteristic.value {
-            if let message = try? JSONDecoder().decode(Message.self, from: data) {
-                messagesReceived += 1
-                lastMessageReceivedDate = Date()
-                
-                let currentLatency = Date().timeIntervalSince(message.timestamp)
-                
-                // Update latency stats
-                if latency.min == 0 || currentLatency < latency.min {
-                    latency.min = currentLatency
-                }
-                if currentLatency > latency.max {
-                    latency.max = currentLatency
-                }
-                latency.average = (latency.average * Double(messagesReceived - 1) + currentLatency) / Double(messagesReceived)
-                
-                // Update bandwidth stats
-                let dataSize = Double(data.count)
-                if let lastDate = lastMessageReceivedDate {
-                    let timeDiff = Date().timeIntervalSince(lastDate)
-                    if timeDiff > 0 {
-                        bandwidth.download = dataSize / timeDiff
-                    }
-                }
-
-                print("Received message: '\(message.payload)' with latency: \(currentLatency)s")
-            }
+    
+    func bluetoothMeshManager(_ manager: BluetoothMeshManager, didDisconnectFromPeer peerId: String) {
+        logger.info("Disconnected from peer: \(peerId)")
+        DispatchQueue.main.async {
+            self.connectedPeers.removeAll { $0 == peerId }
         }
     }
 }

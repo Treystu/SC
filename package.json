@@ -40,8 +40,16 @@
     "encryption",
     "decentralized"
   ],
-  "author": "",
+  "author": "Sovereign Communications Team",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Treystu/SC.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Treystu/SC/issues"
+  },
+  "homepage": "https://github.com/Treystu/SC#readme",
   "devDependencies": {
     "@playwright/test": "^1.40.0",
     "@stryker-mutator/core": "^8.0.0",
@@ -59,5 +67,11 @@
     "standard-version": "^9.5.0",
     "typescript": "^5.3.0",
     "webdriverio": "^8.46.0"
+  },
+  "dependencies": {
+    "@sentry/browser": "^7.91.0",
+    "@sentry/react": "^7.91.0",
+    "@types/dompurify": "^3.0.5",
+    "dompurify": "^3.3.0"
   }
 }

@@ -1,30 +1,53 @@
 import SwiftUI
+import CoreBluetooth
 
 struct ConnectionStatusBadge: View {
-    // TODO: Connect to actual network status
-    @State private var isConnected = false
-    @State private var peerCount = 0
+    @ObservedObject private var meshManager = MeshNetworkManager.shared
     
     var body: some View {
         HStack(spacing: 6) {
             Circle()
-                .fill(isConnected ? Color.green : Color.red)
+                .fill(statusColor)
                 .frame(width: 8, height: 8)
             
-            Text(isConnected ? "Connected" : "Offline")
+            Text(statusText)
                 .font(.caption)
                 .fontWeight(.medium)
             
-            if isConnected && peerCount > 0 {
-                Text("(\(peerCount))")
+            if meshManager.connectedPeers.count > 0 {
+                Text("(\(meshManager.connectedPeers.count))")
                     .font(.caption2)
                     .foregroundColor(.secondary)
             }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
-        .background(Color.gray.opacity(0.1))
+        .background(Color(UIColor.systemGray6))
         .cornerRadius(12)
+        .onAppear {
+            // Ensure stats are up to date
+            _ = meshManager.getStats()
+        }
+    }
+    
+    private var statusColor: Color {
+        if !meshManager.connectedPeers.isEmpty {
+            return .green
+        } else if meshManager.discoveredPeers.count > 0 {
+            return .yellow
+        } else {
+            return .red
+        }
+    }
+    
+    private var statusText: String {
+        if !meshManager.connectedPeers.isEmpty {
+            return "Connected"
+        } else if meshManager.discoveredPeers.count > 0 {
+            return "Scanning..."
+        } else {
+            return "Offline"
+        }
     }
 }
 

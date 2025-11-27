@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,7 +17,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.sp
+import com.sovereign.communications.util.InputSanitizer
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -33,27 +39,24 @@ data class Message(
 fun ChatScreen(
     contactName: String,
     contactId: String,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    viewModel: com.sovereign.communications.ui.viewmodel.ChatViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+        factory = com.sovereign.communications.ui.viewmodel.ChatViewModelFactory(
+            contactId,
+            com.sovereign.communications.SCApplication.instance.database.messageDao()
+        )
+    )
 ) {
     var messageText by remember { mutableStateOf("") }
     
-    // Demo messages showing the UI works
-    // In production, this would be replaced with ViewModel collecting from Room DB
-    val messages = remember {
-        mutableStateListOf(
-            Message("1", "Hey! How's it going?", System.currentTimeMillis() - 3600000, false, "read"),
-            Message("2", "Pretty good! Just testing this new mesh network app", System.currentTimeMillis() - 3540000, true, "delivered"),
-            Message("3", "That's cool! How does it work?", System.currentTimeMillis() - 3480000, false, "read"),
-            Message("4", "It's completely decentralized - no servers needed. Everything is end-to-end encrypted with Ed25519 and ChaCha20.", System.currentTimeMillis() - 3420000, true, "sent"),
-        )
-    }
+    val messages by viewModel.messages.collectAsState()
     val listState = rememberLazyListState()
 
-    // Note: For full integration, inject ChatViewModel here:
-    // val viewModel: ChatViewModel = viewModel(
-    //     factory = ChatViewModelFactory(contactId, messageDao)
-    // )
-    // val messages by viewModel.messages.collectAsState()
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) {
+            listState.animateScrollToItem(messages.size - 1)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -98,25 +101,12 @@ fun ChatScreen(
                 onTextChange = { messageText = it },
                 onSend = {
                     if (messageText.isNotBlank()) {
-                        // Add message to local list (demo)
-                        messages.add(
-                            Message(
-                                id = UUID.randomUUID().toString(),
-                                content = messageText,
-                                timestamp = System.currentTimeMillis(),
-                                isSent = true,
-                                status = "pending"
-                            )
-                        )
-                        
-                        // For full integration: viewModel.sendMessage(messageText)
-                        
+                        val sanitizedText = InputSanitizer.sanitize(messageText)
+                        viewModel.sendMessage(sanitizedText)
                         messageText = ""
-                        
-                        // Auto-scroll to bottom
-                        // Note: In production, use LaunchedEffect with messages.size
                     }
-                }
+                },
+                viewModel = viewModel
             )
         }
     }
@@ -130,7 +120,7 @@ fun ChatScreen(
 }
 
 @Composable
-fun MessageBubble(message: Message) {
+fun MessageBubble(message: com.sovereign.communications.data.entity.MessageEntity) {
     val alignment = if (message.isSent) Alignment.End else Alignment.Start
     val bubbleColor = if (message.isSent) {
         MaterialTheme.colorScheme.primaryContainer
@@ -198,8 +188,23 @@ fun MessageBubble(message: Message) {
 fun MessageInput(
     text: String,
     onTextChange: (String) -> Unit,
-    onSend: () -> Unit
+    onSend: () -> Unit,
+    viewModel: com.sovereign.communications.ui.viewmodel.ChatViewModel
 ) {
+    val context = LocalContext.current
+    val fileManager = com.sovereign.communications.media.FileManager(context)
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        uri?.let {
+            if (fileManager.validateFile(it)) {
+                viewModel.sendFile(it)
+            } else {
+                Toast.makeText(context, "Invalid file type or size", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     Surface(
         color = MaterialTheme.colorScheme.surface,
         shadowElevation = 8.dp
@@ -210,6 +215,15 @@ fun MessageInput(
                 .padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            IconButton(
+                onClick = { launcher.launch("*/*") }
+            ) {
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = "Attach file"
+                )
+            }
+
             TextField(
                 value = text,
                 onValueChange = onTextChange,

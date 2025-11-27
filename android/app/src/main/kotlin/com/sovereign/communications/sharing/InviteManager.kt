@@ -77,11 +77,12 @@ class InviteManager(
     
     /**
      * Get bootstrap peers for helping invitees connect
-     * In production, this would query the mesh network
+     * Queries the mesh network for connected peers
      */
     private fun getBootstrapPeers(): List<String> {
-        // Placeholder - would return actual peer IDs from mesh network
-        return emptyList()
+        val meshManager = com.sovereign.communications.SCApplication.instance.meshNetworkManager
+        // Get list of connected peer IDs from MeshNetworkManager
+        return meshManager.getConnectedPeers()
     }
     
     /**

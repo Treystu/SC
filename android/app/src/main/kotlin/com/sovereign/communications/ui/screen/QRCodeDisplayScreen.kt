@@ -23,6 +23,7 @@ fun QRCodeDisplayScreen(
     peerInfo: String,
     onNavigateBack: () -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var qrBitmap by remember { mutableStateOf<Bitmap?>(null) }
     val scope = rememberCoroutineScope()
     
@@ -112,7 +113,16 @@ fun QRCodeDisplayScreen(
             
             Button(
                 onClick = {
-                    // TODO: Implement share functionality
+                    // Create share intent
+                    val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(android.content.Intent.EXTRA_SUBJECT, "Connect with me on Sovereign Communications")
+                        putExtra(android.content.Intent.EXTRA_TEXT, 
+                            "Connect with me on Sovereign Communications!\n\nMy Peer ID:\n$peerInfo\n\nDownload the app to connect securely without internet.")
+                    }
+                    context.startActivity(
+                        android.content.Intent.createChooser(shareIntent, "Share Peer ID via")
+                    )
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {

@@ -13,7 +13,11 @@ export interface MeshNetworkConfig {
   identity?: IdentityKeyPair;
   maxPeers?: number;
   defaultTTL?: number;
+  persistence?: any; // Type 'PersistenceAdapter' is imported from relay.js but circular dependency might be an issue if not careful. 
+  // ideally import { PersistenceAdapter } from './relay.js';
 }
+
+import { PersistenceAdapter } from './relay.js';
 
 /**
  * Mesh Network Manager
@@ -51,7 +55,12 @@ export class MeshNetwork {
 
     // Initialize components
     this.routingTable = new RoutingTable();
-    this.messageRelay = new MessageRelay(this.localPeerId, this.routingTable);
+    this.messageRelay = new MessageRelay(
+      this.localPeerId,
+      this.routingTable,
+      {},
+      config.persistence as PersistenceAdapter
+    );
     this.peerPool = new PeerConnectionPool();
 
     this.setupMessageHandlers();

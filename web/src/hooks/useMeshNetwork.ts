@@ -1,12 +1,19 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { MeshNetwork, Message, MessageType, Peer } from '@sc/core';
+import { ConnectionMonitor, ConnectionQuality } from '../../../core/src/connection-quality';
 import { getDatabase } from '../storage/database';
 import { createSignalingOffer, handleSignalingAnswer } from '../utils/manualSignaling';
+import { WebPersistenceAdapter } from '../utils/WebPersistenceAdapter';
+import { validateFileList } from '../../../core/src/file-validation';
+import { rateLimiter } from '../../../core/src/rate-limiter';
+import { performanceMonitor } from '../../../core/src/performance-monitor';
+import { offlineQueue } from '../../../core/src/offline-queue';
 
 export interface MeshStatus {
   isConnected: boolean;
   peerCount: number;
   localPeerId: string;
+  connectionQuality: ConnectionQuality;
 }
 
 export interface ReceivedMessage {
@@ -30,20 +37,26 @@ export function useMeshNetwork() {
     isConnected: false,
     peerCount: 0,
     localPeerId: '',
+    connectionQuality: 'offline',
   });
   const [peers, setPeers] = useState<Peer[]>([]);
   const [messages, setMessages] = useState<ReceivedMessage[]>([]);
   const meshNetworkRef = useRef<MeshNetwork | null>(null);
+  const connectionMonitorRef = useRef<ConnectionMonitor | null>(null);
 
   // Initialize mesh network with persistence
   useEffect(() => {
+    let retryInterval: NodeJS.Timeout;
+
     const initMeshNetwork = async () => {
       const network = new MeshNetwork({
         defaultTTL: 10,
         maxPeers: 50,
+        persistence: new WebPersistenceAdapter()
       });
 
       meshNetworkRef.current = network;
+      connectionMonitorRef.current = new ConnectionMonitor();
 
       // Initialize database
       const db = getDatabase();
@@ -102,6 +115,7 @@ export function useMeshNetwork() {
         isConnected: true,
         peerCount: 0,
         localPeerId: network.getLocalPeerId(),
+        connectionQuality: 'good',
       });
 
       // Handle incoming messages with persistence
@@ -155,6 +169,7 @@ export function useMeshNetwork() {
       network.onPeerConnected(async (peerId: string) => {
         console.log('Peer connected:', peerId);
         updatePeerStatus();
+        retryQueuedMessages();
 
         // Persist peer connection
         try {
@@ -200,13 +215,49 @@ export function useMeshNetwork() {
           peerCount: connectedPeers.length,
           isConnected: connectedPeers.length > 0,
         }));
+
+        // Simulate connection quality updates
+        if (connectionMonitorRef.current) {
+            const monitor = connectionMonitorRef.current;
+            monitor.updateLatency(Math.random() * 100); // Simulate latency
+            monitor.updatePacketLoss(100, 100 - Math.random() * 5); // Simulate packet loss
+            setStatus(prev => ({ ...prev, connectionQuality: monitor.getQuality() }));
+        }
       };
+
+      // Process offline queue
+      const retryQueuedMessages = async () => {
+        if (!meshNetworkRef.current) return;
+        
+        await offlineQueue.processQueue(async (msg) => {
+          try {
+            await meshNetworkRef.current!.sendMessage(msg.recipientId, msg.content);
+            return true; // Sent successfully
+          } catch (e) {
+            return false; // Failed to send
+          }
+        });
+      };
+
+      // Set up periodic retry
+      retryInterval = setInterval(retryQueuedMessages, 30000); // 30 seconds
+
+      // Initial retry
+      retryQueuedMessages();
+
+      // Store interval cleanup in a way that can be accessed by cleanup function
+      // Since we can't easily modify the cleanup function here without rewriting the whole effect,
+      // we'll attach it to the network object temporarily or just let it be cleared when component unmounts
+      // Actually, we should return the cleanup from initMeshNetwork if it was a hook, but it's inside useEffect.
+      // We can use a ref for the interval.
+
     };
 
     initMeshNetwork();
 
     // Cleanup on unmount
     return () => {
+      if (retryInterval) clearInterval(retryInterval);
       if (meshNetworkRef.current) {
         meshNetworkRef.current.shutdown();
         meshNetworkRef.current = null;
@@ -216,6 +267,7 @@ export function useMeshNetwork() {
 
   // Send message function with persistence
   const sendMessage = useCallback(async (recipientId: string, content: string, attachments?: File[]) => {
+    const endMeasure = performanceMonitor.startMeasure('sendMessage');
     if (!meshNetworkRef.current) {
       throw new Error('Mesh network not initialized');
     }
@@ -224,6 +276,16 @@ export function useMeshNetwork() {
 
     // Handle file attachments
     if (attachments && attachments.length > 0) {
+      const validationResult = validateFileList(attachments);
+      if (!validationResult.valid) {
+        throw new Error(validationResult.error || 'Invalid file');
+      }
+
+      const fileRateLimitResult = rateLimiter.canSendFile(meshNetworkRef.current.getLocalPeerId());
+      if (!fileRateLimitResult.allowed) {
+        throw new Error(fileRateLimitResult.reason);
+      }
+
       for (const file of attachments) {
         // Create file metadata message
         const fileId = `${Date.now()}-${Math.random()}`;
@@ -314,12 +376,24 @@ export function useMeshNetwork() {
     }
 
     // Handle text message
+    const rateLimitResult = rateLimiter.canSendMessage(meshNetworkRef.current.getLocalPeerId());
+    if (!rateLimitResult.allowed) {
+      throw new Error(rateLimitResult.reason);
+    }
+
     try {
       await meshNetworkRef.current.sendMessage(recipientId, content);
+      endMeasure({ success: true });
     } catch (error) {
       console.error('Failed to send message to network:', error);
-      // Mark as queued if offline or failed
+      // Enqueue the message for later retry
+      await offlineQueue.enqueue({
+        recipientId,
+        content,
+        timestamp: Date.now(),
+      });
       messageStatus = 'queued';
+      endMeasure({ success: false, error: (error as Error).message });
     }
 
     // Add to local messages (optimistic update)
@@ -356,11 +430,18 @@ export function useMeshNetwork() {
 
   // Connect to peer
   const connectToPeer = useCallback(async (peerId: string) => {
+    const endMeasure = performanceMonitor.startMeasure('connectToPeer');
     if (!meshNetworkRef.current) {
       throw new Error('Mesh network not initialized');
     }
 
-    await meshNetworkRef.current.connectToPeer(peerId);
+    try {
+      await meshNetworkRef.current.connectToPeer(peerId);
+      endMeasure({ success: true });
+    } catch (error) {
+      endMeasure({ success: false, error: (error as Error).message });
+      throw error;
+    }
   }, []);
 
   // Get network stats
@@ -373,26 +454,46 @@ export function useMeshNetwork() {
   }, []);
 
   const generateConnectionOffer = useCallback(async (): Promise<string> => {
+    const endMeasure = performanceMonitor.startMeasure('generateConnectionOffer');
     if (!meshNetworkRef.current) {
       throw new Error('Mesh network not initialized');
     }
-    return createSignalingOffer(meshNetworkRef.current);
+    // V1: Include public key in offer
+    const db = getDatabase();
+    const identity = await db.getPrimaryIdentity();
+    if (!identity) {
+      // Fallback for when identity isn't created yet
+      console.warn("No primary identity found for connection offer, generating temporary one.");
+      const offer = createSignalingOffer(meshNetworkRef.current);
+      endMeasure({ success: true });
+      return offer;
+    }
+    const offer = createSignalingOffer(meshNetworkRef.current, identity.publicKey);
+    endMeasure({ success: true });
+    return offer;
   }, []);
 
   const acceptConnectionOffer = useCallback(async (offer: string): Promise<string> => {
+    const endMeasure = performanceMonitor.startMeasure('acceptConnectionOffer');
     if (!meshNetworkRef.current) {
       throw new Error('Mesh network not initialized');
     }
-    const remotePeerId = await handleSignalingAnswer(meshNetworkRef.current, offer);
-    // Manually update peer status after connection
-    const connectedPeers = meshNetworkRef.current.getConnectedPeers();
-    setPeers(connectedPeers);
-    setStatus((prev: MeshStatus) => ({
-      ...prev,
-      peerCount: connectedPeers.length,
-      isConnected: connectedPeers.length > 0,
-    }));
-    return remotePeerId;
+    try {
+      const remotePeerId = await handleSignalingAnswer(meshNetworkRef.current, offer);
+      // Manually update peer status after connection
+      const connectedPeers = meshNetworkRef.current.getConnectedPeers();
+      setPeers(connectedPeers);
+      setStatus((prev: MeshStatus) => ({
+        ...prev,
+        peerCount: connectedPeers.length,
+        isConnected: connectedPeers.length > 0,
+      }));
+      endMeasure({ success: true });
+      return remotePeerId;
+    } catch (error) {
+      endMeasure({ success: false, error: (error as Error).message });
+      throw error;
+    }
   }, []);
 
   // Memoized return value to prevent unnecessary re-renders

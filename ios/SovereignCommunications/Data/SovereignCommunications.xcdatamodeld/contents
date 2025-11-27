@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model name="SovereignCommunications" userDefinedModelVersionIdentifier="" type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="22618" systemVersion="24A5264n" minimumToolsVersion="11.0">
+    <entity name="Message" representedClassName="Message" syncable="YES">
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO" syncable="YES"/>
+        <attribute name="text" attributeType="String" usesScalarValueType="NO" syncable="YES"/>
+        <attribute name="timestamp" attributeType="Date" usesScalarValueType="NO" syncable="YES"/>
+        <relationship name="sender" optional="YES" toEntity="Contact" deletionRule="Nullify" inverseName="messages" inverseEntity="Contact" syncable="YES"/>
+        <relationship name="conversation" optional="YES" toEntity="Conversation" deletionRule="Nullify" inverseName="messages" inverseEntity="Conversation" syncable="YES"/>
+    </entity>
+    <entity name="Contact" representedClassName="Contact" syncable="YES">
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO" syncable="YES"/>
+        <attribute name="name" attributeType="String" usesScalarValueType="NO" syncable="YES"/>
+        <attribute name="publicKey" attributeType="String" usesScalarValueType="NO" syncable="YES"/>
+        <relationship name="messages" optional="YES" toEntity="Message" deletionRule="Nullify" inverseName="sender" inverseEntity="Message" syncable="YES"/>
+        <relationship name="conversations" optional="YES" toEntity="Conversation" deletionRule="Cascade" inverseName="participants" inverseEntity="Conversation" syncable="YES"/>
+    </entity>
+    <entity name="Conversation" representedClassName="Conversation" syncable="YES">
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO" syncable="YES"/>
+        <relationship name="participants" optional="YES" toEntity="Contact" deletionRule="Cascade" inverseName="conversations" inverseEntity="Contact" syncable="YES"/>
+        <relationship name="messages" optional="YES" toEntity="Message" deletionRule="Cascade" inverseName="conversation" inverseEntity="Message" syncable="YES"/>
+    </entity>
+</model>

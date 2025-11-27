@@ -34,6 +34,54 @@ export interface RelayConfig {
 }
 
 /**
+ * Persistence Adapter Interface
+ * Allows plugging in different storage backends (Memory, IndexedDB, SQLite, etc.)
+ */
+export interface PersistenceAdapter {
+  saveMessage(id: string, message: StoredMessage): Promise<void>;
+  getMessage(id: string): Promise<StoredMessage | null>;
+  removeMessage(id: string): Promise<void>;
+  getAllMessages(): Promise<Map<string, StoredMessage>>;
+  pruneExpired(now: number): Promise<void>;
+  size(): Promise<number>;
+}
+
+/**
+ * Default In-Memory Persistence Adapter
+ */
+export class MemoryPersistenceAdapter implements PersistenceAdapter {
+  private storage: Map<string, StoredMessage> = new Map();
+
+  async saveMessage(id: string, message: StoredMessage): Promise<void> {
+    this.storage.set(id, message);
+  }
+
+  async getMessage(id: string): Promise<StoredMessage | null> {
+    return this.storage.get(id) || null;
+  }
+
+  async removeMessage(id: string): Promise<void> {
+    this.storage.delete(id);
+  }
+
+  async getAllMessages(): Promise<Map<string, StoredMessage>> {
+    return new Map(this.storage);
+  }
+
+  async pruneExpired(now: number): Promise<void> {
+    for (const [id, msg] of this.storage.entries()) {
+      if (msg.expiresAt < now) {
+        this.storage.delete(id);
+      }
+    }
+  }
+
+  async size(): Promise<number> {
+    return this.storage.size;
+  }
+}
+
+/**
  * Message Relay Engine
  * Implements flood routing with TTL, deduplication, and store-and-forward
  */
@@ -50,17 +98,22 @@ export class MessageRelay {
     relayFailures: 0,
     loopsDetected: 0,
   };
-  
-  private storedMessages: Map<string, StoredMessage> = new Map();
+
+  private persistence: PersistenceAdapter;
   private messageRoutes: Map<string, string[]> = new Map(); // messageHash -> path of peer IDs
   private peerFloodCounter: Map<string, number[]> = new Map(); // peerId -> timestamps
   private config: RelayConfig;
-  
+
   // Callbacks
   private onMessageForSelfCallback?: (message: Message) => void;
   private onForwardMessageCallback?: (message: Message, excludePeerId: string) => void;
 
-  constructor(localPeerId: string, routingTable: RoutingTable, config: RelayConfig = {}) {
+  constructor(
+    localPeerId: string,
+    routingTable: RoutingTable,
+    config: RelayConfig = {},
+    persistence?: PersistenceAdapter
+  ) {
     this.localPeerId = localPeerId;
     this.routingTable = routingTable;
     this.config = {
@@ -71,6 +124,7 @@ export class MessageRelay {
       floodRateLimit: config.floodRateLimit || 100, // 100 msg/sec per peer
       selectiveFlooding: config.selectiveFlooding !== false,
     };
+    this.persistence = persistence || new MemoryPersistenceAdapter();
   }
 
   /**
@@ -118,7 +172,7 @@ export class MessageRelay {
     if (this.isMessageForSelf(message)) {
       this.stats.messagesForSelf++;
       this.onMessageForSelfCallback?.(message);
-      
+
       // Don't forward messages addressed to us
       return;
     }
@@ -148,17 +202,17 @@ export class MessageRelay {
     if (!this.messageRoutes.has(messageHash)) {
       this.messageRoutes.set(messageHash, []);
     }
-    
+
     const path = this.messageRoutes.get(messageHash)!;
-    
+
     // Check if we've seen this peer in the path
     if (path.includes(fromPeerId)) {
       return true; // Loop detected
     }
-    
+
     // Add to path
     path.push(fromPeerId);
-    
+
     // Limit path tracking (cleanup old entries)
     if (this.messageRoutes.size > 10000) {
       const keys = Array.from(this.messageRoutes.keys());
@@ -166,7 +220,7 @@ export class MessageRelay {
         this.messageRoutes.delete(keys[i]);
       }
     }
-    
+
     return false;
   }
 
@@ -175,25 +229,25 @@ export class MessageRelay {
    */
   private checkFloodRateLimit(peerId: string): boolean {
     const now = Date.now();
-    
+
     if (!this.peerFloodCounter.has(peerId)) {
       this.peerFloodCounter.set(peerId, []);
     }
-    
+
     const timestamps = this.peerFloodCounter.get(peerId)!;
-    
+
     // Remove timestamps older than 1 second
     const recentTimestamps = timestamps.filter(t => now - t < 1000);
-    
+
     // Check rate limit
     if (recentTimestamps.length >= this.config.floodRateLimit!) {
       return false; // Rate limit exceeded
     }
-    
+
     // Add current timestamp
     recentTimestamps.push(now);
     this.peerFloodCounter.set(peerId, recentTimestamps);
-    
+
     return true;
   }
 
@@ -204,12 +258,12 @@ export class MessageRelay {
     if (!this.config.selectiveFlooding) {
       return true; // Forward all messages
     }
-    
+
     // Always forward control messages
     if (this.isControlMessage(message.header.type)) {
       return true;
     }
-    
+
     // For other messages, use selective criteria
     // (Can be extended with topic-based filtering, etc.)
     return true;
@@ -255,36 +309,40 @@ export class MessageRelay {
   /**
    * Store message for offline peer (store-and-forward)
    */
-  storeMessage(message: Message, destinationPeerId: string): void {
-    if (this.storedMessages.size >= this.config.maxStoredMessages!) {
+  async storeMessage(message: Message, destinationPeerId: string): Promise<void> {
+    const currentSize = await this.persistence.size();
+    if (currentSize >= this.config.maxStoredMessages!) {
       // Remove oldest message
-      const oldest = Array.from(this.storedMessages.entries())
+      // Note: This is less efficient with async persistence, might need optimization
+      const allMessages = await this.persistence.getAllMessages();
+      const oldest = Array.from(allMessages.entries())
         .sort((a, b) => a[1].lastAttempt - b[1].lastAttempt)[0];
       if (oldest) {
-        this.storedMessages.delete(oldest[0]);
+        await this.persistence.removeMessage(oldest[0]);
       }
     }
 
     const hash = messageHash(message);
-    this.storedMessages.set(hash, {
+    await this.persistence.saveMessage(hash, {
       message,
       destinationPeerId,
       attempts: 0,
       lastAttempt: Date.now(),
       expiresAt: Date.now() + this.config.storeTimeout!,
     });
-    
+
     this.stats.messagesStored++;
   }
 
   /**
    * Retry forwarding stored messages
    */
-  retryStoredMessages(): void {
+  async retryStoredMessages(): Promise<void> {
     const now = Date.now();
     const toDelete: string[] = [];
+    const allMessages = await this.persistence.getAllMessages();
 
-    for (const [hash, stored] of this.storedMessages.entries()) {
+    for (const [hash, stored] of allMessages.entries()) {
       // Check expiry
       if (stored.expiresAt < now) {
         toDelete.push(hash);
@@ -300,7 +358,7 @@ export class MessageRelay {
       // Check retry backoff
       const timeSinceLastAttempt = now - stored.lastAttempt;
       const backoffTime = this.config.retryBackoff! * Math.pow(2, stored.attempts);
-      
+
       if (timeSinceLastAttempt < backoffTime) {
         continue; // Not time to retry yet
       }
@@ -315,20 +373,25 @@ export class MessageRelay {
       } else {
         // Try forwarding again
         this.onForwardMessageCallback?.(stored.message, '');
+        // Update stored state
+        await this.persistence.saveMessage(hash, stored);
       }
     }
 
     // Clean up
-    toDelete.forEach(hash => this.storedMessages.delete(hash));
+    for (const hash of toDelete) {
+      await this.persistence.removeMessage(hash);
+    }
   }
 
   /**
    * Get stored messages statistics
    */
-  getStoredMessagesStats() {
+  async getStoredMessagesStats() {
+    const allMessages = await this.persistence.getAllMessages();
     return {
-      total: this.storedMessages.size,
-      byDestination: Array.from(this.storedMessages.values())
+      total: allMessages.size,
+      byDestination: Array.from(allMessages.values())
         .reduce((acc, msg) => {
           acc[msg.destinationPeerId] = (acc[msg.destinationPeerId] || 0) + 1;
           return acc;
@@ -400,7 +463,7 @@ export function calculateFragmentSize(mtu: number = 1500, overhead: number = 100
  * Fragment a large message into smaller chunks
  */
 export function fragmentMessage(
-  message: Uint8Array, 
+  message: Uint8Array,
   messageId: string,
   fragmentSize: number = MAX_FRAGMENT_SIZE
 ): MessageFragment[] {
@@ -581,13 +644,13 @@ export class MessageReassembler {
     if (oldest) {
       const [messageId] = oldest;
       const messageFragments = this.fragments.get(messageId);
-      
+
       if (messageFragments) {
         for (const fragment of messageFragments.values()) {
           this.currentBufferSize -= fragment.length;
         }
       }
-      
+
       this.fragments.delete(messageId);
       this.totalFragments.delete(messageId);
       this.fragmentTimestamps.delete(messageId);

@@ -268,21 +268,4 @@ private class SyncOperation: Operation {
     }
 }
 
-/// Manager for Mesh Network interactions
-class MeshNetworkManager {
-    static let shared = MeshNetworkManager()
-    
-    private init() {}
-    
-    func refreshState(completion: @escaping (Bool) -> Void) {
-        // Bridge to Core Mesh Library
-        // In a real implementation, this calls into the C++/Rust core
-        completion(true)
-    }
-    
-    func performSync(completion: @escaping (Result<Int, Error>) -> Void) {
-        // Bridge to Core Mesh Library
-        // In a real implementation, this triggers the sync engine
-        completion(.success(0))
-    }
-}
+

@@ -6,9 +6,10 @@ import {
   generateIdentity,
   signMessage,
   verifySignature,
-  deriveSharedSecret,
+  performKeyExchange,
   encryptMessage,
   decryptMessage,
+  randomBytes,
 } from '../../core/src/crypto/primitives';
 
 interface BenchmarkResult {
@@ -84,23 +85,24 @@ async function runBenchmarks() {
   const bob = await generateIdentity();
   results.push(
     await benchmark('Key Exchange (ECDH)', async () => {
-      await deriveSharedSecret(bob.publicKey, alice.privateKey);
+      await performKeyExchange(alice.privateKey, bob.publicKey);
     }, 100)
   );
 
   // Encryption
-  const sharedSecret = await deriveSharedSecret(bob.publicKey, alice.privateKey);
+  const sharedSecret = await performKeyExchange(alice.privateKey, bob.publicKey);
+  const nonce = randomBytes(24);
   results.push(
     await benchmark('Encryption (1KB)', async () => {
-      await encryptMessage(testData, sharedSecret);
+      await encryptMessage(testData, sharedSecret, nonce);
     }, 100)
   );
 
   // Decryption
-  const encrypted = await encryptMessage(testData, sharedSecret);
+  const encrypted = await encryptMessage(testData, sharedSecret, nonce);
   results.push(
     await benchmark('Decryption (1KB)', async () => {
-      await decryptMessage(encrypted, sharedSecret);
+      await decryptMessage(encrypted, sharedSecret, nonce);
     }, 100)
   );
 
@@ -108,14 +110,14 @@ async function runBenchmarks() {
   const largeData = new Uint8Array(100000).fill(42); // 100KB
   results.push(
     await benchmark('Encryption (100KB)', async () => {
-      await encryptMessage(largeData, sharedSecret);
+      await encryptMessage(largeData, sharedSecret, nonce);
     }, 20)
   );
 
-  const largeEncrypted = await encryptMessage(largeData, sharedSecret);
+  const largeEncrypted = await encryptMessage(largeData, sharedSecret, nonce);
   results.push(
     await benchmark('Decryption (100KB)', async () => {
-      await decryptMessage(largeEncrypted, sharedSecret);
+      await decryptMessage(largeEncrypted, sharedSecret, nonce);
     }, 20)
   );
 

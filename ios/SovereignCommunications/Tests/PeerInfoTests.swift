@@ -15,4 +15,19 @@ class PeerInfoTests: XCTestCase {
         XCTAssertEqual(peerInfo.publicKey, restoredPeerInfo?.publicKey)
         XCTAssertEqual(peerInfo.endpoints, restoredPeerInfo?.endpoints)
     }
+    
+    func testInvalidQRString() {
+        let invalidString = "invalid_json_string"
+        let peerInfo = PeerInfo.fromQRString(invalidString)
+        XCTAssertNil(peerInfo)
+    }
+    
+    func testEquality() {
+        let peer1 = PeerInfo(id: "id1", publicKey: "key1", endpoints: ["ep1"])
+        let peer2 = PeerInfo(id: "id1", publicKey: "key1", endpoints: ["ep1"])
+        let peer3 = PeerInfo(id: "id2", publicKey: "key2", endpoints: ["ep2"])
+        
+        XCTAssertEqual(peer1.id, peer2.id) // Assuming ID equality implies object equality for this test context
+        // If PeerInfo conforms to Equatable, we could use XCTAssertEqual(peer1, peer2)
+    }
 }

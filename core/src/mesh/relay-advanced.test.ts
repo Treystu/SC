@@ -34,14 +34,14 @@ describe('Advanced Message Relay Features', () => {
       };
 
       const messageData = encodeMessage(message);
-      
+
       // Process message from peer1
       await relay.processMessage(messageData, 'peer1');
-      
+
       // Process same message from peer1 again would be caught by deduplication
       // The loop detection tracks the path through different peers
       const stats = relay.getStats();
-      
+
       // First message should be received
       expect(stats.messagesReceived).toBe(1);
     });
@@ -81,7 +81,7 @@ describe('Advanced Message Relay Features', () => {
   });
 
   describe('Store-and-Forward', () => {
-    it('should store messages for offline peers', () => {
+    it('should store messages for offline peers', async () => {
       const message: Message = {
         header: {
           version: 0x01,
@@ -99,12 +99,12 @@ describe('Advanced Message Relay Features', () => {
       const stats = relay.getStats();
       expect(stats.messagesStored).toBe(1);
 
-      const storedStats = relay.getStoredMessagesStats();
+      const storedStats = await relay.getStoredMessagesStats();
       expect(storedStats.total).toBe(1);
       expect(storedStats.byDestination['offline-peer']).toBe(1);
     });
 
-    it('should retry stored messages when peer comes online', () => {
+    it('should retry stored messages when peer comes online', async () => {
       const message: Message = {
         header: {
           version: 0x01,
@@ -123,17 +123,17 @@ describe('Advanced Message Relay Features', () => {
       const peer = createPeer('peer1', new Uint8Array(32), 'webrtc');
       routingTable.addPeer(peer);
 
-      const storedStatsBefore = relay.getStoredMessagesStats();
+      const storedStatsBefore = await relay.getStoredMessagesStats();
       expect(storedStatsBefore.total).toBe(1);
 
       relay.retryStoredMessages();
-      
+
       // Message should still be stored until successfully sent
-      const storedStatsAfter = relay.getStoredMessagesStats();
+      const storedStatsAfter = await relay.getStoredMessagesStats();
       expect(storedStatsAfter).toBeDefined();
     });
 
-    it('should limit stored messages and remove oldest', () => {
+    it('should limit stored messages and remove oldest', async () => {
       for (let i = 0; i < 15; i++) {
         const message: Message = {
           header: {
@@ -150,7 +150,7 @@ describe('Advanced Message Relay Features', () => {
         relay.storeMessage(message, `peer${i}`);
       }
 
-      const storedStats = relay.getStoredMessagesStats();
+      const storedStats = await relay.getStoredMessagesStats();
       expect(storedStats.total).toBeLessThanOrEqual(10);
     });
   });
@@ -204,10 +204,10 @@ describe('Message Fragmentation Advanced Features', () => {
     it('should calculate overhead correctly', () => {
       const messageSize = 100000;
       const fragmentSize = 16384;
-      
+
       const overhead = calculateFragmentationOverhead(messageSize, fragmentSize);
       const expectedFragments = Math.ceil(messageSize / fragmentSize);
-      
+
       expect(overhead).toBe(expectedFragments * 50);
     });
   });
@@ -317,13 +317,13 @@ describe('Message Reassembly Advanced Features', () => {
       };
 
       reassembler.addFragment(fragment);
-      
+
       const beforeStats = reassembler.getStats();
       expect(beforeStats.incompleteMessages).toBe(1);
 
       // Cleanup won't remove recent messages
       const removed = reassembler.cleanup(100000); // Cleanup anything older than 100 seconds
-      
+
       // Should not have removed recent message
       const afterStats = reassembler.getStats();
       expect(afterStats.incompleteMessages).toBe(1);
@@ -332,7 +332,7 @@ describe('Message Reassembly Advanced Features', () => {
 
     it('should include buffer limits in stats', () => {
       const stats = reassembler.getStats();
-      
+
       expect(stats.bufferUsage).toBeDefined();
       expect(stats.bufferLimit).toBe(100 * 1024 * 1024);
     });

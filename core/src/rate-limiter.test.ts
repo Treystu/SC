@@ -1,45 +1,68 @@
-import { TokenBucketRateLimiter, SlidingWindowRateLimiter, FixedWindowRateLimiter } from './rate-limiter.js';
+import { RateLimiter } from './rate-limiter.js';
 
-describe('TokenBucketRateLimiter', () => {
-  it('should allow consumption if tokens are available', () => {
-    const limiter = new TokenBucketRateLimiter({ capacity: 10, refillRate: 10 });
-    expect(limiter.tryConsume()).toBe(true);
+describe('RateLimiter', () => {
+  let limiter: RateLimiter;
+
+  beforeEach(() => {
+    limiter = new RateLimiter();
   });
 
-  it('should deny consumption if tokens are not available', () => {
-    const limiter = new TokenBucketRateLimiter({ capacity: 1, refillRate: 1, initialTokens: 1 });
-    limiter.tryConsume();
-    expect(limiter.tryConsume()).toBe(false);
-  });
-});
+  describe('canSendMessage', () => {
+    it('should allow messages within per-minute limit', () => {
+      const userId = 'user1';
 
-describe('SlidingWindowRateLimiter', () => {
-  it('should allow requests within the capacity', () => {
-    const limiter = new SlidingWindowRateLimiter({ capacity: 5, windowSizeInSeconds: 1 });
-    for (let i = 0; i < 5; i++) {
-      expect(limiter.tryConsume()).toBe(true);
-    }
+      // Should allow first 60 messages
+      for (let i = 0; i < 60; i++) {
+        const result = limiter.canSendMessage(userId);
+        expect(result.allowed).toBe(true);
+      }
+    });
+
+    it('should deny messages exceeding per-minute limit', () => {
+      const userId = 'user1';
+
+      // Send 60 messages (at limit)
+      for (let i = 0; i < 60; i++) {
+        limiter.canSendMessage(userId);
+      }
+
+      // 61st message should be denied
+      const result = limiter.canSendMessage(userId);
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toContain('60 messages per minute');
+    });
+
+    it('should track different users independently', () => {
+      const result1 = limiter.canSendMessage('user1');
+      const result2 = limiter.canSendMessage('user2');
+
+      expect(result1.allowed).toBe(true);
+      expect(result2.allowed).toBe(true);
+    });
   });
 
-  it('should deny requests exceeding the capacity', () => {
-    const limiter = new SlidingWindowRateLimiter({ capacity: 2, windowSizeInSeconds: 1 });
-    limiter.tryConsume();
-    limiter.tryConsume();
-    expect(limiter.tryConsume()).toBe(false);
-  });
-});
+  describe('canSendFile', () => {
+    it('should allow files within limit', () => {
+      const userId = 'user1';
 
-describe('FixedWindowRateLimiter', () => {
-  it('should allow requests within the capacity', () => {
-    const limiter = new FixedWindowRateLimiter({ capacity: 3, windowSizeInSeconds: 1 });
-    expect(limiter.tryConsume()).toBe(true);
-    expect(limiter.tryConsume()).toBe(true);
-    expect(limiter.tryConsume()).toBe(true);
-  });
+      for (let i = 0; i < 100; i++) {
+        const result = limiter.canSendFile(userId);
+        expect(result.allowed).toBe(true);
+      }
+    });
 
-  it('should deny requests exceeding the capacity', () => {
-    const limiter = new FixedWindowRateLimiter({ capacity: 1, windowSizeInSeconds: 1 });
-    limiter.tryConsume();
-    expect(limiter.tryConsume()).toBe(false);
+    it('should deny files exceeding limit', () => {
+      const userId = 'user1';
+
+      // Send 100 files (at limit)
+      for (let i = 0; i < 100; i++) {
+        limiter.canSendFile(userId);
+      }
+
+      // 101st file should be denied
+      const result = limiter.canSendFile(userId);
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toContain('100 files per hour');
+    });
   });
 });

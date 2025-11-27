@@ -1,27 +1,25 @@
-import './ConnectionStatus.css';
+import React from 'react';
+import { ConnectionQuality } from '../../core/src/connection-quality';
 
 interface ConnectionStatusProps {
-  className?: string;
-  status?: 'online' | 'offline' | 'connecting';
-  peerCount?: number;
+  quality: ConnectionQuality;
 }
 
-function ConnectionStatus({ className = '', status = 'offline', peerCount = 0 }: ConnectionStatusProps) {
-  const statusText = {
-    online: 'Connected',
-    offline: 'Offline',
-    connecting: 'Connecting...',
-  };
+const qualityConfig: Record<ConnectionQuality, { color: string; label: string }> = {
+  excellent: { color: 'bg-green-500', label: 'Excellent' },
+  good: { color: 'bg-yellow-500', label: 'Good' },
+  fair: { color: 'bg-orange-500', label: 'Fair' },
+  poor: { color: 'bg-red-500', label: 'Poor' },
+  offline: { color: 'bg-gray-500', label: 'Offline' },
+};
+
+export function ConnectionStatus({ quality }: ConnectionStatusProps) {
+  const { color, label } = qualityConfig[quality];
 
   return (
-    <div className={`connection-status ${status} ${className}`}>
-      <div className="status-indicator"></div>
-      <span className="status-text">{statusText[status]}</span>
-      {status === 'online' && (
-        <span className="peer-count">{peerCount} peer{peerCount !== 1 ? 's' : ''}</span>
-      )}
+    <div className="flex items-center space-x-2" title={`Connection: ${label}`}>
+      <div className={`w-3 h-3 rounded-full ${color}`}></div>
+      <span className="text-sm text-gray-600 sr-only">{label}</span>
     </div>
   );
 }
-
-export default ConnectionStatus;

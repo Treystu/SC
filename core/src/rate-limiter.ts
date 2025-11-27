@@ -1,146 +1,102 @@
-/**
- * Token Bucket Rate Limiter
- * Implements rate limiting to prevent abuse and ensure fair resource usage
- */
-
-export interface RateLimiterConfig {
-  capacity: number; // Maximum number of tokens
-  refillRate: number; // Tokens added per second
-  initialTokens?: number;
+export interface RateLimitConfig {
+  messagesPerMinute: number;
+  messagesPerHour: number;
+  filesPerHour: number;
+  maxMessageSize: number;
 }
 
-export class TokenBucketRateLimiter {
-  private tokens: number;
-  private lastRefill: number;
-  private readonly capacity: number;
-  private readonly refillRate: number;
+export const DEFAULT_RATE_LIMITS: RateLimitConfig = {
+  messagesPerMinute: 60,
+  messagesPerHour: 1000,
+  filesPerHour: 100,
+  maxMessageSize: 10000
+};
 
-  constructor(config: RateLimiterConfig) {
-    this.capacity = config.capacity;
-    this.refillRate = config.refillRate;
-    this.tokens = config.initialTokens ?? config.capacity;
-    this.lastRefill = Date.now();
+export class RateLimiter {
+  private messageTimestamps = new Map<string, number[]>();
+  private fileTimestamps = new Map<string, number[]>();
+  private config: RateLimitConfig;
+  
+  constructor(config: RateLimitConfig = DEFAULT_RATE_LIMITS) {
+    this.config = config;
   }
-
-  /**
-   * Try to consume tokens. Returns true if allowed, false if rate limited.
-   */
-  tryConsume(tokens: number = 1): boolean {
-    this.refillTokens();
-
-    if (this.tokens >= tokens) {
-      this.tokens -= tokens;
-      return true;
-    }
-
-    return false;
-  }
-
-  /**
-   * Refill tokens based on time elapsed since last refill
-   */
-  private refillTokens(): void {
+  
+  canSendMessage(userId: string): { allowed: boolean; reason?: string } {
     const now = Date.now();
-    const elapsed = (now - this.lastRefill) / 1000; // Convert to seconds
-    const tokensToAdd = elapsed * this.refillRate;
-
-    this.tokens = Math.min(this.capacity, this.tokens + tokensToAdd);
-    this.lastRefill = now;
+    const userMessages = this.messageTimestamps.get(userId) || [];
+    
+    // Check per-minute limit
+    const lastMinute = userMessages.filter(t => now - t < 60000);
+    if (lastMinute.length >= this.config.messagesPerMinute) {
+      return {
+        allowed: false,
+        reason: `Rate limit exceeded: ${this.config.messagesPerMinute} messages per minute`
+      };
+    }
+    
+    // Check per-hour limit
+    const lastHour = userMessages.filter(t => now - t < 3600000);
+    if (lastHour.length >= this.config.messagesPerHour) {
+      return {
+        allowed: false,
+        reason: `Rate limit exceeded: ${this.config.messagesPerHour} messages per hour`
+      };
+    }
+    
+    // Record this message
+    lastHour.push(now);
+    this.messageTimestamps.set(userId, lastHour);
+    
+    return { allowed: true };
   }
-
-  /**
-   * Get current token count
-   */
-  getAvailableTokens(): number {
-    this.refillTokens();
-    return Math.floor(this.tokens);
-  }
-
-  /**
-   * Reset the rate limiter
-   */
-  reset(): void {
-    this.tokens = this.capacity;
-    this.lastRefill = Date.now();
-  }
-}
-
-/**
- * Rate limiter for different message types
- */
-export class SlidingWindowRateLimiter {
-  private readonly capacity: number;
-  private readonly windowSizeInMs: number;
-  private requests: number[] = [];
-
-  constructor(config: { capacity: number; windowSizeInSeconds: number }) {
-    this.capacity = config.capacity;
-    this.windowSizeInMs = config.windowSizeInSeconds * 1000;
-  }
-
-  tryConsume(): boolean {
+  
+  canSendFile(userId: string): { allowed: boolean; reason?: string } {
     const now = Date.now();
-    this.requests = this.requests.filter(timestamp => now - timestamp < this.windowSizeInMs);
-
-    if (this.requests.length < this.capacity) {
-      this.requests.push(now);
-      return true;
+    const userFiles = this.fileTimestamps.get(userId) || [];
+    
+    // Check per-hour limit
+    const lastHour = userFiles.filter(t => now - t < 3600000);
+    if (lastHour.length >= this.config.filesPerHour) {
+      return {
+        allowed: false,
+        reason: `Rate limit exceeded: ${this.config.filesPerHour} files per hour`
+      };
     }
-
-    return false;
+    
+    // Record this file
+    lastHour.push(now);
+    this.fileTimestamps.set(userId, lastHour);
+    
+    return { allowed: true };
   }
-}
-
-export class FixedWindowRateLimiter {
-  private readonly capacity: number;
-  private readonly windowSizeInMs: number;
-  private windowStart: number;
-  private count: number = 0;
-
-  constructor(config: { capacity: number; windowSizeInSeconds: number }) {
-    this.capacity = config.capacity;
-    this.windowSizeInMs = config.windowSizeInSeconds * 1000;
-    this.windowStart = Date.now();
-  }
-
-  tryConsume(): boolean {
+  
+  cleanup() {
     const now = Date.now();
-    if (now - this.windowStart > this.windowSizeInMs) {
-      this.windowStart = now;
-      this.count = 0;
+    const hourAgo = now - 3600000;
+    
+    // Clean up old timestamps
+    for (const [userId, timestamps] of this.messageTimestamps.entries()) {
+      const recent = timestamps.filter(t => t > hourAgo);
+      if (recent.length === 0) {
+        this.messageTimestamps.delete(userId);
+      } else {
+        this.messageTimestamps.set(userId, recent);
+      }
     }
-
-    if (this.count < this.capacity) {
-      this.count++;
-      return true;
+    
+    for (const [userId, timestamps] of this.fileTimestamps.entries()) {
+      const recent = timestamps.filter(t => t > hourAgo);
+      if (recent.length === 0) {
+        this.fileTimestamps.delete(userId);
+      } else {
+        this.fileTimestamps.set(userId, recent);
+      }
     }
-
-    return false;
   }
 }
 
-export class MessageRateLimiter {
-  private limiters: Map<string, TokenBucketRateLimiter>;
+// Global rate limiter instance
+export const rateLimiter = new RateLimiter();
 
-  constructor() {
-    this.limiters = new Map();
-
-    // Message type rate limits
-    this.limiters.set('text', new TokenBucketRateLimiter({ capacity: 60, refillRate: 10 })); // 60 msg/min
-    this.limiters.set('file', new TokenBucketRateLimiter({ capacity: 10, refillRate: 1 })); // 10 files/min
-    this.limiters.set('voice', new TokenBucketRateLimiter({ capacity: 20, refillRate: 2 })); // 20 voice/min
-    this.limiters.set('control', new TokenBucketRateLimiter({ capacity: 100, refillRate: 20 })); // 100 control/min
-  }
-
-  canSend(messageType: string, cost: number = 1): boolean {
-    const limiter = this.limiters.get(messageType);
-    if (!limiter) return true; // No limit for unknown types
-
-    return limiter.tryConsume(cost);
-  }
-
-  getStatus(messageType: string): number {
-    const limiter = this.limiters.get(messageType);
-    return limiter?.getAvailableTokens() ?? -1;
-  }
-}
+// Cleanup every 5 minutes
+setInterval(() => rateLimiter.cleanup(), 5 * 60 * 1000);

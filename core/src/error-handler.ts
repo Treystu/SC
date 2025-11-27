@@ -1,3 +1,5 @@
+import { ErrorTracker } from './error-tracking';
+
 /**
  * Error Handler - Centralized error management system
  * Task 181: Error handling and recovery utilities
@@ -199,9 +201,11 @@ export class ErrorHandler {
    * Report error to external monitoring service
    */
   private reportToMonitoring(context: ErrorContext): void {
-    // In production, send to monitoring service
-    // For now, just a placeholder
-    console.log('Would report to monitoring:', context);
+    ErrorTracker.captureError(new AppError(context), {
+      userId: context.userId,
+      action: 'handle-error',
+      metadata: context.details
+    });
   }
 
   /**

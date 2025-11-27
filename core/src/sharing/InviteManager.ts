@@ -31,7 +31,7 @@ export class InviteManager {
     this.peerId = peerId;
     this.publicKey = publicKey;
     this.privateKey = privateKey;
-    this.displayName = displayName;
+    this.displayName = displayName || 'User';
   }
 
   /**

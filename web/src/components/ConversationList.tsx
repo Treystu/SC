@@ -2,6 +2,7 @@ import { useState, useCallback, memo } from 'react';
 import './ConversationList.css';
 import { AddContactDialog } from './AddContactDialog';
 import { SignalingExportDialog, SignalingImportDialog } from './SignalingDialog';
+import { LoadingState } from './LoadingState';
 
 interface Conversation {
   id: string;
@@ -138,23 +139,23 @@ function ConversationList({ conversations, loading, selectedId, onSelect, onAddC
       </div>
 
       <div className="list-content">
-        {loading ? (
-          <div className="loading-spinner">Loading contacts...</div>
-        ) : conversations.length === 0 ? (
-          <div className="empty-list">
-            <p>No conversations yet</p>
-            <p className="hint">Add a contact to start messaging</p>
-          </div>
-        ) : (
-          conversations.map(conv => (
-            <ConversationItem
-              key={conv.id}
-              conv={conv}
-              isSelected={selectedId === conv.id}
-              onSelect={handleSelect}
-            />
-          ))
-        )}
+        <LoadingState loading={loading}>
+          {conversations.length === 0 ? (
+            <div className="empty-list">
+              <p>No conversations yet</p>
+              <p className="hint">Add a contact to start messaging</p>
+            </div>
+          ) : (
+            conversations.map(conv => (
+              <ConversationItem
+                key={conv.id}
+                conv={conv}
+                isSelected={selectedId === conv.id}
+                onSelect={handleSelect}
+              />
+            ))
+          )}
+        </LoadingState>
       </div>
     </div>
   );

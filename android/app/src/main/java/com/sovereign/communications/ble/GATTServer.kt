@@ -4,10 +4,19 @@ import android.bluetooth.*
 import android.content.Context
 import android.util.Log
 import java.util.UUID
+import java.util.concurrent.ConcurrentLinkedQueue
 
-class MeshGATTServer(private val context: Context) {
+interface MeshGATTServerCallback {
+    fun onDeviceConnected(device: BluetoothDevice)
+    fun onDeviceDisconnected(device: BluetoothDevice)
+    fun onMessageReceived(device: BluetoothDevice, data: ByteArray)
+}
+
+class MeshGATTServer(private val context: Context, private val callback: MeshGATTServerCallback) {
     private var bluetoothManager: BluetoothManager? = null
     private var gattServer: BluetoothGattServer? = null
+    private val connectedDevices = mutableSetOf<BluetoothDevice>()
+    private val outgoingQueue = ConcurrentLinkedQueue<ByteArray>()
     
     companion object {
         private const val TAG = "MeshGATTServer"
@@ -18,13 +27,20 @@ class MeshGATTServer(private val context: Context) {
 
     private val gattServerCallback = object : BluetoothGattServerCallback() {
         override fun onConnectionStateChange(device: BluetoothDevice, status: Int, newState: Int) {
-            when (newState) {
-                BluetoothProfile.STATE_CONNECTED -> {
+            super.onConnectionStateChange(device, status, newState)
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                if (newState == BluetoothProfile.STATE_CONNECTED) {
                     Log.d(TAG, "Device connected: ${device.address}")
-                }
-                BluetoothProfile.STATE_DISCONNECTED -> {
+                    connectedDevices.add(device)
+                    callback.onDeviceConnected(device)
+                } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                     Log.d(TAG, "Device disconnected: ${device.address}")
+                    connectedDevices.remove(device)
+                    callback.onDeviceDisconnected(device)
                 }
+            } else {
+                Log.e(TAG, "Connection state change error: $status")
+                connectedDevices.remove(device)
             }
         }
 
@@ -37,13 +53,21 @@ class MeshGATTServer(private val context: Context) {
             offset: Int,
             value: ByteArray
         ) {
-            when (characteristic.uuid) {
-                RX_CHAR_UUID -> {
-                    Log.d(TAG, "Received message: ${value.size} bytes")
-                    handleIncomingMessage(value)
-                    if (responseNeeded) {
-                        gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, 0, null)
-                    }
+            super.onCharacteristicWriteRequest(device, requestId, characteristic, preparedWrite, responseNeeded, offset, value)
+            
+            if (characteristic.uuid == RX_CHAR_UUID) {
+                Log.d(TAG, "Received message part: ${value.size} bytes from ${device.address}")
+                
+                // In a real implementation, we would handle fragmentation here.
+                // For now, we assume small messages or handle them directly.
+                callback.onMessageReceived(device, value)
+                
+                if (responseNeeded) {
+                    gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, 0, null)
+                }
+            } else {
+                if (responseNeeded) {
+                    gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_FAILURE, 0, null)
                 }
             }
         }
@@ -54,18 +78,36 @@ class MeshGATTServer(private val context: Context) {
             offset: Int,
             characteristic: BluetoothGattCharacteristic
         ) {
-            when (characteristic.uuid) {
-                TX_CHAR_UUID -> {
-                    val response = getOutgoingMessage()
-                    gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, 0, response)
-                }
+            super.onCharacteristicReadRequest(device, requestId, offset, characteristic)
+            
+            if (characteristic.uuid == TX_CHAR_UUID) {
+                val response = outgoingQueue.poll() ?: ByteArray(0)
+                gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, 0, response)
+            } else {
+                gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_FAILURE, 0, null)
+            }
+        }
+        
+        override fun onNotificationSent(device: BluetoothDevice, status: Int) {
+            super.onNotificationSent(device, status)
+            if (status != BluetoothGatt.GATT_SUCCESS) {
+                Log.e(TAG, "Notification failed to send to ${device.address}")
             }
         }
     }
 
-    fun start() {
+    fun start(): Boolean {
         bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+        if (bluetoothManager == null) {
+            Log.e(TAG, "BluetoothManager not available")
+            return false
+        }
+        
         gattServer = bluetoothManager?.openGattServer(context, gattServerCallback)
+        if (gattServer == null) {
+            Log.e(TAG, "Unable to open GATT server")
+            return false
+        }
         
         val service = BluetoothGattService(SERVICE_UUID, BluetoothGattService.SERVICE_TYPE_PRIMARY)
         
@@ -84,23 +126,40 @@ class MeshGATTServer(private val context: Context) {
         service.addCharacteristic(txCharacteristic)
         service.addCharacteristic(rxCharacteristic)
         
-        gattServer?.addService(service)
-        Log.d(TAG, "GATT Server started")
+        val result = gattServer?.addService(service) ?: false
+        Log.d(TAG, "GATT Server started: $result")
+        return result
     }
 
     fun stop() {
+        gattServer?.clearServices()
         gattServer?.close()
         gattServer = null
+        connectedDevices.clear()
         Log.d(TAG, "GATT Server stopped")
     }
 
-    private fun handleIncomingMessage(data: ByteArray) {
-        // Process incoming BLE message
-        // Route through mesh network
+    fun broadcastMessage(data: ByteArray) {
+        val service = gattServer?.getService(SERVICE_UUID)
+        val characteristic = service?.getCharacteristic(TX_CHAR_UUID)
+        
+        if (characteristic != null) {
+            characteristic.value = data
+            for (device in connectedDevices) {
+                gattServer?.notifyCharacteristicChanged(device, characteristic, false)
+            }
+        }
     }
-
-    private fun getOutgoingMessage(): ByteArray {
-        // Get next message from queue
-        return ByteArray(0)
+    
+    fun sendToDevice(device: BluetoothDevice, data: ByteArray) {
+        if (!connectedDevices.contains(device)) return
+        
+        val service = gattServer?.getService(SERVICE_UUID)
+        val characteristic = service?.getCharacteristic(TX_CHAR_UUID)
+        
+        if (characteristic != null) {
+            characteristic.value = data
+            gattServer?.notifyCharacteristicChanged(device, characteristic, false)
+        }
     }
 }

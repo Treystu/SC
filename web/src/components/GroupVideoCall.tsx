@@ -15,8 +15,33 @@ interface GroupVideoCallProps {
 }
 
 export const GroupVideoCall: React.FC<GroupVideoCallProps> = ({ roomId, onLeave }) => {
-  const [participants] = useState<Participant[]>([]);
+  const [participants, setParticipants] = useState<Participant[]>([]);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+
+  // Simulate receiving remote streams (in real app, use WebRTC signaling)
+  useEffect(() => {
+    // Placeholder for mesh network stream reception
+    const handleRemoteStream = (peerId: string, stream: MediaStream) => {
+      setParticipants(prev => {
+        if (prev.find(p => p.id === peerId)) return prev;
+        return [...prev, {
+          id: peerId,
+          name: `Peer ${peerId.substring(0, 4)}`,
+          stream: stream,
+          audioEnabled: true,
+          videoEnabled: true,
+          speaking: false
+        }];
+      });
+    };
+
+    // Example: Listen for 'stream-added' event from mesh network
+    // meshNetwork.on('stream-added', handleRemoteStream);
+
+    return () => {
+      // meshNetwork.off('stream-added', handleRemoteStream);
+    };
+  }, []);
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [videoEnabled, setVideoEnabled] = useState(true);
   const [screenSharing, setScreenSharing] = useState(false);
@@ -68,7 +93,7 @@ export const GroupVideoCall: React.FC<GroupVideoCallProps> = ({ roomId, onLeave 
     const checkAudioLevel = () => {
       analyser.getByteFrequencyData(dataArray);
       const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-      
+
       // Update speaking status based on audio level
       if (average > 30) {
         // Local user is speaking

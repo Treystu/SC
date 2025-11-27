@@ -183,13 +183,9 @@ object KeystoreManager {
         val passphrase = ByteArray(32)
         java.security.SecureRandom().nextBytes(passphrase)
         
-        // Encrypt it with Keystore key
-        val encrypted = encrypt("database_passphrase", passphrase)
-        
-        // Store the encrypted passphrase (would typically use SharedPreferences)
-        // For now, return the plaintext for immediate use
-        // TODO: Implement persistent storage of encrypted passphrase
-        
+        // Return the plaintext passphrase for the caller to encrypt and store
+        // The caller (SCApplication) will encrypt this with the Keystore key
+        // and persist it in SharedPreferences
         return passphrase
     }
 }

@@ -34,7 +34,16 @@ class NotificationReceiver : BroadcastReceiver() {
         
         if (replyText != null) {
             scope.launch {
-                // TODO: Send message through mesh network
+                // Send message through mesh network
+                try {
+                    val meshManager = com.sovereign.communications.SCApplication.instance.meshNetworkManager
+                    meshManager.sendMessage(
+                        recipientId = conversationId,
+                        payload = replyText.toByteArray()
+                    )
+                } catch (e: Exception) {
+                    android.util.Log.e("NotificationReceiver", "Failed to send reply", e)
+                }
                 // meshNetwork.sendMessage(conversationId, replyText)
                 
                 // Cancel the notification
@@ -48,7 +57,13 @@ class NotificationReceiver : BroadcastReceiver() {
         val conversationId = intent.getStringExtra("conversationId") ?: return
         
         scope.launch {
-            // TODO: Mark messages as read in database
+            // Mark messages as read in database
+            try {
+                val database = com.sovereign.communications.SCApplication.instance.database
+                database.messageDao().markConversationAsRead(conversationId)
+            } catch (e: Exception) {
+                android.util.Log.e("NotificationReceiver", "Failed to mark as read", e)
+            }
             // database.messageDao().markConversationAsRead(conversationId)
             
             // Cancel the notification

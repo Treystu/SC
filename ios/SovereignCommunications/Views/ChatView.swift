@@ -6,12 +6,13 @@ import SwiftUI
 
 struct ChatView: View {
     let conversation: ConversationEntity
-    @State private var messageText: String = ""
-    @State private var messages: [MessageEntity] = []
+    @StateObject private var viewModel: ChatViewModel
     @FocusState private var isInputFocused: Bool
     
-    // Note: For full integration, use @StateObject with a ViewModel that
-    // connects to the mesh network layer and Core Data
+    init(conversation: ConversationEntity) {
+        self.conversation = conversation
+        _viewModel = StateObject(wrappedValue: ChatViewModel(conversationId: conversation.id ?? ""))
+    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -19,14 +20,14 @@ struct ChatView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 12) {
-                        ForEach(messages, id: \.id) { message in
+                        ForEach(viewModel.messages, id: \.id) { message in
                             MessageBubble(message: message)
                         }
                     }
                     .padding()
                 }
-                .onChange(of: messages.count) { _ in
-                    if let lastMessage = messages.last {
+                .onChange(of: viewModel.messages.count) { _ in
+                    if let lastMessage = viewModel.messages.last {
                         withAnimation {
                             proxy.scrollTo(lastMessage.id, anchor: .bottom)
                         }
@@ -36,63 +37,23 @@ struct ChatView: View {
             
             // Message input
             HStack(alignment: .bottom, spacing: 12) {
-                TextField("Message", text: $messageText, axis: .vertical)
+                TextField("Message", text: $viewModel.messageText, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
                     .lineLimit(1...5)
                     .focused($isInputFocused)
                 
-                Button(action: sendMessage) {
+                Button(action: viewModel.sendMessage) {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.system(size: 32))
-                        .foregroundColor(messageText.isEmpty ? .gray : .blue)
+                        .foregroundColor(viewModel.messageText.isEmpty ? .gray : .blue)
                 }
-                .disabled(messageText.isEmpty)
+                .disabled(viewModel.messageText.isEmpty)
             }
             .padding()
             .background(Color(UIColor.systemBackground))
         }
         .navigationTitle(conversation.contactName ?? "Chat")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
-            loadMessages()
-        }
-    }
-    
-    private func sendMessage() {
-        guard !messageText.isEmpty else { return }
-        
-        // Save to Core Data (persistence layer)
-        let newMessage = MessageEntity(context: CoreDataStack.shared.viewContext)
-        newMessage.id = UUID().uuidString
-        newMessage.conversationId = conversation.id
-        newMessage.content = messageText
-        newMessage.timestamp = Date()
-        newMessage.isSent = true
-        newMessage.status = "sent"
-        
-        do {
-            try CoreDataStack.shared.viewContext.save()
-            messages.append(newMessage)
-            messageText = ""
-            
-            // TODO: For full integration, send via mesh network:
-            // let meshNetwork = MeshNetworkManager.shared
-            // meshNetwork.sendMessage(to: conversation.id, content: messageText)
-        } catch {
-            print("Error saving message: \(error)")
-        }
-    }
-    
-    private func loadMessages() {
-        let request = MessageEntity.fetchRequest()
-        request.predicate = NSPredicate(format: "conversationId == %@", conversation.id ?? "")
-        request.sortDescriptors = [NSSortDescriptor(keyPath: \MessageEntity.timestamp, ascending: true)]
-        
-        do {
-            messages = try CoreDataStack.shared.viewContext.fetch(request)
-        } catch {
-            print("Error loading messages: \(error)")
-        }
     }
 }
 

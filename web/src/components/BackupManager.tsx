@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { BackupManager, BackupOptions } from '../../../core/src/backup-manager';
+import { getDatabase } from '../storage/database';
 
-export const BackupRestore: React.FC = () => {
+export const BackupManager: React.FC = () => {
   const [password, setPassword] = useState('');
   const [includeMessages, setIncludeMessages] = useState(true);
   const [includeContacts, setIncludeContacts] = useState(true);
@@ -10,32 +10,27 @@ export const BackupRestore: React.FC = () => {
   const [status, setStatus] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const backupManager = new BackupManager();
 
   const handleCreateBackup = async () => {
-    if (encrypt && !password) {
-      setStatus('Password required for encrypted backup');
-      return;
-    }
-
     setIsProcessing(true);
     setStatus('Creating backup...');
 
     try {
-      const options: BackupOptions = {
-        includeMessages,
-        includeContacts,
-        includeSettings,
-        encrypt,
-        password: encrypt ? password : undefined
-      };
+      const db = getDatabase();
+      const data = await db.exportAllData();
+      const backupJson = JSON.stringify(data, null, 2);
 
-      const backupData = await backupManager.createBackup(options);
-      
       // Download backup file
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const filename = `sovereign-backup-${timestamp}.json`;
-      backupManager.downloadBackup(backupData, filename);
+
+      const blob = new Blob([backupJson], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
 
       setStatus('Backup created successfully!');
     } catch (error) {
@@ -54,9 +49,18 @@ export const BackupRestore: React.FC = () => {
     setStatus('Restoring backup...');
 
     try {
-      const backupData = await file.text();
-      await backupManager.restoreBackup(backupData, password || undefined);
-      setStatus('Backup restored successfully! Please reload the app.');
+      const backupText = await file.text();
+      const backupData = JSON.parse(backupText);
+
+      const db = getDatabase();
+      const result = await db.importData(backupData);
+
+      if (result.errors.length > 0) {
+        setStatus(`Backup restored with ${result.errors.length} errors. Imported: ${result.imported}, Skipped: ${result.skipped}`);
+        console.error('Import errors:', result.errors);
+      } else {
+        setStatus(`Backup restored successfully! Imported: ${result.imported}, Skipped: ${result.skipped}. Please reload the app.`);
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       setStatus(`Error restoring backup: ${errorMessage}`);
@@ -68,11 +72,11 @@ export const BackupRestore: React.FC = () => {
   return (
     <div className="backup-restore">
       <h2>Backup & Restore</h2>
-      
+
       {/* Create Backup Section */}
       <div className="section">
         <h3>Create Backup</h3>
-        
+
         <div className="options">
           <label>
             <input
@@ -136,7 +140,7 @@ export const BackupRestore: React.FC = () => {
       {/* Restore Backup Section */}
       <div className="section">
         <h3>Restore Backup</h3>
-        
+
         <div className="password-field">
           <input
             type="password"

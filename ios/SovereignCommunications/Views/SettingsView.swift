@@ -99,7 +99,9 @@ struct SettingsView: View {
                 
                 Section(header: Text("Data Management")) {
                     Button("Export Data") {
-                        // TODO: Export all data
+                        // Export data logic (e.g., share sheet with JSON)
+                        // For now, just print to console as a placeholder for the UI action
+                        print("Exporting data...")
                     }
                     
                     Button("Clear Cache") {
@@ -185,7 +187,18 @@ struct SettingsView: View {
         // Clear notification badge
         NotificationManager.shared.updateBadgeCount(0)
         
-        // TODO: Clear image cache, temporary files, etc.
+        // Clear temp directory
+        let fileManager = FileManager.default
+        let tempDirectory = fileManager.temporaryDirectory
+        do {
+            let tempFiles = try fileManager.contentsOfDirectory(at: tempDirectory, includingPropertiesForKeys: nil)
+            for file in tempFiles {
+                try fileManager.removeItem(at: file)
+            }
+            print("Cache cleared")
+        } catch {
+            print("Error clearing cache: \(error)")
+        }
     }
     
     private func clearAllMessages() {

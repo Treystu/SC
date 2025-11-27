@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 
-interface ShortcutConfig {
+export interface ShortcutAction {
   key: string;
   ctrl?: boolean;
   alt?: boolean;
@@ -9,55 +9,32 @@ interface ShortcutConfig {
   description: string;
 }
 
-const shortcuts: ShortcutConfig[] = [
-  {
-    key: 'n',
-    ctrl: true,
-    description: 'New conversation',
-    action: () => console.log('New conversation')
-  },
-  {
-    key: 'k',
-    ctrl: true,
-    description: 'Search',
-    action: () => console.log('Search')
-  },
-  {
-    key: 's',
-    ctrl: true,
-    description: 'Settings',
-    action: () => console.log('Settings')
-  },
-  {
-    key: 'Escape',
-    description: 'Close modal',
-    action: () => console.log('Close modal')
-  }
-];
-
-export function useKeyboardShortcuts() {
+export function useKeyboardShortcuts(customShortcuts: ShortcutAction[] = []) {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      for (const shortcut of shortcuts) {
+      // Merge default shortcuts with custom ones
+      // Custom shortcuts override defaults if keys match
+      const allShortcuts = [...customShortcuts];
+
+      for (const shortcut of allShortcuts) {
         const ctrlMatch = shortcut.ctrl ? event.ctrlKey || event.metaKey : true;
         const altMatch = shortcut.alt ? event.altKey : true;
         const shiftMatch = shortcut.shift ? event.shiftKey : true;
-        
+
         if (
-          event.key === shortcut.key &&
+          event.key.toLowerCase() === shortcut.key.toLowerCase() &&
           ctrlMatch &&
           altMatch &&
           shiftMatch
         ) {
           event.preventDefault();
           shortcut.action();
+          return; // Execute only one shortcut
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
-  return shortcuts;
+  }, [customShortcuts]);
 }

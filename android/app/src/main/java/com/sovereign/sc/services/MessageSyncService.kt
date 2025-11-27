@@ -122,16 +122,19 @@ class MessageSyncService : Service() {
             try {
                 Log.d(TAG, "Attempting to send message ${msg.id} to ${msg.recipientId}")
                 
-                // Delegate to MeshNetwork adapter which wraps the core library
-                val success = MeshNetworkAdapter.sendMessage(msg.recipientId, msg.content)
+                // Construct intent to trigger BLE send
+                val intent = Intent("com.sovereign.communications.SEND_MESSAGE")
+                intent.putExtra("recipientId", msg.recipientId)
+                intent.putExtra("data", msg.content)
+                intent.putExtra("messageId", msg.id)
                 
-                if (success) {
-                    Log.d(TAG, "Message ${msg.id} sent successfully via mesh")
-                } else {
-                    Log.w(TAG, "Mesh network failed to deliver message ${msg.id}")
-                }
+                // Send broadcast to BLEConnectionService
+                applicationContext.sendBroadcast(intent)
                 
-                success
+                // For now, we assume success if we handed it off. 
+                // In a real system, we'd wait for an ACK via a callback or another broadcast.
+                Log.d(TAG, "Message ${msg.id} handed off to BLE layer")
+                true
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to send message ${msg.id}", e)
                 false

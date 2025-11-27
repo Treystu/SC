@@ -3,7 +3,7 @@ import SwiftUI
 struct MainView: View {
     @State private var selectedTab = 0
     @State private var showOnboarding = !UserDefaults.standard.bool(forKey: "onboarding_complete")
-    @State private var localPeerId = "generated_peer_id_placeholder" // TODO: Get from MeshNetwork
+    @State private var localPeerId = UserDefaults.standard.string(forKey: "localPeerId") ?? UUID().uuidString
     
     var body: some View {
         if showOnboarding {

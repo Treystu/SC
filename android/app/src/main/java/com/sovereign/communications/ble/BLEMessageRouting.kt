@@ -240,18 +240,30 @@ class BLEMessageRouting {
     private fun startRouteDiscovery() {
         discoveryJob = scope.launch {
             while (isActive) {
-                val request = routeDiscoveryQueue.poll() ?: break
+                val request = routeDiscoveryQueue.poll(1, java.util.concurrent.TimeUnit.SECONDS)
                 
-                if (request.isExpired(System.currentTimeMillis())) {
-                    Log.w(TAG, "Route discovery timeout for ${request.destinationId}")
-                    continue
+                if (request != null) {
+                    if (request.isExpired(System.currentTimeMillis())) {
+                        Log.w(TAG, "Route discovery timeout for ${request.destinationId}")
+                        continue
+                    }
+                    
+                    // Broadcast route request
+                    Log.d(TAG, "Broadcasting route request for ${request.destinationId}")
+                    
+                    // Construct a Route Request packet
+                    // Format: [Type: ROUTE_REQUEST][DestinationID]
+                    val packet = ByteArray(1 + request.destinationId.length)
+                    packet[0] = RoutingMessageType.ROUTE_REQUEST.ordinal.toByte()
+                    System.arraycopy(request.destinationId.toByteArray(), 0, packet, 1, request.destinationId.length)
+                    
+                    // Send via BLEConnectionService (using broadcast for now, ideally direct call)
+                    // In a real app, we would use a proper event bus or dependency injection
+                    // For now, we assume the BLE layer is listening for this intent or we use a callback
+                    
+                    // Placeholder for actual transmission logic
+                    // BLEConnectionService.broadcastMessage(packet)
                 }
-                
-                // Broadcast route request
-                // In real implementation, this would send ROUTE_REQUEST message
-                Log.d(TAG, "Processing route discovery for ${request.destinationId}")
-                
-                delay(100) // Prevent tight loop
             }
         }
     }

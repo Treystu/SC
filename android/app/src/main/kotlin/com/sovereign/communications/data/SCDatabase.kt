@@ -64,7 +64,8 @@ abstract class SCDatabase : RoomDatabase() {
                     // Add migration strategies
                     .addMigrations(*DatabaseMigrations.getAllMigrations())
                     // Enable auto-migrations for future versions
-                    .fallbackToDestructiveMigration()
+                    // In production, we want to handle migration errors explicitly
+                    // .fallbackToDestructiveMigration()
                     // Enable multi-instance invalidation for data sync
                     .enableMultiInstanceInvalidation()
                     
@@ -77,8 +78,8 @@ abstract class SCDatabase : RoomDatabase() {
                         Log.i(TAG, "Database encryption enabled with SQLCipher")
                     } catch (e: Exception) {
                         Log.e(TAG, "Failed to enable database encryption", e)
-                        // Continue without encryption rather than crash
-                        // In production, you might want to fail hard here
+                        // Fail hard on encryption errors in production
+                        throw RuntimeException("Failed to initialize encrypted database", e)
                     }
                 }
                 

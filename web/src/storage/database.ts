@@ -1,6 +1,7 @@
+import { CURRENT_SCHEMA_VERSION, validateAndMigrate } from './schema-validator';
 /**
  * IndexedDB Persistence for Web Application
- * Stores messages, contacts, conversations, and V1 persistence data
+ * Stores messages, contacts, conversations, groups, and V1 persistence data
  */
 
 export interface StoredMessage {
@@ -37,6 +38,19 @@ export interface StoredConversation {
   lastMessageTimestamp: number;
   unreadCount: number;
   createdAt: number;
+}
+
+export interface StoredGroup {
+  id: string;
+  name: string;
+  members: Array<{
+    id: string;
+    name: string;
+    isAdmin: boolean;
+  }>;
+  createdBy: string;
+  createdAt: number;
+  lastMessageTimestamp: number;
 }
 
 /**
@@ -102,7 +116,7 @@ export interface SessionKey {
  */
 export class DatabaseManager {
   private dbName = 'sovereign-communications';
-  private version = 2; // Incremented for V1 persistence stores
+  private version = CURRENT_SCHEMA_VERSION;
   private db: IDBDatabase | null = null;
 
   /**
@@ -118,63 +132,10 @@ export class DatabaseManager {
         resolve();
       };
 
-      request.onupgradeneeded = (event) => {
+      request.onupgradeneeded = async (event) => {
         const db = (event.target as IDBOpenDBRequest).result;
-
-        // Messages store
-        if (!db.objectStoreNames.contains('messages')) {
-          const messageStore = db.createObjectStore('messages', { keyPath: 'id' });
-          messageStore.createIndex('conversationId', 'conversationId', { unique: false });
-          messageStore.createIndex('timestamp', 'timestamp', { unique: false });
-          messageStore.createIndex('status', 'status', { unique: false });
-        }
-
-        // Contacts store
-        if (!db.objectStoreNames.contains('contacts')) {
-          const contactStore = db.createObjectStore('contacts', { keyPath: 'id' });
-          contactStore.createIndex('publicKey', 'publicKey', { unique: true });
-          contactStore.createIndex('displayName', 'displayName', { unique: false });
-        }
-
-        // Conversations store
-        if (!db.objectStoreNames.contains('conversations')) {
-          const conversationStore = db.createObjectStore('conversations', { keyPath: 'id' });
-          conversationStore.createIndex('contactId', 'contactId', { unique: true });
-          conversationStore.createIndex('lastMessageTimestamp', 'lastMessageTimestamp', { unique: false });
-        }
-
-        // V1 Persistence: Identities store
-        if (!db.objectStoreNames.contains('identities')) {
-          const identityStore = db.createObjectStore('identities', { keyPath: 'id' });
-          identityStore.createIndex('fingerprint', 'fingerprint', { unique: true });
-          identityStore.createIndex('isPrimary', 'isPrimary', { unique: false });
-          identityStore.createIndex('createdAt', 'createdAt', { unique: false });
-        }
-
-        // V1 Persistence: Persisted Peers store
-        if (!db.objectStoreNames.contains('persistedPeers')) {
-          const peerStore = db.createObjectStore('persistedPeers', { keyPath: 'id' });
-          peerStore.createIndex('publicKey', 'publicKey', { unique: true });
-          peerStore.createIndex('lastSeen', 'lastSeen', { unique: false });
-          peerStore.createIndex('isBlacklisted', 'isBlacklisted', { unique: false });
-          peerStore.createIndex('transportType', 'transportType', { unique: false });
-          peerStore.createIndex('reputation', 'reputation', { unique: false });
-        }
-
-        // V1 Persistence: Routes store
-        if (!db.objectStoreNames.contains('routes')) {
-          const routeStore = db.createObjectStore('routes', { keyPath: 'destinationId' });
-          routeStore.createIndex('nextHopId', 'nextHopId', { unique: false });
-          routeStore.createIndex('lastUpdated', 'lastUpdated', { unique: false });
-          routeStore.createIndex('cost', 'cost', { unique: false });
-        }
-
-        // V1 Persistence: Session Keys store
-        if (!db.objectStoreNames.contains('sessionKeys')) {
-          const sessionStore = db.createObjectStore('sessionKeys', { keyPath: 'peerId' });
-          sessionStore.createIndex('expiresAt', 'expiresAt', { unique: false });
-          sessionStore.createIndex('createdAt', 'createdAt', { unique: false });
-        }
+        const oldVersion = event.oldVersion;
+        await validateAndMigrate(db, oldVersion);
       };
     });
   }
@@ -200,20 +161,37 @@ export class DatabaseManager {
   /**
    * Get messages for a conversation
    */
-  async getMessages(conversationId: string, limit = 100): Promise<StoredMessage[]> {
+  async getMessages(conversationId: string, limit: number = 50, offset: number = 0): Promise<StoredMessage[]> {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(['messages'], 'readonly');
       const store = transaction.objectStore('messages');
-      const index = store.index('conversationId');
+      const index = store.index('conversationId'); // Assuming 'conversationId' is the correct index name
       const request = index.getAll(conversationId);
 
       request.onsuccess = () => {
-        const messages = request.result as StoredMessage[];
-        // Sort by timestamp and limit
-        const sorted = messages.sort((a, b) => b.timestamp - a.timestamp).slice(0, limit);
-        resolve(sorted);
+        const messages = request.result.sort((a, b) => a.timestamp - b.timestamp);
+        resolve(messages.slice(Math.max(0, messages.length - limit - offset), messages.length - offset));
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  /**
+   * Get all queued messages
+   */
+  async getQueuedMessages(): Promise<StoredMessage[]> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['messages'], 'readonly');
+      const store = transaction.objectStore('messages');
+      const request = store.getAll();
+
+      request.onsuccess = () => {
+        const messages = request.result.filter(m => m.status === 'queued');
+        resolve(messages.sort((a, b) => a.timestamp - b.timestamp));
       };
       request.onerror = () => reject(request.error);
     });
@@ -267,6 +245,16 @@ export class DatabaseManager {
    */
   async saveContact(contact: StoredContact): Promise<void> {
     if (!this.db) await this.init();
+
+    // Validate public key before saving
+    try {
+      const publicKeyBytes = new Uint8Array(atob(contact.publicKey).split('').map(c => c.charCodeAt(0)));
+      if (publicKeyBytes.length !== 32) {
+        throw new Error('Invalid public key length. Must be 32 bytes for Ed25519.');
+      }
+    } catch (e) {
+      return Promise.reject(new Error(`Invalid base64 public key: ${(e as Error).message}`));
+    }
 
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(['contacts'], 'readwrite');
@@ -403,6 +391,61 @@ export class DatabaseManager {
         }
       };
       getRequest.onerror = () => reject(getRequest.error);
+    });
+  }
+
+  // ===== GROUP OPERATIONS =====
+
+  /**
+   * Save a group
+   */
+  async saveGroup(group: StoredGroup): Promise<void> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['groups'], 'readwrite');
+      const store = transaction.objectStore('groups');
+      const request = store.put(group);
+
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  /**
+   * Get all groups
+   */
+  async getGroups(): Promise<StoredGroup[]> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['groups'], 'readonly');
+      const store = transaction.objectStore('groups');
+      const request = store.getAll();
+
+      request.onsuccess = () => {
+        const groups = request.result as StoredGroup[];
+        // Sort by last message timestamp
+        const sorted = groups.sort((a, b) => b.lastMessageTimestamp - a.lastMessageTimestamp);
+        resolve(sorted);
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  /**
+   * Get group by ID
+   */
+  async getGroup(groupId: string): Promise<StoredGroup | null> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['groups'], 'readonly');
+      const store = transaction.objectStore('groups');
+      const request = store.get(groupId);
+
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => reject(request.error);
     });
   }
 

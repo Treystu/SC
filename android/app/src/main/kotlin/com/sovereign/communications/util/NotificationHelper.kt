@@ -126,7 +126,16 @@ class NotificationReplyReceiver : android.content.BroadcastReceiver() {
         val remoteInput = RemoteInput.getResultsFromIntent(intent)
         val replyText = remoteInput?.getCharSequence("key_text_reply")?.toString() ?: return
         
-        // TODO: Send message through mesh network
+        // Send message through mesh network
+        try {
+            val meshManager = SCApplication.instance.meshNetworkManager
+            meshManager.sendMessage(
+                recipientId = conversationId,
+                payload = replyText.toByteArray()
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to send reply", e)
+        }
         // For now, just dismiss the notification
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.cancel(conversationId.hashCode())
@@ -140,7 +149,13 @@ class NotificationActionReceiver : android.content.BroadcastReceiver() {
             "MARK_READ" -> {
                 val messageId = intent.getStringExtra("message_id") ?: return
                 
-                // TODO: Mark message as read in database
+                // Mark message as read in database
+                try {
+                    val database = SCApplication.instance.database
+                    database.messageDao().markConversationAsRead(conversationId)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to mark as read", e)
+                }
                 
                 // Dismiss notification
                 val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

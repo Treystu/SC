@@ -254,8 +254,27 @@ class BLEConnectionService : Service() {
     }
     
     private suspend fun processMeshData(deviceAddress: String, data: ByteArray) {
-        // TODO: Forward to mesh network handler
         Log.d(TAG, "Processing mesh data from $deviceAddress")
+        
+        // Basic packet parsing (example structure: [Type][Length][Payload])
+        if (data.size < 2) return
+        
+        val type = data[0]
+        val length = data[1].toInt()
+        
+        if (data.size < length + 2) return
+        
+        val payload = data.copyOfRange(2, 2 + length)
+        
+        // Broadcast intent for other components to handle the message
+        val intent = Intent("com.sovereign.communications.MESH_MESSAGE_RECEIVED")
+        intent.putExtra("sender", deviceAddress)
+        intent.putExtra("type", type)
+        intent.putExtra("payload", payload)
+        
+        // Use LocalBroadcastManager if available, or standard broadcast with permission
+        // For this example, we'll use standard broadcast
+        sendBroadcast(intent)
     }
     
     /**

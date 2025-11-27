@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ main, develop ]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -154,7 +158,7 @@ jobs:
   report:
     name: Test Report
     runs-on: ubuntu-latest
-    needs: [test-core, build, test-integration]
+    needs: [lint, test-core, build, test-integration]
     if: always()
     permissions: {}
     steps:

@@ -8,6 +8,7 @@ export * from './protocol/message.js';
 // Crypto
 export * from './crypto/primitives.js';
 export * from './crypto/storage.js';
+export * from './utils/fingerprint.js';
 
 // Mesh networking
 export * from './mesh/routing.js';
@@ -127,6 +128,11 @@ export {
 
 // Sharing and invites
 export * from './sharing/index.js';
+export { InviteManager } from './sharing/InviteManager.js';
+export { parseConnectionOffer, hexToBytes } from './sharing/utils.js';
+
+// Identity
+export { IdentityManager } from './identity-manager.js';
 
 // Version
 export const VERSION = '0.1.0';

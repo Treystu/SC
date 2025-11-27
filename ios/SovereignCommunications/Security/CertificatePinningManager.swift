@@ -37,17 +37,17 @@ class CertificatePinningManager: NSObject {
     ///
     /// IMPORTANT: Replace these placeholder pins with actual certificate pins before production
     private let pinnedCertificates: [String: Set<String>] = [
-        // Example: API server (update with actual pins)
-        // "api.sovereigncommunications.app": [
-        //     "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", // Primary cert
-        //     "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB="  // Backup cert
-        // ],
+        // Production server pins (replace with actual pins)
+        "api.sovereigncommunications.app": [
+            "LPJNul+wow4m6DsqxbninhsWHlwfp0JecwQzYpOLmCQ=", // Primary cert hash
+            "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB="  // Backup cert hash
+        ],
         
-        // Example: Update server (update with actual pins)
-        // "updates.sovereigncommunications.app": [
-        //     "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC=", // Primary cert
-        //     "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD="  // Backup cert
-        // ]
+        // Update server pins (replace with actual pins)
+        "updates.sovereigncommunications.app": [
+            "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC=", // Primary cert hash
+            "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD="  // Backup cert hash
+        ]
     ]
     
     /// Whether to enforce certificate pinning
@@ -69,10 +69,14 @@ class CertificatePinningManager: NSObject {
         // Get pinned certificates for this domain
         guard let pinnedHashes = pinnedCertificates[domain], !pinnedHashes.isEmpty else {
             // No pins configured for this domain
-            // In production, you might want to fail closed (return false)
-            // For now, we'll allow connections to unpinned domains
+            // In production, we fail closed for security
+            #if DEBUG
             print("⚠️ No certificate pins configured for domain: \(domain)")
             return true
+            #else
+            print("❌ No certificate pins configured for domain: \(domain). Connection refused in production.")
+            return false
+            #endif
         }
         
         // Get the server trust from the challenge
@@ -151,7 +155,14 @@ extension CertificatePinningManager: URLSessionDelegate {
         }
         
         // Check if pinning is enabled
-        guard isPinningEnabled else {
+        // In production, we ignore the isPinningEnabled flag and always enforce pinning
+        #if !DEBUG
+        let shouldPin = true
+        #else
+        let shouldPin = isPinningEnabled
+        #endif
+
+        guard shouldPin else {
             // Pinning disabled (for development)
             if let serverTrust = challenge.protectionSpace.serverTrust {
                 completionHandler(.useCredential, URLCredential(trust: serverTrust))

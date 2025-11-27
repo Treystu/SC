@@ -308,15 +308,28 @@ class PeerSecurityAlertSystem {
     }
     
     private func signAlert(data: [String: Any], privateKey: Data) throws -> Data {
-        // TODO: Implement Ed25519 signing
-        // Placeholder
-        return Data(count: 64)
+        let jsonData = try JSONSerialization.data(withJSONObject: data, options: .sortedKeys)
+        let key = try Curve25519.Signing.PrivateKey(rawRepresentation: privateKey)
+        let signature = try key.signature(for: jsonData)
+        return signature
     }
     
     private func verifyAlertSignature(alert: SecurityAlert, publicKey: Data) throws -> Bool {
-        // TODO: Implement Ed25519 verification
-        // Placeholder
-        return true
+        // Reconstruct data dictionary for verification
+        let alertData: [String: Any] = [
+            "type": alert.type.rawValue,
+            "severity": alert.severity.rawValue,
+            "suspiciousPeerId": alert.suspiciousPeerId,
+            "reporterId": alert.reporterId,
+            "description": alert.description,
+            "evidence": alert.evidence as Any,
+            "timestamp": alert.timestamp,
+            "ttl": alert.ttl
+        ]
+        
+        let jsonData = try JSONSerialization.data(withJSONObject: alertData, options: .sortedKeys)
+        let key = try Curve25519.Signing.PublicKey(rawRepresentation: publicKey)
+        return key.isValidSignature(alert.signature, for: jsonData)
     }
     
     private func saveAlerts() throws {

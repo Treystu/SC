@@ -6,6 +6,8 @@ import com.sovereign.communications.data.dao.MessageDao
 import com.sovereign.communications.data.entity.MessageEntity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import android.net.Uri
+import com.sovereign.communications.SCApplication
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.util.*
@@ -68,9 +70,24 @@ class ChatViewModel(
                 // Save to database
                 messageDao.insert(message)
                 
-                // TODO: Send via MeshNetworkService
-                // val service = getMeshNetworkService()
-                // service.sendMessage(contactId, content)
+                // Send via MeshNetworkService
+                try {
+                    val meshManager = com.sovereign.communications.SCApplication.instance.meshNetworkManager
+                    val success = meshManager.sendMessage(
+                        recipientId = contactId,
+                        payload = content.toByteArray()
+                    )
+                    
+                    // Update status based on result
+                    if (success) {
+                        messageDao.updateMessageStatus(message.id, "sent")
+                    } else {
+                        messageDao.updateMessageStatus(message.id, "queued")
+                    }
+                } catch (e: Exception) {
+                    // Mark as queued for retry
+                    messageDao.updateMessageStatus(message.id, "queued")
+                }
                 
                 // Reload messages to show new message
                 loadMessages()
@@ -91,6 +108,23 @@ class ChatViewModel(
                 
                 // Reload messages
                 loadMessages()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    /**
+     * Send a file message
+     */
+    fun sendFile(uri: Uri) {
+        viewModelScope.launch {
+            try {
+                val fileManager = com.sovereign.communications.media.FileManager(SCApplication.instance)
+                val file = fileManager.saveFile(uri)
+                if (file != null) {
+                    sendMessage("file://${file.absolutePath}")
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
             }

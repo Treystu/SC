@@ -15,16 +15,21 @@ import { MeshNetwork } from '@sc/core';
  * Creates a signaling offer (Peer Identity) to be shared with a peer.
  * Returns a JSON object with the local peer ID.
  */
-export async function createSignalingOffer(meshNetwork: MeshNetwork): Promise<string> {
+export async function createSignalingOffer(meshNetwork: MeshNetwork, publicKey?: Uint8Array): Promise<string> {
   const localPeerId = meshNetwork.getLocalPeerId();
 
   // We exchange Peer IDs to allow the discovery layer to prioritize and connect to this peer.
   // The actual SDP exchange happens automatically via the Mesh Network's signaling channel
   // once the peers discover each other.
 
-  const offerPayload = {
+  const offerPayload: { peerId: string; publicKey?: string } = {
     peerId: localPeerId,
   };
+
+  if (publicKey) {
+    // Convert Uint8Array to hex string for transport
+    offerPayload.publicKey = Array.from(publicKey).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
 
   return JSON.stringify(offerPayload, null, 2);
 }

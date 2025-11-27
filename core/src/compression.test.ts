@@ -12,14 +12,15 @@ describe('Compression', () => {
       expect(result.compressedSize).toBe(5);
     });
 
-    it('should return uncompressed data for large messages (compression disabled)', () => {
-      const data = new Uint8Array(2048).fill(65); // 2KB of 'A's
+    it('should compress large messages with repetitive data', () => {
+      const data = new Uint8Array(2048).fill(65); // 2KB of 'A's - highly compressible
       const result = compressMessage(data);
 
-      expect(result.compressed).toBe(false);
-      expect(result.data).toEqual(data);
+      expect(result.compressed).toBe(true);
       expect(result.originalSize).toBe(2048);
-      expect(result.compressedSize).toBe(2048);
+      expect(result.compressedSize).toBeLessThan(result.originalSize);
+      // Repetitive data compresses very well
+      expect(result.compressedSize).toBeLessThan(result.originalSize * 0.1);
     });
 
     it('should handle empty data', () => {
@@ -49,11 +50,11 @@ describe('Compression', () => {
       expect(result).toEqual(data);
     });
 
-    it('should throw error if compression flag is true (compression disabled)', () => {
+    it('should throw error for invalid compressed data', () => {
       const data = new Uint8Array([1, 2, 3, 4, 5]);
-      
-      expect(() => decompressMessage(data, true)).toThrow('Decompression not available');
-      expect(() => decompressMessage(data, true)).toThrow('fflate library not installed');
+
+      // Trying to decompress invalid data should throw
+      expect(() => decompressMessage(data, true)).toThrow('Failed to decompress message');
     });
 
     it('should handle empty data', () => {

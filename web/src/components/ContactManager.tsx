@@ -18,6 +18,13 @@ export function ContactManager() {
 
   const handleAddContact = async () => {
     if (!newContact.name || !newContact.publicKey) {
+      alert("Name and Public Key are required");
+      return;
+    }
+
+    // Basic validation for public key (assuming base64 or hex)
+    if (newContact.publicKey.length < 32) {
+      alert("Invalid Public Key format");
       return;
     }
 
@@ -28,7 +35,10 @@ export function ContactManager() {
       publicKey: newContact.publicKey,
       lastSeen: Date.now(),
       fingerprint: '',
-      verified: false
+      verified: false,
+      createdAt: Date.now(),
+      blocked: false,
+      endpoints: []
     };
 
     await saveContact(contact);

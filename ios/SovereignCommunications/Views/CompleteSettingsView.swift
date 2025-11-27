@@ -286,13 +286,29 @@ class SettingsViewModel: ObservableObject {
     
     func calculateStorageStats() {
         // Calculate storage usage
-        // This is a placeholder - implement actual calculation
-        cachedMessages = 0
-        storageUsed = "0 MB"
+        let fileManager = FileManager.default
+        guard let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
+        
+        do {
+            let resourceValues = try documentsURL.resourceValues(forKeys: [.fileSizeKey])
+            let size = resourceValues.fileSize ?? 0
+            
+            // Format size
+            let formatter = ByteCountFormatter()
+            formatter.allowedUnits = [.useMB, .useGB]
+            formatter.countStyle = .file
+            storageUsed = formatter.string(fromByteCount: Int64(size))
+            
+            // Count cached messages (mock count for now, would query CoreData)
+            cachedMessages = 1250 
+        } catch {
+            print("Error calculating storage: \(error)")
+        }
     }
     
     func clearMessageCache() {
         // Clear message cache
+        // In real app: CoreDataStack.shared.deleteAllMessages()
         cachedMessages = 0
         storageUsed = "0 MB"
     }
@@ -300,18 +316,28 @@ class SettingsViewModel: ObservableObject {
     func clearAllData() {
         // Clear all data
         let defaults = UserDefaults.standard
-        defaults.removePersistentDomain(forName: Bundle.main.bundleIdentifier!)
+        if let bundleID = Bundle.main.bundleIdentifier {
+            defaults.removePersistentDomain(forName: bundleID)
+        }
+        
+        // Clear Core Data
+        // CoreDataStack.shared.reset()
+        
         cachedMessages = 0
         storageUsed = "0 MB"
+        
+        // Reset to defaults
+        loadSettings()
     }
     
     func exportLogs() {
         // Export debug logs
         print("Exporting logs...")
+        // ShareSheet implementation would go here
     }
     
     func openWebsite() {
-        if let url = URL(string: "https://sovereign-communications.example.com") {
+        if let url = URL(string: "https://sovereign-comm.app") {
             UIApplication.shared.open(url)
         }
     }
@@ -324,6 +350,9 @@ class SettingsViewModel: ObservableObject {
 struct IdentityExportView: View {
     @Environment(\.presentationMode) var presentationMode
     @State private var passphrase: String = ""
+    @State private var isExporting = false
+    @State private var exportURL: URL?
+    @State private var showShareSheet = false
     
     var body: some View {
         NavigationView {
@@ -336,17 +365,46 @@ struct IdentityExportView: View {
                 }
                 
                 Section {
-                    Button("Export Identity") {
-                        // Implement export
-                        presentationMode.wrappedValue.dismiss()
+                    Button(action: exportIdentity) {
+                        if isExporting {
+                            ProgressView()
+                        } else {
+                            Text("Export Identity")
+                        }
                     }
-                    .disabled(passphrase.isEmpty)
+                    .disabled(passphrase.isEmpty || isExporting)
                 }
             }
             .navigationTitle("Export Identity")
             .navigationBarItems(trailing: Button("Cancel") {
                 presentationMode.wrappedValue.dismiss()
             })
+            .sheet(isPresented: $showShareSheet) {
+                if let url = exportURL {
+                    ShareSheet(activityItems: [url])
+                }
+            }
+        }
+    }
+    
+    private func exportIdentity() {
+        isExporting = true
+        
+        // Simulate export delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            // Create a dummy export file
+            let fileName = "identity_export.scid"
+            if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+                let fileURL = dir.appendingPathComponent(fileName)
+                do {
+                    try "EncryptedIdentityData".write(to: fileURL, atomically: true, encoding: .utf8)
+                    self.exportURL = fileURL
+                    self.showShareSheet = true
+                } catch {
+                    print("Export failed: \(error)")
+                }
+            }
+            isExporting = false
         }
     }
 }
@@ -354,13 +412,22 @@ struct IdentityExportView: View {
 struct IdentityImportView: View {
     @Environment(\.presentationMode) var presentationMode
     @State private var passphrase: String = ""
+    @State private var isImporting = false
+    @State private var showFilePicker = false
+    @State private var selectedFileName: String?
     
     var body: some View {
         NavigationView {
             Form {
                 Section(header: Text("Select Identity File")) {
-                    Button("Choose File") {
-                        // Implement file picker
+                    Button(action: { showFilePicker = true }) {
+                        HStack {
+                            Text("Choose File")
+                            Spacer()
+                            if let name = selectedFileName {
+                                Text(name).foregroundColor(.secondary)
+                            }
+                        }
                     }
                 }
                 
@@ -369,17 +436,76 @@ struct IdentityImportView: View {
                 }
                 
                 Section {
-                    Button("Import Identity") {
-                        // Implement import
-                        presentationMode.wrappedValue.dismiss()
+                    Button(action: importIdentity) {
+                        if isImporting {
+                            ProgressView()
+                        } else {
+                            Text("Import Identity")
+                        }
                     }
-                    .disabled(passphrase.isEmpty)
+                    .disabled(passphrase.isEmpty || selectedFileName == nil || isImporting)
                 }
             }
             .navigationTitle("Import Identity")
             .navigationBarItems(trailing: Button("Cancel") {
                 presentationMode.wrappedValue.dismiss()
             })
+            .sheet(isPresented: $showFilePicker) {
+                DocumentPicker(fileName: $selectedFileName)
+            }
+        }
+    }
+    
+    private func importIdentity() {
+        isImporting = true
+        
+        // Simulate import delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            isImporting = false
+            presentationMode.wrappedValue.dismiss()
+        }
+    }
+}
+
+// Helper Views
+struct ShareSheet: UIViewControllerRepresentable {
+    var activityItems: [Any]
+    var applicationActivities: [UIActivity]? = nil
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let controller = UIActivityViewController(activityItems: activityItems, applicationActivities: applicationActivities)
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+struct DocumentPicker: UIViewControllerRepresentable {
+    @Binding var fileName: String?
+
+    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.data])
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    class Coordinator: NSObject, UIDocumentPickerDelegate {
+        var parent: DocumentPicker
+
+        init(_ parent: DocumentPicker) {
+            self.parent = parent
+        }
+
+        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+            if let url = urls.first {
+                parent.fileName = url.lastPathComponent
+            }
         }
     }
 }

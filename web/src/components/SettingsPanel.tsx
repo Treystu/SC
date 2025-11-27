@@ -1,17 +1,24 @@
 import { useState, useEffect } from 'react';
 import { useMeshNetwork } from '../hooks/useMeshNetwork';
 import { getDatabase } from '../storage/database';
+import { BackupManager } from './BackupManager';
+import { ProfileManager, UserProfile } from '../managers/ProfileManager';
 
 export function SettingsPanel() {
   const { status } = useMeshNetwork();
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [displayName, setDisplayName] = useState('');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
   const [storageInfo, setStorageInfo] = useState({ usage: 0, quota: 0, percentage: 0 });
-  const [isExporting, setIsExporting] = useState(false);
-  const [isImporting, setIsImporting] = useState(false);
 
   useEffect(() => {
+    const profileManager = new ProfileManager();
+    profileManager.getProfile().then(p => {
+      setProfile(p);
+      setDisplayName(p.displayName);
+    });
+
     // Get storage usage
     if ('storage' in navigator && 'estimate' in navigator.storage) {
       navigator.storage.estimate().then(estimate => {
@@ -23,76 +30,14 @@ export function SettingsPanel() {
     }
   }, []);
 
-  const handleExportAllData = async () => {
-    setIsExporting(true);
+  const handleSaveProfile = async () => {
+    const profileManager = new ProfileManager();
     try {
-      const db = getDatabase();
-      const data = await db.exportAllData();
-      
-      // Convert to JSON and create download
-      const jsonStr = JSON.stringify(data, null, 2);
-      const blob = new Blob([jsonStr], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `sovereign-communications-export-${Date.now()}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
-      alert('Data exported successfully!');
+      await profileManager.updateProfile({ displayName });
+      alert('Profile updated successfully!');
     } catch (error) {
-      console.error('Export failed:', error);
-      alert(`Export failed: ${error}`);
-    } finally {
-      setIsExporting(false);
+      alert(`Failed to update profile: ${error}`);
     }
-  };
-
-  const handleImportData = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    setIsImporting(true);
-    const reader = new FileReader();
-    
-    reader.onload = async (e) => {
-      try {
-        const data = JSON.parse(e.target?.result as string);
-        const db = getDatabase();
-        
-        const result = await db.importData(data, { mergeStrategy: 'merge' });
-        
-        if (result.errors.length > 0) {
-          alert(`Import completed with errors:\nImported: ${result.imported}\nSkipped: ${result.skipped}\nErrors: ${result.errors.length}\n\nFirst error: ${result.errors[0]}`);
-        } else {
-          alert(`Import successful!\nImported: ${result.imported} items\nSkipped: ${result.skipped} items`);
-        }
-        
-        // Refresh storage info
-        if ('storage' in navigator && 'estimate' in navigator.storage) {
-          const estimate = await navigator.storage.estimate();
-          const usage = estimate.usage || 0;
-          const quota = estimate.quota || 0;
-          const percentage = quota > 0 ? (usage / quota) * 100 : 0;
-          setStorageInfo({ usage, quota, percentage });
-        }
-      } catch (error) {
-        console.error('Import failed:', error);
-        alert(`Failed to import data: ${error}`);
-      } finally {
-        setIsImporting(false);
-      }
-    };
-    
-    reader.onerror = () => {
-      alert('Failed to read file');
-      setIsImporting(false);
-    };
-    
-    reader.readAsText(file);
   };
 
   const handleDeleteAllData = async () => {
@@ -104,14 +49,14 @@ export function SettingsPanel() {
     try {
       const db = getDatabase();
       await db.deleteAllData(deleteConfirmation);
-      
+
       alert('All local data has been permanently deleted.');
       setShowDeleteDialog(false);
       setDeleteConfirmation('');
-      
+
       // Refresh storage info
       setStorageInfo({ usage: 0, quota: storageInfo.quota, percentage: 0 });
-      
+
       // Optionally reload the page
       if (window.confirm('Data deleted. Reload the page?')) {
         window.location.reload();
@@ -121,13 +66,7 @@ export function SettingsPanel() {
     }
   };
 
-  const formatBytes = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
-  };
+
 
   return (
     <div className="settings-panel">
@@ -143,6 +82,7 @@ export function SettingsPanel() {
             onChange={(e) => setDisplayName(e.target.value)}
             placeholder="Enter your display name"
           />
+          <button onClick={handleSaveProfile}>Save</button>
         </div>
 
         <div className="identity-info">
@@ -154,49 +94,13 @@ export function SettingsPanel() {
       </section>
 
       <section className="settings-section">
-        <h3>Data Sovereignty</h3>
-        <p className="sovereignty-notice">
-          Your data is stored <strong>locally on this device only</strong>. No servers, no tracking, complete control.
-        </p>
-        
-        <div className="storage-info">
-          <div className="info-item">
-            <label>Storage Used</label>
-            <div>{formatBytes(storageInfo.usage)} / {formatBytes(storageInfo.quota)}</div>
-            <div className="storage-bar">
-              <div 
-                className="storage-bar-fill" 
-                style={{ width: `${Math.min(storageInfo.percentage, 100)}%` }}
-              />
-            </div>
-          </div>
-        </div>
+        <BackupManager />
 
-        <div className="button-group">
-          <button 
-            onClick={handleExportAllData} 
-            className="secondary-btn"
-            disabled={isExporting}
-          >
-            {isExporting ? 'Exporting...' : 'Export All Data'}
-          </button>
-          <label className="file-input-label">
-            {isImporting ? 'Importing...' : 'Import Data'}
-            <input
-              type="file"
-              accept=".json"
-              onChange={handleImportData}
-              style={{ display: 'none' }}
-              disabled={isImporting}
-            />
-          </label>
-        </div>
-        
         <div className="danger-zone">
           <h4>⚠️ Danger Zone</h4>
           <p>Delete all local data permanently. This action cannot be undone.</p>
-          <button 
-            onClick={() => setShowDeleteDialog(true)} 
+          <button
+            onClick={() => setShowDeleteDialog(true)}
             className="danger-btn"
           >
             Delete All Local Data
@@ -271,8 +175,8 @@ export function SettingsPanel() {
               }} className="cancel-btn">
                 Cancel
               </button>
-              <button 
-                onClick={handleDeleteAllData} 
+              <button
+                onClick={handleDeleteAllData}
                 className="danger-btn"
                 disabled={deleteConfirmation !== 'DELETE ALL MY DATA'}
               >

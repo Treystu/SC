@@ -58,7 +58,7 @@ class MainActivity : ComponentActivity() {
         
         if (showOnboarding) {
             OnboardingScreen(
-                localPeerId = "generated_peer_id_placeholder", // TODO: Get from MeshNetwork
+                localPeerId = com.sovereign.communications.SCApplication.instance.localPeerId ?: "unknown",
                 onComplete = {
                     prefs.edit().putBoolean("onboarding_complete", true).apply()
                     showOnboarding = false
@@ -104,8 +104,29 @@ class MainActivity : ComponentActivity() {
      * Show dialog explaining permission requirements
      */
     private fun showPermissionRationaleDialog() {
-        // TODO: Implement permission rationale dialog
-        // This should explain why each permission is needed for mesh networking
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Permissions Required")
+            .setMessage(
+                """
+                Sovereign Communications needs the following permissions to enable secure mesh networking:
+                
+                📡 Bluetooth: Required to discover and connect to nearby devices for peer-to-peer messaging without internet.
+                
+                📍 Location: Android requires location permission for Bluetooth scanning (we don't track your location).
+                
+                🔔 Notifications: Alerts you when you receive new messages while the app is in the background.
+                
+                All permissions are essential for secure, offline mesh communication.
+                """.trimIndent()
+            )
+            .setPositiveButton("Grant Permissions") { _, _ ->
+                permissionManager.requestAllPermissions(this)
+            }
+            .setNegativeButton("Cancel") { dialog, _ ->
+                dialog.dismiss()
+            }
+            .setCancelable(false)
+            .show()
     }
     
     /**

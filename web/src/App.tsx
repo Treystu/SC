@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
+import * as Sentry from '@sentry/react';
+import './sentry';
 import './App.css';
 import ConversationList from './components/ConversationList';
 import ChatView from './components/ChatView';
-import ConnectionStatus from './components/ConnectionStatus';
+import { ConnectionStatus } from './components/ConnectionStatus';
 import { SettingsPanel } from './components/SettingsPanel';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { OnboardingFlow } from './components/Onboarding/OnboardingFlow';
@@ -12,8 +14,14 @@ import { useMeshNetwork } from './hooks/useMeshNetwork';
 import { useInvite } from './hooks/useInvite';
 import { usePendingInvite } from './hooks/usePendingInvite';
 import { useContacts } from './hooks/useContacts';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { announce } from './utils/accessibility';
 import { getDatabase } from './storage/database';
+import { generateFingerprint, publicKeyToBase64, isValidPublicKey } from '../../core/src/utils/fingerprint';
+import { IdentityManager, parseConnectionOffer, hexToBytes } from '../../core/src';
+import { ProfileManager, UserProfile } from './managers/ProfileManager';
+import { validateMessageContent } from '../../core/src/validation';
+import { rateLimiter } from '../../core/src/rate-limiter';
 
 function App() {
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
@@ -22,6 +30,7 @@ function App() {
   const [showShareApp, setShowShareApp] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [demoMessages, setDemoMessages] = useState<Array<{ id: string; from: string; content: string; timestamp: number }>>([]);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const { status, messages, sendMessage, connectToPeer, generateConnectionOffer, acceptConnectionOffer } = useMeshNetwork();
   const { contacts, addContact, loading: contactsLoading } = useContacts();
 
@@ -36,11 +45,19 @@ function App() {
     status.localPeerId,
     identityKeys.publicKey,
     identityKeys.privateKey,
-    'User' // TODO: Get from user profile
+    userProfile?.displayName || 'User'
   );
 
   // Check for pending invite from join.html page
   const pendingInvite = usePendingInvite();
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts([
+    { key: 'n', ctrl: true, description: 'New Conversation', action: () => document.querySelector<HTMLElement>('.add-contact-btn')?.click() },
+    { key: 'k', ctrl: true, description: 'Search', action: () => document.querySelector<HTMLElement>('.search-input')?.focus() },
+    { key: 's', ctrl: true, description: 'Settings', action: () => setShowSettings(true) },
+    { key: 'Escape', description: 'Close Modals', action: () => { setShowSettings(false); setShowDiagnostics(false); setShowShareApp(false); } }
+  ]);
 
   // Check if onboarding has been completed
   useEffect(() => {
@@ -49,20 +66,40 @@ function App() {
       setShowOnboarding(true);
     }
 
-    // Initialize identity keys (placeholder - should use actual identity management)
-    // For now, we'll create keys on mount
+    // Initialize identity keys
     const initKeys = async () => {
-      const { generateIdentity } = await import('@sc/core');
-      const identity = generateIdentity();
-      setIdentityKeys({
-        publicKey: identity.publicKey,
-        privateKey: identity.privateKey,
-      });
+      try {
+        const { generateIdentity } = await import('@sc/core');
+        // Check if keys exist in storage
+        const storedKeys = localStorage.getItem('sc_identity_keys');
+        if (storedKeys) {
+          const parsed = JSON.parse(storedKeys);
+          setIdentityKeys({
+            publicKey: new Uint8Array(Object.values(parsed.publicKey)),
+            privateKey: new Uint8Array(Object.values(parsed.privateKey))
+          });
+        } else {
+          const identity = generateIdentity();
+          setIdentityKeys({
+            publicKey: identity.publicKey,
+            privateKey: identity.privateKey,
+          });
+          localStorage.setItem('sc_identity_keys', JSON.stringify({
+            publicKey: Array.from(identity.publicKey),
+            privateKey: Array.from(identity.privateKey)
+          }));
+        }
+      } catch (e) {
+        console.error("Failed to initialize identity", e);
+      }
     };
 
     if (!identityKeys.publicKey && !identityKeys.privateKey) {
       initKeys();
     }
+
+    const profileManager = new ProfileManager();
+    profileManager.getProfile().then(setUserProfile);
   }, [identityKeys]);
 
   // Handle pending invite from join.html page
@@ -77,7 +114,7 @@ function App() {
             status.localPeerId,
             identityKeys.publicKey!,
             identityKeys.privateKey!,
-            'User'
+            userProfile?.displayName || 'User'
           );
 
           // Redeem the invite (code is guaranteed to be non-null by the outer if check)
@@ -143,67 +180,56 @@ function App() {
     }
   }, [status.isConnected, status.peerCount]);
 
-  const handleAddContact = async (peerId: string, name: string) => {
-    try {
-      // Special demo mode for testing without real peers
-      if (peerId.toLowerCase() === 'demo') {
-        announce.message(`Demo mode activated - messages will echo back`, 'polite');
-        // Add welcome message
-        setTimeout(() => {
-          setDemoMessages(prev => [...prev, {
-            id: `demo-${Date.now()}`,
-            from: 'demo',
-            content: `Hi! This is demo mode. Your messages will echo back. Try sending something!`,
-            timestamp: Date.now()
-          }]);
-        }, 500);
-      } else {
-        await connectToPeer(peerId);
-        announce.message(`Connected to ${name}`, 'polite');
-      }
-      setSelectedConversation(peerId);
-    } catch (error) {
-      console.error('Failed to connect to peer:', error);
-      announce.message(`Failed to connect to ${name}`, 'assertive');
-      // Still add contact but maybe mark as offline/unverified
+  const handleAddContact = async (peerId: string, name: string, publicKeyHex?: string) => {
+    if (!publicKeyHex || !isValidPublicKey(publicKeyHex)) {
+      throw new Error('Valid public key required for contact');
     }
-
-    // Save contact to IndexedDB regardless of connection status
-    try {
-      await addContact({
-        id: peerId,
-        publicKey: peerId, // In production, use actual public key
-        displayName: name,
-        lastSeen: Date.now(),
-        createdAt: Date.now(),
-        fingerprint: '', // In production, generate from public key
-        verified: false,
-        blocked: false,
-        endpoints: [{ type: 'webrtc' }]
-      });
-    } catch (dbError) {
-      console.error('Failed to save contact:', dbError);
-    }
+    
+    const publicKeyBytes = hexToBytes(publicKeyHex);
+    const publicKeyBase64 = publicKeyToBase64(publicKeyBytes);
+    const fingerprint = await generateFingerprint(publicKeyBytes);
+    
+    await addContact({
+      id: peerId,
+      publicKey: publicKeyBase64, // ACTUAL PUBLIC KEY
+      displayName: name,
+      lastSeen: Date.now(),
+      createdAt: Date.now(),
+      fingerprint: fingerprint, // ACTUAL FINGERPRINT
+      verified: false, // Verify through key exchange
+      blocked: false,
+      endpoints: [{ type: 'webrtc' }]
+    });
   };
 
   const handleImportContact = async (code: string, name: string) => {
     try {
+      const offer = parseConnectionOffer(code);
+      
+      if (!offer.publicKey || !isValidPublicKey(offer.publicKey)) {
+        throw new Error('Invalid connection offer - missing public key');
+      }
+      
+      const publicKeyBytes = hexToBytes(offer.publicKey);
+      const publicKeyBase64 = publicKeyToBase64(publicKeyBytes);
+      const fingerprint = await generateFingerprint(publicKeyBytes);
+      
       const remotePeerId = await acceptConnectionOffer(code);
-      announce.message(`Connected to ${name}`, 'polite');
-      setSelectedConversation(remotePeerId);
-
-      // Save contact to IndexedDB
+      
       await addContact({
         id: remotePeerId,
-        publicKey: remotePeerId, // In production, use actual public key from signaling
+        publicKey: publicKeyBase64, // ACTUAL PUBLIC KEY FROM OFFER
         displayName: name,
         lastSeen: Date.now(),
         createdAt: Date.now(),
-        fingerprint: '', // In production, generate from public key
-        verified: true, // Mark as verified since we connected
+        fingerprint: fingerprint, // ACTUAL FINGERPRINT
+        verified: true, // Verified through key exchange
         blocked: false,
         endpoints: [{ type: 'webrtc' }]
       });
+
+      setSelectedConversation(remotePeerId);
+      announce.message(`Connected to ${name}`, 'polite');
     } catch (error) {
       console.error('Failed to connect to peer from offer:', error);
       announce.message(`Failed to connect to ${name}`, 'assertive');
@@ -211,6 +237,28 @@ function App() {
   };
 
   const handleSendMessage = async (content: string, attachments?: File[]) => {
+    const validation = validateMessageContent(content);
+    if (!validation.valid) {
+      alert(validation.error);
+      return;
+    }
+
+    const rateLimitResult = rateLimiter.canSendMessage(status.localPeerId);
+    if (!rateLimitResult.allowed) {
+      alert(rateLimitResult.reason);
+      return;
+    }
+
+    if (attachments && attachments.length > 0) {
+      const fileRateLimitResult = rateLimiter.canSendFile(status.localPeerId);
+      if (!fileRateLimitResult.allowed) {
+        alert(fileRateLimitResult.reason);
+        return;
+      }
+    }
+
+    const sanitizedContent = validation.sanitized;
+
     if (selectedConversation === 'demo') {
       // Handle attachments in demo mode
       if (attachments && attachments.length > 0) {
@@ -239,12 +287,12 @@ function App() {
         }
       }
 
-      if (content) {
+      if (sanitizedContent) {
         // Add user message
         const userMsg = {
           id: `me-${Date.now()}`,
           from: 'me',
-          content,
+          content: sanitizedContent,
           timestamp: Date.now(),
           type: 'text',
           status: 'sent'
@@ -256,7 +304,7 @@ function App() {
           setDemoMessages(prev => [...prev, {
             id: `demo-${Date.now()}`,
             from: 'demo',
-            content: `Echo: ${content}`,
+            content: `Echo: ${sanitizedContent}`,
             timestamp: Date.now(),
             type: 'text',
             status: 'read'
@@ -264,17 +312,17 @@ function App() {
         }, 1000);
       }
     } else if (selectedConversation) {
-      sendMessage(selectedConversation, content, attachments);
+      sendMessage(selectedConversation, sanitizedContent, attachments);
 
       // Save message to IndexedDB
       try {
         const db = getDatabase();
         // Save text message if present
-        if (content) {
+        if (sanitizedContent) {
           await db.saveMessage({
             id: `msg-${Date.now()}`,
             conversationId: selectedConversation,
-            content,
+            content: sanitizedContent,
             timestamp: Date.now(),
             senderId: status.localPeerId,
             recipientId: selectedConversation,
@@ -398,10 +446,7 @@ function App() {
             >
               ⚙️
             </button>
-            <ConnectionStatus
-              status={status.isConnected ? 'online' : 'offline'}
-              peerCount={status.peerCount}
-            />
+            <ConnectionStatus quality={status.connectionQuality} />
           </div>
         </header>
 
@@ -429,11 +474,14 @@ function App() {
           <main className="main-content" id="main-content" role="main" tabIndex={-1}>
             <ErrorBoundary fallback={<div role="alert">Error loading chat</div>}>
               {selectedConversation ? (
-                <ChatView
-                  conversationId={selectedConversation}
-                  messages={displayMessages}
-                  onSendMessage={handleSendMessage}
-                />
+                <ErrorBoundary fallback={<div role="alert">Error in ChatView</div>}>
+                  <ChatView
+                    conversationId={selectedConversation}
+                    messages={displayMessages}
+                    onSendMessage={handleSendMessage}
+                    isLoading={contactsLoading}
+                  />
+                </ErrorBoundary>
               ) : (
                 <div className="empty-state">
                   <h2>Welcome to Sovereign Communications</h2>
@@ -484,4 +532,15 @@ function App() {
   );
 }
 
-export default App;
+export default Sentry.withErrorBoundary(App, {
+  fallback: (props: { error: Error; componentStack: string | null; resetError: () => void; }) => (
+    <ErrorBoundary>
+      <div>
+        <h2>Something went wrong</h2>
+        <p>{props.error.toString()}</p>
+        <p>{props.componentStack}</p>
+        <button onClick={props.resetError}>Try again</button>
+      </div>
+    </ErrorBoundary>
+  ),
+});

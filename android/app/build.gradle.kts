@@ -119,7 +119,7 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     
     // WebRTC
-    implementation("org.webrtc:google-webrtc:1.0.32006")
+    implementation("org.webrtc:google-webrtc:1.1.0")
     
     // Performance monitoring
     implementation("androidx.profileinstaller:profileinstaller:1.4.1")

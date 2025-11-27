@@ -57,7 +57,7 @@ describe('MessageRelay', () => {
 
       const encoded = encodeMessage(message);
       await relay.processMessage(encoded, 'peer-1');
-      
+
       const stats = relay.getStats();
       expect(stats.messagesReceived).toBe(1);
     });
@@ -76,10 +76,10 @@ describe('MessageRelay', () => {
       };
 
       const encoded = encodeMessage(message);
-      
+
       await relay.processMessage(encoded, 'peer-1');
       await relay.processMessage(encoded, 'peer-2'); // Duplicate
-      
+
       const stats = relay.getStats();
       expect(stats.messagesReceived).toBe(2);
       expect(stats.messagesDuplicate).toBe(1);
@@ -100,7 +100,7 @@ describe('MessageRelay', () => {
 
       const encoded = encodeMessage(message);
       await relay.processMessage(encoded, 'peer-1');
-      
+
       const stats = relay.getStats();
       expect(stats.messagesExpired).toBe(1);
     });
@@ -109,7 +109,7 @@ describe('MessageRelay', () => {
   describe('Statistics', () => {
     it('should track message stats', () => {
       const stats = relay.getStats();
-      
+
       expect(stats).toHaveProperty('messagesReceived');
       expect(stats).toHaveProperty('messagesForwarded');
       expect(stats).toHaveProperty('messagesDuplicate');
@@ -123,7 +123,7 @@ describe('MessageRelay', () => {
     it('should reset statistics', () => {
       relay.resetStats();
       const stats = relay.getStats();
-      
+
       expect(stats.messagesReceived).toBe(0);
       expect(stats.messagesForwarded).toBe(0);
       expect(stats.messagesDuplicate).toBe(0);
@@ -132,7 +132,7 @@ describe('MessageRelay', () => {
   });
 
   describe('Store and Forward', () => {
-    it('should store message for offline peer', () => {
+    it('should store message for offline peer', async () => {
       const message: Message = {
         header: {
           version: 0x01,
@@ -146,12 +146,12 @@ describe('MessageRelay', () => {
       };
 
       relay.storeMessage(message, 'offline-peer');
-      
-      const stats = relay.getStats();
+
+      const stats = await relay.getStats();
       expect(stats.messagesStored).toBe(1);
     });
 
-    it('should track stored messages stats', () => {
+    it('should track stored messages stats', async () => {
       const message: Message = {
         header: {
           version: 0x01,
@@ -165,8 +165,8 @@ describe('MessageRelay', () => {
       };
 
       relay.storeMessage(message, 'offline-peer');
-      const storedStats = relay.getStoredMessagesStats();
-      
+      const storedStats = await relay.getStoredMessagesStats();
+
       expect(storedStats.total).toBeGreaterThan(0);
       expect(storedStats.byDestination).toHaveProperty('offline-peer');
     });
@@ -186,7 +186,7 @@ describe('MessageRelay', () => {
 
       relay.storeMessage(message, 'peer-1');
       relay.retryStoredMessages();
-      
+
       expect(relay).toBeDefined();
     });
   });
@@ -194,21 +194,21 @@ describe('MessageRelay', () => {
   describe('Callbacks', () => {
     it('should register onMessageForSelf callback', () => {
       let callbackCalled = false;
-      
+
       relay.onMessageForSelf(() => {
         callbackCalled = true;
       });
-      
+
       expect(relay).toBeDefined();
     });
 
     it('should register onForwardMessage callback', () => {
       let callbackCalled = false;
-      
+
       relay.onForwardMessage(() => {
         callbackCalled = true;
       });
-      
+
       expect(relay).toBeDefined();
     });
   });
@@ -228,10 +228,10 @@ describe('MessageRelay', () => {
       };
 
       const encoded = encodeMessage(message);
-      
+
       // Process from multiple peers to simulate potential loop
       await relay.processMessage(encoded, 'peer-1');
-      
+
       const stats = relay.getStats();
       expect(stats).toBeDefined();
     });
