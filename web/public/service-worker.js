@@ -45,7 +45,13 @@ self.addEventListener('activate', (event) => {
 // Fetch event - serve from cache, fallback to network
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
-  
+
+  // Ignore unsupported schemes (like chrome-extension://)
+  if (!url.protocol.startsWith('http')) {
+    return;
+  }
+
+
   // Handle /join route with invite data
   if (url.pathname === '/join' && activeInvite) {
     event.respondWith(
@@ -60,7 +66,7 @@ self.addEventListener('fetch', (event) => {
               'const inviterName = params.get(\'inviter\') || sessionStorage.getItem(\'inviterName\');',
               `const inviterName = '${activeInvite.inviterName || 'A friend'}';`
             );
-            
+
             return new Response(modifiedBody, {
               headers: {
                 'Content-Type': 'text/html',
@@ -73,7 +79,7 @@ self.addEventListener('fetch', (event) => {
     );
     return;
   }
-  
+
   event.respondWith(
     caches.match(event.request).then((response) => {
       // Return cached response if found
@@ -120,7 +126,7 @@ async function syncOfflineMessages() {
     // Get offline messages from IndexedDB
     const db = await openDatabase();
     const messages = await getPendingMessages(db);
-    
+
     // Send each message
     for (const message of messages) {
       try {
@@ -185,7 +191,7 @@ self.addEventListener('message', (event) => {
 // Push notifications
 self.addEventListener('push', (event) => {
   console.log('Service Worker: Push notification received');
-  
+
   const data = event.data ? event.data.json() : {};
   const title = data.title || 'New Message';
   const options = {
