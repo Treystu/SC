@@ -75,7 +75,7 @@
   margin-bottom: 1rem;
 }
 
-.empty-state > p {
+.empty-state>p {
   color: var(--text-secondary);
   margin-bottom: 3rem;
 }
@@ -136,10 +136,33 @@
   gap: 1rem;
 }
 
+.diagnostics-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 1.5rem;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.diagnostics-btn:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--accent-primary);
+  transform: scale(1.1);
+}
+
 .settings-btn {
   background: transparent;
   border: 1px solid var(--border-color);
   color: var(--text-primary);
+  font-family: system-ui, -apple-system, sans-serif;
   font-size: 1.5rem;
   width: 40px;
   height: 40px;
@@ -188,6 +211,7 @@
     opacity: 0;
     transform: translateY(-20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -283,7 +307,10 @@
   flex-wrap: wrap;
 }
 
-.secondary-btn, .danger-btn, .cancel-btn, .primary-btn {
+.secondary-btn,
+.danger-btn,
+.cancel-btn,
+.primary-btn {
   padding: 0.75rem 1.5rem;
   border-radius: 8px;
   font-size: 1rem;
@@ -353,7 +380,7 @@
     position: absolute;
     z-index: 100;
   }
-  
+
   .features {
     grid-template-columns: 1fr;
   }
