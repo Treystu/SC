@@ -532,4 +532,15 @@ function App() {
   );
 }
 
-export default App;
+export default Sentry.withErrorBoundary(App, {
+  fallback: (props: { error: Error; componentStack: string | null; resetError: () => void; }) => (
+    <ErrorBoundary>
+      <div>
+        <h2>Something went wrong</h2>
+        <p>{props.error.toString()}</p>
+        <p>{props.componentStack}</p>
+        <button onClick={props.resetError}>Try again</button>
+      </div>
+    </ErrorBoundary>
+  ),
+});
