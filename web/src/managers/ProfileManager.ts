@@ -41,7 +41,10 @@ export class ProfileManager {
 
   private async createDefaultProfile(): Promise<UserProfile> {
     const identityManager = new IdentityManager();
-    await identityManager.loadIdentity();
+    const identity = await identityManager.loadIdentity();
+    if (!identity) {
+      await identityManager.generateIdentity();
+    }
     const publicKeyBytes = await identityManager.getPublicKeyBytes();
     const publicKey = publicKeyToBase64(publicKeyBytes);
     const fingerprint = await generateFingerprint(publicKeyBytes);

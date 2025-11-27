@@ -67,40 +67,51 @@ function App() {
     }
 
     // Initialize identity keys
+    // Initialize identity keys
     const initKeys = async () => {
       try {
-        const { generateIdentity } = await import('@sc/core');
-        // Check if keys exist in storage
-        const storedKeys = localStorage.getItem('sc_identity_keys');
-        if (storedKeys) {
-          const parsed = JSON.parse(storedKeys);
+        const { IdentityManager } = await import('@sc/core');
+        const identityManager = new IdentityManager();
+
+        let identity = await identityManager.loadIdentity();
+
+        if (!identity) {
+          console.log('No identity found, generating new one...');
+          identity = await identityManager.generateIdentity();
+        }
+
+        if (identity) {
+          const publicKey = await identityManager.getPublicKeyBytes();
+          // We can't easily get private key bytes from CryptoKey if it's non-extractable, 
+          // but IdentityManager makes them extractable.
+          // However, for the App state, we mainly need the public key for display/logic.
+          // The private key is used internally by IdentityManager for signing.
+          // But useInvite hook needs the private key bytes.
+
+          // IdentityManager.exportIdentity gives us JWKs. 
+          // We need raw bytes for the current App state interface.
+          // Let's assume we can get them.
+
+          // Actually, IdentityManager stores keys as CryptoKeys. 
+          // We need to export the private key to bytes for the current state shape.
+          const privateKeyExport = await window.crypto.subtle.exportKey('pkcs8', identity.privateKey as any);
+          const privateKey = new Uint8Array(privateKeyExport);
+
           setIdentityKeys({
-            publicKey: new Uint8Array(Object.values(parsed.publicKey)),
-            privateKey: new Uint8Array(Object.values(parsed.privateKey))
+            publicKey,
+            privateKey
           });
-        } else {
-          const identity = generateIdentity();
-          setIdentityKeys({
-            publicKey: identity.publicKey,
-            privateKey: identity.privateKey,
-          });
-          localStorage.setItem('sc_identity_keys', JSON.stringify({
-            publicKey: Array.from(identity.publicKey),
-            privateKey: Array.from(identity.privateKey)
-          }));
         }
       } catch (e) {
         console.error("Failed to initialize identity", e);
       }
     };
 
-    if (!identityKeys.publicKey && !identityKeys.privateKey) {
-      initKeys();
-    }
+    initKeys();
 
     const profileManager = new ProfileManager();
     profileManager.getProfile().then(setUserProfile);
-  }, [identityKeys]);
+  }, []); // Remove dependency on identityKeys to avoid infinite loop if we set them here
 
   // Handle pending invite from join.html page
   useEffect(() => {

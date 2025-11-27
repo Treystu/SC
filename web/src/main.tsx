@@ -14,17 +14,16 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-console.log('Main.tsx executing...');
-// alert('Main.tsx executing'); // Visual confirmation
-
 const rootElement = document.getElementById('root');
-console.log('Root element:', rootElement);
 
 if (!rootElement) {
   console.error('Failed to find the root element');
 } else {
-  console.log('Mounting React app...');
   ReactDOM.createRoot(rootElement).render(
-    <App />
+    <React.StrictMode>
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
+    </React.StrictMode>,
   );
 }
