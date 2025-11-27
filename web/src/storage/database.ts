@@ -118,26 +118,53 @@ export class DatabaseManager {
   private dbName = 'sovereign-communications';
   private version = CURRENT_SCHEMA_VERSION;
   private db: IDBDatabase | null = null;
+  private initPromise: Promise<void> | null = null;
 
   /**
    * Initialize database
    */
   async init(): Promise<void> {
-    return new Promise((resolve, reject) => {
+    if (this.db) return;
+    if (this.initPromise) return this.initPromise;
+
+    this.initPromise = new Promise((resolve, reject) => {
       const request = indexedDB.open(this.dbName, this.version);
 
-      request.onerror = () => reject(request.error);
+      request.onerror = () => {
+        this.initPromise = null;
+        reject(request.error);
+      };
+
       request.onsuccess = () => {
         this.db = request.result;
+        // Handle connection closing
+        this.db.onversionchange = () => {
+          this.db?.close();
+          this.db = null;
+          this.initPromise = null;
+        };
+        this.db.onclose = () => {
+          this.db = null;
+          this.initPromise = null;
+        };
         resolve();
       };
 
       request.onupgradeneeded = async (event) => {
         const db = (event.target as IDBOpenDBRequest).result;
         const oldVersion = event.oldVersion;
-        await validateAndMigrate(db, oldVersion);
+        try {
+          await validateAndMigrate(db, oldVersion);
+        } catch (error) {
+          console.error('DatabaseManager: Migration failed:', error);
+          request.transaction?.abort();
+          this.initPromise = null;
+          reject(error);
+        }
       };
     });
+
+    return this.initPromise;
   }
 
   // ===== MESSAGE OPERATIONS =====

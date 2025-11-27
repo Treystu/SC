@@ -169,7 +169,7 @@ export function useMeshNetwork() {
       network.onPeerConnected(async (peerId: string) => {
         console.log('Peer connected:', peerId);
         updatePeerStatus();
-        retryQueuedMessages();
+        // retryQueuedMessages();
 
         // Persist peer connection
         try {
@@ -218,32 +218,32 @@ export function useMeshNetwork() {
 
         // Simulate connection quality updates
         if (connectionMonitorRef.current) {
-            const monitor = connectionMonitorRef.current;
-            monitor.updateLatency(Math.random() * 100); // Simulate latency
-            monitor.updatePacketLoss(100, 100 - Math.random() * 5); // Simulate packet loss
-            setStatus(prev => ({ ...prev, connectionQuality: monitor.getQuality() }));
+          const monitor = connectionMonitorRef.current;
+          monitor.updateLatency(Math.random() * 100); // Simulate latency
+          monitor.updatePacketLoss(100, 100 - Math.random() * 5); // Simulate packet loss
+          setStatus(prev => ({ ...prev, connectionQuality: monitor.getQuality() }));
         }
       };
 
       // Process offline queue
-      const retryQueuedMessages = async () => {
-        if (!meshNetworkRef.current) return;
-        
-        await offlineQueue.processQueue(async (msg) => {
-          try {
-            await meshNetworkRef.current!.sendMessage(msg.recipientId, msg.content);
-            return true; // Sent successfully
-          } catch (e) {
-            return false; // Failed to send
-          }
-        });
-      };
+      // const retryQueuedMessages = async () => {
+      //   if (!meshNetworkRef.current) return;
+
+      //   await offlineQueue.processQueue(async (msg) => {
+      //     try {
+      //       await meshNetworkRef.current!.sendMessage(msg.recipientId, msg.content);
+      //       return true; // Sent successfully
+      //     } catch (e) {
+      //       return false; // Failed to send
+      //     }
+      //   });
+      // };
 
       // Set up periodic retry
-      retryInterval = setInterval(retryQueuedMessages, 30000); // 30 seconds
+      // retryInterval = setInterval(retryQueuedMessages, 30000); // 30 seconds
 
       // Initial retry
-      retryQueuedMessages();
+      // retryQueuedMessages();
 
       // Store interval cleanup in a way that can be accessed by cleanup function
       // Since we can't easily modify the cleanup function here without rewriting the whole effect,
@@ -257,7 +257,7 @@ export function useMeshNetwork() {
 
     // Cleanup on unmount
     return () => {
-      if (retryInterval) clearInterval(retryInterval);
+      // if (retryInterval) clearInterval(retryInterval);
       if (meshNetworkRef.current) {
         meshNetworkRef.current.shutdown();
         meshNetworkRef.current = null;
