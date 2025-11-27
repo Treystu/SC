@@ -18,8 +18,14 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
+const rootElement = document.getElementById('root');
+console.log('Root element:', rootElement);
+
+if (!rootElement) {
+  console.error('Failed to find the root element');
+} else {
+  console.log('Mounting React app...');
+  ReactDOM.createRoot(rootElement).render(
     <App />
-  </React.StrictMode>,
-);
+  );
+}
