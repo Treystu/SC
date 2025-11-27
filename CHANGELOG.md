@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.1.5](https://github.com/Treystu/SC/compare/v0.1.4...v0.1.5) (2025-11-27)
+
+
+### Bug Fixes
+
+* Signature validation and test suite improvements ([0d80ccf](https://github.com/Treystu/SC/commit/0d80ccfd5c23459aece319eafb1f3f647253dff4))
+
 ### [0.1.4](https://github.com/Treystu/SC/compare/v0.1.3...v0.1.4) (2025-11-27)
 
 
