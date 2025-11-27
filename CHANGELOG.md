@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.1.4](https://github.com/Treystu/SC/compare/v0.1.3...v0.1.4) (2025-11-27)
+
+
+### Features
+
+* continue generating completeness report ([3c488d0](https://github.com/Treystu/SC/commit/3c488d0bd5451fb3954b73881bd40812b37e06f4))
+
 ### [0.1.3](https://github.com/Treystu/SC/compare/v0.1.2...v0.1.3) (2025-11-26)
 
 ### [0.1.2](https://github.com/Treystu/SC/compare/v0.1.1...v0.1.2) (2025-11-26)

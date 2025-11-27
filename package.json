@@ -1,6 +1,6 @@
 {
   "name": "sovereign-communications",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Decentralized mesh networking communication platform",
   "private": true,
   "workspaces": [
