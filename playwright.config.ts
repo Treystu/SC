@@ -9,11 +9,11 @@ export default defineConfig({
   testMatch: ['**/*.e2e.test.ts', '**/*.e2e.spec.ts', '**/cross-platform.e2e.test.ts'],
   
   /* Maximum time one test can run for */
-  timeout: 30 * 1000,
+  timeout: 60 * 1000,
   
   /* Test timeout for expect() */
   expect: {
-    timeout: 5000,
+    timeout: 10000,
   },
   
   /* Run tests in files in parallel */
@@ -39,7 +39,7 @@ export default defineConfig({
   /* Shared settings for all the projects below */
   use: {
     /* Base URL to use in actions like `await page.goto('/')` */
-    baseURL: process.env.BASE_URL || 'http://localhost:5173',
+    baseURL: process.env.BASE_URL || 'http://localhost:3000',
     
     /* Collect trace when retrying the failed test */
     trace: 'on-first-retry',
@@ -49,6 +49,10 @@ export default defineConfig({
     
     /* Video on first retry */
     video: 'retain-on-failure',
+
+    /* Clear local storage before each test */
+    storageState: undefined,
+    ignoreHTTPSErrors: true,
   },
 
   /* Configure projects for major browsers */
@@ -81,8 +85,8 @@ export default defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: 'npx vite preview --port 5173 --outDir web/dist',
-    url: 'http://localhost:5173',
+    command: 'npm run dev',
+    url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,
   },

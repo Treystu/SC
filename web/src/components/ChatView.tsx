@@ -132,6 +132,7 @@ function ChatView({
             }
           }}
           onTyping={() => { }}
+          data-testid="message-input-component"
         />
       </div>
     </div>

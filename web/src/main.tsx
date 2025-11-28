@@ -6,11 +6,13 @@ import './sentry'; // Sentry is initialized in sentry.ts
 import './index.css';
 
 // Register service worker for PWA support
-// Unregister service worker to clear cache issues
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.ready.then(registration => {
-    registration.unregister();
-    console.log('Service Worker unregistered');
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js').then(registration => {
+      console.log('Service Worker registered with scope:', registration.scope);
+    }).catch(error => {
+      console.error('Service Worker registration failed:', error);
+    });
   });
 }
 

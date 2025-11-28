@@ -30,7 +30,7 @@ function App() {
   const [showShareApp, setShowShareApp] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const { status, peers, messages, sendMessage, connectToPeer, generateConnectionOffer, acceptConnectionOffer, identity } = useMeshNetwork();
+  const { status, peers, messages, sendMessage, connectToPeer, generateConnectionOffer, acceptConnectionOffer, identity, joinRoom } = useMeshNetwork();
   const { contacts, addContact, loading: contactsLoading } = useContacts();
 
   const { invite, createInvite, clearInvite } = useInvite(
@@ -328,6 +328,22 @@ function App() {
 
   return (
     <ErrorBoundary>
+      {/* Initialization Error Banner */}
+      {status.initializationError && (
+        <div className="error-banner" role="alert">
+          <div className="error-content">
+            <h3>⚠️ Startup Error</h3>
+            <p>{status.initializationError}</p>
+            <button
+              onClick={() => navigator.clipboard.writeText(status.initializationError!)}
+              className="copy-error-btn"
+            >
+              Copy Error
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Onboarding Flow */}
       {showOnboarding && (
         <OnboardingFlow
@@ -374,6 +390,7 @@ function App() {
               className="diagnostics-btn"
               aria-label="Network Diagnostics"
               title="Network Diagnostics"
+              data-testid="diagnostics-btn"
             >
               📶
             </button>
@@ -382,6 +399,7 @@ function App() {
               className="settings-btn"
               aria-label="Settings"
               title="Settings"
+              data-testid="settings-btn"
             >
               ⚙️
             </button>
@@ -389,68 +407,73 @@ function App() {
           </div>
         </header>
 
-        <div className="app-body">
-          <aside className="sidebar" role="complementary" aria-label="Conversations">
-            <ErrorBoundary fallback={<div role="alert">Error loading conversations</div>}>
-              <ConversationList
-                conversations={contacts.map(c => ({
-                  id: c.id,
-                  name: c.displayName,
-                  unreadCount: 0, // Replace with actual unread count
-                }))}
-                loading={contactsLoading}
-                selectedId={selectedConversation}
-                onSelect={setSelectedConversation}
-                onAddContact={handleAddContact}
-                onImportContact={handleImportContact}
-                onShareApp={handleShareApp}
-                localPeerId={status.localPeerId}
-                generateConnectionOffer={generateConnectionOffer}
-              />
-            </ErrorBoundary>
-          </aside>
-
-          <main className="main-content" id="main-content" role="main" tabIndex={-1}>
-            <ErrorBoundary fallback={<div role="alert">Error loading chat</div>}>
-              {selectedConversation ? (
-                <ErrorBoundary fallback={<div role="alert">Error in ChatView</div>}>
-                  <ChatView
-                    conversationId={selectedConversation}
-                    contactName={contacts.find(c => c.id === selectedConversation)?.displayName || 'Unknown Contact'}
-                    isOnline={peers.some(p => p.id === selectedConversation)}
-                    messages={messages}
-                    onSendMessage={handleSendMessage}
-                    isLoading={contactsLoading}
+        <div className="app-body" data-testid="app-body">
+          {!showOnboarding && (
+            <>
+              <aside className="sidebar" role="complementary" aria-label="Conversations">
+                <ErrorBoundary fallback={<div role="alert">Error loading conversations</div>}>
+                  <ConversationList
+                    conversations={contacts.map(c => ({
+                      id: c.id,
+                      name: c.displayName,
+                      unreadCount: 0, // Replace with actual unread count
+                    }))}
+                    loading={contactsLoading}
+                    selectedId={selectedConversation}
+                    onSelect={setSelectedConversation}
+                    onAddContact={handleAddContact}
+                    onImportContact={handleImportContact}
+                    onShareApp={handleShareApp}
+                    localPeerId={status.localPeerId}
+                    generateConnectionOffer={generateConnectionOffer}
+                    onJoinRoom={joinRoom}
                   />
                 </ErrorBoundary>
-              ) : (
-                <div className="empty-state">
-                  <h2>Welcome to Sovereign Communications</h2>
-                  <p>Select a conversation or add a new contact to get started</p>
-                  <div className="features" role="list">
-                    <div className="feature" role="listitem">
-                      <h3>🔒 End-to-End Encrypted</h3>
-                      <p>All messages are encrypted with Ed25519 and ChaCha20-Poly1305</p>
-                    </div>
-                    <div className="feature" role="listitem">
-                      <h3>🌐 Mesh Networking</h3>
-                      <p>Direct peer-to-peer communication with no central servers</p>
-                    </div>
-                    <div className="feature" role="listitem">
-                      <h3>🔗 Multi-Platform</h3>
-                      <p>Works on Web, Android, and iOS with seamless connectivity</p>
-                    </div>
-                  </div>
-                  {status.localPeerId && (
-                    <div className="peer-info" role="status" aria-live="polite">
-                      <p><strong>Your Peer ID:</strong> <span aria-label={`Peer ID ${status.localPeerId}`}>{status.localPeerId.substring(0, 16)}...</span></p>
-                      <p><strong>Connected Peers:</strong> {status.peerCount}</p>
+              </aside>
+
+              <main className="main-content" id="main-content" role="main" tabIndex={-1} data-testid="main-content">
+                <ErrorBoundary fallback={<div role="alert">Error loading chat</div>}>
+                  {selectedConversation ? (
+                    <ErrorBoundary fallback={<div role="alert">Error in ChatView</div>}>
+                      <ChatView
+                        conversationId={selectedConversation}
+                        contactName={contacts.find(c => c.id === selectedConversation)?.displayName || 'Unknown Contact'}
+                        isOnline={peers.some(p => p.id === selectedConversation)}
+                        messages={messages}
+                        onSendMessage={handleSendMessage}
+                        isLoading={contactsLoading}
+                      />
+                    </ErrorBoundary>
+                  ) : (
+                    <div className="empty-state">
+                      <h2>Welcome to Sovereign Communications</h2>
+                      <p>Select a conversation or add a new contact to get started</p>
+                      <div className="features" role="list">
+                        <div className="feature" role="listitem">
+                          <h3>🔒 End-to-End Encrypted</h3>
+                          <p>All messages are encrypted with Ed25519 and ChaCha20-Poly1305</p>
+                        </div>
+                        <div className="feature" role="listitem">
+                          <h3>🌐 Mesh Networking</h3>
+                          <p>Direct peer-to-peer communication with no central servers</p>
+                        </div>
+                        <div className="feature" role="listitem">
+                          <h3>🔗 Multi-Platform</h3>
+                          <p>Works on Web, Android, and iOS with seamless connectivity</p>
+                        </div>
+                      </div>
+                      {status.localPeerId && (
+                        <div className="peer-info" role="status" aria-live="polite">
+                          <p><strong>Your Peer ID:</strong> <span aria-label={`Peer ID ${status.localPeerId}`}>{status.localPeerId.substring(0, 16)}...</span></p>
+                          <p><strong>Connected Peers:</strong> {status.peerCount}</p>
+                        </div>
+                      )}
                     </div>
                   )}
-                </div>
-              )}
-            </ErrorBoundary>
-          </main>
+                </ErrorBoundary>
+              </main>
+            </>
+          )}
         </div>
 
         {/* Settings Modal */}

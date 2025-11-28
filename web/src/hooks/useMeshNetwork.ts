@@ -14,6 +14,7 @@ export interface MeshStatus {
   peerCount: number;
   localPeerId: string;
   connectionQuality: ConnectionQuality;
+  initializationError?: string;
 }
 
 export interface ReceivedMessage {
@@ -38,6 +39,7 @@ export function useMeshNetwork() {
     peerCount: 0,
     localPeerId: '',
     connectionQuality: 'offline',
+    initializationError: undefined,
   });
   const [peers, setPeers] = useState<Peer[]>([]);
   const [messages, setMessages] = useState<ReceivedMessage[]>([]);
@@ -49,98 +51,108 @@ export function useMeshNetwork() {
     let retryInterval: NodeJS.Timeout;
 
     const initMeshNetwork = async () => {
-      // Initialize database
-      const db = getDatabase();
-      await db.init();
-
-      // Load persisted identity (if exists) or generate new one
-      let identityKeyPair;
       try {
-        const storedIdentity = await db.getPrimaryIdentity();
-        if (storedIdentity) {
-          console.log('Loaded persisted identity:', storedIdentity.fingerprint);
-          identityKeyPair = {
-            publicKey: storedIdentity.publicKey,
-            privateKey: storedIdentity.privateKey
-          };
-        } else {
-          console.log('No persisted identity found, generating new one...');
-          const { generateIdentity, generateFingerprint, publicKeyToBase64 } = await import('@sc/core');
-          const newIdentity = generateIdentity();
-          const fingerprint = await generateFingerprint(newIdentity.publicKey);
+        // Initialize database
+        const db = getDatabase();
+        await db.init();
 
-          // Save to database
-          await db.saveIdentity({
-            id: fingerprint.substring(0, 16), // Use first 16 chars of fingerprint as ID
-            publicKey: newIdentity.publicKey,
-            privateKey: newIdentity.privateKey,
-            fingerprint: fingerprint,
-            createdAt: Date.now(),
-            isPrimary: true,
-            label: 'Primary Identity'
-          });
+        // Load persisted identity (if exists) or generate new one
+        let identityKeyPair;
+        try {
+          const storedIdentity = await db.getPrimaryIdentity();
+          if (storedIdentity) {
+            console.log('Loaded persisted identity:', storedIdentity.fingerprint);
+            identityKeyPair = {
+              publicKey: storedIdentity.publicKey,
+              privateKey: storedIdentity.privateKey
+            };
+          } else {
+            console.log('No persisted identity found, generating new one...');
+            const { generateIdentity, generateFingerprint, publicKeyToBase64 } = await import('@sc/core');
+            const newIdentity = generateIdentity();
+            const fingerprint = await generateFingerprint(newIdentity.publicKey);
 
-          identityKeyPair = newIdentity;
-          console.log('Generated and saved new identity:', fingerprint);
+            // Save to database
+            await db.saveIdentity({
+              id: fingerprint.substring(0, 16), // Use first 16 chars of fingerprint as ID
+              publicKey: newIdentity.publicKey,
+              privateKey: newIdentity.privateKey,
+              fingerprint: fingerprint,
+              createdAt: Date.now(),
+              isPrimary: true,
+              label: 'Primary Identity'
+            });
+
+            identityKeyPair = newIdentity;
+            console.log('Generated and saved new identity:', fingerprint);
+          }
+        } catch (error) {
+          console.error('Failed to load/generate identity:', error);
+          // Fallback to temporary identity if DB fails
+          const { generateIdentity } = await import('@sc/core');
+          identityKeyPair = generateIdentity();
         }
-      } catch (error) {
-        console.error('Failed to load/generate identity:', error);
-        // Fallback to temporary identity if DB fails
-        const { generateIdentity } = await import('@sc/core');
-        identityKeyPair = generateIdentity();
-      }
 
-      const network = new MeshNetwork({
-        defaultTTL: 10,
-        maxPeers: 50,
-        persistence: new WebPersistenceAdapter(),
-        identity: identityKeyPair
-      });
+        const network = new MeshNetwork({
+          defaultTTL: 10,
+          maxPeers: 50,
+          persistence: new WebPersistenceAdapter(),
+          identity: identityKeyPair
+        });
 
-      meshNetworkRef.current = network;
-      connectionMonitorRef.current = new ConnectionMonitor();
+        meshNetworkRef.current = network;
+        connectionMonitorRef.current = new ConnectionMonitor();
 
-      // Load persisted peers and populate routing table
-      try {
-        const activePeers = await db.getActivePeers();
-        console.log(`Loaded ${activePeers.length} persisted peers`);
+        // Load persisted peers and populate routing table
+        try {
+          const activePeers = await db.getActivePeers();
+          console.log(`Loaded ${activePeers.length} persisted peers`);
 
-        // Note: Persisted peers will be used to attempt reconnection
-        // The routing table is rebuilt dynamically as connections are established
-        if (activePeers.length > 0) {
-          console.log('Persisted peers available for reconnection:',
-            activePeers.map(p => p.id.substring(0, 8)).join(', '));
+          // Note: Persisted peers will be used to attempt reconnection
+          // The routing table is rebuilt dynamically as connections are established
+          if (activePeers.length > 0) {
+            console.log('Persisted peers available for reconnection:',
+              activePeers.map(p => p.id.substring(0, 8)).join(', '));
+          }
+        } catch (error) {
+          console.error('Failed to load peers:', error);
         }
+
+        // Load persisted routes
+        try {
+          const routes = await db.getAllRoutes();
+          console.log(`Loaded ${routes.length} persisted routes`);
+
+          // Note: Routes are rebuilt dynamically through peer announcements
+          // Persisted routes serve as hints for initial connectivity
+        } catch (error) {
+          console.error('Failed to load routes:', error);
+        }
+
+        // Clean up expired data
+        try {
+          await db.deleteExpiredRoutes();
+          await db.deleteExpiredSessionKeys();
+        } catch (error) {
+          console.error('Failed to clean up expired data:', error);
+        }
+
+        // Update status
+        setStatus({
+          isConnected: true,
+          peerCount: 0,
+          localPeerId: network.getLocalPeerId(),
+          connectionQuality: 'good',
+          initializationError: undefined,
+        });
       } catch (error) {
-        console.error('Failed to load peers:', error);
+        console.error('Failed to initialize mesh network:', error);
+        setStatus(prev => ({
+          ...prev,
+          initializationError: error instanceof Error ? error.message : String(error)
+        }));
+        return; // Stop initialization on critical error
       }
-
-      // Load persisted routes
-      try {
-        const routes = await db.getAllRoutes();
-        console.log(`Loaded ${routes.length} persisted routes`);
-
-        // Note: Routes are rebuilt dynamically through peer announcements
-        // Persisted routes serve as hints for initial connectivity
-      } catch (error) {
-        console.error('Failed to load routes:', error);
-      }
-
-      // Clean up expired data
-      try {
-        await db.deleteExpiredRoutes();
-        await db.deleteExpiredSessionKeys();
-      } catch (error) {
-        console.error('Failed to clean up expired data:', error);
-      }
-
-      // Update status
-      setStatus({
-        isConnected: true,
-        peerCount: 0,
-        localPeerId: network.getLocalPeerId(),
-        connectionQuality: 'good',
-      });
 
       // Handle incoming messages with persistence
       network.onMessage(async (message: Message) => {
@@ -514,6 +526,35 @@ export function useMeshNetwork() {
     }
   }, []);
 
+  const createManualOffer = useCallback(async (peerId: string): Promise<string> => {
+    if (!meshNetworkRef.current) throw new Error('Mesh network not initialized');
+    return await meshNetworkRef.current.createManualConnection(peerId);
+  }, []);
+
+  const acceptManualOffer = useCallback(async (offerData: string): Promise<string> => {
+    if (!meshNetworkRef.current) throw new Error('Mesh network not initialized');
+    return await meshNetworkRef.current.acceptManualConnection(offerData);
+  }, []);
+
+  const finalizeManualConnection = useCallback(async (answerData: string): Promise<void> => {
+    if (!meshNetworkRef.current) throw new Error('Mesh network not initialized');
+    await meshNetworkRef.current.finalizeManualConnection(answerData);
+
+    // Update peer status
+    const connectedPeers = meshNetworkRef.current.getConnectedPeers();
+    setPeers(connectedPeers);
+    setStatus((prev: MeshStatus) => ({
+      ...prev,
+      peerCount: connectedPeers.length,
+      isConnected: connectedPeers.length > 0,
+    }));
+  }, []);
+
+  const joinRoom = useCallback(async (url: string): Promise<void> => {
+    if (!meshNetworkRef.current) throw new Error('Mesh network not initialized');
+    await meshNetworkRef.current.joinPublicRoom(url);
+  }, []);
+
   // Memoized return value to prevent unnecessary re-renders
   return useMemo(() => ({
     status,
@@ -524,6 +565,10 @@ export function useMeshNetwork() {
     getStats,
     generateConnectionOffer,
     acceptConnectionOffer,
+    createManualOffer,
+    acceptManualOffer,
+    finalizeManualConnection,
+    joinRoom,
     identity: meshNetworkRef.current?.getIdentity(), // Expose identity
-  }), [status, peers, messages, sendMessage, connectToPeer, getStats, generateConnectionOffer, acceptConnectionOffer]);
+  }), [status, peers, messages, sendMessage, connectToPeer, getStats, generateConnectionOffer, acceptConnectionOffer, createManualOffer, acceptManualOffer, finalizeManualConnection, joinRoom]);
 }

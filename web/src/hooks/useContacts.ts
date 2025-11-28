@@ -23,10 +23,13 @@ export function useContacts() {
   const addContact = useCallback(async (contact: StoredContact) => {
     try {
       await saveContact(contact);
-      setContacts(prevContacts => [...prevContacts, contact]);
+      // Re-fetch contacts from the database to ensure the UI is in sync
+      const storedContacts = await getContacts();
+      setContacts(storedContacts);
     } catch (error) {
       console.error('Failed to save contact:', error);
-      // Optionally, handle the error in the UI
+      // Re-throw the error to make it visible in tests
+      throw error;
     }
   }, []);
 

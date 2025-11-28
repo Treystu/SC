@@ -3,6 +3,7 @@ import './ConversationList.css';
 import { AddContactDialog } from './AddContactDialog';
 import { SignalingExportDialog, SignalingImportDialog } from './SignalingDialog';
 import { LoadingState } from './LoadingState';
+import { ManualConnectionModal } from './ManualConnectionModal';
 
 interface Conversation {
   id: string;
@@ -22,6 +23,7 @@ interface ConversationListProps {
   onShareApp?: () => void;
   localPeerId?: string;
   generateConnectionOffer?: () => Promise<string>;
+  onJoinRoom?: (url: string) => void;
 }
 
 // Memoized conversation item component
@@ -68,11 +70,12 @@ const ConversationItem = memo(({
 
 ConversationItem.displayName = 'ConversationItem';
 
-function ConversationList({ conversations, loading, selectedId, onSelect, onAddContact, onImportContact, onShareApp, localPeerId = '', generateConnectionOffer }: ConversationListProps) {
+function ConversationList({ conversations, loading, selectedId, onSelect, onAddContact, onImportContact, onShareApp, localPeerId = '', generateConnectionOffer, onJoinRoom }: ConversationListProps) {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showSignalingExport, setShowSignalingExport] = useState(false);
   const [showSignalingImport, setShowSignalingImport] = useState(false);
+  const [showManualConnection, setShowManualConnection] = useState(false);
 
   // Memoized select handler
   const handleSelect = useCallback((id: string) => {
@@ -108,6 +111,11 @@ function ConversationList({ conversations, loading, selectedId, onSelect, onAddC
         onImport={handleImportContact}
       />
 
+      <ManualConnectionModal
+        isOpen={showManualConnection}
+        onClose={() => setShowManualConnection(false)}
+      />
+
       <div className="list-header">
         <h2>Conversations</h2>
         <div className="header-actions">
@@ -124,13 +132,26 @@ function ConversationList({ conversations, loading, selectedId, onSelect, onAddC
               <button onClick={() => { setShowAddDialog(true); setShowMenu(false); }} data-testid="quick-add-btn">
                 Quick Add (Demo/Testing)
               </button>
-              <button onClick={() => { setShowSignalingImport(true); setShowMenu(false); }}>
+              <button onClick={() => { setShowSignalingImport(true); setShowMenu(false); }} data-testid="add-via-code-btn">
                 Add via Code
               </button>
-              <button onClick={() => { setShowSignalingExport(true); setShowMenu(false); }}>
+              <button onClick={() => { setShowSignalingExport(true); setShowMenu(false); }} data-testid="share-my-info-btn">
                 Share My Info
               </button>
-              <button onClick={() => { onShareApp?.(); setShowMenu(false); }}>
+              <button onClick={() => { setShowManualConnection(true); setShowMenu(false); }} data-testid="manual-connect-btn">
+                Manual Connect (WAN)
+              </button>
+              <button onClick={() => {
+                const defaultUrl = window.location.origin + '/.netlify/functions/room';
+                const url = prompt('Enter Public Room URL:', defaultUrl);
+                if (url) {
+                  onJoinRoom?.(url);
+                }
+                setShowMenu(false);
+              }} data-testid="join-public-room-btn">
+                🌐 Join Public Room
+              </button>
+              <button onClick={() => { onShareApp?.(); setShowMenu(false); }} data-testid="share-app-btn">
                 📤 Share App
               </button>
             </div>

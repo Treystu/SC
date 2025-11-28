@@ -64,7 +64,7 @@ export function OnboardingFlow({ onComplete, localPeerId }: OnboardingFlowProps)
               <li>✅ Direct peer-to-peer connections</li>
               <li>✅ Your data stays on your device</li>
             </ul>
-            <button onClick={handleNext} className="btn-primary onboarding-btn">
+            <button onClick={handleNext} className="btn-primary onboarding-btn" data-testid="get-started-btn">
               Get Started
             </button>
             <button onClick={handleSkip} className="btn-text">
@@ -187,7 +187,7 @@ export function OnboardingFlow({ onComplete, localPeerId }: OnboardingFlowProps)
               <button onClick={() => setStep('add-contact')} className="btn-secondary">
                 Back
               </button>
-              <button onClick={handleNext} className="btn-primary">
+              <button onClick={handleNext} className="btn-primary" data-testid="start-messaging-btn">
                 Start Messaging
               </button>
             </div>

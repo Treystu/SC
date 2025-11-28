@@ -451,4 +451,149 @@ export class MeshNetwork {
   async stop(): Promise<void> {
     this.shutdown();
   }
+
+  // --- Manual Connection Methods (WAN Support) ---
+
+  /**
+   * Initiate a manual connection to a peer (for WAN/Serverless).
+   * Returns the SDP Offer to be shared with the remote peer.
+   */
+  async createManualConnection(peerId: string): Promise<string> {
+    if (this.routingTable.getAllPeers().length >= this.maxPeers) {
+      throw new Error('Maximum number of peers reached');
+    }
+
+    // Create or get peer connection
+    const peer = this.peerPool.getOrCreatePeer(peerId);
+
+    // Create data channels
+    peer.createDataChannel({ label: 'reliable', ordered: true });
+    peer.createDataChannel({ label: 'unreliable', ordered: false, maxRetransmits: 0 });
+
+    // Create offer
+    const offer = await peer.createOffer();
+
+    // Return the offer wrapped with metadata
+    return JSON.stringify({
+      type: 'offer',
+      peerId: this.localPeerId,
+      sdp: offer
+    });
+  }
+
+  /**
+   * Accept a manual connection offer.
+   * Returns the SDP Answer to be sent back to the initiator.
+   */
+  async acceptManualConnection(offerData: string): Promise<string> {
+    const payload = JSON.parse(offerData);
+    const { peerId, sdp } = payload;
+
+    if (!peerId || !sdp || sdp.type !== 'offer') {
+      throw new Error('Invalid manual offer data');
+    }
+
+    // Create peer connection
+    const peer = this.peerPool.getOrCreatePeer(peerId);
+
+    // Create answer
+    const answer = await peer.createAnswer(sdp);
+
+    // Return the answer wrapped with metadata
+    return JSON.stringify({
+      type: 'answer',
+      peerId: this.localPeerId,
+      sdp: answer
+    });
+  }
+
+  /**
+   * Finalize a manual connection with the answer.
+   */
+  async finalizeManualConnection(answerData: string): Promise<void> {
+    const payload = JSON.parse(answerData);
+    const { peerId, sdp } = payload;
+
+    if (!peerId || !sdp || sdp.type !== 'answer') {
+      throw new Error('Invalid manual answer data');
+    }
+
+    const peer = this.peerPool.getPeer(peerId);
+    if (!peer) {
+      throw new Error(`Peer ${peerId} not found (connection not initiated?)`);
+    }
+
+    await peer.setRemoteAnswer(sdp);
+  }
+
+  // --- Public Room / HTTP Signaling Support ---
+
+  private httpSignaling?: import('../transport/http-signaling.js').HttpSignalingClient;
+
+  /**
+   * Join a Public Chat Room (Signaling Server).
+   * This enables WAN discovery and signaling.
+   */
+  async joinPublicRoom(url: string): Promise<void> {
+    const { HttpSignalingClient } = await import('../transport/http-signaling.js');
+    this.httpSignaling = new HttpSignalingClient(url, this.localPeerId);
+
+    // Handle new peers discovered in the room
+    this.httpSignaling.on('peerDiscovered', async (peer: any) => {
+      if (peer._id === this.localPeerId) return;
+
+      // If not already connected, initiate connection
+      if (!this.peerPool.getPeer(peer._id)) {
+        console.log(`Discovered peer in room: ${peer._id}, initiating connection...`);
+        const p = this.peerPool.getOrCreatePeer(peer._id);
+
+        // Setup ICE candidate forwarding
+        p.onSignal((signal: any) => {
+          if (signal.type === 'candidate') {
+            this.httpSignaling?.sendSignal(peer._id, 'candidate', signal.candidate);
+          }
+        });
+
+        p.createDataChannel({ label: 'reliable', ordered: true });
+        const offer = await p.createOffer();
+        await this.httpSignaling?.sendSignal(peer._id, 'offer', offer);
+      }
+    });
+
+    // Handle incoming signals
+    this.httpSignaling.on('signal', async ({ from, type, signal }: { from: string, type: string, signal: any }) => {
+      if (from === this.localPeerId) return;
+
+      const peer = this.peerPool.getOrCreatePeer(from);
+
+      // Setup ICE candidate forwarding (if not already set)
+      // Note: This might add multiple listeners if we are not careful.
+      // Ideally we check if listener is attached.
+      peer.onSignal((sig: any) => {
+        if (sig.type === 'candidate') {
+          this.httpSignaling?.sendSignal(from, 'candidate', sig.candidate);
+        }
+      });
+
+      try {
+        if (type === 'offer') {
+          const answer = await peer.createAnswer(signal);
+          await this.httpSignaling?.sendSignal(from, 'answer', answer);
+        } else if (type === 'answer') {
+          await peer.setRemoteAnswer(signal);
+        } else if (type === 'candidate') {
+          await peer.addIceCandidate(signal);
+        }
+      } catch (err) {
+        console.error(`Error handling signal from ${from}:`, err);
+      }
+    });
+
+    // Handle public messages
+    this.httpSignaling.on('publicMessage', (msg: any) => {
+      console.log('Public Room Message:', msg);
+    });
+
+    await this.httpSignaling.join({ agent: 'sovereign-web' });
+  }
 }

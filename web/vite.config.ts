@@ -26,7 +26,7 @@ export default defineConfig({
     'global': 'window', // Polyfill global for some older libs if needed
   },
   build: {
-    target: 'es2020',
+    target: 'esnext',
     sourcemap: false,
     minify: 'terser',
     terserOptions: {
