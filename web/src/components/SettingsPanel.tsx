@@ -50,17 +50,16 @@ export function SettingsPanel() {
       const db = getDatabase();
       await db.deleteAllData(deleteConfirmation);
 
-      alert('All local data has been permanently deleted.');
+      // Clear all browser storage
+      localStorage.clear();
+      sessionStorage.clear();
+
+      alert('All local data has been permanently deleted. The application will now reload.');
       setShowDeleteDialog(false);
       setDeleteConfirmation('');
 
-      // Refresh storage info
-      setStorageInfo({ usage: 0, quota: storageInfo.quota, percentage: 0 });
-
-      // Optionally reload the page
-      if (window.confirm('Data deleted. Reload the page?')) {
-        window.location.reload();
-      }
+      // Force reload to clear memory state
+      window.location.reload();
     } catch (error) {
       alert(`Failed to delete data: ${error}`);
     }

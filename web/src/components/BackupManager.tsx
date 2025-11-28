@@ -11,6 +11,63 @@ export const BackupManager: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
 
 
+  // Crypto helpers
+  const deriveKey = async (password: string, salt: Uint8Array): Promise<CryptoKey> => {
+    const enc = new TextEncoder();
+    const keyMaterial = await window.crypto.subtle.importKey(
+      "raw",
+      enc.encode(password),
+      { name: "PBKDF2" },
+      false,
+      ["deriveKey"]
+    );
+    return window.crypto.subtle.deriveKey(
+      {
+        name: "PBKDF2",
+        salt: salt as any,
+        iterations: 100000,
+        hash: "SHA-256"
+      },
+      keyMaterial,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["encrypt", "decrypt"]
+    );
+  };
+
+  const encryptData = async (data: string, password: string): Promise<{ ciphertext: string; salt: string; iv: string }> => {
+    const salt = window.crypto.getRandomValues(new Uint8Array(16));
+    const iv = window.crypto.getRandomValues(new Uint8Array(12));
+    const key = await deriveKey(password, salt);
+    const enc = new TextEncoder();
+    const encrypted = await window.crypto.subtle.encrypt(
+      { name: "AES-GCM", iv: iv },
+      key,
+      enc.encode(data)
+    );
+
+    return {
+      ciphertext: btoa(String.fromCharCode(...new Uint8Array(encrypted))),
+      salt: btoa(String.fromCharCode(...salt)),
+      iv: btoa(String.fromCharCode(...iv))
+    };
+  };
+
+  const decryptData = async (encryptedData: { ciphertext: string; salt: string; iv: string }, password: string): Promise<string> => {
+    const salt = new Uint8Array(atob(encryptedData.salt).split('').map(c => c.charCodeAt(0)));
+    const iv = new Uint8Array(atob(encryptedData.iv).split('').map(c => c.charCodeAt(0)));
+    const ciphertext = new Uint8Array(atob(encryptedData.ciphertext).split('').map(c => c.charCodeAt(0)));
+    const key = await deriveKey(password, salt);
+
+    const decrypted = await window.crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: iv },
+      key,
+      ciphertext
+    );
+
+    return new TextDecoder().decode(decrypted);
+  };
+
   const handleCreateBackup = async () => {
     setIsProcessing(true);
     setStatus('Creating backup...');
@@ -18,7 +75,21 @@ export const BackupManager: React.FC = () => {
     try {
       const db = getDatabase();
       const data = await db.exportAllData();
-      const backupJson = JSON.stringify(data, null, 2);
+      let outputData: any = data;
+
+      if (encrypt && password) {
+        const jsonString = JSON.stringify(data);
+        const encrypted = await encryptData(jsonString, password);
+        outputData = {
+          isEncrypted: true,
+          version: '1.0',
+          ...encrypted
+        };
+      } else if (encrypt && !password) {
+        throw new Error('Password is required for encrypted backup');
+      }
+
+      const backupJson = JSON.stringify(outputData, null, 2);
 
       // Download backup file
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -50,7 +121,19 @@ export const BackupManager: React.FC = () => {
 
     try {
       const backupText = await file.text();
-      const backupData = JSON.parse(backupText);
+      let backupData = JSON.parse(backupText);
+
+      if (backupData.isEncrypted) {
+        if (!password) {
+          throw new Error('This backup is encrypted. Please enter the password.');
+        }
+        try {
+          const decryptedJson = await decryptData(backupData, password);
+          backupData = JSON.parse(decryptedJson);
+        } catch (e) {
+          throw new Error('Incorrect password or corrupted backup file.');
+        }
+      }
 
       const db = getDatabase();
       const result = await db.importData(backupData);
@@ -66,8 +149,12 @@ export const BackupManager: React.FC = () => {
       setStatus(`Error restoring backup: ${errorMessage}`);
     } finally {
       setIsProcessing(false);
+      // Clear the file input
+      event.target.value = '';
     }
   };
+
+
 
   return (
     <div className="backup-restore">
@@ -165,6 +252,8 @@ export const BackupManager: React.FC = () => {
         </div>
       </div>
 
+
+
       {/* Status Message */}
       {status && (
         <div className={`status ${status.includes('Error') ? 'error' : 'success'}`}>
@@ -184,6 +273,11 @@ export const BackupManager: React.FC = () => {
           border-radius: 8px;
           padding: 20px;
           margin-bottom: 20px;
+        }
+
+        .danger-zone {
+          border: 1px solid #ff4444;
+          background: #2a0000;
         }
 
         h2 {
@@ -269,6 +363,15 @@ export const BackupManager: React.FC = () => {
         button:disabled {
           opacity: 0.5;
           cursor: not-allowed;
+        }
+
+        .danger-button {
+          background: #ff4444;
+          color: white;
+        }
+
+        .danger-button:hover {
+          background: #cc0000;
         }
 
         .warning {
