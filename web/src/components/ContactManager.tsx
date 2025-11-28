@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Contact, getContacts, saveContact, deleteContact } from '../storage';
+import { StoredContact, getDatabase } from '../storage/database';
+import { sha256 } from 'js-sha256';
 
 export function ContactManager() {
-  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [contacts, setContacts] = useState<StoredContact[]>([]);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [newContact, setNewContact] = useState({ name: '', publicKey: '' });
   const [searchQuery, setSearchQuery] = useState('');
@@ -12,7 +13,8 @@ export function ContactManager() {
   }, []);
 
   const loadContacts = async () => {
-    const allContacts = await getContacts();
+    const db = getDatabase();
+    const allContacts = await db.getContacts();
     setContacts(allContacts);
   };
 
@@ -28,20 +30,20 @@ export function ContactManager() {
       return;
     }
 
-    const contact: Contact = {
+    const fingerprint = sha256(newContact.publicKey);
+    const contact: StoredContact = {
       id: crypto.randomUUID(),
-      name: newContact.name,
       displayName: newContact.name,
       publicKey: newContact.publicKey,
       lastSeen: Date.now(),
-      fingerprint: '',
+      fingerprint,
       verified: false,
       createdAt: Date.now(),
       blocked: false,
       endpoints: []
     };
-
-    await saveContact(contact);
+    const db = getDatabase();
+    await db.saveContact(contact);
     await loadContacts();
     setNewContact({ name: '', publicKey: '' });
     setShowAddDialog(false);
@@ -49,13 +51,20 @@ export function ContactManager() {
 
   const handleDeleteContact = async (contactId: string) => {
     if (confirm('Are you sure you want to delete this contact?')) {
-      await deleteContact(contactId);
+      const db = getDatabase();
+      await db.deleteContact(contactId);
       await loadContacts();
     }
   };
 
+  const handleVerifyContact = async (contact: StoredContact) => {
+    const db = getDatabase();
+    await db.saveContact({ ...contact, verified: true });
+    await loadContacts();
+  };
+
   const filteredContacts = contacts.filter(contact =>
-    (contact.name || contact.displayName).toLowerCase().includes(searchQuery.toLowerCase()) ||
+    contact.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     contact.publicKey.includes(searchQuery)
   );
 
@@ -88,24 +97,32 @@ export function ContactManager() {
           filteredContacts.map(contact => (
             <div key={contact.id} className="contact-item">
               <div className="contact-avatar">
-                {(contact.name || contact.displayName).charAt(0).toUpperCase()}
+                {contact.displayName.charAt(0).toUpperCase()}
               </div>
               <div className="contact-info">
-                <div className="contact-name">{contact.name || contact.displayName}</div>
-                <div className="contact-key">
-                  {contact.publicKey.substring(0, 16)}...
+                <div className="contact-name">{contact.displayName}</div>
+                <div className="contact-key" title={contact.fingerprint}>
+                  {contact.fingerprint.substring(0, 16)}...
                 </div>
               </div>
-              {contact.verified && (
-                <div className="verified-badge" title="Verified">✓</div>
-              )}
-              <button
-                onClick={() => handleDeleteContact(contact.id)}
-                className="delete-btn"
-                title="Delete contact"
-              >
-                ×
-              </button>
+              <div className="contact-actions">
+                {!contact.verified && (
+                  <button
+                    onClick={() => handleVerifyContact(contact)}
+                    className="verify-btn"
+                    title="Verify contact"
+                  >
+                    Verify
+                  </button>
+                )}
+                <button
+                  onClick={() => handleDeleteContact(contact.id)}
+                  className="delete-btn"
+                  title="Delete contact"
+                >
+                  ×
+                </button>
+              </div>
             </div>
           ))
         )}

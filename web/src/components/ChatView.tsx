@@ -5,6 +5,7 @@ import './ChatView.css';
 import { MessageInput } from './MessageInput';
 import { LoadingState } from './LoadingState';
 import { validateFileList } from '@sc/core';
+import { getDatabase, StoredMessage } from '../storage/database';
 
 const sanitizeHTML = (html: string) => {
   return DOMPurify.sanitize(html);
@@ -33,25 +34,25 @@ interface ChatViewProps {
 }
 
 function ChatView({
-  conversationId: _conversationId,
+  conversationId,
   contactName = 'Unknown Contact',
   isOnline = false,
-  messages: receivedMessages = [],
   onSendMessage,
   isLoading = false
 }: ChatViewProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const [messages, setMessages] = useState<StoredMessage[]>([]);
 
-  // Memoize message transformation to prevent unnecessary recalculations
-  const messages: Message[] = useMemo(() =>
-    receivedMessages.map(msg => ({
-      id: msg.id,
-      content: msg.content,
-      timestamp: msg.timestamp,
-      isSent: msg.from === 'me',
-      status: (msg as any).status || 'sent',
-    })), [receivedMessages]);
+  useEffect(() => {
+    const fetchMessages = async () => {
+      const db = getDatabase();
+      const fetchedMessages = await db.getMessages(conversationId);
+      setMessages(fetchedMessages);
+    };
+
+    fetchMessages();
+  }, [conversationId]);
 
   useEffect(() => {
     // Scroll to bottom when messages change
@@ -81,7 +82,7 @@ function ChatView({
             messages.map((message) => (
               <div
                 key={message.id}
-                className={`message ${message.isSent ? 'sent' : 'received'} `}
+                className={`message ${message.senderId === 'me' ? 'sent' : 'received'} `}
               >
                 <div className="message-bubble">
                   <div className="message-content" dangerouslySetInnerHTML={{ __html: sanitizeHTML(message.content) }}></div>
@@ -92,7 +93,7 @@ function ChatView({
                         minute: '2-digit',
                       })}
                     </span>
-                    {message.isSent && (
+                    {message.senderId === 'me' && (
                       <span
                         className={`message - status status - ${message.status} `}
                         data-testid={`message - status - ${message.status} `}

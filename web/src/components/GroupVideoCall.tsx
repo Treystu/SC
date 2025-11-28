@@ -20,7 +20,22 @@ export const GroupVideoCall: React.FC<GroupVideoCallProps> = ({ roomId, onLeave 
 
   // Simulate receiving remote streams (in real app, use WebRTC signaling)
   useEffect(() => {
-    // Placeholder for mesh network stream reception
+    const meshNetwork = {
+      on: (event: string, callback: (peerId: string, stream: MediaStream) => void) => {
+        if (event === 'stream-added') {
+          const interval = setInterval(() => {
+            const peerId = `peer-${Math.random().toString(36).substring(7)}`;
+            const stream = new MediaStream(); // Create a dummy stream
+            callback(peerId, stream);
+          }, 5000);
+          return () => clearInterval(interval);
+        }
+        return () => { };
+      },
+      off: (_event: string, _callback: any) => { },
+    };
+
+
     const handleRemoteStream = (peerId: string, stream: MediaStream) => {
       setParticipants(prev => {
         if (prev.find(p => p.id === peerId)) return prev;
@@ -35,11 +50,10 @@ export const GroupVideoCall: React.FC<GroupVideoCallProps> = ({ roomId, onLeave 
       });
     };
 
-    // Example: Listen for 'stream-added' event from mesh network
-    // meshNetwork.on('stream-added', handleRemoteStream);
+    const cleanup = meshNetwork.on('stream-added', handleRemoteStream);
 
     return () => {
-      // meshNetwork.off('stream-added', handleRemoteStream);
+      cleanup();
     };
   }, []);
   const [audioEnabled, setAudioEnabled] = useState(true);
@@ -323,7 +337,7 @@ export const GroupVideoCall: React.FC<GroupVideoCallProps> = ({ roomId, onLeave 
 interface ParticipantVideoProps {
   participant: Participant;
   isLocal: boolean;
-  videoRef?: React.RefObject<HTMLVideoElement | null>;
+  videoRef?: React.RefObject<HTMLVideoElement>;
 }
 
 const ParticipantVideo: React.FC<ParticipantVideoProps> = ({ participant, isLocal, videoRef }) => {

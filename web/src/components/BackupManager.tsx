@@ -3,6 +3,7 @@ import { getDatabase } from '../storage/database';
 
 export const BackupManager: React.FC = () => {
   const [password, setPassword] = useState('');
+  const [restorePassword, setRestorePassword] = useState('');
   const [includeMessages, setIncludeMessages] = useState(true);
   const [includeContacts, setIncludeContacts] = useState(true);
   const [includeSettings, setIncludeSettings] = useState(true);
@@ -74,7 +75,7 @@ export const BackupManager: React.FC = () => {
 
     try {
       const db = getDatabase();
-      const data = await db.exportAllData();
+      const data = await db.exportAllData({ includeMessages, includeContacts, includeSettings });
       let outputData: any = data;
 
       if (encrypt && password) {
@@ -124,11 +125,11 @@ export const BackupManager: React.FC = () => {
       let backupData = JSON.parse(backupText);
 
       if (backupData.isEncrypted) {
-        if (!password) {
+        if (!restorePassword) {
           throw new Error('This backup is encrypted. Please enter the password.');
         }
         try {
-          const decryptedJson = await decryptData(backupData, password);
+          const decryptedJson = await decryptData(backupData, restorePassword);
           backupData = JSON.parse(decryptedJson);
         } catch (e) {
           throw new Error('Incorrect password or corrupted backup file.');
@@ -138,13 +139,16 @@ export const BackupManager: React.FC = () => {
       const db = getDatabase();
       const result = await db.importData(backupData);
 
-      if (result.errors.length > 0) {
-        setStatus(`Backup restored with ${result.errors.length} errors. Imported: ${result.imported}, Skipped: ${result.skipped}`);
-        console.error('Import errors:', result.errors);
-      } else {
-        setStatus(`Backup restored successfully! Imported: ${result.imported}, Skipped: ${result.skipped}. Please reload the app.`);
-      }
-    } catch (error) {
+    if (result.errors.length > 0) {
+      setStatus(`Backup restored with ${result.errors.length} errors. Imported: ${result.imported}, Skipped: ${result.skipped}`);
+      console.error('Import errors:', result.errors);
+    } else {
+      setStatus(`Backup restored successfully! Imported: ${result.imported}, Skipped: ${result.skipped}. The application will now reload.`);
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    }
+  } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       setStatus(`Error restoring backup: ${errorMessage}`);
     } finally {
@@ -232,8 +236,8 @@ export const BackupManager: React.FC = () => {
           <input
             type="password"
             placeholder="Backup password (if encrypted)"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            value={restorePassword}
+            onChange={(e) => setRestorePassword(e.target.value)}
             disabled={isProcessing}
           />
         </div>

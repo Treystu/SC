@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getDatabase, StoredGroup } from '../storage/database';
-
+import { ProfileManager } from '../managers/ProfileManager';
 export function GroupChat() {
   const [groups, setGroups] = useState<StoredGroup[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -28,11 +28,13 @@ export function GroupChat() {
 
     try {
       const db = getDatabase();
+      const profileManager = new ProfileManager();
+      const profile = await profileManager.getProfile();
       const newGroup: StoredGroup = {
         id: crypto.randomUUID(),
         name: newGroupName.trim(),
         members: [], // In a real app, add self and selected contacts
-        createdBy: 'me', // TODO: Use actual user ID
+        createdBy: profile.fingerprint,
         createdAt: Date.now(),
         lastMessageTimestamp: Date.now()
       };

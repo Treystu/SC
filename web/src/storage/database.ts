@@ -910,40 +910,80 @@ export class DatabaseManager {
    * Export all user data (sovereignty feature)
    * Returns a complete snapshot of all local data
    */
-  async exportAllData(): Promise<{
+  async exportAllData(options?: { includeMessages?: boolean; includeContacts?: boolean; includeSettings?: boolean; }): Promise<{
     version: string;
     exportedAt: number;
-    identities: Identity[];
-    contacts: StoredContact[];
-    conversations: StoredConversation[];
-    messages: StoredMessage[];
-    peers: PersistedPeer[];
-    routes: Route[];
-    sessionKeys: SessionKey[];
+    identities?: Identity[];
+    contacts?: StoredContact[];
+    conversations?: StoredConversation[];
+    messages?: StoredMessage[];
+    peers?: PersistedPeer[];
+    routes?: Route[];
+    sessionKeys?: SessionKey[];
+    userProfile?: any;
   }> {
     if (!this.db) await this.init();
 
-    const [identities, contacts, conversations, messages, peers, routes, sessionKeys] = await Promise.all([
-      this.getAllIdentities(),
-      this.getContacts(),
-      this.getConversations(),
-      this.getAllMessages(),
-      this.getAllPeers(),
-      this.getAllRoutes(),
-      this.getAllSessionKeys()
-    ]);
+    const exportOptions = {
+      includeMessages: options?.includeMessages ?? true,
+      includeContacts: options?.includeContacts ?? true,
+      includeSettings: options?.includeSettings ?? true,
+    };
 
-    return {
+    const promises: Promise<any>[] = [
+      this.getAllIdentities(), // Always include identities
+    ];
+
+    if (exportOptions.includeContacts) {
+      promises.push(this.getContacts());
+      promises.push(this.getConversations());
+    } else {
+      promises.push(Promise.resolve([]));
+      promises.push(Promise.resolve([]));
+    }
+
+    if (exportOptions.includeMessages) {
+      promises.push(this.getAllMessages());
+    } else {
+      promises.push(Promise.resolve([]));
+    }
+
+    if (exportOptions.includeSettings) {
+      promises.push(this.getAllPeers());
+      promises.push(this.getAllRoutes());
+      promises.push(this.getAllSessionKeys());
+    } else {
+      promises.push(Promise.resolve([]));
+      promises.push(Promise.resolve([]));
+      promises.push(Promise.resolve([]));
+    }
+
+    const [identities, contacts, conversations, messages, peers, routes, sessionKeys] = await Promise.all(promises);
+
+    const exportedData: any = {
       version: '1.0',
       exportedAt: Date.now(),
       identities,
-      contacts,
-      conversations,
-      messages,
-      peers,
-      routes,
-      sessionKeys
     };
+
+    if (exportOptions.includeContacts) {
+      exportedData.contacts = contacts;
+      exportedData.conversations = conversations;
+    }
+    if (exportOptions.includeMessages) {
+      exportedData.messages = messages;
+    }
+    if (exportOptions.includeSettings) {
+      const userProfile = localStorage.getItem('user_profile');
+      if (userProfile) {
+        exportedData.userProfile = JSON.parse(userProfile);
+      }
+      exportedData.peers = peers;
+      exportedData.routes = routes;
+      exportedData.sessionKeys = sessionKeys;
+    }
+
+    return exportedData;
   }
 
   /**
@@ -1116,6 +1156,16 @@ export class DatabaseManager {
           } catch (error) {
             errors.push(`Failed to import session key ${sessionKey.peerId}: ${error}`);
           }
+        }
+      }
+
+      // Import user profile
+      if ((data as any).userProfile) {
+        try {
+          localStorage.setItem('user_profile', JSON.stringify((data as any).userProfile));
+          imported++;
+        } catch (error) {
+          errors.push(`Failed to import user profile: ${error}`);
         }
       }
     } catch (error) {

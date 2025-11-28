@@ -11,8 +11,27 @@ export function SettingsPanel() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
   const [storageInfo, setStorageInfo] = useState({ usage: 0, quota: 0, percentage: 0 });
+  const [networkSettings, setNetworkSettings] = useState({
+    webrtc: true,
+    mdns: true,
+    autoconnect: true,
+  });
+  const [appearanceSettings, setAppearanceSettings] = useState({
+    theme: 'dark',
+  });
 
   useEffect(() => {
+    // Load settings from local storage
+    const storedNetwork = localStorage.getItem('networkSettings');
+    if (storedNetwork) {
+      setNetworkSettings(JSON.parse(storedNetwork));
+    }
+    const storedAppearance = localStorage.getItem('appearanceSettings');
+    if (storedAppearance) {
+      setAppearanceSettings(JSON.parse(storedAppearance));
+    }
+
+
     const profileManager = new ProfileManager();
     profileManager.getProfile().then(p => {
       setProfile(p);
@@ -65,7 +84,27 @@ export function SettingsPanel() {
     }
   };
 
+  const handleNetworkChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, checked } = e.target;
+    setNetworkSettings(prev => {
+      const newSettings = { ...prev, [name]: checked };
+      localStorage.setItem('networkSettings', JSON.stringify(newSettings));
+      return newSettings;
+    });
+  };
 
+  const handleAppearanceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setAppearanceSettings(prev => {
+      const newSettings = { ...prev, [name]: value };
+      localStorage.setItem('appearanceSettings', JSON.stringify(newSettings));
+      return newSettings;
+    });
+  };
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', appearanceSettings.theme);
+  }, [appearanceSettings.theme]);
 
   return (
     <div className="settings-panel">
@@ -111,19 +150,19 @@ export function SettingsPanel() {
         <h3>Network</h3>
         <div className="setting-item">
           <label>
-            <input type="checkbox" defaultChecked />
+            <input type="checkbox" name="webrtc" checked={networkSettings.webrtc} onChange={handleNetworkChange} />
             Enable WebRTC Connections
           </label>
         </div>
         <div className="setting-item">
           <label>
-            <input type="checkbox" defaultChecked />
+            <input type="checkbox" name="mdns" checked={networkSettings.mdns} onChange={handleNetworkChange} />
             Enable mDNS Discovery
           </label>
         </div>
         <div className="setting-item">
           <label>
-            <input type="checkbox" defaultChecked />
+            <input type="checkbox" name="autoconnect" checked={networkSettings.autoconnect} onChange={handleNetworkChange} />
             Auto-connect to Discovered Peers
           </label>
         </div>
@@ -133,7 +172,7 @@ export function SettingsPanel() {
         <h3>Appearance</h3>
         <div className="setting-item">
           <label>Theme</label>
-          <select defaultValue="dark">
+          <select name="theme" value={appearanceSettings.theme} onChange={handleAppearanceChange}>
             <option value="light">Light</option>
             <option value="dark">Dark</option>
             <option value="auto">Auto</option>
