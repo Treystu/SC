@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.1.21](https://github.com/Treystu/SC/compare/v0.1.20...v0.1.21) (2025-11-28)
+
+
+### Features
+
+* Implement Public Chat Rooms and Headless Signaling Node ([f7e2552](https://github.com/Treystu/SC/commit/f7e2552455664559b8c1d335b33650b346e39f7b))
+
 ### [0.1.20](https://github.com/Treystu/SC/compare/v0.1.19...v0.1.20) (2025-11-28)
 
 
