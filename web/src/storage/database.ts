@@ -128,14 +128,34 @@ export class DatabaseManager {
     if (this.initPromise) return this.initPromise;
 
     this.initPromise = new Promise((resolve, reject) => {
+      // Add timeout to prevent infinite hanging
+      const timeoutId = setTimeout(() => {
+        if (this.initPromise) {
+          console.error('DatabaseManager: Initialization timed out');
+          this.initPromise = null;
+          reject(new Error('Database initialization timed out'));
+        }
+      }, 5000);
+
       const request = indexedDB.open(this.dbName, this.version);
 
+      request.onblocked = () => {
+        console.warn('DatabaseManager: Database upgrade blocked by another connection');
+        // Try to close the connection if it's somehow open on this instance
+        if (this.db) {
+          this.db.close();
+          this.db = null;
+        }
+      };
+
       request.onerror = () => {
+        clearTimeout(timeoutId);
         this.initPromise = null;
         reject(request.error);
       };
 
       request.onsuccess = () => {
+        clearTimeout(timeoutId);
         this.db = request.result;
         // Handle connection closing
         this.db.onversionchange = () => {
@@ -151,11 +171,14 @@ export class DatabaseManager {
       };
 
       request.onupgradeneeded = async (event) => {
+        // Don't clear timeout here as migration might take time, 
+        // but maybe extend it? For now let's rely on the 5s total.
         const db = (event.target as IDBOpenDBRequest).result;
         const oldVersion = event.oldVersion;
         try {
           await validateAndMigrate(db, oldVersion);
         } catch (error) {
+          clearTimeout(timeoutId);
           console.error('DatabaseManager: Migration failed:', error);
           request.transaction?.abort();
           this.initPromise = null;

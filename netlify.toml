@@ -1,10 +1,13 @@
-# Netlify configuration for Sovereign Communications Web App
+# Netlify configuration for Sovereign Communications
 
 [build]
-  # Build command
+  # Base directory for the build
+  base = "web"
+
+  # Build command (executed in the base directory)
   command = "npm run build"
   
-  # Publish directory (output from Vite)
+  # Publish directory (relative to the base directory)
   publish = "dist"
   
   # Set node version

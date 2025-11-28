@@ -49,32 +49,56 @@ export function useMeshNetwork() {
     let retryInterval: NodeJS.Timeout;
 
     const initMeshNetwork = async () => {
-      const network = new MeshNetwork({
-        defaultTTL: 10,
-        maxPeers: 50,
-        persistence: new WebPersistenceAdapter()
-      });
-
-      meshNetworkRef.current = network;
-      connectionMonitorRef.current = new ConnectionMonitor();
-
       // Initialize database
       const db = getDatabase();
       await db.init();
 
-      // Load persisted identity (if exists)
+      // Load persisted identity (if exists) or generate new one
+      let identityKeyPair;
       try {
-        const identity = await db.getPrimaryIdentity();
-        if (identity) {
-          console.log('Loaded persisted identity:', identity.fingerprint);
-          // Identity is loaded and can be used for cryptographic operations
-          // The network layer will create its own identity if needed
+        const storedIdentity = await db.getPrimaryIdentity();
+        if (storedIdentity) {
+          console.log('Loaded persisted identity:', storedIdentity.fingerprint);
+          identityKeyPair = {
+            publicKey: storedIdentity.publicKey,
+            privateKey: storedIdentity.privateKey
+          };
         } else {
-          console.log('No persisted identity found, network will generate new one');
+          console.log('No persisted identity found, generating new one...');
+          const { generateIdentity, generateFingerprint, publicKeyToBase64 } = await import('@sc/core');
+          const newIdentity = generateIdentity();
+          const fingerprint = await generateFingerprint(newIdentity.publicKey);
+
+          // Save to database
+          await db.saveIdentity({
+            id: fingerprint.substring(0, 16), // Use first 16 chars of fingerprint as ID
+            publicKey: newIdentity.publicKey,
+            privateKey: newIdentity.privateKey,
+            fingerprint: fingerprint,
+            createdAt: Date.now(),
+            isPrimary: true,
+            label: 'Primary Identity'
+          });
+
+          identityKeyPair = newIdentity;
+          console.log('Generated and saved new identity:', fingerprint);
         }
       } catch (error) {
-        console.error('Failed to load identity:', error);
+        console.error('Failed to load/generate identity:', error);
+        // Fallback to temporary identity if DB fails
+        const { generateIdentity } = await import('@sc/core');
+        identityKeyPair = generateIdentity();
       }
+
+      const network = new MeshNetwork({
+        defaultTTL: 10,
+        maxPeers: 50,
+        persistence: new WebPersistenceAdapter(),
+        identity: identityKeyPair
+      });
+
+      meshNetworkRef.current = network;
+      connectionMonitorRef.current = new ConnectionMonitor();
 
       // Load persisted peers and populate routing table
       try {
@@ -226,30 +250,24 @@ export function useMeshNetwork() {
       };
 
       // Process offline queue
-      // const retryQueuedMessages = async () => {
-      //   if (!meshNetworkRef.current) return;
+      const retryQueuedMessages = async () => {
+        if (!meshNetworkRef.current) return;
 
-      //   await offlineQueue.processQueue(async (msg) => {
-      //     try {
-      //       await meshNetworkRef.current!.sendMessage(msg.recipientId, msg.content);
-      //       return true; // Sent successfully
-      //     } catch (e) {
-      //       return false; // Failed to send
-      //     }
-      //   });
-      // };
+        await offlineQueue.processQueue(async (msg) => {
+          try {
+            await meshNetworkRef.current!.sendMessage(msg.recipientId, msg.content);
+            return true; // Sent successfully
+          } catch (e) {
+            return false; // Failed to send
+          }
+        });
+      };
 
       // Set up periodic retry
-      // retryInterval = setInterval(retryQueuedMessages, 30000); // 30 seconds
+      retryInterval = setInterval(retryQueuedMessages, 30000); // 30 seconds
 
       // Initial retry
-      // retryQueuedMessages();
-
-      // Store interval cleanup in a way that can be accessed by cleanup function
-      // Since we can't easily modify the cleanup function here without rewriting the whole effect,
-      // we'll attach it to the network object temporarily or just let it be cleared when component unmounts
-      // Actually, we should return the cleanup from initMeshNetwork if it was a hook, but it's inside useEffect.
-      // We can use a ref for the interval.
+      retryQueuedMessages();
 
     };
 
@@ -257,7 +275,7 @@ export function useMeshNetwork() {
 
     // Cleanup on unmount
     return () => {
-      // if (retryInterval) clearInterval(retryInterval);
+      if (retryInterval) clearInterval(retryInterval);
       if (meshNetworkRef.current) {
         meshNetworkRef.current.shutdown();
         meshNetworkRef.current = null;
@@ -506,5 +524,6 @@ export function useMeshNetwork() {
     getStats,
     generateConnectionOffer,
     acceptConnectionOffer,
+    identity: meshNetworkRef.current?.getIdentity(), // Expose identity
   }), [status, peers, messages, sendMessage, connectToPeer, getStats, generateConnectionOffer, acceptConnectionOffer]);
 }

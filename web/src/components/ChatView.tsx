@@ -20,6 +20,8 @@ interface Message {
 
 interface ChatViewProps {
   conversationId: string;
+  contactName?: string;
+  isOnline?: boolean;
   messages?: Array<{
     id: string;
     from: string;
@@ -30,7 +32,14 @@ interface ChatViewProps {
   isLoading?: boolean;
 }
 
-function ChatView({ conversationId: _conversationId, messages: receivedMessages = [], onSendMessage, isLoading = false }: ChatViewProps) {
+function ChatView({
+  conversationId: _conversationId,
+  contactName = 'Unknown Contact',
+  isOnline = false,
+  messages: receivedMessages = [],
+  onSendMessage,
+  isLoading = false
+}: ChatViewProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,10 +61,12 @@ function ChatView({ conversationId: _conversationId, messages: receivedMessages 
   return (
     <div className="chat-view">
       <div className="chat-header">
-        <div className="chat-avatar">C</div>
+        <div className="chat-avatar">{contactName.charAt(0).toUpperCase()}</div>
         <div className="chat-info">
-          <h3>Contact Name</h3>
-          <span className="status">Online</span>
+          <h3>{contactName}</h3>
+          <span className={`status ${isOnline ? 'online' : 'offline'}`}>
+            {isOnline ? 'Online' : 'Offline'}
+          </span>
         </div>
       </div>
 
