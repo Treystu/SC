@@ -29,7 +29,6 @@ function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showShareApp, setShowShareApp] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
-  const [demoMessages, setDemoMessages] = useState<Array<{ id: string; from: string; content: string; timestamp: number }>>([]);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const { status, peers, messages, sendMessage, connectToPeer, generateConnectionOffer, acceptConnectionOffer, identity } = useMeshNetwork();
   const { contacts, addContact, loading: contactsLoading } = useContacts();
@@ -249,9 +248,7 @@ function App() {
 
     const sanitizedContent = validation.sanitized;
 
-    if (selectedConversation === 'demo') {
-      // ... (demo logic)
-    } else if (selectedConversation) {
+    if (selectedConversation) {
       try {
         await sendMessage(selectedConversation, sanitizedContent, attachments);
       } catch (error) {
@@ -318,8 +315,6 @@ function App() {
     setShowShareApp(false);
     clearInvite();
   };
-
-  const displayMessages = selectedConversation === 'demo' ? demoMessages : messages;
 
   return (
     <ErrorBoundary>
@@ -413,7 +408,7 @@ function App() {
                     conversationId={selectedConversation}
                     contactName={contacts.find(c => c.id === selectedConversation)?.displayName || 'Unknown Contact'}
                     isOnline={peers.some(p => p.id === selectedConversation)}
-                    messages={displayMessages}
+                    messages={messages}
                     onSendMessage={handleSendMessage}
                     isLoading={contactsLoading}
                   />

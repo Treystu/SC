@@ -1,18 +1,19 @@
 # Netlify configuration for Sovereign Communications
 
 [build]
-  # Base directory for the build
-  base = "web"
+  # Base directory for the build (root of monorepo)
+  base = "."
 
   # Build command (executed in the base directory)
+  # This runs "npm run build --workspaces" defined in root package.json
   command = "npm run build"
   
   # Publish directory (relative to the base directory)
-  publish = "dist"
+  publish = "web/dist"
   
   # Set node version
   [build.environment]
-    NODE_VERSION = "18"
+    NODE_VERSION = "20"
 
 # Redirect all requests to index.html for SPA routing
 [[redirects]]
