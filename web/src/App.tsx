@@ -186,6 +186,16 @@ function App() {
       blocked: false,
       endpoints: [{ type: 'webrtc' }]
     });
+
+    // Create a conversation for the new contact
+    const db = getDatabase();
+    await db.saveConversation({
+      id: peerId,
+      contactId: peerId,
+      lastMessageTimestamp: Date.now(),
+      unreadCount: 0,
+      createdAt: Date.now(),
+    });
   };
 
   const handleImportContact = async (code: string, name: string) => {
