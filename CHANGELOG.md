@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.1.16](https://github.com/Treystu/SC/compare/v0.1.15...v0.1.16) (2025-11-28)
+
+
+### Features
+
+* Relocate Netlify configuration to the root, refactor identity management into `useMeshNetwork`, and enhance IndexedDB initialization with timeout and blocked handling. ([0d86cf4](https://github.com/Treystu/SC/commit/0d86cf4760ad1ed9e56d1621c5d486ef6dfcb54c))
+
 ### [0.1.15](https://github.com/Treystu/SC/compare/v0.1.14...v0.1.15) (2025-11-27)
 
 
