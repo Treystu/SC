@@ -10,6 +10,6 @@
     },
     "scripts": {
         "start": "ts-node relay.ts",
-        "build": "tsc relay.ts --esModuleInterop"
+        "build": "tsc"
     }
 }
