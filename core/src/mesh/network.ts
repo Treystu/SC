@@ -8,6 +8,7 @@ import { RoutingTable, Peer, createPeer } from './routing.js';
 import { MessageRelay } from './relay.js';
 import { PeerConnectionPool } from '../transport/webrtc.js';
 import { generateIdentity, IdentityKeyPair, signMessage } from '../crypto/primitives.js';
+import { Directory } from './directory.js';
 
 export interface MeshNetworkConfig {
   identity?: IdentityKeyPair;
@@ -529,6 +530,8 @@ export class MeshNetwork {
   // --- Public Room / HTTP Signaling Support ---
 
   private httpSignaling?: import('../transport/http-signaling.js').HttpSignalingClient;
+  private wsSignaling?: import('../transport/websocket-signaling.js').WebSocketSignalingClient;
+  private directory: Directory = new Directory();
 
   /**
    * Join a Public Chat Room (Signaling Server).
@@ -595,5 +598,68 @@ export class MeshNetwork {
     });
 
     await this.httpSignaling.join({ agent: 'sovereign-web' });
+  }
+
+  /**
+   * Join a Relay Server (WebSocket).
+   * This enables persistent P2P signaling and directory sync.
+   */
+  async joinRelay(url: string): Promise<void> {
+    const { WebSocketSignalingClient } = await import('../transport/websocket-signaling.js');
+    this.wsSignaling = new WebSocketSignalingClient(url, this.localPeerId, this.directory);
+
+    this.wsSignaling.on('directoryUpdated', (entries: any[]) => {
+      entries.forEach(entry => {
+        if (entry.id !== this.localPeerId) {
+          if (!this.peerPool.getPeer(entry.id)) {
+            console.log(`Discovered peer via relay: ${entry.id}`);
+            this.connectViaRelay(entry.id);
+          }
+        }
+      });
+    });
+
+    this.wsSignaling.on('signal', async ({ from, type, signal }: { from: string, type: string, signal: any }) => {
+      if (from === this.localPeerId) return;
+
+      const peer = this.peerPool.getOrCreatePeer(from);
+
+      // Setup ICE candidate forwarding via WebSocket
+      peer.onSignal((sig: any) => {
+        if (sig.type === 'candidate') {
+          this.wsSignaling?.sendSignal(from, 'candidate', sig.candidate);
+        }
+      });
+
+      try {
+        if (type === 'offer') {
+          const answer = await peer.createAnswer(signal);
+          this.wsSignaling?.sendSignal(from, 'answer', answer);
+        } else if (type === 'answer') {
+          await peer.setRemoteAnswer(signal);
+        } else if (type === 'candidate') {
+          await peer.addIceCandidate(signal);
+        }
+      } catch (err) {
+        console.error(`Error handling signal from ${from}:`, err);
+      }
+    });
+
+    this.wsSignaling.connect();
+  }
+
+  private async connectViaRelay(peerId: string) {
+    const p = this.peerPool.getOrCreatePeer(peerId);
+
+    // Setup ICE candidate forwarding
+    p.onSignal((signal: any) => {
+      if (signal.type === 'candidate') {
+        this.wsSignaling?.sendSignal(peerId, 'candidate', signal.candidate);
+      }
+    });
+
+    p.createDataChannel({ label: 'reliable', ordered: true });
+    const offer = await p.createOffer();
+    this.wsSignaling?.sendSignal(peerId, 'offer', offer);
   }
 }

@@ -5,10 +5,12 @@
   "private": true,
   "workspaces": [
     "core",
-    "web"
+    "web",
+    "server"
   ],
   "scripts": {
     "build": "npm run build --workspaces",
+    "build:server": "VITE_DEPLOYMENT_MODE=server VITE_PUBLIC_HUB=true npm run build --workspaces",
     "build:all": "./scripts/build-all.sh",
     "test": "npm run test --workspaces",
     "test:unit": "npm run test -w core",

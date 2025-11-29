@@ -11,9 +11,14 @@
   # Publish directory (relative to the base directory)
   publish = "web/dist"
   
-  # Set node version
+  # Set node version and default env vars
   [build.environment]
     NODE_VERSION = "20"
+    VITE_DEPLOYMENT_MODE = "netlify"
+    VITE_PUBLIC_HUB = "true"
+
+  # Functions directory
+  functions = "netlify/functions"
 
 # Redirect all requests to index.html for SPA routing
 [[redirects]]

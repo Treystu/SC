@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 import './sentry';
 import './App.css';
@@ -22,6 +22,7 @@ import { parseConnectionOffer, hexToBytes } from '@sc/core';
 import { ProfileManager, UserProfile } from './managers/ProfileManager';
 import { validateMessageContent } from '@sc/core';
 import { rateLimiter } from '../../core/src/rate-limiter';
+import { config } from './config';
 
 function App() {
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
@@ -30,8 +31,9 @@ function App() {
   const [showShareApp, setShowShareApp] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const { status, peers, messages, sendMessage, connectToPeer, generateConnectionOffer, acceptConnectionOffer, identity, joinRoom } = useMeshNetwork();
+  const { status, peers, messages, sendMessage, connectToPeer, generateConnectionOffer, acceptConnectionOffer, identity, joinRoom, joinRelay } = useMeshNetwork();
   const { contacts, addContact, loading: contactsLoading } = useContacts();
+  const autoJoinedRef = useRef(false);
 
   const { invite, createInvite, clearInvite } = useInvite(
     status.localPeerId,
@@ -61,6 +63,20 @@ function App() {
     const profileManager = new ProfileManager();
     profileManager.getProfile().then(setUserProfile);
   }, []);
+
+  // Auto-join public hub if configured
+  useEffect(() => {
+    if (status.isConnected && config.publicHub && !autoJoinedRef.current) {
+      autoJoinedRef.current = true;
+      console.log(`Auto-joining public hub in ${config.deploymentMode} mode...`);
+
+      if (config.deploymentMode === 'netlify') {
+        joinRoom(config.relayUrl).catch(err => console.error('Failed to auto-join Netlify room:', err));
+      } else if (config.deploymentMode === 'server') {
+        joinRelay(config.relayUrl).catch(err => console.error('Failed to auto-join Relay server:', err));
+      }
+    }
+  }, [status.isConnected, joinRoom, joinRelay]);
 
   // Handle pending invite from join.html page
   useEffect(() => {
@@ -427,6 +443,7 @@ function App() {
                     localPeerId={status.localPeerId}
                     generateConnectionOffer={generateConnectionOffer}
                     onJoinRoom={joinRoom}
+                    onJoinRelay={joinRelay}
                   />
                 </ErrorBoundary>
               </aside>

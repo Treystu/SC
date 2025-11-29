@@ -555,6 +555,11 @@ export function useMeshNetwork() {
     await meshNetworkRef.current.joinPublicRoom(url);
   }, []);
 
+  const joinRelay = useCallback(async (url: string): Promise<void> => {
+    if (!meshNetworkRef.current) throw new Error('Mesh network not initialized');
+    await meshNetworkRef.current.joinRelay(url);
+  }, []);
+
   // Memoized return value to prevent unnecessary re-renders
   return useMemo(() => ({
     status,
@@ -569,6 +574,7 @@ export function useMeshNetwork() {
     acceptManualOffer,
     finalizeManualConnection,
     joinRoom,
+    joinRelay,
     identity: meshNetworkRef.current?.getIdentity(), // Expose identity
-  }), [status, peers, messages, sendMessage, connectToPeer, getStats, generateConnectionOffer, acceptConnectionOffer, createManualOffer, acceptManualOffer, finalizeManualConnection, joinRoom]);
+  }), [status, peers, messages, sendMessage, connectToPeer, getStats, generateConnectionOffer, acceptConnectionOffer, createManualOffer, acceptManualOffer, finalizeManualConnection, joinRoom, joinRelay]);
 }

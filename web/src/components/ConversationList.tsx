@@ -24,6 +24,7 @@ interface ConversationListProps {
   localPeerId?: string;
   generateConnectionOffer?: () => Promise<string>;
   onJoinRoom?: (url: string) => void;
+  onJoinRelay?: (url: string) => void;
 }
 
 // Memoized conversation item component
@@ -70,7 +71,7 @@ const ConversationItem = memo(({
 
 ConversationItem.displayName = 'ConversationItem';
 
-function ConversationList({ conversations, loading, selectedId, onSelect, onAddContact, onImportContact, onShareApp, localPeerId = '', generateConnectionOffer, onJoinRoom }: ConversationListProps) {
+function ConversationList({ conversations, loading, selectedId, onSelect, onAddContact, onImportContact, onShareApp, localPeerId = '', generateConnectionOffer, onJoinRoom, onJoinRelay }: ConversationListProps) {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showSignalingExport, setShowSignalingExport] = useState(false);
@@ -149,7 +150,16 @@ function ConversationList({ conversations, loading, selectedId, onSelect, onAddC
                 }
                 setShowMenu(false);
               }} data-testid="join-public-room-btn">
-                🌐 Join Public Room
+                🌐 Join Public Room (Netlify)
+              </button>
+              <button onClick={() => {
+                const url = prompt('Enter Relay Server URL:', 'ws://localhost:8080');
+                if (url) {
+                  onJoinRelay?.(url);
+                }
+                setShowMenu(false);
+              }} data-testid="join-relay-btn">
+                🔌 Join Relay (WebSocket)
               </button>
               <button onClick={() => { onShareApp?.(); setShowMenu(false); }} data-testid="share-app-btn">
                 📤 Share App
