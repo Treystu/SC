@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.1.22](https://github.com/Treystu/SC/compare/v0.1.21...v0.1.22) (2025-11-29)
+
+
+### Features
+
+* Implement Hybrid Deployment (Netlify/Serverless + Standalone Node.js) and P2P Relay ([1273068](https://github.com/Treystu/SC/commit/127306881f5ab50a25b85089288bece2f8dac43f))
+
 ### [0.1.21](https://github.com/Treystu/SC/compare/v0.1.20...v0.1.21) (2025-11-28)
 
 
