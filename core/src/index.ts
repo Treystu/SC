@@ -39,17 +39,7 @@ export {
 
 // Discovery
 export * from './discovery/peer.js';
-export {
-  MDNSBroadcaster,
-  MDNSDiscoverer,
-  createServiceType,
-  validateServiceName,
-  formatServiceInstanceName,
-  type MDNSServiceInfo,
-  type MDNSCapabilities,
-  type MDNSBroadcasterOptions,
-  type MDNSDiscoveryOptions,
-} from './discovery/mdns.js';
+
 export {
   QRCodeDiscoveryV2,
   QR_FORMAT_VERSION,
@@ -68,7 +58,7 @@ export {
 } from './discovery/reachability.js';
 export { AudioTonePairing, pairViaDTMF, type AudioPairingOptions } from './discovery/audio-pairing.js';
 export { ProximityPairing, type ProximityDevice, type ProximityPairingOptions } from './discovery/proximity.js';
-export { PeerAnnouncementManager, type PeerCapabilities as AnnouncementCapabilities } from './discovery/announcement.js';
+
 
 // File transfer
 export * from './transfer/file.js';
@@ -92,16 +82,11 @@ export {
 
 export * from './file-validation.js';
 
-// TODO: Many validation functions listed here don't exist in validation.ts
-// They need to be implemented or removed from this export list
-/*
 export {
   ValidationError,
   required,
   validateStringLength,
-  // ... other missing exports
 } from './validation.js';
-*/
 
 // Rate limiting
 export {

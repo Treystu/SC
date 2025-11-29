@@ -68,7 +68,7 @@ export function useMeshNetwork() {
             };
           } else {
             console.log('No persisted identity found, generating new one...');
-            const { generateIdentity, generateFingerprint, publicKeyToBase64 } = await import('@sc/core');
+            const { generateIdentity, generateFingerprint } = await import('@sc/core');
             const newIdentity = generateIdentity();
             const fingerprint = await generateFingerprint(newIdentity.publicKey);
 
@@ -122,9 +122,6 @@ export function useMeshNetwork() {
         try {
           const routes = await db.getAllRoutes();
           console.log(`Loaded ${routes.length} persisted routes`);
-
-          // Note: Routes are rebuilt dynamically through peer announcements
-          // Persisted routes serve as hints for initial connectivity
         } catch (error) {
           console.error('Failed to load routes:', error);
         }
@@ -137,6 +134,132 @@ export function useMeshNetwork() {
           console.error('Failed to clean up expired data:', error);
         }
 
+        // Handle incoming messages with persistence
+        network.onMessage(async (message: Message) => {
+          try {
+            const payload = new TextDecoder().decode(message.payload);
+            const data = JSON.parse(payload);
+
+            const senderId = Array.from(message.header.senderId as Uint8Array)
+              .map((b) => (b as number).toString(16).padStart(2, '0'))
+              .join('')
+              .substring(0, 8); // Simplified ID for now
+
+            const receivedMessage: ReceivedMessage = {
+              id: `${message.header.timestamp}-${Math.random()}`,
+              from: senderId,
+              conversationId: senderId, // Incoming message belongs to sender's conversation
+              content: data.text || '',
+              timestamp: data.timestamp || message.header.timestamp,
+              type: message.header.type,
+              status: 'read', // Assume read for simplicity in this demo
+            };
+
+            setMessages((prev: ReceivedMessage[]) => [...prev, receivedMessage]);
+
+            // Persist message to IndexedDB
+            try {
+              await db.saveMessage({
+                id: receivedMessage.id,
+                conversationId: receivedMessage.from, // Use sender as conversation ID for now
+                content: receivedMessage.content,
+                timestamp: receivedMessage.timestamp,
+                senderId: receivedMessage.from,
+                recipientId: network.getLocalPeerId(),
+                type: receivedMessage.type === MessageType.TEXT ? 'text' :
+                  receivedMessage.type === MessageType.FILE_METADATA || receivedMessage.type === MessageType.FILE_CHUNK ? 'file' :
+                    receivedMessage.type === MessageType.VOICE ? 'voice' : 'text',
+                status: 'delivered',
+              });
+            } catch (error) {
+              console.error('Failed to persist message:', error);
+            }
+          } catch (error) {
+            console.error('Failed to parse message:', error);
+          }
+        });
+
+        // Handle peer connected with persistence
+        network.onPeerConnected(async (peerId: string) => {
+          console.log('Peer connected:', peerId);
+          updatePeerStatus();
+
+          // Persist peer connection
+          try {
+            await db.savePeer({
+              id: peerId,
+              publicKey: network.getPeer(peerId)?.publicKey ?
+                Array.from(network.getPeer(peerId)!.publicKey)
+                  .map((b: unknown) => (b as number).toString(16).padStart(2, '0')).join('') : '',
+              transportType: 'webrtc',
+              lastSeen: Date.now(),
+              connectedAt: Date.now(),
+              connectionQuality: 100,
+              bytesSent: 0,
+              bytesReceived: 0,
+              reputation: 50, // Start with neutral reputation
+              isBlacklisted: false,
+            });
+          } catch (error) {
+            console.error('Failed to persist peer:', error);
+          }
+        });
+
+        // Handle peer disconnected with persistence
+        network.onPeerDisconnected(async (peerId: string) => {
+          console.log('Peer disconnected:', peerId);
+          updatePeerStatus();
+
+          // Update peer's last seen time
+          try {
+            const peer = await db.getPeer(peerId);
+            if (peer) {
+              peer.lastSeen = Date.now();
+              await db.savePeer(peer);
+            }
+          } catch (error) {
+            console.error('Failed to update peer last seen:', error);
+          }
+        });
+
+        const updatePeerStatus = () => {
+          const connectedPeers = network.getConnectedPeers();
+          setPeers(connectedPeers);
+          setStatus((prev: MeshStatus) => ({
+            ...prev,
+            peerCount: connectedPeers.length,
+            isConnected: connectedPeers.length > 0,
+          }));
+
+          // Simulate connection quality updates
+          if (connectionMonitorRef.current) {
+            const monitor = connectionMonitorRef.current;
+            monitor.updateLatency(Math.random() * 100); // Simulate latency
+            monitor.updatePacketLoss(100, 100 - Math.random() * 5); // Simulate packet loss
+            setStatus(prev => ({ ...prev, connectionQuality: monitor.getQuality() }));
+          }
+        };
+
+        // Process offline queue
+        const retryQueuedMessages = async () => {
+          if (!meshNetworkRef.current) return;
+
+          await offlineQueue.processQueue(async (msg) => {
+            try {
+              await meshNetworkRef.current!.sendMessage(msg.recipientId, msg.content);
+              return true; // Sent successfully
+            } catch (e) {
+              return false; // Failed to send
+            }
+          });
+        };
+
+        // Set up periodic retry
+        retryInterval = setInterval(retryQueuedMessages, 30000); // 30 seconds
+
+        // Initial retry
+        retryQueuedMessages();
+
         // Update status
         setStatus({
           isConnected: true,
@@ -145,6 +268,7 @@ export function useMeshNetwork() {
           connectionQuality: 'good',
           initializationError: undefined,
         });
+
       } catch (error) {
         console.error('Failed to initialize mesh network:', error);
         setStatus(prev => ({
@@ -153,134 +277,6 @@ export function useMeshNetwork() {
         }));
         return; // Stop initialization on critical error
       }
-
-      // Handle incoming messages with persistence
-      network.onMessage(async (message: Message) => {
-        try {
-          const payload = new TextDecoder().decode(message.payload);
-          const data = JSON.parse(payload);
-
-          const senderId = Array.from(message.header.senderId as Uint8Array)
-            .map((b) => (b as number).toString(16).padStart(2, '0'))
-            .join('')
-            .substring(0, 8); // Simplified ID for now
-
-          // In a real app, we'd map this ID to a contact
-
-          const receivedMessage: ReceivedMessage = {
-            id: `${message.header.timestamp}-${Math.random()}`,
-            from: senderId,
-            conversationId: senderId, // Incoming message belongs to sender's conversation
-            content: data.text || '',
-            timestamp: data.timestamp || message.header.timestamp,
-            type: message.header.type,
-            status: 'read', // Assume read for simplicity in this demo
-          };
-
-          setMessages((prev: ReceivedMessage[]) => [...prev, receivedMessage]);
-
-          // Persist message to IndexedDB
-          try {
-            await db.saveMessage({
-              id: receivedMessage.id,
-              conversationId: receivedMessage.from, // Use sender as conversation ID for now
-              content: receivedMessage.content,
-              timestamp: receivedMessage.timestamp,
-              senderId: receivedMessage.from,
-              recipientId: network.getLocalPeerId(),
-              type: receivedMessage.type === MessageType.TEXT ? 'text' :
-                receivedMessage.type === MessageType.FILE_METADATA || receivedMessage.type === MessageType.FILE_CHUNK ? 'file' :
-                  receivedMessage.type === MessageType.VOICE ? 'voice' : 'text',
-              status: 'delivered',
-            });
-          } catch (error) {
-            console.error('Failed to persist message:', error);
-          }
-        } catch (error) {
-          console.error('Failed to parse message:', error);
-        }
-      });
-
-      // Handle peer connected with persistence
-      network.onPeerConnected(async (peerId: string) => {
-        console.log('Peer connected:', peerId);
-        updatePeerStatus();
-        // retryQueuedMessages();
-
-        // Persist peer connection
-        try {
-          await db.savePeer({
-            id: peerId,
-            publicKey: '', // TODO: Get actual public key
-            transportType: 'webrtc',
-            lastSeen: Date.now(),
-            connectedAt: Date.now(),
-            connectionQuality: 100,
-            bytesSent: 0,
-            bytesReceived: 0,
-            reputation: 50, // Start with neutral reputation
-            isBlacklisted: false,
-          });
-        } catch (error) {
-          console.error('Failed to persist peer:', error);
-        }
-      });
-
-      // Handle peer disconnected with persistence
-      network.onPeerDisconnected(async (peerId: string) => {
-        console.log('Peer disconnected:', peerId);
-        updatePeerStatus();
-
-        // Update peer's last seen time
-        try {
-          const peer = await db.getPeer(peerId);
-          if (peer) {
-            peer.lastSeen = Date.now();
-            await db.savePeer(peer);
-          }
-        } catch (error) {
-          console.error('Failed to update peer last seen:', error);
-        }
-      });
-
-      const updatePeerStatus = () => {
-        const connectedPeers = network.getConnectedPeers();
-        setPeers(connectedPeers);
-        setStatus((prev: MeshStatus) => ({
-          ...prev,
-          peerCount: connectedPeers.length,
-          isConnected: connectedPeers.length > 0,
-        }));
-
-        // Simulate connection quality updates
-        if (connectionMonitorRef.current) {
-          const monitor = connectionMonitorRef.current;
-          monitor.updateLatency(Math.random() * 100); // Simulate latency
-          monitor.updatePacketLoss(100, 100 - Math.random() * 5); // Simulate packet loss
-          setStatus(prev => ({ ...prev, connectionQuality: monitor.getQuality() }));
-        }
-      };
-
-      // Process offline queue
-      const retryQueuedMessages = async () => {
-        if (!meshNetworkRef.current) return;
-
-        await offlineQueue.processQueue(async (msg) => {
-          try {
-            await meshNetworkRef.current!.sendMessage(msg.recipientId, msg.content);
-            return true; // Sent successfully
-          } catch (e) {
-            return false; // Failed to send
-          }
-        });
-      };
-
-      // Set up periodic retry
-      retryInterval = setInterval(retryQueuedMessages, 30000); // 30 seconds
-
-      // Initial retry
-      retryQueuedMessages();
-
     };
 
     initMeshNetwork();

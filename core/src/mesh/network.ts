@@ -328,6 +328,13 @@ export class MeshNetwork {
   }
 
   /**
+   * Get a specific peer by ID
+   */
+  getPeer(peerId: string): Peer | undefined {
+    return this.routingTable.getPeer(peerId);
+  }
+
+  /**
    * Get network statistics
    */
   async getStats() {
@@ -624,7 +631,7 @@ export class MeshNetwork {
         p.createDataChannel({ label: 'reliable', ordered: true });
         const offer = await p.createOffer();
         const recipientKey = peerPublicKeys.get(peer._id);
-        
+
         if (recipientKey) {
           await this.httpSignaling?.sendSignal(peer._id, 'offer', offer, recipientKey);
         } else {
@@ -662,7 +669,7 @@ export class MeshNetwork {
         if (type === 'offer') {
           const answer = await peer.createAnswer(signal);
           const recipientKey = peerPublicKeys.get(from);
-          
+
           if (recipientKey) {
             await this.httpSignaling?.sendSignal(from, 'answer', answer, recipientKey);
           } else {

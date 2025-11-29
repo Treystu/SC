@@ -1,4 +1,4 @@
-import { ObjectId } from 'mongodb';
+import { randomBytes } from 'crypto';
 
 // In-memory store
 const memoryStore: Record<string, any[]> = {
@@ -6,6 +6,11 @@ const memoryStore: Record<string, any[]> = {
     signals: [],
     messages: []
 };
+
+// Helper to generate IDs similar to MongoDB ObjectId (24 hex chars)
+function generateId(): string {
+    return randomBytes(12).toString('hex');
+}
 
 // Mock Collection
 class MockCollection {
@@ -25,7 +30,9 @@ class MockCollection {
         if (item) {
             this.applyUpdate(item, update);
         } else if (options?.upsert) {
-            item = { _id: filter._id || new ObjectId().toString(), ...filter };
+            // If filter has _id, use it, otherwise generate new one
+            const id = filter._id || generateId();
+            item = { ...filter, _id: id };
             this.applyUpdate(item, update);
             collection.push(item);
         }
@@ -34,7 +41,7 @@ class MockCollection {
 
     async insertOne(doc: any) {
         const collection = memoryStore[this.name];
-        const newDoc = { _id: new ObjectId().toString(), ...doc };
+        const newDoc = { _id: generateId(), ...doc };
         collection.push(newDoc);
         return { insertedId: newDoc._id };
     }

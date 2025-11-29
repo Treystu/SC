@@ -194,3 +194,4 @@ dist
 .pnp.*
 
 server/relay.js
+logs/

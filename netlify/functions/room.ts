@@ -1,6 +1,6 @@
 import { Handler } from '@netlify/functions';
 import { connectToDatabase } from './utils/db';
-import { ObjectId } from 'mongodb';
+
 
 const CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
@@ -100,7 +100,7 @@ export const handler: Handler = async (event, context) => {
                 // Mark signals as read (or delete them)
                 if (signals.length > 0) {
                     await signalsCollection.updateMany(
-                        { _id: { $in: signals.map(s => s._id) } },
+                        { _id: { $in: signals.map((s: any) => s._id) } },
                         { $set: { read: true } }
                     );
                 }
@@ -117,7 +117,7 @@ export const handler: Handler = async (event, context) => {
                     statusCode: 200,
                     headers: CORS_HEADERS,
                     body: JSON.stringify({
-                        signals: signals.map(s => ({ ...s, _id: undefined })), // Sanitize ID
+                        signals: signals.map((s: any) => ({ ...s, _id: undefined })), // Sanitize ID
                         messages: messages.reverse()
                     }),
                 };
