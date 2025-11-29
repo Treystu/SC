@@ -1,23 +1,150 @@
-import { MongoClient, Db } from 'mongodb';
+import { ObjectId } from 'mongodb';
 
-let cachedDb: Db | null = null;
+// In-memory store
+const memoryStore: Record<string, any[]> = {
+    peers: [],
+    signals: [],
+    messages: []
+};
 
-export async function connectToDatabase(): Promise<Db> {
-    if (cachedDb) {
-        return cachedDb;
+// Mock Collection
+class MockCollection {
+    private name: string;
+
+    constructor(name: string) {
+        this.name = name;
+        if (!memoryStore[name]) {
+            memoryStore[name] = [];
+        }
     }
 
-    const uri = process.env.MONGODB_URI;
-    if (!uri) {
-        throw new Error('MONGODB_URI environment variable is not set');
+    async updateOne(filter: any, update: any, options?: any) {
+        const collection = memoryStore[this.name];
+        let item = collection.find(i => this.matches(i, filter));
+
+        if (item) {
+            this.applyUpdate(item, update);
+        } else if (options?.upsert) {
+            item = { _id: filter._id || new ObjectId().toString(), ...filter };
+            this.applyUpdate(item, update);
+            collection.push(item);
+        }
+        return { modifiedCount: item ? 1 : 0, upsertedCount: (!item && options?.upsert) ? 1 : 0 };
     }
 
-    const client = new MongoClient(uri);
-    await client.connect();
+    async insertOne(doc: any) {
+        const collection = memoryStore[this.name];
+        const newDoc = { _id: new ObjectId().toString(), ...doc };
+        collection.push(newDoc);
+        return { insertedId: newDoc._id };
+    }
 
-    // Select database from URI or default to 'sovereign_db'
-    const dbName = new URL(uri).pathname.substring(1) || 'sovereign_db';
-    cachedDb = client.db(dbName);
+    find(filter: any) {
+        const collection = memoryStore[this.name];
+        let result = collection.filter(i => this.matches(i, filter));
 
-    return cachedDb;
+        return {
+            project: (projection: any) => {
+                // Simple projection implementation
+                result = result.map(item => {
+                    const projected: any = {};
+                    for (const key in projection) {
+                        if (projection[key] === 1) {
+                            projected[key] = item[key];
+                        }
+                    }
+                    // Always include _id unless explicitly excluded (not implemented here for simplicity)
+                    if (projection._id !== 0) {
+                        projected._id = item._id;
+                    }
+                    return projected;
+                });
+                return this.cursor(result);
+            },
+            sort: (sortOpts: any) => {
+                result.sort((a, b) => {
+                    for (const key in sortOpts) {
+                        if (a[key] < b[key]) return sortOpts[key] === 1 ? -1 : 1;
+                        if (a[key] > b[key]) return sortOpts[key] === 1 ? 1 : -1;
+                    }
+                    return 0;
+                });
+                return this.cursor(result);
+            },
+            limit: (limit: number) => {
+                result = result.slice(0, limit);
+                return this.cursor(result);
+            },
+            toArray: async () => result
+        };
+    }
+
+    async updateMany(filter: any, update: any) {
+        const collection = memoryStore[this.name];
+        const items = collection.filter(i => this.matches(i, filter));
+        items.forEach(item => this.applyUpdate(item, update));
+        return { modifiedCount: items.length };
+    }
+
+    private cursor(result: any[]) {
+        return {
+            project: (projection: any) => this.find({}).project(projection), // Chaining mock
+            sort: (sortOpts: any) => {
+                result.sort((a, b) => {
+                    for (const key in sortOpts) {
+                        if (a[key] < b[key]) return sortOpts[key] === 1 ? -1 : 1;
+                        if (a[key] > b[key]) return sortOpts[key] === 1 ? 1 : -1;
+                    }
+                    return 0;
+                });
+                return this.cursor(result);
+            },
+            limit: (limit: number) => {
+                result = result.slice(0, limit);
+                return this.cursor(result);
+            },
+            toArray: async () => result
+        };
+    }
+
+    private matches(item: any, filter: any): boolean {
+        for (const key in filter) {
+            const value = filter[key];
+            if (typeof value === 'object' && value !== null) {
+                // Handle operators like $gt, $ne, $in
+                if (value.$gt) {
+                    if (!(new Date(item[key]) > new Date(value.$gt))) return false;
+                }
+                if (value.$ne) {
+                    if (item[key] === value.$ne) return false;
+                }
+                if (value.$in) {
+                    if (!value.$in.includes(item[key])) return false;
+                }
+            } else {
+                if (item[key] !== value) return false;
+            }
+        }
+        return true;
+    }
+
+    private applyUpdate(item: any, update: any) {
+        if (update.$set) {
+            Object.assign(item, update.$set);
+        }
+    }
+}
+
+// Mock Db
+class MockDb {
+    collection(name: string) {
+        return new MockCollection(name);
+    }
+}
+
+const mockDb = new MockDb();
+
+export async function connectToDatabase(): Promise<any> {
+    console.log('Using in-memory database');
+    return mockDb;
 }

@@ -1,22 +1,13 @@
-import { useState, useEffect } from 'react';
-import { StoredContact, getDatabase } from '../storage/database';
+import { useState } from 'react';
+import { StoredContact } from '../storage/database';
 import { generateFingerprint, isValidPublicKey, hexToBytes, publicKeyToBase64 } from '@sc/core';
+import { useContacts } from '../hooks/useContacts';
 
 export function ContactManager() {
-  const [contacts, setContacts] = useState<StoredContact[]>([]);
+  const { contacts, addContact, updateContact, removeContact } = useContacts();
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [newContact, setNewContact] = useState({ name: '', publicKey: '' });
   const [searchQuery, setSearchQuery] = useState('');
-
-  useEffect(() => {
-    loadContacts();
-  }, []);
-
-  const loadContacts = async () => {
-    const db = getDatabase();
-    const allContacts = await db.getContacts();
-    setContacts(allContacts);
-  };
 
   const handleAddContact = async () => {
     if (!newContact.name || !newContact.publicKey) {
@@ -50,9 +41,7 @@ export function ContactManager() {
         endpoints: [{ type: 'webrtc' }]
       };
 
-      const db = getDatabase();
-      await db.saveContact(contact);
-      await loadContacts();
+      await addContact(contact);
       setNewContact({ name: '', publicKey: '' });
       setShowAddDialog(false);
     } catch (error) {
@@ -63,16 +52,12 @@ export function ContactManager() {
 
   const handleDeleteContact = async (contactId: string) => {
     if (confirm('Are you sure you want to delete this contact?')) {
-      const db = getDatabase();
-      await db.deleteContact(contactId);
-      await loadContacts();
+      await removeContact(contactId);
     }
   };
 
   const handleVerifyContact = async (contact: StoredContact) => {
-    const db = getDatabase();
-    await db.saveContact({ ...contact, verified: true });
-    await loadContacts();
+    await updateContact({ ...contact, verified: true });
   };
 
   const filteredContacts = contacts.filter(contact =>
