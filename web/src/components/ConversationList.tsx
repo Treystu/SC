@@ -18,6 +18,7 @@ interface ConversationListProps {
   loading: boolean;
   selectedId: string | null;
   onSelect: (id: string) => void;
+  onDelete: (id: string) => void;
   onAddContact?: (peerId: string, name: string) => void;
   onImportContact?: (code: string, name: string) => void;
   onShareApp?: () => void;
@@ -31,11 +32,13 @@ interface ConversationListProps {
 const ConversationItem = memo(({
   conv,
   isSelected,
-  onSelect
+  onSelect,
+  onDelete
 }: {
   conv: Conversation;
   isSelected: boolean;
   onSelect: (id: string) => void;
+  onDelete: (id: string) => void;
 }) => (
   <div
     className={`conversation-item ${isSelected ? 'selected' : ''}`}
@@ -66,12 +69,24 @@ const ConversationItem = memo(({
     {conv.unreadCount > 0 && (
       <div className="unread-badge">{conv.unreadCount}</div>
     )}
+    <button
+      className="delete-btn"
+      onClick={(e) => {
+        e.stopPropagation();
+        if (confirm('Are you sure you want to delete this conversation?')) {
+          onDelete(conv.id);
+        }
+      }}
+      title="Delete conversation"
+    >
+      ×
+    </button>
   </div>
 ));
 
 ConversationItem.displayName = 'ConversationItem';
 
-function ConversationList({ conversations, loading, selectedId, onSelect, onAddContact, onImportContact, onShareApp, localPeerId = '', generateConnectionOffer, onJoinRoom, onJoinRelay }: ConversationListProps) {
+function ConversationList({ conversations, loading, selectedId, onSelect, onDelete, onAddContact, onImportContact, onShareApp, localPeerId = '', generateConnectionOffer, onJoinRoom, onJoinRelay }: ConversationListProps) {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showSignalingExport, setShowSignalingExport] = useState(false);
@@ -82,6 +97,10 @@ function ConversationList({ conversations, loading, selectedId, onSelect, onAddC
   const handleSelect = useCallback((id: string) => {
     onSelect(id);
   }, [onSelect]);
+
+  const handleDelete = useCallback((id: string) => {
+    onDelete(id);
+  }, [onDelete]);
 
   const handleAddContact = useCallback((peerId: string, name: string) => {
     onAddContact?.(peerId, name);
@@ -183,6 +202,7 @@ function ConversationList({ conversations, loading, selectedId, onSelect, onAddC
                 conv={conv}
                 isSelected={selectedId === conv.id}
                 onSelect={handleSelect}
+                onDelete={handleDelete}
               />
             ))
           )}

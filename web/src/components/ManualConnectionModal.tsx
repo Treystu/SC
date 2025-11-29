@@ -8,7 +8,7 @@ interface ManualConnectionModalProps {
 }
 
 export function ManualConnectionModal({ isOpen, onClose, initialPeerId }: ManualConnectionModalProps) {
-    const { createManualOffer, acceptManualOffer, finalizeManualConnection } = useMeshNetwork();
+    const { createManualOffer, acceptManualOffer, finalizeManualConnection, status } = useMeshNetwork();
     const [mode, setMode] = useState<'initiate' | 'join'>('initiate');
     const [step, setStep] = useState<'input' | 'offer' | 'answer' | 'success'>('input');
     const [peerId, setPeerId] = useState(initialPeerId || '');
@@ -92,6 +92,15 @@ export function ManualConnectionModal({ isOpen, onClose, initialPeerId }: Manual
                 <button className="modal-close" onClick={onClose}>×</button>
 
                 <h2>Manual Connection (WAN)</h2>
+
+                <div className="local-peer-info">
+                    <p><strong>Your Peer ID:</strong></p>
+                    <div className="peer-id-display">
+                        <code>{status.localPeerId}</code>
+                        <button onClick={() => copyToClipboard(status.localPeerId)} title="Copy Peer ID">📋</button>
+                    </div>
+                    <p className="hint">Share this with your friend so they can initiate a connection.</p>
+                </div>
 
                 {step === 'input' && (
                     <div className="step-content">

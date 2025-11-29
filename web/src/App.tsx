@@ -19,7 +19,7 @@ import { useContacts } from './hooks/useContacts';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { announce } from './utils/accessibility';
 import { getDatabase } from './storage/database';
-import { generateFingerprint, publicKeyToBase64, isValidPublicKey } from '@sc/core';
+import { generateFingerprint, publicKeyToBase64, isValidPublicKey, logger } from '@sc/core';
 import { parseConnectionOffer, hexToBytes } from '@sc/core';
 import { ProfileManager, UserProfile } from './managers/ProfileManager';
 import { validateMessageContent } from '@sc/core';
@@ -34,7 +34,7 @@ function App() {
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [pendingInviteData, setPendingInviteData] = useState<{ code: string; inviterName: string | null } | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const { contacts, addContact, loading: contactsLoading } = useContacts();
+  const { contacts, addContact, removeContact, loading: contactsLoading } = useContacts();
   const { conversations: storedConversations } = useConversations();
   const {
     status,
@@ -52,6 +52,16 @@ function App() {
     joinRelay
   } = useMeshNetwork();
   const autoJoinedRef = useRef(false);
+
+  // Configure Logger
+  useEffect(() => {
+    if (status.localPeerId) {
+      logger.setPeerId(status.localPeerId);
+      if (config.deploymentMode === 'netlify') {
+        logger.setRemoteUrl('/.netlify/functions/log');
+      }
+    }
+  }, [status.localPeerId]);
 
   const { invite, createInvite, clearInvite } = useInvite(
     status.localPeerId,
@@ -181,6 +191,19 @@ function App() {
       announce.message('Disconnected from network', 'polite');
     }
   }, [status.isConnected, status.peerCount]);
+
+  const handleDeleteConversation = async (id: string) => {
+    try {
+      await removeContact(id);
+      if (selectedConversation === id) {
+        setSelectedConversation(null);
+      }
+      announce.message('Conversation deleted', 'polite');
+    } catch (error) {
+      console.error('Failed to delete conversation:', error);
+      announce.message('Failed to delete conversation', 'assertive');
+    }
+  };
 
   const handleAddContact = async (peerId: string, name: string, publicKeyHex?: string) => {
     let finalPublicKeyHex = publicKeyHex;
@@ -472,6 +495,7 @@ function App() {
                     loading={contactsLoading}
                     selectedId={selectedConversation}
                     onSelect={setSelectedConversation}
+                    onDelete={handleDeleteConversation}
                     onAddContact={handleAddContact}
                     onImportContact={handleImportContact}
                     onShareApp={handleShareApp}

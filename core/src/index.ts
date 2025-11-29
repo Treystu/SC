@@ -111,5 +111,8 @@ export { ErrorTracker, type ErrorContext } from './error-tracking.js';
 // Identity
 export { IdentityManager } from './identity-manager.js';
 
+// Logger
+export { logger, LogLevel, type LogEntry } from './logger.js';
+
 // Version
 export const VERSION = '0.1.0';

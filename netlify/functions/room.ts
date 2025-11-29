@@ -113,12 +113,20 @@ export const handler: Handler = async (event, context) => {
                     .limit(50)
                     .toArray();
 
+                // Get active peers (last 5 mins) to keep client updated
+                const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+                const activePeers = await peersCollection
+                    .find({ lastSeen: { $gt: fiveMinutesAgo }, _id: { $ne: peerId } })
+                    .project({ _id: 1, metadata: 1 })
+                    .toArray();
+
                 return {
                     statusCode: 200,
                     headers: CORS_HEADERS,
                     body: JSON.stringify({
                         signals: signals.map((s: any) => ({ ...s, _id: undefined })), // Sanitize ID
-                        messages: messages.reverse()
+                        messages: messages.reverse(),
+                        peers: activePeers
                     }),
                 };
             }

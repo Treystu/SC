@@ -1,306 +1,186 @@
 /**
- * Logger - Structured logging system
- * Task 182: Logging and debugging utilities
+ * Advanced Logging System
+ * Supports log levels, persistence, and export
  */
 
 export enum LogLevel {
-  DEBUG = 'debug',
-  INFO = 'info',
-  WARN = 'warn',
-  ERROR = 'error'
+  DEBUG = 0,
+  INFO = 1,
+  WARN = 2,
+  ERROR = 3,
 }
 
 export interface LogEntry {
-  level: LogLevel;
-  message: string;
   timestamp: number;
-  module?: string;
-  data?: Record<string, any>;
-  userId?: string;
-  sessionId?: string;
+  level: LogLevel;
+  component: string;
+  message: string;
+  data?: any;
 }
 
-export class Logger {
-  private static instance: Logger;
-  private logBuffer: LogEntry[] = [];
-  private maxBufferSize = 5000;
-  private currentLevel: LogLevel = LogLevel.INFO;
-  private moduleFilters: Set<string> = new Set();
+class Logger {
+  private logs: LogEntry[] = [];
+  private maxLogs: number = 1000;
+  private listeners: ((entry: LogEntry) => void)[] = [];
+  private dbName = 'sc-logs';
+  private storeName = 'logs';
 
-  private constructor() {
-    // Check environment for log level
-    if (typeof process !== 'undefined' && process.env.LOG_LEVEL) {
-      this.setLevel(process.env.LOG_LEVEL as LogLevel);
-    }
+  private remoteUrl: string | null = null;
+  private peerId: string | null = null;
+
+  constructor() {
+    this.initDB();
   }
 
-  static getInstance(): Logger {
-    if (!Logger.instance) {
-      Logger.instance = new Logger();
-    }
-    return Logger.instance;
+  setRemoteUrl(url: string) {
+    this.remoteUrl = url;
   }
 
-  /**
-   * Set minimum log level
-   */
-  setLevel(level: LogLevel): void {
-    this.currentLevel = level;
+  setPeerId(id: string) {
+    this.peerId = id;
   }
 
-  /**
-   * Enable logging for specific modules
-   */
-  enableModule(module: string): void {
-    this.moduleFilters.add(module);
-  }
+  private async initDB() {
+    if (typeof indexedDB === 'undefined') return;
 
-  /**
-   * Disable logging for specific modules
-   */
-  disableModule(module: string): void {
-    this.moduleFilters.delete(module);
-  }
-
-  /**
-   * Check if level should be logged
-   */
-  private shouldLog(level: LogLevel, module?: string): boolean {
-    const levels = [LogLevel.DEBUG, LogLevel.INFO, LogLevel.WARN, LogLevel.ERROR];
-    const currentIndex = levels.indexOf(this.currentLevel);
-    const messageIndex = levels.indexOf(level);
-
-    if (messageIndex < currentIndex) {
-      return false;
-    }
-
-    if (module && this.moduleFilters.size > 0) {
-      return this.moduleFilters.has(module);
-    }
-
-    return true;
-  }
-
-  /**
-   * Create log entry
-   */
-  private createEntry(
-    level: LogLevel,
-    message: string,
-    module?: string,
-    data?: Record<string, any>
-  ): LogEntry {
-    return {
-      level,
-      message,
-      timestamp: Date.now(),
-      module,
-      data,
-      userId: this.getCurrentUserId(),
-      sessionId: this.getSessionId()
+    const request = indexedDB.open(this.dbName, 1);
+    request.onupgradeneeded = (event: any) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains(this.storeName)) {
+        db.createObjectStore(this.storeName, { keyPath: 'timestamp' });
+      }
     };
   }
 
-  /**
-   * Get current user ID (if available)
-   */
-  private getCurrentUserId(): string | undefined {
-    if (typeof window !== 'undefined' && (window as any).SC_USER_ID) {
-      return (window as any).SC_USER_ID;
-    }
-    return undefined;
-  }
+  private async persistLog(entry: LogEntry) {
+    if (typeof indexedDB === 'undefined') return;
 
-  /**
-   * Get session ID
-   */
-  private getSessionId(): string | undefined {
-    if (typeof window !== 'undefined' && (window as any).SC_SESSION_ID) {
-      return (window as any).SC_SESSION_ID;
-    }
-    return undefined;
-  }
-
-  /**
-   * Add entry to buffer
-   */
-  private addToBuffer(entry: LogEntry): void {
-    this.logBuffer.push(entry);
-
-    if (this.logBuffer.length > this.maxBufferSize) {
-      this.logBuffer = this.logBuffer.slice(-this.maxBufferSize);
+    try {
+      const request = indexedDB.open(this.dbName, 1);
+      request.onsuccess = (event: any) => {
+        const db = event.target.result;
+        const tx = db.transaction(this.storeName, 'readwrite');
+        const store = tx.objectStore(this.storeName);
+        store.add(entry);
+      };
+    } catch (e) {
+      console.error('Failed to persist log', e);
     }
   }
 
-  /**
-   * Format log message for console
-   */
-  private formatMessage(entry: LogEntry): any[] {
-    const timestamp = new Date(entry.timestamp).toISOString();
-    const module = entry.module ? `[${entry.module}]` : '';
-    const level = `[${entry.level.toUpperCase()}]`;
-    
-    const parts = [timestamp, level, module, entry.message].filter(Boolean);
-    
-    if (entry.data) {
-      return [parts.join(' '), entry.data];
-    }
-    
-    return [parts.join(' ')];
-  }
+  log(level: LogLevel, component: string, message: string, data?: any) {
+    const entry: LogEntry = {
+      timestamp: Date.now(),
+      level,
+      component,
+      message,
+      data,
+    };
 
-  /**
-   * Write to console
-   */
-  private writeToConsole(entry: LogEntry): void {
-    const formatted = this.formatMessage(entry);
-    
-    switch (entry.level) {
-      case LogLevel.ERROR:
-        console.error(...formatted);
+    this.logs.push(entry);
+    if (this.logs.length > this.maxLogs) {
+      this.logs.shift();
+    }
+
+    this.persistLog(entry);
+    this.notifyListeners(entry);
+
+    // Remote logging
+    if (this.remoteUrl) {
+      fetch(this.remoteUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          level: LogLevel[level],
+          message: `[${component}] ${message}`,
+          details: data,
+          timestamp: new Date(entry.timestamp).toISOString(),
+          peerId: this.peerId
+        })
+      }).catch(err => {
+        // Prevent infinite loops if logging fails
+        // console.error('Failed to send remote log', err);
+      });
+    }
+
+    // Console output
+    const prefix = `[${new Date(entry.timestamp).toISOString()}] [${LogLevel[level]}] [${component}]`;
+    switch (level) {
+      case LogLevel.DEBUG:
+        console.debug(prefix, message, data || '');
+        break;
+      case LogLevel.INFO:
+        console.info(prefix, message, data || '');
         break;
       case LogLevel.WARN:
-        console.warn(...formatted);
+        console.warn(prefix, message, data || '');
         break;
-      case LogLevel.DEBUG:
-        console.debug(...formatted);
+      case LogLevel.ERROR:
+        console.error(prefix, message, data || '');
         break;
-      default:
-        console.log(...formatted);
     }
   }
 
-  /**
-   * Log debug message
-   */
-  debug(message: string, module?: string, data?: Record<string, any>): void {
-    if (!this.shouldLog(LogLevel.DEBUG, module)) return;
-    
-    const entry = this.createEntry(LogLevel.DEBUG, message, module, data);
-    this.addToBuffer(entry);
-    this.writeToConsole(entry);
+  debug(component: string, message: string, data?: any) {
+    this.log(LogLevel.DEBUG, component, message, data);
   }
 
-  /**
-   * Log info message
-   */
-  info(message: string, module?: string, data?: Record<string, any>): void {
-    if (!this.shouldLog(LogLevel.INFO, module)) return;
-    
-    const entry = this.createEntry(LogLevel.INFO, message, module, data);
-    this.addToBuffer(entry);
-    this.writeToConsole(entry);
+  info(component: string, message: string, data?: any) {
+    this.log(LogLevel.INFO, component, message, data);
   }
 
-  /**
-   * Log warning message
-   */
-  warn(message: string, module?: string, data?: Record<string, any>): void {
-    if (!this.shouldLog(LogLevel.WARN, module)) return;
-    
-    const entry = this.createEntry(LogLevel.WARN, message, module, data);
-    this.addToBuffer(entry);
-    this.writeToConsole(entry);
+  warn(component: string, message: string, data?: any) {
+    this.log(LogLevel.WARN, component, message, data);
   }
 
-  /**
-   * Log error message
-   */
-  error(message: string, module?: string, data?: Record<string, any>): void {
-    if (!this.shouldLog(LogLevel.ERROR, module)) return;
-    
-    const entry = this.createEntry(LogLevel.ERROR, message, module, data);
-    this.addToBuffer(entry);
-    this.writeToConsole(entry);
+  error(component: string, message: string, data?: any) {
+    this.log(LogLevel.ERROR, component, message, data);
   }
 
-  /**
-   * Get recent logs
-   */
-  getRecentLogs(limit: number = 100): LogEntry[] {
-    return this.logBuffer.slice(-limit);
+  getLogs(): LogEntry[] {
+    return [...this.logs];
   }
 
-  /**
-   * Get logs by level
-   */
-  getLogsByLevel(level: LogLevel): LogEntry[] {
-    return this.logBuffer.filter(entry => entry.level === level);
-  }
+  async getAllLogs(): Promise<LogEntry[]> {
+    if (typeof indexedDB === 'undefined') return this.logs;
 
-  /**
-   * Get logs by module
-   */
-  getLogsByModule(module: string): LogEntry[] {
-    return this.logBuffer.filter(entry => entry.module === module);
-  }
-
-  /**
-   * Get logs in time range
-   */
-  getLogsByTimeRange(startTime: number, endTime: number): LogEntry[] {
-    return this.logBuffer.filter(
-      entry => entry.timestamp >= startTime && entry.timestamp <= endTime
-    );
-  }
-
-  /**
-   * Clear log buffer
-   */
-  clearLogs(): void {
-    this.logBuffer = [];
-  }
-
-  /**
-   * Export logs as JSON
-   */
-  exportLogs(): string {
-    return JSON.stringify(this.logBuffer, null, 2);
-  }
-
-  /**
-   * Get log statistics
-   */
-  getStats(): {
-    total: number;
-    byLevel: Record<LogLevel, number>;
-    byModule: Record<string, number>;
-  } {
-    const stats = {
-      total: this.logBuffer.length,
-      byLevel: {} as Record<LogLevel, number>,
-      byModule: {} as Record<string, number>
-    };
-
-    // Initialize level counters
-    Object.values(LogLevel).forEach(level => {
-      stats.byLevel[level as LogLevel] = 0;
+    return new Promise((resolve) => {
+      const request = indexedDB.open(this.dbName, 1);
+      request.onsuccess = (event: any) => {
+        const db = event.target.result;
+        const tx = db.transaction(this.storeName, 'readonly');
+        const store = tx.objectStore(this.storeName);
+        const getAll = store.getAll();
+        getAll.onsuccess = () => {
+          resolve(getAll.result);
+        };
+        getAll.onerror = () => {
+          resolve(this.logs);
+        };
+      };
+      request.onerror = () => {
+        resolve(this.logs);
+      };
     });
+  }
 
-    // Count occurrences
-    this.logBuffer.forEach(entry => {
-      stats.byLevel[entry.level]++;
-      
-      if (entry.module) {
-        stats.byModule[entry.module] = (stats.byModule[entry.module] || 0) + 1;
+  exportLogs(): string {
+    return JSON.stringify(this.logs, null, 2);
+  }
+
+  onLog(callback: (entry: LogEntry) => void) {
+    this.listeners.push(callback);
+  }
+
+  private notifyListeners(entry: LogEntry) {
+    this.listeners.forEach(listener => {
+      try {
+        listener(entry);
+      } catch (e) {
+        console.error('Error in log listener', e);
       }
     });
-
-    return stats;
   }
 }
 
-// Global logger instance
-export const logger = Logger.getInstance();
-
-// Convenience exports for module-specific loggers
-export const createModuleLogger = (moduleName: string) => ({
-  debug: (message: string, data?: Record<string, any>) => 
-    logger.debug(message, moduleName, data),
-  info: (message: string, data?: Record<string, any>) => 
-    logger.info(message, moduleName, data),
-  warn: (message: string, data?: Record<string, any>) => 
-    logger.warn(message, moduleName, data),
-  error: (message: string, data?: Record<string, any>) => 
-    logger.error(message, moduleName, data)
-});
+export const logger = new Logger();

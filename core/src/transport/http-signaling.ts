@@ -183,7 +183,7 @@ export class HttpSignalingClient {
                         if (s.signal && s.signal.encrypted && this.identity) {
                             try {
                                 const { ephemeralPublicKey, nonce, ciphertext, senderPublicKey } = s.signal;
-                                
+
                                 // 1. Perform ECDH: Identity Private + Ephemeral Public
                                 const sharedSecret = performKeyExchange(
                                     this.identity.privateKey,
@@ -202,7 +202,7 @@ export class HttpSignalingClient {
 
                                 const plaintext = new TextDecoder().decode(plaintextBytes);
                                 s.signal = JSON.parse(plaintext);
-                                
+
                                 // Attach sender public key to the decrypted signal object so listeners can use it
                                 if (senderPublicKey) {
                                     s.signal.senderPublicKey = senderPublicKey;
@@ -213,6 +213,12 @@ export class HttpSignalingClient {
                             }
                         }
                         this.emit('signal', s);
+                    });
+                }
+
+                if (data.peers) {
+                    data.peers.forEach((p: any) => {
+                        this.emit('peerDiscovered', p);
                     });
                 }
 
