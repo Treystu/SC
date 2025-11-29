@@ -9,6 +9,7 @@ import { SettingsPanel } from './components/SettingsPanel';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { OnboardingFlow } from './components/Onboarding/OnboardingFlow';
 import { QRCodeShare } from './components/QRCodeShare';
+import { InviteAcceptanceModal } from './components/InviteAcceptanceModal';
 import { NetworkDiagnostics } from './components/NetworkDiagnostics';
 import { useMeshNetwork } from './hooks/useMeshNetwork';
 import { useInvite } from './hooks/useInvite';
@@ -31,6 +32,7 @@ function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showShareApp, setShowShareApp] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [pendingInviteData, setPendingInviteData] = useState<{ code: string; inviterName: string | null } | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const { contacts, addContact, loading: contactsLoading } = useContacts();
   const { conversations: storedConversations } = useConversations();
@@ -97,71 +99,79 @@ function App() {
   // Handle pending invite from join.html page
   useEffect(() => {
     if (pendingInvite.code && identity?.publicKey && identity?.privateKey) {
-      // Process the pending invite
-      const processPendingInvite = async () => {
-        try {
-          // Import InviteManager from core
-          const { InviteManager } = await import('@sc/core');
-          const inviteManager = new InviteManager(
-            status.localPeerId,
-            identity.publicKey,
-            identity.privateKey,
-            userProfile?.displayName || 'User'
-          );
-
-          // Redeem the invite (code is guaranteed to be non-null by the outer if check)
-          const inviteCode = pendingInvite.code;
-          if (!inviteCode) return;
-
-          const result = await inviteManager.redeemInvite(
-            inviteCode,
-            status.localPeerId
-          );
-
-          if (result.success) {
-            // Convert publicKey Uint8Array to base64 string for storage
-            // Use Array.from to avoid stack overflow with large arrays
-            const publicKeyArray = Array.from(result.contact.publicKey);
-            const publicKeyBase64 = btoa(String.fromCharCode.apply(null, publicKeyArray as any));
-
-            // Use first 16 characters as fingerprint for display
-            const FINGERPRINT_LENGTH = 16;
-
-            // Save contact to database
-            const db = getDatabase();
-            await db.saveContact({
-              id: result.contact.peerId,
-              publicKey: publicKeyBase64,
-              displayName: result.contact.name || pendingInvite.inviterName || 'New Contact',
-              lastSeen: Date.now(),
-              createdAt: Date.now(),
-              fingerprint: publicKeyBase64.substring(0, FINGERPRINT_LENGTH),
-              verified: true,
-              blocked: false,
-              endpoints: [],
-            });
-
-            // Connect to the inviter
-            await connectToPeer(result.contact.peerId);
-            setSelectedConversation(result.contact.peerId);
-
-            announce.message(
-              `Joined from invite! Connected to ${result.contact.name || pendingInvite.inviterName || 'your friend'}`,
-              'assertive'
-            );
-          }
-        } catch (error) {
-          console.error('Failed to process pending invite:', error);
-          announce.message(
-            'Failed to process invite. The invite may be invalid or expired.',
-            'assertive'
-          );
-        }
-      };
-
-      processPendingInvite();
+      // Instead of auto-processing, set state to show confirmation modal
+      setPendingInviteData({
+        code: pendingInvite.code,
+        inviterName: pendingInvite.inviterName
+      });
     }
-  }, [pendingInvite.code, identity, status.localPeerId, connectToPeer]);
+  }, [pendingInvite.code, identity]);
+
+  const handleAcceptInvite = async () => {
+    if (!pendingInviteData || !identity?.publicKey || !identity?.privateKey) return;
+
+    try {
+      // Import InviteManager from core
+      const { InviteManager } = await import('@sc/core');
+      const inviteManager = new InviteManager(
+        status.localPeerId,
+        identity.publicKey,
+        identity.privateKey,
+        userProfile?.displayName || 'User'
+      );
+
+      // Redeem the invite
+      const result = await inviteManager.redeemInvite(
+        pendingInviteData.code,
+        status.localPeerId
+      );
+
+      if (result.success) {
+        // Convert publicKey Uint8Array to base64 string for storage
+        // Use Array.from to avoid stack overflow with large arrays
+        const publicKeyArray = Array.from(result.contact.publicKey);
+        const publicKeyBase64 = btoa(String.fromCharCode.apply(null, publicKeyArray as any));
+
+        // Use first 16 characters as fingerprint for display
+        const FINGERPRINT_LENGTH = 16;
+
+        // Save contact to database
+        const db = getDatabase();
+        await db.saveContact({
+          id: result.contact.peerId,
+          publicKey: publicKeyBase64,
+          displayName: result.contact.name || pendingInviteData.inviterName || 'New Contact',
+          lastSeen: Date.now(),
+          createdAt: Date.now(),
+          fingerprint: publicKeyBase64.substring(0, FINGERPRINT_LENGTH),
+          verified: true,
+          blocked: false,
+          endpoints: [],
+        });
+
+        // Connect to the inviter
+        await connectToPeer(result.contact.peerId);
+        setSelectedConversation(result.contact.peerId);
+
+        announce.message(
+          `Joined from invite! Connected to ${result.contact.name || pendingInviteData.inviterName || 'your friend'}`,
+          'assertive'
+        );
+      }
+    } catch (error) {
+      console.error('Failed to process pending invite:', error);
+      announce.message(
+        'Failed to process invite. The invite may be invalid or expired.',
+        'assertive'
+      );
+    } finally {
+      setPendingInviteData(null);
+    }
+  };
+
+  const handleDeclineInvite = () => {
+    setPendingInviteData(null);
+  };
 
   // Announce connection status changes to screen readers
   useEffect(() => {
@@ -389,6 +399,15 @@ function App() {
         <QRCodeShare
           invite={invite}
           onClose={handleCloseShareApp}
+        />
+      )}
+
+      {/* Invite Acceptance Modal */}
+      {pendingInviteData && (
+        <InviteAcceptanceModal
+          inviterName={pendingInviteData.inviterName || 'A friend'}
+          onAccept={handleAcceptInvite}
+          onDecline={handleDeclineInvite}
         />
       )}
 

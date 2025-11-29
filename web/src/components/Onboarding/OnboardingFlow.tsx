@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import QRCode from 'qrcode';
+import { useMeshNetwork } from '../../hooks/useMeshNetwork';
 import './OnboardingFlow.css';
 
 interface OnboardingFlowProps {
@@ -7,10 +9,16 @@ interface OnboardingFlowProps {
 }
 
 type OnboardingStep = 'welcome' | 'identity' | 'add-contact' | 'privacy';
+type AddContactMethod = 'none' | 'qr' | 'manual' | 'demo';
 
 export function OnboardingFlow({ onComplete, localPeerId }: OnboardingFlowProps) {
   const [step, setStep] = useState<OnboardingStep>('welcome');
   const [displayName, setDisplayName] = useState('');
+  const [activeMethod, setActiveMethod] = useState<AddContactMethod>('none');
+  const [manualPeerId, setManualPeerId] = useState('');
+  const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle');
+  const [qrCodeUrl, setQrCodeUrl] = useState('');
+  const { connectToPeer } = useMeshNetwork();
 
   const handleNext = () => {
     switch (step) {
@@ -117,34 +125,139 @@ export function OnboardingFlow({ onComplete, localPeerId }: OnboardingFlowProps)
           <div className="onboarding-step">
             <div className="onboarding-icon">👥</div>
             <h2 id="onboarding-title">Connect with Others</h2>
-            <p>
-              To start messaging, you'll need to add contacts. There are several ways to connect:
-            </p>
-            <div className="connection-methods">
-              <div className="method-card">
-                <strong>📱 QR Code</strong>
-                <p>Scan someone's QR code or show yours</p>
+            
+            {activeMethod === 'none' ? (
+              <>
+                <p>
+                  To start messaging, you'll need to add contacts. There are several ways to connect:
+                </p>
+                <div className="connection-methods">
+                  <button
+                    className="method-card"
+                    onClick={() => {
+                      setActiveMethod('qr');
+                      QRCode.toDataURL(localPeerId, { width: 200, margin: 1 })
+                        .then(url => setQrCodeUrl(url))
+                        .catch(err => console.error(err));
+                    }}
+                  >
+                    <strong>📱 QR Code</strong>
+                    <p>Show your QR code to a friend</p>
+                  </button>
+                  <button
+                    className="method-card"
+                    onClick={() => setActiveMethod('manual')}
+                  >
+                    <strong>🔗 Manual Entry</strong>
+                    <p>Enter a Peer ID directly</p>
+                  </button>
+                  <button
+                    className="method-card"
+                    onClick={() => setActiveMethod('demo')}
+                  >
+                    <strong>🧪 Demo Mode</strong>
+                    <p>Connect to a demo peer</p>
+                  </button>
+                </div>
+                <div className="onboarding-tip">
+                  💡 <strong>Tip:</strong> You can also add contacts later using the "+" button.
+                </div>
+                <div className="onboarding-actions">
+                  <button onClick={() => setStep('identity')} className="btn-secondary">
+                    Back
+                  </button>
+                  <button onClick={handleNext} className="btn-primary">
+                    Continue
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="active-method-container">
+                {activeMethod === 'qr' && (
+                  <div className="method-content">
+                    <h3>Your QR Code</h3>
+                    {qrCodeUrl && <img src={qrCodeUrl} alt="Your Peer ID QR Code" className="qr-code-img" />}
+                    <p className="peer-id-small">{localPeerId}</p>
+                    <p>Have your friend scan this code.</p>
+                  </div>
+                )}
+
+                {activeMethod === 'manual' && (
+                  <div className="method-content">
+                    <h3>Manual Entry</h3>
+                    <input
+                      type="text"
+                      value={manualPeerId}
+                      onChange={(e) => setManualPeerId(e.target.value)}
+                      placeholder="Enter Peer ID"
+                      className="onboarding-input"
+                    />
+                    <button
+                      className="btn-primary"
+                      onClick={async () => {
+                        setConnectionStatus('connecting');
+                        try {
+                          await connectToPeer(manualPeerId);
+                          setConnectionStatus('connected');
+                          setTimeout(() => {
+                            setConnectionStatus('idle');
+                            setActiveMethod('none');
+                            handleNext();
+                          }, 1500);
+                        } catch (e) {
+                          setConnectionStatus('error');
+                        }
+                      }}
+                      disabled={!manualPeerId || connectionStatus === 'connecting'}
+                    >
+                      {connectionStatus === 'connecting' ? 'Connecting...' :
+                       connectionStatus === 'connected' ? 'Connected!' :
+                       connectionStatus === 'error' ? 'Failed (Try Again)' : 'Connect'}
+                    </button>
+                  </div>
+                )}
+
+                {activeMethod === 'demo' && (
+                  <div className="method-content">
+                    <h3>Demo Mode</h3>
+                    <p>Connect to a simulated peer to test messaging.</p>
+                    <button
+                      className="btn-primary"
+                      onClick={async () => {
+                        setConnectionStatus('connecting');
+                        try {
+                          await connectToPeer('demo');
+                          setConnectionStatus('connected');
+                          setTimeout(() => {
+                            setConnectionStatus('idle');
+                            setActiveMethod('none');
+                            handleNext();
+                          }, 1500);
+                        } catch (e) {
+                          setConnectionStatus('error');
+                        }
+                      }}
+                      disabled={connectionStatus === 'connecting'}
+                    >
+                      {connectionStatus === 'connecting' ? 'Connecting...' :
+                       connectionStatus === 'connected' ? 'Connected!' :
+                       connectionStatus === 'error' ? 'Failed (Try Again)' : 'Connect to Demo'}
+                    </button>
+                  </div>
+                )}
+
+                <button
+                  className="btn-text"
+                  onClick={() => {
+                    setActiveMethod('none');
+                    setConnectionStatus('idle');
+                    setManualPeerId('');
+                  }}
+                >
+                  Cancel
+                </button>
               </div>
-              <div className="method-card">
-                <strong>🔗 Manual Entry</strong>
-                <p>Exchange Peer IDs directly</p>
-              </div>
-              <div className="method-card">
-                <strong>🧪 Demo Mode</strong>
-                <p>Try it out with "demo" as the Peer ID</p>
-              </div>
-            </div>
-            <div className="onboarding-tip">
-              💡 <strong>Tip:</strong> Click the "+" button in the top-right to add your first contact
-            </div>
-            <div className="onboarding-actions">
-              <button onClick={() => setStep('identity')} className="btn-secondary">
-                Back
-              </button>
-              <button onClick={handleNext} className="btn-primary">
-                Continue
-              </button>
-            </div>
+            )}
           </div>
         )}
 
