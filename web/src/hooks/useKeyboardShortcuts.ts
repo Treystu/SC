@@ -12,20 +12,27 @@ export interface ShortcutAction {
 export function useKeyboardShortcuts(customShortcuts: ShortcutAction[] = []) {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Merge default shortcuts with custom ones
-      // Custom shortcuts override defaults if keys match
-      const allShortcuts = [...customShortcuts];
+      const defaultShortcuts: ShortcutAction[] = [
+        // Add default shortcuts here if needed
+      ];
+
+      // Custom shortcuts take precedence
+      const allShortcuts = [...customShortcuts, ...defaultShortcuts];
 
       for (const shortcut of allShortcuts) {
-        const ctrlMatch = shortcut.ctrl ? event.ctrlKey || event.metaKey : true;
-        const altMatch = shortcut.alt ? event.altKey : true;
-        const shiftMatch = shortcut.shift ? event.shiftKey : true;
+        const isCtrl = event.ctrlKey || event.metaKey;
+        const isAlt = event.altKey;
+        const isShift = event.shiftKey;
+
+        const reqCtrl = !!shortcut.ctrl;
+        const reqAlt = !!shortcut.alt;
+        const reqShift = !!shortcut.shift;
 
         if (
           event.key.toLowerCase() === shortcut.key.toLowerCase() &&
-          ctrlMatch &&
-          altMatch &&
-          shiftMatch
+          isCtrl === reqCtrl &&
+          isAlt === reqAlt &&
+          isShift === reqShift
         ) {
           event.preventDefault();
           shortcut.action();

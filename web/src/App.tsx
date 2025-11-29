@@ -12,6 +12,7 @@ import { QRCodeShare } from './components/QRCodeShare';
 import { NetworkDiagnostics } from './components/NetworkDiagnostics';
 import { useMeshNetwork } from './hooks/useMeshNetwork';
 import { useInvite } from './hooks/useInvite';
+import { useConversations } from './hooks/useConversations';
 import { usePendingInvite } from './hooks/usePendingInvite';
 import { useContacts } from './hooks/useContacts';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
@@ -31,8 +32,23 @@ function App() {
   const [showShareApp, setShowShareApp] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const { status, peers, messages, sendMessage, connectToPeer, generateConnectionOffer, acceptConnectionOffer, identity, joinRoom, joinRelay } = useMeshNetwork();
   const { contacts, addContact, loading: contactsLoading } = useContacts();
+  const { conversations: storedConversations } = useConversations();
+  const {
+    status,
+    peers,
+    messages,
+    sendMessage,
+    connectToPeer,
+    generateConnectionOffer,
+    acceptConnectionOffer,
+    createManualOffer,
+    acceptManualOffer,
+    finalizeManualConnection,
+    identity,
+    joinRoom,
+    joinRelay
+  } = useMeshNetwork();
   const autoJoinedRef = useRef(false);
 
   const { invite, createInvite, clearInvite } = useInvite(

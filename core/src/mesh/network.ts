@@ -36,7 +36,9 @@ export class MeshNetwork {
   // Callbacks
   private messageListeners: Set<(message: Message) => void> = new Set();
   private onPeerConnectedCallback?: (peerId: string) => void;
+
   private onPeerDisconnectedCallback?: (peerId: string) => void;
+  private onPeerTrackCallback?: (peerId: string, track: MediaStreamTrack, stream: MediaStream) => void;
 
   // Metrics tracking
   private messagesSent = 0;
@@ -107,6 +109,11 @@ export class MeshNetwork {
         type: 'SIGNAL',
         signal
       })).catch(err => console.error('Failed to send signal:', err));
+    });
+
+    // Handle incoming tracks (Audio/Video)
+    this.peerPool.onTrack((peerId: string, track: MediaStreamTrack, stream: MediaStream) => {
+      this.onPeerTrackCallback?.(peerId, track, stream);
     });
   }
 
@@ -277,6 +284,40 @@ export class MeshNetwork {
    */
   onPeerDisconnected(callback: (peerId: string) => void): void {
     this.onPeerDisconnectedCallback = callback;
+  }
+
+  /**
+   * Register callback for incoming peer tracks
+   */
+  onPeerTrack(callback: (peerId: string, track: MediaStreamTrack, stream: MediaStream) => void): void {
+    this.onPeerTrackCallback = callback;
+  }
+
+  /**
+   * Add media stream to peer connection
+   */
+  async addStreamToPeer(peerId: string, stream: MediaStream): Promise<void> {
+    const peer = this.peerPool.getPeer(peerId);
+    if (!peer) {
+      throw new Error(`Peer ${peerId} not found`);
+    }
+
+    stream.getTracks().forEach(track => {
+      peer.addTrack(track, stream);
+    });
+
+    // If connection is already established, we might need to renegotiate
+    // But for now, we assume this is called before or during connection setup
+    // Or that the browser handles renegotiation (which requires sending a new offer)
+
+    // Trigger renegotiation if connected
+    if (peer.getState() === 'connected') {
+      const offer = await peer.createOffer();
+      await this.sendMessage(peerId, JSON.stringify({
+        type: 'SIGNAL',
+        signal: { type: 'offer', sdp: offer }
+      }));
+    }
   }
 
   /**

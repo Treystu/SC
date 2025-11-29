@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useMeshNetwork } from '../hooks/useMeshNetwork';
 
 interface Participant {
   id: string;
@@ -18,25 +19,11 @@ export const GroupVideoCall: React.FC<GroupVideoCallProps> = ({ roomId, onLeave 
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
 
-  // Simulate receiving remote streams (in real app, use WebRTC signaling)
+  const { peers, addStreamToPeer, onPeerTrack } = useMeshNetwork();
+
+  // Handle incoming remote streams
   useEffect(() => {
-    const meshNetwork = {
-      on: (event: string, callback: (peerId: string, stream: MediaStream) => void) => {
-        if (event === 'stream-added') {
-          const interval = setInterval(() => {
-            const peerId = `peer-${Math.random().toString(36).substring(7)}`;
-            const stream = new MediaStream(); // Create a dummy stream
-            callback(peerId, stream);
-          }, 5000);
-          return () => clearInterval(interval);
-        }
-        return () => { };
-      },
-      off: (_event: string, _callback: any) => { },
-    };
-
-
-    const handleRemoteStream = (peerId: string, stream: MediaStream) => {
+    onPeerTrack((peerId, track, stream) => {
       setParticipants(prev => {
         if (prev.find(p => p.id === peerId)) return prev;
         return [...prev, {
@@ -48,14 +35,17 @@ export const GroupVideoCall: React.FC<GroupVideoCallProps> = ({ roomId, onLeave 
           speaking: false
         }];
       });
-    };
+    });
+  }, [onPeerTrack]);
 
-    const cleanup = meshNetwork.on('stream-added', handleRemoteStream);
-
-    return () => {
-      cleanup();
-    };
-  }, []);
+  // Add local stream to existing peers when stream is ready
+  useEffect(() => {
+    if (localStream && peers.length > 0) {
+      peers.forEach(peer => {
+        addStreamToPeer(peer.id, localStream).catch(console.error);
+      });
+    }
+  }, [localStream, peers, addStreamToPeer]);
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [videoEnabled, setVideoEnabled] = useState(true);
   const [screenSharing, setScreenSharing] = useState(false);

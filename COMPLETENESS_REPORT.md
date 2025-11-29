@@ -90,6 +90,7 @@
 | /Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/ios/SovereignCommunications/Views/CompleteSettingsView.swift | 7 |
 | /Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/ios/SovereignCommunications/Notifications/NotificationManager.swift | 10 |
 | /Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/web/src/App.tsx | 8 |
+| /Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/web/src/App.tsx | 10 |
 | /Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/web/src/components/Accessibility.tsx | 10 |
 | /Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/web/src/components/AddContactDialog.tsx | 10 |
 | /Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/web/src/components/AdvancedSettings.tsx | 10 |
@@ -97,14 +98,14 @@
 | /Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/web/src/components/ChatView.tsx | 10 |
 | /Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/web/src/components/ConnectionStatus.tsx | 10 |
 | /Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/web/src/components/ContactList.tsx | 10 |
-| /Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/web/src/components/ContactManager.tsx | 8 |
+| /Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/web/src/components/ContactManager.tsx | 10 |
 | /Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/web/src/components/ConversationList.tsx | 10 |
 | /Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/web/src/components/ErrorBoundary.tsx | 10 |
 | /Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/web/src/components/FileAttachment.tsx | 10 |
 | /Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/web/src/components/FileExport.tsx | 10 |
 | /Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/web/src/components/FilePreview.tsx | 10 |
-| /Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/web/src/components/GroupChat.tsx | 2 |
-| /Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/web/src/components/GroupVideoCall.tsx | 8 |
+| /Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/web/src/components/GroupChat.tsx | 9 |
+| /Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/web/src/components/GroupVideoCall.tsx | 10 |
 | /Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/web/src/components/ImageUpload.tsx | 10 |
 | /Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/web/src/components/MessageExport.tsx | 10 |
 | /Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/web/src/components/MessageForwarding.tsx | 10 |
@@ -132,7 +133,7 @@
 | /Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/web/src/hooks/useCustomHooks.ts | 10 |
 | /Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/web/src/hooks/useDebounce.ts | 10 |
 | /Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/web/src/hooks/useInvite.ts | 10 |
-| /Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/web/src/hooks/useKeyboardShortcuts.ts | 8 |
+| /Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/web/src/hooks/useKeyboardShortcuts.ts | 10 |
 | /Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/web/src/hooks/useLocalStorage.ts | 10 |
 | /Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/web/src/hooks/useMediaQuery.ts | 10 |
 | /Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/web/src/hooks/useMeshNetwork.ts | 10 |

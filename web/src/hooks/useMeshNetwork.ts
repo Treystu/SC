@@ -560,6 +560,16 @@ export function useMeshNetwork() {
     await meshNetworkRef.current.joinRelay(url);
   }, []);
 
+  const addStreamToPeer = useCallback(async (peerId: string, stream: MediaStream) => {
+    if (!meshNetworkRef.current) throw new Error('Mesh network not initialized');
+    await meshNetworkRef.current.addStreamToPeer(peerId, stream);
+  }, []);
+
+  const onPeerTrack = useCallback((callback: (peerId: string, track: MediaStreamTrack, stream: MediaStream) => void) => {
+    if (!meshNetworkRef.current) throw new Error('Mesh network not initialized');
+    meshNetworkRef.current.onPeerTrack(callback);
+  }, []);
+
   // Memoized return value to prevent unnecessary re-renders
   return useMemo(() => ({
     status,
@@ -575,6 +585,8 @@ export function useMeshNetwork() {
     finalizeManualConnection,
     joinRoom,
     joinRelay,
+    addStreamToPeer,
+    onPeerTrack,
     identity: meshNetworkRef.current?.getIdentity(), // Expose identity
-  }), [status, peers, messages, sendMessage, connectToPeer, getStats, generateConnectionOffer, acceptConnectionOffer, createManualOffer, acceptManualOffer, finalizeManualConnection, joinRoom, joinRelay]);
+  }), [status, peers, messages, sendMessage, connectToPeer, getStats, generateConnectionOffer, acceptConnectionOffer, createManualOffer, acceptManualOffer, finalizeManualConnection, joinRoom, joinRelay, addStreamToPeer, onPeerTrack]);
 }

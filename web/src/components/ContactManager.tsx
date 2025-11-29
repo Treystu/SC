@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { StoredContact, getDatabase } from '../storage/database';
-import { sha256 } from 'js-sha256';
+import { generateFingerprint, isValidPublicKey, hexToBytes, publicKeyToBase64 } from '@sc/core';
 
 export function ContactManager() {
   const [contacts, setContacts] = useState<StoredContact[]>([]);
@@ -24,29 +24,41 @@ export function ContactManager() {
       return;
     }
 
-    // Basic validation for public key (assuming base64 or hex)
-    if (newContact.publicKey.length < 32) {
-      alert("Invalid Public Key format");
+    let publicKeyHex = newContact.publicKey;
+    // Basic cleanup
+    publicKeyHex = publicKeyHex.replace(/\s/g, '');
+
+    if (!isValidPublicKey(publicKeyHex)) {
+      alert("Invalid Public Key format (must be 32 bytes hex)");
       return;
     }
 
-    const fingerprint = sha256(newContact.publicKey);
-    const contact: StoredContact = {
-      id: crypto.randomUUID(),
-      displayName: newContact.name,
-      publicKey: newContact.publicKey,
-      lastSeen: Date.now(),
-      fingerprint,
-      verified: false,
-      createdAt: Date.now(),
-      blocked: false,
-      endpoints: []
-    };
-    const db = getDatabase();
-    await db.saveContact(contact);
-    await loadContacts();
-    setNewContact({ name: '', publicKey: '' });
-    setShowAddDialog(false);
+    try {
+      const publicKeyBytes = hexToBytes(publicKeyHex);
+      const publicKeyBase64 = publicKeyToBase64(publicKeyBytes);
+      const fingerprint = await generateFingerprint(publicKeyBytes);
+
+      const contact: StoredContact = {
+        id: publicKeyHex, // Use public key (hex) as ID for consistency
+        displayName: newContact.name,
+        publicKey: publicKeyBase64,
+        lastSeen: Date.now(),
+        fingerprint,
+        verified: false,
+        createdAt: Date.now(),
+        blocked: false,
+        endpoints: [{ type: 'webrtc' }]
+      };
+
+      const db = getDatabase();
+      await db.saveContact(contact);
+      await loadContacts();
+      setNewContact({ name: '', publicKey: '' });
+      setShowAddDialog(false);
+    } catch (error) {
+      console.error('Error adding contact:', error);
+      alert('Failed to add contact: ' + (error as Error).message);
+    }
   };
 
   const handleDeleteContact = async (contactId: string) => {

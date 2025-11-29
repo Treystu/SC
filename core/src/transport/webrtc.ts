@@ -25,6 +25,7 @@ export class WebRTCPeer {
   private onMessageCallback?: (data: Uint8Array) => void;
   private onStateChangeCallback?: (state: ConnectionState) => void;
   private onSignalCallback?: (signal: any) => void;
+  private onTrackCallback?: (track: MediaStreamTrack, stream: MediaStream) => void;
   private peerId: string;
 
   constructor(config: PeerConnectionConfig) {
@@ -69,6 +70,13 @@ export class WebRTCPeer {
     // Data channel receiving
     this.peerConnection.ondatachannel = (event) => {
       this.setupDataChannel(event.channel);
+    };
+
+    // Track receiving (Audio/Video)
+    this.peerConnection.ontrack = (event) => {
+      if (event.streams && event.streams[0]) {
+        this.onTrackCallback?.(event.track, event.streams[0]);
+      }
     };
   }
 
@@ -231,6 +239,23 @@ export class WebRTCPeer {
   }
 
   /**
+   * Register callback for incoming tracks
+   */
+  onTrack(callback: (track: MediaStreamTrack, stream: MediaStream) => void): void {
+    this.onTrackCallback = callback;
+  }
+
+  /**
+   * Add local track to connection
+   */
+  addTrack(track: MediaStreamTrack, stream: MediaStream): void {
+    if (!this.peerConnection) {
+      throw new Error('Peer connection not initialized');
+    }
+    this.peerConnection.addTrack(track, stream);
+  }
+
+  /**
    * Get current connection state
    */
   getState(): ConnectionState {
@@ -278,6 +303,7 @@ export class PeerConnectionPool {
   private peers: Map<string, WebRTCPeer> = new Map();
   private onMessageCallback?: (peerId: string, data: Uint8Array) => void;
   private onSignalCallback?: (peerId: string, signal: any) => void;
+  private onTrackCallback?: (peerId: string, track: MediaStreamTrack, stream: MediaStream) => void;
 
   /**
    * Create or get peer connection
@@ -303,6 +329,11 @@ export class PeerConnectionPool {
       // Set up signal handler
       peer.onSignal((signal) => {
         this.onSignalCallback?.(peerId, signal);
+      });
+
+      // Set up track handler
+      peer.onTrack((track, stream) => {
+        this.onTrackCallback?.(peerId, track, stream);
       });
 
       this.peers.set(peerId, peer);
@@ -395,5 +426,18 @@ export class PeerConnectionPool {
       connectedPeers: this.getConnectedPeers().length,
       peers: peerStats,
     };
+  }
+  /**
+   * Register callback for incoming tracks (audio/video)
+   */
+  onTrack(callback: (peerId: string, track: MediaStreamTrack, stream: MediaStream) => void): void {
+    this.onTrackCallback = callback;
+
+    // Register for existing peers
+    this.peers.forEach((peer, peerId) => {
+      peer.onTrack((track, stream) => {
+        callback(peerId, track, stream);
+      });
+    });
   }
 }
