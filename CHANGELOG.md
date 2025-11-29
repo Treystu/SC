@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.1.25](https://github.com/Treystu/SC/compare/v0.1.24...v0.1.25) (2025-11-29)
+
+
+### Features
+
+* implement end-to-end encryption for signaling messages using ephemeral keys and identity public keys. ([c64008b](https://github.com/Treystu/SC/commit/c64008b5a37621bbc7237f71e92e4e75acc518ef))
+
 ### [0.1.24](https://github.com/Treystu/SC/compare/v0.1.23...v0.1.24) (2025-11-29)
 
 
