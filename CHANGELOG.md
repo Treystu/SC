@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.1.24](https://github.com/Treystu/SC/compare/v0.1.23...v0.1.24) (2025-11-29)
+
+
+### Features
+
+* Refactor contact management with core utilities, enhance group chat member selection, introduce a new conversation hook, and refine keyboard shortcut modifier matching. ([a8a4dc7](https://github.com/Treystu/SC/commit/a8a4dc78fd1ae757b97fbece97e4c8a29062d105))
+
 ### [0.1.23](https://github.com/Treystu/SC/compare/v0.1.22...v0.1.23) (2025-11-29)
 
 
