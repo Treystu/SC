@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.1.23](https://github.com/Treystu/SC/compare/v0.1.22...v0.1.23) (2025-11-29)
+
+
+### Bug Fixes
+
+* Add server tsconfig and update build script ([53e20ec](https://github.com/Treystu/SC/commit/53e20ecd07e463f0879b6fe23dbe6ba76404e608))
+
 ### [0.1.22](https://github.com/Treystu/SC/compare/v0.1.21...v0.1.22) (2025-11-29)
 
 
