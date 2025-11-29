@@ -580,11 +580,29 @@ export class MeshNetwork {
    */
   async joinPublicRoom(url: string): Promise<void> {
     const { HttpSignalingClient } = await import('../transport/http-signaling.js');
-    this.httpSignaling = new HttpSignalingClient(url, this.localPeerId);
+    this.httpSignaling = new HttpSignalingClient(url, this.localPeerId, this.identity);
+
+    // Helper to convert hex string to Uint8Array
+    const fromHex = (hex: string): Uint8Array => {
+      if (!hex) return new Uint8Array(0);
+      const bytes = new Uint8Array(hex.length / 2);
+      for (let i = 0; i < hex.length; i += 2) {
+        bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
+      }
+      return bytes;
+    };
+
+    // Store peer public keys from discovery
+    const peerPublicKeys = new Map<string, Uint8Array>();
 
     // Handle new peers discovered in the room
     this.httpSignaling.on('peerDiscovered', async (peer: any) => {
       if (peer._id === this.localPeerId) return;
+
+      // Store public key if available
+      if (peer.metadata?.publicKey) {
+        peerPublicKeys.set(peer._id, fromHex(peer.metadata.publicKey));
+      }
 
       // If not already connected, initiate connection
       if (!this.peerPool.getPeer(peer._id)) {
@@ -594,19 +612,35 @@ export class MeshNetwork {
         // Setup ICE candidate forwarding
         p.onSignal((signal: any) => {
           if (signal.type === 'candidate') {
-            this.httpSignaling?.sendSignal(peer._id, 'candidate', signal.candidate);
+            const recipientKey = peerPublicKeys.get(peer._id);
+            if (recipientKey) {
+              this.httpSignaling?.sendSignal(peer._id, 'candidate', signal.candidate, recipientKey);
+            } else {
+              console.error(`Cannot send candidate to ${peer._id}: missing public key`);
+            }
           }
         });
 
         p.createDataChannel({ label: 'reliable', ordered: true });
         const offer = await p.createOffer();
-        await this.httpSignaling?.sendSignal(peer._id, 'offer', offer);
+        const recipientKey = peerPublicKeys.get(peer._id);
+        
+        if (recipientKey) {
+          await this.httpSignaling?.sendSignal(peer._id, 'offer', offer, recipientKey);
+        } else {
+          console.error(`Cannot send offer to ${peer._id}: missing public key`);
+        }
       }
     });
 
     // Handle incoming signals
     this.httpSignaling.on('signal', async ({ from, type, signal }: { from: string, type: string, signal: any }) => {
       if (from === this.localPeerId) return;
+
+      // If signal contains sender's public key, store it
+      if (signal.senderPublicKey) {
+        peerPublicKeys.set(from, fromHex(signal.senderPublicKey));
+      }
 
       const peer = this.peerPool.getOrCreatePeer(from);
 
@@ -615,14 +649,25 @@ export class MeshNetwork {
       // Ideally we check if listener is attached.
       peer.onSignal((sig: any) => {
         if (sig.type === 'candidate') {
-          this.httpSignaling?.sendSignal(from, 'candidate', sig.candidate);
+          const recipientKey = peerPublicKeys.get(from);
+          if (recipientKey) {
+            this.httpSignaling?.sendSignal(from, 'candidate', sig.candidate, recipientKey);
+          } else {
+            console.error(`Cannot send candidate to ${from}: missing public key`);
+          }
         }
       });
 
       try {
         if (type === 'offer') {
           const answer = await peer.createAnswer(signal);
-          await this.httpSignaling?.sendSignal(from, 'answer', answer);
+          const recipientKey = peerPublicKeys.get(from);
+          
+          if (recipientKey) {
+            await this.httpSignaling?.sendSignal(from, 'answer', answer, recipientKey);
+          } else {
+            console.error(`Cannot send answer to ${from}: missing public key`);
+          }
         } else if (type === 'answer') {
           await peer.setRemoteAnswer(signal);
         } else if (type === 'candidate') {
