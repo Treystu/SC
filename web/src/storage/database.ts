@@ -64,6 +64,7 @@ export interface Identity {
   fingerprint: string;
   createdAt: number;
   label?: string;
+  displayName?: string;
   isPrimary: boolean;
 }
 
@@ -1263,6 +1264,12 @@ export class DatabaseManager {
             "user_profile",
             JSON.stringify((data as any).userProfile),
           );
+          if ((data as any).userProfile.displayName) {
+            localStorage.setItem(
+              "sc-display-name",
+              (data as any).userProfile.displayName,
+            );
+          }
           imported++;
         } catch (error) {
           errors.push(`Failed to import user profile: ${error}`);

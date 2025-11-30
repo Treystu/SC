@@ -221,11 +221,17 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
               {identity && status.localPeerId && (
                 <QRCodeShare
                   invite={{
-                    code: `${window.location.origin}?invite=${status.localPeerId}`, // Simplified for demo
+                    code: status.localPeerId, // Just the ID, QRCodeShare adds the URL structure
                     inviterName: displayName,
+                    inviterPeerId: status.localPeerId,
+                    inviterPublicKey: identity.publicKey,
+                    createdAt: Date.now(),
                     expiresAt: Date.now() + 86400000, // 24 hours
+                    signature: new Uint8Array(0), // Dummy signature for demo
+                    bootstrapPeers: [],
                   }}
                   onClose={() => {}}
+                  embedded={true}
                 />
               )}
             </div>

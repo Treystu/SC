@@ -65,17 +65,30 @@ export function useMeshNetwork() {
         await db.init();
 
         // Load persisted identity (if exists) or generate new one
-        let identityKeyPair;
+        let identityKeyPair: any;
         try {
           const storedIdentity = await db.getPrimaryIdentity();
+          const displayName = localStorage.getItem("sc-display-name");
+
           if (storedIdentity) {
             console.log(
               "Loaded persisted identity:",
               storedIdentity.fingerprint,
             );
+
+            // Update display name if missing/different in DB but present in localStorage
+            if (displayName && storedIdentity.displayName !== displayName) {
+              await db.saveIdentity({
+                ...storedIdentity,
+                displayName: displayName,
+              });
+              storedIdentity.displayName = displayName;
+            }
+
             identityKeyPair = {
               publicKey: storedIdentity.publicKey,
               privateKey: storedIdentity.privateKey,
+              displayName: storedIdentity.displayName,
             };
           } else {
             console.log("No persisted identity found, generating new one...");
@@ -95,9 +108,13 @@ export function useMeshNetwork() {
               createdAt: Date.now(),
               isPrimary: true,
               label: "Primary Identity",
+              displayName: displayName || undefined,
             });
 
-            identityKeyPair = newIdentity;
+            identityKeyPair = {
+              ...newIdentity,
+              displayName: displayName || undefined,
+            };
             console.log("Generated and saved new identity:", fingerprint);
           }
         } catch (error) {
