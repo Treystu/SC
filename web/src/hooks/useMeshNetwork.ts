@@ -131,6 +131,9 @@ export function useMeshNetwork() {
           identity: identityKeyPair,
         });
 
+        // Start heartbeat
+        network.startHeartbeat();
+
         meshNetworkRef.current = network;
         connectionMonitorRef.current = new ConnectionMonitor();
 

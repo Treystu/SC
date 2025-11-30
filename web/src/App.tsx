@@ -28,10 +28,11 @@ import {
   publicKeyToBase64,
   isValidPublicKey,
   logger,
+  Database,
 } from "@sc/core";
 
 // Initialize core database with web implementation
-setMockDatabase(getDatabase() as any);
+setMockDatabase(getDatabase() as unknown as Database);
 import { parseConnectionOffer, hexToBytes } from "@sc/core";
 import { ProfileManager, UserProfile } from "./managers/ProfileManager";
 import { validateMessageContent } from "@sc/core";
@@ -669,6 +670,13 @@ function App() {
     return "Unknown Contact";
   };
 
+  const handleManualConnectionInitiated = async (peerId: string) => {
+    if (!contacts.some((c) => c.id === peerId)) {
+      await addContact(peerId, `Peer ${peerId.slice(0, 6)}`);
+    }
+    setSelectedConversation(peerId);
+  };
+
   return (
     <ErrorBoundary>
       {/* Initialization Error Banner */}
@@ -805,6 +813,7 @@ function App() {
                     generateConnectionOffer={generateConnectionOffer}
                     onJoinRoom={handleJoinRoom}
                     onJoinRelay={joinRelay}
+                    onInitiateConnection={handleManualConnectionInitiated}
                   />
                 ) : (
                   <GroupChat onSelectGroup={handleSelectConversation} />

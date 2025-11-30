@@ -85,11 +85,26 @@ export class MeshNetwork {
   /**
    * Set up message handlers for relay and peer pool
    */
+  private heartbeatInterval: any;
+
+  /**
+   * Set up message handlers for relay and peer pool
+   */
   private setupMessageHandlers(): void {
     // Handle messages addressed to this peer
     this.messageRelay.onMessageForSelf((message: Message) => {
       this.messagesReceived++;
       this.bytesTransferred += message.payload.byteLength;
+
+      // Handle Control Messages
+      if (message.header.type === MessageType.CONTROL_PING) {
+        this.sendPong(message.header.senderId);
+        return;
+      }
+      if (message.header.type === MessageType.CONTROL_PONG) {
+        // TODO: Update peer last seen status
+        return;
+      }
 
       // Notify all listeners
       this.messageListeners.forEach((listener) => {
@@ -135,6 +150,80 @@ export class MeshNetwork {
         this.onPeerTrackCallback?.(peerId, track, stream);
       },
     );
+  }
+
+  /**
+   * Start sending heartbeat (PING) messages
+   */
+  startHeartbeat(intervalMs: number = 30000): void {
+    if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
+    this.heartbeatInterval = setInterval(() => {
+      this.broadcastPing();
+    }, intervalMs);
+  }
+
+  /**
+   * Stop sending heartbeat messages
+   */
+  stopHeartbeat(): void {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = undefined;
+    }
+  }
+
+  private async broadcastPing(): Promise<void> {
+    const message: Message = {
+      header: {
+        version: 0x01,
+        type: MessageType.CONTROL_PING,
+        ttl: 1, // Only neighbors
+        timestamp: Date.now(),
+        senderId: this.identity.publicKey,
+        signature: new Uint8Array(65),
+      },
+      payload: new Uint8Array(0),
+    };
+
+    // Sign and broadcast
+    const messageBytes = encodeMessage(message);
+    message.header.signature = signMessage(
+      messageBytes,
+      this.identity.privateKey,
+    );
+    const encodedMessage = encodeMessage(message);
+
+    this.peerPool.broadcast(encodedMessage);
+  }
+
+  private async sendPong(recipientPublicKey: Uint8Array): Promise<void> {
+    const recipientId = Array.from(recipientPublicKey)
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+
+    const message: Message = {
+      header: {
+        version: 0x01,
+        type: MessageType.CONTROL_PONG,
+        ttl: 1,
+        timestamp: Date.now(),
+        senderId: this.identity.publicKey,
+        signature: new Uint8Array(65),
+      },
+      payload: new Uint8Array(0),
+    };
+
+    const messageBytes = encodeMessage(message);
+    message.header.signature = signMessage(
+      messageBytes,
+      this.identity.privateKey,
+    );
+    const encodedMessage = encodeMessage(message);
+
+    const peer = this.peerPool.getPeer(recipientId);
+    if (peer && peer.getState() === "connected") {
+      peer.send(encodedMessage);
+    }
   }
 
   /**
