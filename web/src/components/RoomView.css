@@ -87,6 +87,21 @@
   color: white;
 }
 
+.close-room-btn {
+  background: transparent;
+  border: none;
+  color: #888;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0 0.5rem;
+  line-height: 1;
+  transition: color 0.2s;
+}
+
+.close-room-btn:hover {
+  color: #fff;
+}
+
 .room-content {
   display: flex;
   flex: 1;

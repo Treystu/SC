@@ -835,6 +835,7 @@ function App() {
                       messages={messages}
                       onSendMessage={handleSendMessage}
                       isLoading={contactsLoading}
+                      onClose={() => setSelectedConversation(null)}
                     />
                   )
                 ) : (

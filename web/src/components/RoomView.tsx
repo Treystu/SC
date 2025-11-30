@@ -76,7 +76,15 @@ export function RoomView({
               {uniqueDiscovered.length + uniqueConnected.length + 1} Online
             </span>
           </div>
-          {!embedded && (
+          {embedded ? (
+            <button
+              className="close-room-btn"
+              onClick={onClose}
+              title="Close view"
+            >
+              ×
+            </button>
+          ) : (
             <button className="close-btn" onClick={onClose}>
               Leave Room
             </button>

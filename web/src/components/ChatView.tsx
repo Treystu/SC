@@ -22,6 +22,7 @@ interface ChatViewProps {
   }>;
   onSendMessage?: (content: string, attachments?: File[]) => void;
   isLoading?: boolean;
+  onClose?: () => void;
 }
 
 function ChatView({
@@ -30,6 +31,7 @@ function ChatView({
   isOnline = false,
   onSendMessage,
   isLoading = false,
+  onClose,
 }: ChatViewProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +62,16 @@ function ChatView({
             {isOnline ? "Online" : "Offline"}
           </span>
         </div>
+        {onClose && (
+          <button
+            className="close-chat-btn"
+            onClick={onClose}
+            aria-label="Close chat"
+            title="Close chat"
+          >
+            ×
+          </button>
+        )}
       </div>
 
       <div className="chat-messages">

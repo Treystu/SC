@@ -7,7 +7,13 @@ export interface PeerConnectionConfig {
   iceServers?: RTCIceServer[];
 }
 
-export type ConnectionState = 'new' | 'connecting' | 'connected' | 'disconnected' | 'failed' | 'closed';
+export type ConnectionState =
+  | "new"
+  | "connecting"
+  | "connected"
+  | "disconnected"
+  | "failed"
+  | "closed";
 
 export interface DataChannelConfig {
   label: string;
@@ -25,7 +31,10 @@ export class WebRTCPeer {
   private onMessageCallback?: (data: Uint8Array) => void;
   private onStateChangeCallback?: (state: ConnectionState) => void;
   private onSignalCallback?: (signal: any) => void;
-  private onTrackCallback?: (track: MediaStreamTrack, stream: MediaStream) => void;
+  private onTrackCallback?: (
+    track: MediaStreamTrack,
+    stream: MediaStream,
+  ) => void;
   private peerId: string;
 
   constructor(config: PeerConnectionConfig) {
@@ -41,7 +50,7 @@ export class WebRTCPeer {
       iceServers: iceServers || [
         // Optional STUN servers (for NAT traversal if available)
         // Prefer direct connections through mesh relay
-        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: "stun:stun.l.google.com:19302" },
       ],
       iceCandidatePoolSize: 10,
     };
@@ -54,7 +63,7 @@ export class WebRTCPeer {
       this.onStateChangeCallback?.(state);
 
       // Automatic reconnection on failure
-      if (state === 'failed') {
+      if (state === "failed") {
         this.handleConnectionFailure();
       }
     };
@@ -85,7 +94,7 @@ export class WebRTCPeer {
    */
   createDataChannel(config: DataChannelConfig): RTCDataChannel {
     if (!this.peerConnection) {
-      throw new Error('Peer connection not initialized');
+      throw new Error("Peer connection not initialized");
     }
 
     const channelConfig: RTCDataChannelInit = {
@@ -93,7 +102,10 @@ export class WebRTCPeer {
       maxRetransmits: config.maxRetransmits,
     };
 
-    const channel = this.peerConnection.createDataChannel(config.label, channelConfig);
+    const channel = this.peerConnection.createDataChannel(
+      config.label,
+      channelConfig,
+    );
     this.setupDataChannel(channel);
 
     return channel;
@@ -121,7 +133,7 @@ export class WebRTCPeer {
     channel.onmessage = (event) => {
       if (event.data instanceof ArrayBuffer) {
         this.onMessageCallback?.(new Uint8Array(event.data));
-      } else if (typeof event.data === 'string') {
+      } else if (typeof event.data === "string") {
         // Convert string to Uint8Array
         const encoder = new TextEncoder();
         this.onMessageCallback?.(encoder.encode(event.data));
@@ -134,7 +146,7 @@ export class WebRTCPeer {
    */
   async createOffer(): Promise<RTCSessionDescriptionInit> {
     if (!this.peerConnection) {
-      throw new Error('Peer connection not initialized');
+      throw new Error("Peer connection not initialized");
     }
 
     const offer = await this.peerConnection.createOffer();
@@ -145,9 +157,11 @@ export class WebRTCPeer {
   /**
    * Create and send SDP answer
    */
-  async createAnswer(offer: RTCSessionDescriptionInit): Promise<RTCSessionDescriptionInit> {
+  async createAnswer(
+    offer: RTCSessionDescriptionInit,
+  ): Promise<RTCSessionDescriptionInit> {
     if (!this.peerConnection) {
-      throw new Error('Peer connection not initialized');
+      throw new Error("Peer connection not initialized");
     }
 
     await this.peerConnection.setRemoteDescription(offer);
@@ -161,7 +175,7 @@ export class WebRTCPeer {
    */
   async setRemoteAnswer(answer: RTCSessionDescriptionInit): Promise<void> {
     if (!this.peerConnection) {
-      throw new Error('Peer connection not initialized');
+      throw new Error("Peer connection not initialized");
     }
 
     await this.peerConnection.setRemoteDescription(answer);
@@ -172,7 +186,7 @@ export class WebRTCPeer {
    */
   async addIceCandidate(candidate: RTCIceCandidateInit): Promise<void> {
     if (!this.peerConnection) {
-      throw new Error('Peer connection not initialized');
+      throw new Error("Peer connection not initialized");
     }
 
     await this.peerConnection.addIceCandidate(candidate);
@@ -183,9 +197,15 @@ export class WebRTCPeer {
    */
   private handleIceCandidate(candidate: RTCIceCandidate): void {
     if (this.onSignalCallback) {
-      this.onSignalCallback({ type: 'candidate', candidate: candidate.toJSON() });
+      this.onSignalCallback({
+        type: "candidate",
+        candidate: candidate.toJSON(),
+      });
     } else {
-      console.log('ICE candidate generated but no signal handler:', candidate.toJSON());
+      console.log(
+        "ICE candidate generated but no signal handler:",
+        candidate.toJSON(),
+      );
     }
   }
 
@@ -193,7 +213,7 @@ export class WebRTCPeer {
    * Handle connection failure - attempt reconnection
    */
   private async handleConnectionFailure(): Promise<void> {
-    console.log('Connection failed, attempting reconnection...');
+    console.log("Connection failed, attempting reconnection...");
 
     // Close existing connection
     this.close();
@@ -206,10 +226,10 @@ export class WebRTCPeer {
   /**
    * Send message through data channel
    */
-  send(data: Uint8Array, channelLabel: string = 'reliable'): void {
+  send(data: Uint8Array, channelLabel: string = "reliable"): void {
     const channel = this.dataChannels.get(channelLabel);
 
-    if (!channel || channel.readyState !== 'open') {
+    if (!channel || channel.readyState !== "open") {
       throw new Error(`Data channel ${channelLabel} not ready`);
     }
 
@@ -241,7 +261,9 @@ export class WebRTCPeer {
   /**
    * Register callback for incoming tracks
    */
-  onTrack(callback: (track: MediaStreamTrack, stream: MediaStream) => void): void {
+  onTrack(
+    callback: (track: MediaStreamTrack, stream: MediaStream) => void,
+  ): void {
     this.onTrackCallback = callback;
   }
 
@@ -250,7 +272,7 @@ export class WebRTCPeer {
    */
   addTrack(track: MediaStreamTrack, stream: MediaStream): void {
     if (!this.peerConnection) {
-      throw new Error('Peer connection not initialized');
+      throw new Error("Peer connection not initialized");
     }
     this.peerConnection.addTrack(track, stream);
   }
@@ -259,7 +281,7 @@ export class WebRTCPeer {
    * Get current connection state
    */
   getState(): ConnectionState {
-    return (this.peerConnection?.connectionState || 'new') as ConnectionState;
+    return (this.peerConnection?.connectionState || "new") as ConnectionState;
   }
 
   /**
@@ -280,11 +302,59 @@ export class WebRTCPeer {
   }
 
   /**
+   * Wait for ICE gathering to complete
+   */
+  async waitForIceGathering(timeoutMs: number = 2000): Promise<void> {
+    if (!this.peerConnection) {
+      throw new Error("Peer connection not initialized");
+    }
+
+    if (this.peerConnection.iceGatheringState === "complete") {
+      return;
+    }
+
+    return new Promise<void>((resolve) => {
+      let timeoutId: any;
+
+      const checkState = () => {
+        if (this.peerConnection?.iceGatheringState === "complete") {
+          clearTimeout(timeoutId);
+          this.peerConnection?.removeEventListener(
+            "icegatheringstatechange",
+            checkState,
+          );
+          resolve();
+        }
+      };
+
+      this.peerConnection?.addEventListener(
+        "icegatheringstatechange",
+        checkState,
+      );
+
+      timeoutId = setTimeout(() => {
+        this.peerConnection?.removeEventListener(
+          "icegatheringstatechange",
+          checkState,
+        );
+        resolve(); // Resolve anyway on timeout
+      }, timeoutMs);
+    });
+  }
+
+  /**
+   * Get local session description
+   */
+  async getLocalDescription(): Promise<RTCSessionDescription | null> {
+    return this.peerConnection?.localDescription || null;
+  }
+
+  /**
    * Gracefully close connection
    */
   close(): void {
     // Close all data channels
-    this.dataChannels.forEach(channel => channel.close());
+    this.dataChannels.forEach((channel) => channel.close());
     this.dataChannels.clear();
 
     // Close peer connection
@@ -303,7 +373,11 @@ export class PeerConnectionPool {
   private peers: Map<string, WebRTCPeer> = new Map();
   private onMessageCallback?: (peerId: string, data: Uint8Array) => void;
   private onSignalCallback?: (peerId: string, signal: any) => void;
-  private onTrackCallback?: (peerId: string, track: MediaStreamTrack, stream: MediaStream) => void;
+  private onTrackCallback?: (
+    peerId: string,
+    track: MediaStreamTrack,
+    stream: MediaStream,
+  ) => void;
 
   /**
    * Create or get peer connection
@@ -321,7 +395,7 @@ export class PeerConnectionPool {
 
       // Set up state change handler
       peer.onStateChange((state) => {
-        if (state === 'closed' || state === 'failed') {
+        if (state === "closed" || state === "failed") {
           this.peers.delete(peerId);
         }
       });
@@ -365,7 +439,7 @@ export class PeerConnectionPool {
    */
   getConnectedPeers(): string[] {
     return Array.from(this.peers.entries())
-      .filter(([_, peer]) => peer.getState() === 'connected')
+      .filter(([_, peer]) => peer.getState() === "connected")
       .map(([peerId]) => peerId);
   }
 
@@ -374,7 +448,7 @@ export class PeerConnectionPool {
    */
   broadcast(data: Uint8Array, excludePeerId?: string): void {
     this.peers.forEach((peer, peerId) => {
-      if (peerId !== excludePeerId && peer.getState() === 'connected') {
+      if (peerId !== excludePeerId && peer.getState() === "connected") {
         try {
           peer.send(data);
         } catch (error) {
@@ -402,7 +476,7 @@ export class PeerConnectionPool {
    * Close all connections
    */
   closeAll(): void {
-    this.peers.forEach(peer => peer.close());
+    this.peers.forEach((peer) => peer.close());
     this.peers.clear();
   }
 
@@ -418,7 +492,7 @@ export class PeerConnectionPool {
           state: peer.getState(),
           stats,
         };
-      })
+      }),
     );
 
     return {
@@ -430,7 +504,13 @@ export class PeerConnectionPool {
   /**
    * Register callback for incoming tracks (audio/video)
    */
-  onTrack(callback: (peerId: string, track: MediaStreamTrack, stream: MediaStream) => void): void {
+  onTrack(
+    callback: (
+      peerId: string,
+      track: MediaStreamTrack,
+      stream: MediaStream,
+    ) => void,
+  ): void {
     this.onTrackCallback = callback;
 
     // Register for existing peers

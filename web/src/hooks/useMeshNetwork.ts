@@ -733,17 +733,34 @@ export function useMeshNetwork() {
       const seenMessageIds = new Set<string>();
 
       meshNetworkRef.current.onPublicRoomMessage((msg) => {
+        // Normalize message (HttpSignaling uses 'from', we use 'peerId')
+        const normalizedMsg = {
+          ...msg,
+          peerId: msg.peerId || msg.from,
+        };
+
         // Deduplicate messages based on ID or content+timestamp signature
         const msgId =
-          msg.id || msg._id || `${msg.peerId}-${msg.timestamp}-${msg.content}`;
+          normalizedMsg.id ||
+          normalizedMsg._id ||
+          `${normalizedMsg.peerId}-${normalizedMsg.timestamp}-${normalizedMsg.content}`;
 
         if (!seenMessageIds.has(msgId)) {
           seenMessageIds.add(msgId);
           setRoomMessages((prev: any[]) => {
             // Double check against current state to be sure
-            if (prev.some((m: any) => m.id === msgId || m._id === msgId))
+            if (
+              prev.some(
+                (m: any) =>
+                  m.id === msgId ||
+                  m._id === msgId ||
+                  (m.peerId === normalizedMsg.peerId &&
+                    m.timestamp === normalizedMsg.timestamp &&
+                    m.content === normalizedMsg.content),
+              )
+            )
               return prev;
-            return [...prev, msg];
+            return [...prev, normalizedMsg];
           });
         }
       });
