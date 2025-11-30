@@ -24,7 +24,7 @@ Body (variable):
 #### Key Generation
 
 ```typescript
-async function generateIdentityKeyPair(): Promise<KeyPair>
+async function generateIdentityKeyPair(): Promise<KeyPair>;
 ```
 
 Generates an Ed25519 key pair for identity.
@@ -37,13 +37,14 @@ Generates an Ed25519 key pair for identity.
 async function encryptMessage(
   plaintext: Uint8Array,
   recipientPublicKey: Uint8Array,
-  senderPrivateKey: Uint8Array
-): Promise<EncryptedMessage>
+  senderPrivateKey: Uint8Array,
+): Promise<EncryptedMessage>;
 ```
 
 Encrypts a message using ChaCha20-Poly1305 with ECDH-derived key.
 
 **Parameters:**
+
 - `plaintext`: Message content as bytes
 - `recipientPublicKey`: Recipient's Ed25519 public key
 - `senderPrivateKey`: Sender's Ed25519 private key
@@ -56,13 +57,14 @@ Encrypts a message using ChaCha20-Poly1305 with ECDH-derived key.
 async function decryptMessage(
   encrypted: EncryptedMessage,
   senderPublicKey: Uint8Array,
-  recipientPrivateKey: Uint8Array
-): Promise<Uint8Array>
+  recipientPrivateKey: Uint8Array,
+): Promise<Uint8Array>;
 ```
 
 Decrypts a message using ChaCha20-Poly1305.
 
 **Parameters:**
+
 - `encrypted`: Encrypted message object
 - `senderPublicKey`: Sender's Ed25519 public key
 - `recipientPrivateKey`: Recipient's Ed25519 private key
@@ -78,7 +80,7 @@ interface Peer {
   id: string;
   publicKey: Uint8Array;
   lastSeen: number;
-  connectionType: 'webrtc' | 'ble';
+  connectionType: "webrtc" | "ble";
   address?: string;
 }
 
@@ -119,14 +121,16 @@ class ConnectionManager {
 class WebRTCPeer {
   constructor(peerId: string);
   createOffer(): Promise<RTCSessionDescriptionInit>;
-  acceptOffer(offer: RTCSessionDescriptionInit): Promise<RTCSessionDescriptionInit>;
+  acceptOffer(
+    offer: RTCSessionDescriptionInit,
+  ): Promise<RTCSessionDescriptionInit>;
   acceptAnswer(answer: RTCSessionDescriptionInit): Promise<void>;
   sendData(data: Uint8Array): void;
   close(): void;
-  
-  on(event: 'data', callback: (data: Uint8Array) => void): void;
-  on(event: 'connected', callback: () => void): void;
-  on(event: 'disconnected', callback: () => void): void;
+
+  on(event: "data", callback: (data: Uint8Array) => void): void;
+  on(event: "connected", callback: () => void): void;
+  on(event: "disconnected", callback: () => void): void;
 }
 ```
 
@@ -141,7 +145,7 @@ interface FileTransfer {
   senderId: string;
   recipientId: string;
   progress: number;
-  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  status: "pending" | "in_progress" | "completed" | "failed";
 }
 
 class FileTransferManager {
@@ -175,10 +179,10 @@ class MessageStore {
 interface MessageDao {
     @Insert
     suspend fun insertMessage(message: MessageEntity)
-    
+
     @Query("SELECT * FROM messages WHERE conversation_id = :conversationId ORDER BY timestamp DESC LIMIT :limit")
     suspend fun getMessages(conversationId: String, limit: Int): List<MessageEntity>
-    
+
     @Query("DELETE FROM messages WHERE id = :messageId")
     suspend fun deleteMessage(messageId: String)
 }
@@ -204,8 +208,8 @@ class MDNSDiscovery {
   stopBroadcasting(): void;
   startDiscovery(): void;
   stopDiscovery(): void;
-  
-  on(event: 'peer_discovered', callback: (peer: DiscoveredPeer) => void): void;
+
+  on(event: "peer_discovered", callback: (peer: DiscoveredPeer) => void): void;
 }
 ```
 
@@ -240,18 +244,104 @@ interface EventEmitter {
 // - 'connection_state_changed'
 ```
 
+### Backup & Restore API
+
+Secure backup functionality using Web Crypto API.
+
+#### Backup Format
+
+```typescript
+interface BackupData {
+  version: number; // 1
+  timestamp: number;
+  data: {
+    identity: IdentityKeyPair;
+    contacts: Contact[];
+    conversations: Conversation[];
+    messages: Message[];
+    settings: Settings;
+  };
+}
+
+interface EncryptedBackup {
+  iv: string; // Base64 encoded IV (12 bytes)
+  salt: string; // Base64 encoded PBKDF2 salt (16 bytes)
+  data: string; // Base64 encoded ciphertext
+}
+```
+
+#### Crypto Operations
+
+```typescript
+// Key Derivation (PBKDF2)
+async function deriveKey(
+  password: string,
+  salt: Uint8Array,
+): Promise<CryptoKey>;
+
+// Encryption (AES-GCM)
+async function encryptData(
+  data: any,
+  password?: string,
+): Promise<string | EncryptedBackup>;
+
+// Decryption (AES-GCM)
+async function decryptData(
+  encryptedData: string | EncryptedBackup,
+  password?: string,
+): Promise<any>;
+```
+
+### Room API (Public Hub)
+
+HTTP-based signaling for public rooms.
+
+#### Endpoints
+
+`POST /room`
+
+**Actions:**
+
+1.  **Join**
+    - Action: `join`
+    - Payload: `{ metadata: { ... } }`
+    - Response: `{ peers: ActivePeer[] }`
+
+2.  **Signal**
+    - Action: `signal`
+    - Payload: `{ to: string, type: string, signal: any }`
+    - Response: `{ success: true }`
+
+3.  **Message**
+    - Action: `message`
+    - Payload: `{ content: string }`
+    - Response: `{ success: true }`
+
+4.  **Poll**
+    - Action: `poll`
+    - Payload: `{ since?: number }`
+    - Response:
+      ```typescript
+      {
+        signals: SignalingMessage[];
+        messages: PublicMessage[];
+        peers: ActivePeer[];
+      }
+      ```
+    - **Note:** The `since` parameter allows efficient polling by only returning messages newer than the specified timestamp.
+
 ## Error Handling
 
 All async operations return Promises that reject with specific error types:
 
 ```typescript
 enum ErrorCode {
-  ENCRYPTION_FAILED = 'ENCRYPTION_FAILED',
-  DECRYPTION_FAILED = 'DECRYPTION_FAILED',
-  NETWORK_ERROR = 'NETWORK_ERROR',
-  PEER_NOT_FOUND = 'PEER_NOT_FOUND',
-  INVALID_MESSAGE = 'INVALID_MESSAGE',
-  STORAGE_ERROR = 'STORAGE_ERROR',
+  ENCRYPTION_FAILED = "ENCRYPTION_FAILED",
+  DECRYPTION_FAILED = "DECRYPTION_FAILED",
+  NETWORK_ERROR = "NETWORK_ERROR",
+  PEER_NOT_FOUND = "PEER_NOT_FOUND",
+  INVALID_MESSAGE = "INVALID_MESSAGE",
+  STORAGE_ERROR = "STORAGE_ERROR",
 }
 
 class SCError extends Error {
@@ -284,16 +374,19 @@ interface SCConfig {
 ## Platform-Specific Notes
 
 ### Web
+
 - Uses IndexedDB for persistent storage
 - Service Workers for background sync
 - WebRTC for peer connections
 
 ### Android
+
 - Room database for persistence
 - Foreground service for connectivity
 - BLE GATT for mesh networking
 
 ### iOS
+
 - Core Data for persistence
 - Background modes (VoIP, BLE)
 - CoreBluetooth for mesh networking
