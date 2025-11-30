@@ -52,6 +52,7 @@ export function useMeshNetwork() {
   const [messages, setMessages] = useState<ReceivedMessage[]>([]);
   const meshNetworkRef = useRef<MeshNetwork | null>(null);
   const connectionMonitorRef = useRef<ConnectionMonitor | null>(null);
+  const seenMessageIdsRef = useRef<Set<string>>(new Set());
 
   // Initialize mesh network with persistence
   useEffect(() => {
@@ -160,26 +161,53 @@ export function useMeshNetwork() {
               .join("")
               .substring(0, 8); // Simplified ID for now
 
+            // Create a unique ID for the message if one doesn't exist in the payload
+            // Use a combination of timestamp, sender, and content hash/signature if possible
+            // For now, we'll trust the timestamp from the header + senderId to be fairly unique
+            // But to be safe, we generate a local ID that we can use for React keys
+            const messageId =
+              data.id || `${message.header.timestamp}-${senderId}`;
+
+            // Check if we've already processed this message ID
+            if (seenMessageIdsRef.current.has(messageId)) {
+              console.log("Duplicate message ignored:", messageId);
+              return;
+            }
+            seenMessageIdsRef.current.add(messageId);
+
             const receivedMessage: ReceivedMessage = {
-              id: `${message.header.timestamp}-${Math.random()}`,
+              id: messageId,
               from: senderId,
-              conversationId: senderId, // Incoming message belongs to sender's conversation
+              conversationId: data.groupId || senderId, // Incoming message belongs to sender's conversation OR group
               content: data.text || "",
               timestamp: data.timestamp || message.header.timestamp,
               type: message.header.type,
               status: "read", // Assume read for simplicity in this demo
             };
 
-            setMessages((prev: ReceivedMessage[]) => [
-              ...prev,
-              receivedMessage,
-            ]);
+            setMessages((prev: ReceivedMessage[]) => {
+              // Double check against state just in case
+              if (prev.some((m) => m.id === receivedMessage.id)) {
+                return prev;
+              }
+              return [...prev, receivedMessage];
+            });
 
             // Persist message to IndexedDB
             try {
+              // Check if message already exists in DB to avoid unnecessary writes
+              const existingMsg = await db.getMessage(receivedMessage.id);
+              if (existingMsg) {
+                console.log(
+                  "Message already exists in DB:",
+                  receivedMessage.id,
+                );
+                return;
+              }
+
               await db.saveMessage({
                 id: receivedMessage.id,
-                conversationId: receivedMessage.from, // Use sender as conversation ID for now
+                conversationId: receivedMessage.conversationId!, // Use resolved conversation ID
                 content: receivedMessage.content,
                 timestamp: receivedMessage.timestamp,
                 senderId: receivedMessage.from,
@@ -195,6 +223,40 @@ export function useMeshNetwork() {
                         : "text",
                 status: "delivered",
               });
+
+              if (data.groupId) {
+                // Update Group
+                const group = await db.getGroup(data.groupId);
+                if (group) {
+                  await db.saveGroup({
+                    ...group,
+                    lastMessageTimestamp: receivedMessage.timestamp,
+                    unreadCount: (group.unreadCount || 0) + 1,
+                  });
+                }
+              } else {
+                // Update Conversation
+                const conversation = await db.getConversation(
+                  receivedMessage.from,
+                );
+                if (conversation) {
+                  await db.saveConversation({
+                    ...conversation,
+                    lastMessageTimestamp: receivedMessage.timestamp,
+                    unreadCount: conversation.unreadCount + 1,
+                    lastMessageId: receivedMessage.id,
+                  });
+                } else {
+                  await db.saveConversation({
+                    id: receivedMessage.from,
+                    contactId: receivedMessage.from,
+                    lastMessageTimestamp: receivedMessage.timestamp,
+                    unreadCount: 1,
+                    createdAt: Date.now(),
+                    lastMessageId: receivedMessage.id,
+                  });
+                }
+              }
             } catch (error) {
               console.error("Failed to persist message:", error);
             }
@@ -327,7 +389,12 @@ export function useMeshNetwork() {
 
   // Send message function with persistence
   const sendMessage = useCallback(
-    async (recipientId: string, content: string, attachments?: File[]) => {
+    async (
+      recipientId: string,
+      content: string,
+      attachments?: File[],
+      groupId?: string,
+    ) => {
       const endMeasure = performanceMonitor.startMeasure("sendMessage");
       if (!meshNetworkRef.current) {
         throw new Error("Mesh network not initialized");
@@ -358,6 +425,7 @@ export function useMeshNetwork() {
             size: file.size,
             type: file.type,
             content: content, // Optional caption
+            groupId: groupId, // Include groupId in file metadata
           };
 
           try {
@@ -411,7 +479,7 @@ export function useMeshNetwork() {
             id: fileId,
             from: "me",
             to: recipientId,
-            conversationId: recipientId,
+            conversationId: groupId || recipientId, // Use groupId if present
             content: `Sent file: ${file.name}`,
             timestamp: Date.now(),
             type: MessageType.FILE_METADATA,
@@ -425,7 +493,7 @@ export function useMeshNetwork() {
             const db = getDatabase();
             await db.saveMessage({
               id: localFileMessage.id,
-              conversationId: recipientId,
+              conversationId: groupId || recipientId,
               content: localFileMessage.content,
               timestamp: localFileMessage.timestamp,
               senderId: meshNetworkRef.current!.getLocalPeerId(),
@@ -436,6 +504,7 @@ export function useMeshNetwork() {
                 fileName: file.name,
                 fileSize: file.size,
                 fileType: file.type,
+                groupId: groupId,
               },
             });
           } catch (error) {
@@ -454,7 +523,14 @@ export function useMeshNetwork() {
       }
 
       try {
-        await meshNetworkRef.current.sendMessage(recipientId, content);
+        // Construct payload with groupId
+        const payload = JSON.stringify({
+          text: content,
+          timestamp: Date.now(),
+          groupId: groupId,
+        });
+
+        await meshNetworkRef.current.sendMessage(recipientId, payload);
         endMeasure({ success: true });
       } catch (error) {
         console.error("Failed to send message to network:", error);
@@ -473,7 +549,7 @@ export function useMeshNetwork() {
         id: `${Date.now()}-${Math.random()}`,
         from: "me",
         to: recipientId,
-        conversationId: recipientId, // Outgoing message belongs to recipient's conversation
+        conversationId: groupId || recipientId, // Use groupId if present
         content,
         timestamp: Date.now(),
         type: MessageType.TEXT,
@@ -487,7 +563,7 @@ export function useMeshNetwork() {
         const db = getDatabase();
         await db.saveMessage({
           id: localMessage.id,
-          conversationId: recipientId,
+          conversationId: groupId || recipientId,
           content: localMessage.content,
           timestamp: localMessage.timestamp,
           senderId: meshNetworkRef.current!.getLocalPeerId(),
@@ -624,6 +700,7 @@ export function useMeshNetwork() {
   const [joinError, setJoinError] = useState<string | null>(null);
   const [discoveredPeers, setDiscoveredPeers] = useState<string[]>([]);
   const [roomMessages, setRoomMessages] = useState<any[]>([]);
+  const pendingAutoConnectionsRef = useRef<Set<string>>(new Set());
 
   const joinRoom = useCallback(async (url: string): Promise<void> => {
     if (!meshNetworkRef.current)
@@ -634,6 +711,45 @@ export function useMeshNetwork() {
       // Setup listeners before joining
       meshNetworkRef.current.onDiscoveryUpdate((peers) => {
         setDiscoveredPeers(peers);
+
+        // Auto-connect to discovered peers (Background Relay Opportunity)
+        const network = meshNetworkRef.current;
+        if (!network) return;
+
+        const connectedPeerIds = new Set(
+          network.getConnectedPeers().map((p) => p.id),
+        );
+        const localPeerId = network.getLocalPeerId();
+
+        peers.forEach((peerId) => {
+          if (
+            peerId !== localPeerId &&
+            !connectedPeerIds.has(peerId) &&
+            !pendingAutoConnectionsRef.current.has(peerId)
+          ) {
+            pendingAutoConnectionsRef.current.add(peerId);
+
+            // Random delay 1-5s to prevent signaling storms/glare
+            const delay = 1000 + Math.random() * 4000;
+
+            setTimeout(() => {
+              // Clean up pending set
+              pendingAutoConnectionsRef.current.delete(peerId);
+
+              // Re-check connection status
+              if (
+                network &&
+                !network.getConnectedPeers().some((p) => p.id === peerId)
+              ) {
+                console.log(`Auto-connecting to discovered peer: ${peerId}`);
+                network.connectToPeer(peerId).catch((err) => {
+                  // It's expected that some might fail or be rejected
+                  console.debug(`Auto-connect to ${peerId} result:`, err);
+                });
+              }
+            }, delay);
+          }
+        });
       });
 
       const seenMessageIds = new Set<string>();
@@ -645,9 +761,9 @@ export function useMeshNetwork() {
 
         if (!seenMessageIds.has(msgId)) {
           seenMessageIds.add(msgId);
-          setRoomMessages((prev) => {
+          setRoomMessages((prev: any[]) => {
             // Double check against current state to be sure
-            if (prev.some((m) => m.id === msgId || m._id === msgId))
+            if (prev.some((m: any) => m.id === msgId || m._id === msgId))
               return prev;
             return [...prev, msg];
           });

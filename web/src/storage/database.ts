@@ -1,4 +1,4 @@
-import { CURRENT_SCHEMA_VERSION, validateAndMigrate } from './schema-validator';
+import { CURRENT_SCHEMA_VERSION, validateAndMigrate } from "./schema-validator";
 /**
  * IndexedDB Persistence for Web Application
  * Stores messages, contacts, conversations, groups, and V1 persistence data
@@ -11,8 +11,8 @@ export interface StoredMessage {
   timestamp: number;
   senderId: string;
   recipientId: string;
-  type: 'text' | 'file' | 'voice';
-  status: 'pending' | 'sent' | 'delivered' | 'read' | 'queued' | 'failed';
+  type: "text" | "file" | "voice";
+  status: "pending" | "sent" | "delivered" | "read" | "queued" | "failed";
   metadata?: any;
 }
 
@@ -51,6 +51,7 @@ export interface StoredGroup {
   createdBy: string;
   createdAt: number;
   lastMessageTimestamp: number;
+  unreadCount?: number;
 }
 
 /**
@@ -72,7 +73,7 @@ export interface Identity {
 export interface PersistedPeer {
   id: string;
   publicKey: string;
-  transportType: 'webrtc' | 'ble' | 'wifi';
+  transportType: "webrtc" | "ble" | "wifi";
   lastSeen: number;
   connectedAt: number;
   connectionQuality: number;
@@ -115,7 +116,7 @@ export interface SessionKey {
  * IndexedDB Database Manager
  */
 export class DatabaseManager {
-  private dbName = 'sovereign-communications';
+  private dbName = "sovereign-communications";
   private version = CURRENT_SCHEMA_VERSION;
   private db: IDBDatabase | null = null;
   private initPromise: Promise<void> | null = null;
@@ -131,16 +132,18 @@ export class DatabaseManager {
       // Add timeout to prevent infinite hanging
       const timeoutId = setTimeout(() => {
         if (this.initPromise) {
-          console.error('DatabaseManager: Initialization timed out');
+          console.error("DatabaseManager: Initialization timed out");
           this.initPromise = null;
-          reject(new Error('Database initialization timed out'));
+          reject(new Error("Database initialization timed out"));
         }
       }, 5000);
 
       const request = indexedDB.open(this.dbName, this.version);
 
       request.onblocked = () => {
-        console.warn('DatabaseManager: Database upgrade blocked by another connection');
+        console.warn(
+          "DatabaseManager: Database upgrade blocked by another connection",
+        );
         // Try to close the connection if it's somehow open on this instance
         if (this.db) {
           this.db.close();
@@ -171,7 +174,7 @@ export class DatabaseManager {
       };
 
       request.onupgradeneeded = async (event) => {
-        // Don't clear timeout here as migration might take time, 
+        // Don't clear timeout here as migration might take time,
         // but maybe extend it? For now let's rely on the 5s total.
         const db = (event.target as IDBOpenDBRequest).result;
         const oldVersion = event.oldVersion;
@@ -179,7 +182,7 @@ export class DatabaseManager {
           await validateAndMigrate(db, oldVersion);
         } catch (error) {
           clearTimeout(timeoutId);
-          console.error('DatabaseManager: Migration failed:', error);
+          console.error("DatabaseManager: Migration failed:", error);
           request.transaction?.abort();
           this.initPromise = null;
           reject(error);
@@ -199,8 +202,8 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['messages'], 'readwrite');
-      const store = transaction.objectStore('messages');
+      const transaction = this.db!.transaction(["messages"], "readwrite");
+      const store = transaction.objectStore("messages");
       const request = store.put(message);
 
       request.onsuccess = () => resolve();
@@ -209,20 +212,47 @@ export class DatabaseManager {
   }
 
   /**
-   * Get messages for a conversation
+   * Get a single message by ID
    */
-  async getMessages(conversationId: string, limit: number = 50, offset: number = 0): Promise<StoredMessage[]> {
+  async getMessage(messageId: string): Promise<StoredMessage | null> {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['messages'], 'readonly');
-      const store = transaction.objectStore('messages');
-      const index = store.index('conversationId'); // Assuming 'conversationId' is the correct index name
+      const transaction = this.db!.transaction(["messages"], "readonly");
+      const store = transaction.objectStore("messages");
+      const request = store.get(messageId);
+
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  /**
+   * Get messages for a conversation
+   */
+  async getMessages(
+    conversationId: string,
+    limit: number = 50,
+    offset: number = 0,
+  ): Promise<StoredMessage[]> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(["messages"], "readonly");
+      const store = transaction.objectStore("messages");
+      const index = store.index("conversationId"); // Assuming 'conversationId' is the correct index name
       const request = index.getAll(conversationId);
 
       request.onsuccess = () => {
-        const messages = request.result.sort((a, b) => a.timestamp - b.timestamp);
-        resolve(messages.slice(Math.max(0, messages.length - limit - offset), messages.length - offset));
+        const messages = request.result.sort(
+          (a, b) => a.timestamp - b.timestamp,
+        );
+        resolve(
+          messages.slice(
+            Math.max(0, messages.length - limit - offset),
+            messages.length - offset,
+          ),
+        );
       };
       request.onerror = () => reject(request.error);
     });
@@ -235,12 +265,12 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['messages'], 'readonly');
-      const store = transaction.objectStore('messages');
+      const transaction = this.db!.transaction(["messages"], "readonly");
+      const store = transaction.objectStore("messages");
       const request = store.getAll();
 
       request.onsuccess = () => {
-        const messages = request.result.filter(m => m.status === 'queued');
+        const messages = request.result.filter((m) => m.status === "queued");
         resolve(messages.sort((a, b) => a.timestamp - b.timestamp));
       };
       request.onerror = () => reject(request.error);
@@ -254,8 +284,8 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['messages'], 'readwrite');
-      const store = transaction.objectStore('messages');
+      const transaction = this.db!.transaction(["messages"], "readwrite");
+      const store = transaction.objectStore("messages");
       const request = store.delete(messageId);
 
       request.onsuccess = () => resolve();
@@ -266,12 +296,15 @@ export class DatabaseManager {
   /**
    * Update message status
    */
-  async updateMessageStatus(messageId: string, status: StoredMessage['status']): Promise<void> {
+  async updateMessageStatus(
+    messageId: string,
+    status: StoredMessage["status"],
+  ): Promise<void> {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['messages'], 'readwrite');
-      const store = transaction.objectStore('messages');
+      const transaction = this.db!.transaction(["messages"], "readwrite");
+      const store = transaction.objectStore("messages");
       const getRequest = store.get(messageId);
 
       getRequest.onsuccess = () => {
@@ -281,7 +314,7 @@ export class DatabaseManager {
           store.put(message);
           resolve();
         } else {
-          reject(new Error('Message not found'));
+          reject(new Error("Message not found"));
         }
       };
       getRequest.onerror = () => reject(getRequest.error);
@@ -298,17 +331,25 @@ export class DatabaseManager {
 
     // Validate public key before saving
     try {
-      const publicKeyBytes = new Uint8Array(atob(contact.publicKey).split('').map(c => c.charCodeAt(0)));
+      const publicKeyBytes = new Uint8Array(
+        atob(contact.publicKey)
+          .split("")
+          .map((c) => c.charCodeAt(0)),
+      );
       if (publicKeyBytes.length !== 32) {
-        throw new Error('Invalid public key length. Must be 32 bytes for Ed25519.');
+        throw new Error(
+          "Invalid public key length. Must be 32 bytes for Ed25519.",
+        );
       }
     } catch (e) {
-      return Promise.reject(new Error(`Invalid base64 public key: ${(e as Error).message}`));
+      return Promise.reject(
+        new Error(`Invalid base64 public key: ${(e as Error).message}`),
+      );
     }
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['contacts'], 'readwrite');
-      const store = transaction.objectStore('contacts');
+      const transaction = this.db!.transaction(["contacts"], "readwrite");
+      const store = transaction.objectStore("contacts");
       const request = store.put(contact);
 
       request.onsuccess = () => resolve();
@@ -323,8 +364,8 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['contacts'], 'readonly');
-      const store = transaction.objectStore('contacts');
+      const transaction = this.db!.transaction(["contacts"], "readonly");
+      const store = transaction.objectStore("contacts");
       const request = store.getAll();
 
       request.onsuccess = () => resolve(request.result);
@@ -339,8 +380,8 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['contacts'], 'readonly');
-      const store = transaction.objectStore('contacts');
+      const transaction = this.db!.transaction(["contacts"], "readonly");
+      const store = transaction.objectStore("contacts");
       const request = store.get(contactId);
 
       request.onsuccess = () => resolve(request.result || null);
@@ -355,8 +396,8 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['contacts'], 'readwrite');
-      const store = transaction.objectStore('contacts');
+      const transaction = this.db!.transaction(["contacts"], "readwrite");
+      const store = transaction.objectStore("contacts");
       const request = store.delete(contactId);
 
       request.onsuccess = () => resolve();
@@ -373,8 +414,8 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['conversations'], 'readwrite');
-      const store = transaction.objectStore('conversations');
+      const transaction = this.db!.transaction(["conversations"], "readwrite");
+      const store = transaction.objectStore("conversations");
       const request = store.put(conversation);
 
       request.onsuccess = () => resolve();
@@ -389,14 +430,16 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['conversations'], 'readonly');
-      const store = transaction.objectStore('conversations');
+      const transaction = this.db!.transaction(["conversations"], "readonly");
+      const store = transaction.objectStore("conversations");
       const request = store.getAll();
 
       request.onsuccess = () => {
         const conversations = request.result as StoredConversation[];
         // Sort by last message timestamp
-        const sorted = conversations.sort((a, b) => b.lastMessageTimestamp - a.lastMessageTimestamp);
+        const sorted = conversations.sort(
+          (a, b) => b.lastMessageTimestamp - a.lastMessageTimestamp,
+        );
         resolve(sorted);
       };
       request.onerror = () => reject(request.error);
@@ -406,12 +449,14 @@ export class DatabaseManager {
   /**
    * Get conversation by ID
    */
-  async getConversation(conversationId: string): Promise<StoredConversation | null> {
+  async getConversation(
+    conversationId: string,
+  ): Promise<StoredConversation | null> {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['conversations'], 'readonly');
-      const store = transaction.objectStore('conversations');
+      const transaction = this.db!.transaction(["conversations"], "readonly");
+      const store = transaction.objectStore("conversations");
       const request = store.get(conversationId);
 
       request.onsuccess = () => resolve(request.result || null);
@@ -422,12 +467,15 @@ export class DatabaseManager {
   /**
    * Update conversation unread count
    */
-  async updateUnreadCount(conversationId: string, count: number): Promise<void> {
+  async updateUnreadCount(
+    conversationId: string,
+    count: number,
+  ): Promise<void> {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['conversations'], 'readwrite');
-      const store = transaction.objectStore('conversations');
+      const transaction = this.db!.transaction(["conversations"], "readwrite");
+      const store = transaction.objectStore("conversations");
       const getRequest = store.get(conversationId);
 
       getRequest.onsuccess = () => {
@@ -437,7 +485,7 @@ export class DatabaseManager {
           store.put(conversation);
           resolve();
         } else {
-          reject(new Error('Conversation not found'));
+          reject(new Error("Conversation not found"));
         }
       };
       getRequest.onerror = () => reject(getRequest.error);
@@ -453,8 +501,8 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['groups'], 'readwrite');
-      const store = transaction.objectStore('groups');
+      const transaction = this.db!.transaction(["groups"], "readwrite");
+      const store = transaction.objectStore("groups");
       const request = store.put(group);
 
       request.onsuccess = () => resolve();
@@ -469,14 +517,16 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['groups'], 'readonly');
-      const store = transaction.objectStore('groups');
+      const transaction = this.db!.transaction(["groups"], "readonly");
+      const store = transaction.objectStore("groups");
       const request = store.getAll();
 
       request.onsuccess = () => {
         const groups = request.result as StoredGroup[];
         // Sort by last message timestamp
-        const sorted = groups.sort((a, b) => b.lastMessageTimestamp - a.lastMessageTimestamp);
+        const sorted = groups.sort(
+          (a, b) => b.lastMessageTimestamp - a.lastMessageTimestamp,
+        );
         resolve(sorted);
       };
       request.onerror = () => reject(request.error);
@@ -490,12 +540,37 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['groups'], 'readonly');
-      const store = transaction.objectStore('groups');
+      const transaction = this.db!.transaction(["groups"], "readonly");
+      const store = transaction.objectStore("groups");
       const request = store.get(groupId);
 
       request.onsuccess = () => resolve(request.result || null);
       request.onerror = () => reject(request.error);
+    });
+  }
+
+  /**
+   * Update group unread count
+   */
+  async updateGroupUnreadCount(groupId: string, count: number): Promise<void> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(["groups"], "readwrite");
+      const store = transaction.objectStore("groups");
+      const getRequest = store.get(groupId);
+
+      getRequest.onsuccess = () => {
+        const group = getRequest.result;
+        if (group) {
+          group.unreadCount = count;
+          store.put(group);
+          resolve();
+        } else {
+          reject(new Error("Group not found"));
+        }
+      };
+      getRequest.onerror = () => reject(getRequest.error);
     });
   }
 
@@ -508,8 +583,8 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['identities'], 'readwrite');
-      const store = transaction.objectStore('identities');
+      const transaction = this.db!.transaction(["identities"], "readwrite");
+      const store = transaction.objectStore("identities");
       const request = store.put(identity);
 
       request.onsuccess = () => resolve();
@@ -524,8 +599,8 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['identities'], 'readonly');
-      const store = transaction.objectStore('identities');
+      const transaction = this.db!.transaction(["identities"], "readonly");
+      const store = transaction.objectStore("identities");
       const request = store.get(id);
 
       request.onsuccess = () => resolve(request.result || null);
@@ -540,13 +615,13 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['identities'], 'readonly');
-      const store = transaction.objectStore('identities');
+      const transaction = this.db!.transaction(["identities"], "readonly");
+      const store = transaction.objectStore("identities");
       const request = store.getAll();
 
       request.onsuccess = () => {
         const identities = request.result as Identity[];
-        const primary = identities.find(id => id.isPrimary);
+        const primary = identities.find((id) => id.isPrimary);
         resolve(primary || null);
       };
       request.onerror = () => reject(request.error);
@@ -560,8 +635,8 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['identities'], 'readonly');
-      const store = transaction.objectStore('identities');
+      const transaction = this.db!.transaction(["identities"], "readonly");
+      const store = transaction.objectStore("identities");
       const request = store.getAll();
 
       request.onsuccess = () => resolve(request.result);
@@ -576,8 +651,8 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['identities'], 'readwrite');
-      const store = transaction.objectStore('identities');
+      const transaction = this.db!.transaction(["identities"], "readwrite");
+      const store = transaction.objectStore("identities");
       const request = store.delete(id);
 
       request.onsuccess = () => resolve();
@@ -594,8 +669,8 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['persistedPeers'], 'readwrite');
-      const store = transaction.objectStore('persistedPeers');
+      const transaction = this.db!.transaction(["persistedPeers"], "readwrite");
+      const store = transaction.objectStore("persistedPeers");
       const request = store.put(peer);
 
       request.onsuccess = () => resolve();
@@ -610,8 +685,8 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['persistedPeers'], 'readonly');
-      const store = transaction.objectStore('persistedPeers');
+      const transaction = this.db!.transaction(["persistedPeers"], "readonly");
+      const store = transaction.objectStore("persistedPeers");
       const request = store.get(id);
 
       request.onsuccess = () => resolve(request.result || null);
@@ -626,8 +701,8 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['persistedPeers'], 'readonly');
-      const store = transaction.objectStore('persistedPeers');
+      const transaction = this.db!.transaction(["persistedPeers"], "readonly");
+      const store = transaction.objectStore("persistedPeers");
       const request = store.getAll();
 
       request.onsuccess = () => resolve(request.result);
@@ -644,14 +719,14 @@ export class DatabaseManager {
     const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['persistedPeers'], 'readonly');
-      const store = transaction.objectStore('persistedPeers');
+      const transaction = this.db!.transaction(["persistedPeers"], "readonly");
+      const store = transaction.objectStore("persistedPeers");
       const request = store.getAll();
 
       request.onsuccess = () => {
         const allPeers = request.result as PersistedPeer[];
-        const activePeers = allPeers.filter(peer =>
-          peer.lastSeen >= fiveMinutesAgo && !peer.isBlacklisted
+        const activePeers = allPeers.filter(
+          (peer) => peer.lastSeen >= fiveMinutesAgo && !peer.isBlacklisted,
         );
         resolve(activePeers);
       };
@@ -666,8 +741,8 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['persistedPeers'], 'readwrite');
-      const store = transaction.objectStore('persistedPeers');
+      const transaction = this.db!.transaction(["persistedPeers"], "readwrite");
+      const store = transaction.objectStore("persistedPeers");
       const getRequest = store.get(id);
 
       getRequest.onsuccess = () => {
@@ -677,7 +752,7 @@ export class DatabaseManager {
           store.put(peer);
           resolve();
         } else {
-          reject(new Error('Peer not found'));
+          reject(new Error("Peer not found"));
         }
       };
       getRequest.onerror = () => reject(getRequest.error);
@@ -691,8 +766,8 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['persistedPeers'], 'readwrite');
-      const store = transaction.objectStore('persistedPeers');
+      const transaction = this.db!.transaction(["persistedPeers"], "readwrite");
+      const store = transaction.objectStore("persistedPeers");
       const getRequest = store.get(id);
 
       getRequest.onsuccess = () => {
@@ -703,7 +778,7 @@ export class DatabaseManager {
           store.put(peer);
           resolve();
         } else {
-          reject(new Error('Peer not found'));
+          reject(new Error("Peer not found"));
         }
       };
       getRequest.onerror = () => reject(getRequest.error);
@@ -717,8 +792,8 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['persistedPeers'], 'readwrite');
-      const store = transaction.objectStore('persistedPeers');
+      const transaction = this.db!.transaction(["persistedPeers"], "readwrite");
+      const store = transaction.objectStore("persistedPeers");
       const request = store.delete(id);
 
       request.onsuccess = () => resolve();
@@ -735,8 +810,8 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['routes'], 'readwrite');
-      const store = transaction.objectStore('routes');
+      const transaction = this.db!.transaction(["routes"], "readwrite");
+      const store = transaction.objectStore("routes");
       const request = store.put(route);
 
       request.onsuccess = () => resolve();
@@ -751,8 +826,8 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['routes'], 'readonly');
-      const store = transaction.objectStore('routes');
+      const transaction = this.db!.transaction(["routes"], "readonly");
+      const store = transaction.objectStore("routes");
       const request = store.get(destinationId);
 
       request.onsuccess = () => resolve(request.result || null);
@@ -767,8 +842,8 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['routes'], 'readonly');
-      const store = transaction.objectStore('routes');
+      const transaction = this.db!.transaction(["routes"], "readonly");
+      const store = transaction.objectStore("routes");
       const request = store.getAll();
 
       request.onsuccess = () => resolve(request.result);
@@ -785,15 +860,15 @@ export class DatabaseManager {
     const now = Date.now();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['routes'], 'readwrite');
-      const store = transaction.objectStore('routes');
+      const transaction = this.db!.transaction(["routes"], "readwrite");
+      const store = transaction.objectStore("routes");
       const request = store.getAll();
 
       request.onsuccess = () => {
         const routes = request.result as Route[];
         const deletePromises = routes
-          .filter(route => route.lastUpdated + route.ttl * 1000 < now)
-          .map(route => {
+          .filter((route) => route.lastUpdated + route.ttl * 1000 < now)
+          .map((route) => {
             return new Promise<void>((res, rej) => {
               const delRequest = store.delete(route.destinationId);
               delRequest.onsuccess = () => res();
@@ -801,7 +876,9 @@ export class DatabaseManager {
             });
           });
 
-        Promise.all(deletePromises).then(() => resolve()).catch(reject);
+        Promise.all(deletePromises)
+          .then(() => resolve())
+          .catch(reject);
       };
       request.onerror = () => reject(request.error);
     });
@@ -814,8 +891,8 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['routes'], 'readwrite');
-      const store = transaction.objectStore('routes');
+      const transaction = this.db!.transaction(["routes"], "readwrite");
+      const store = transaction.objectStore("routes");
       const request = store.clear();
 
       request.onsuccess = () => resolve();
@@ -832,8 +909,8 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['sessionKeys'], 'readwrite');
-      const store = transaction.objectStore('sessionKeys');
+      const transaction = this.db!.transaction(["sessionKeys"], "readwrite");
+      const store = transaction.objectStore("sessionKeys");
       const request = store.put(sessionKey);
 
       request.onsuccess = () => resolve();
@@ -848,8 +925,8 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['sessionKeys'], 'readonly');
-      const store = transaction.objectStore('sessionKeys');
+      const transaction = this.db!.transaction(["sessionKeys"], "readonly");
+      const store = transaction.objectStore("sessionKeys");
       const request = store.get(peerId);
 
       request.onsuccess = () => resolve(request.result || null);
@@ -864,8 +941,8 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['sessionKeys'], 'readwrite');
-      const store = transaction.objectStore('sessionKeys');
+      const transaction = this.db!.transaction(["sessionKeys"], "readwrite");
+      const store = transaction.objectStore("sessionKeys");
       const request = store.delete(peerId);
 
       request.onsuccess = () => resolve();
@@ -882,15 +959,15 @@ export class DatabaseManager {
     const now = Date.now();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['sessionKeys'], 'readwrite');
-      const store = transaction.objectStore('sessionKeys');
+      const transaction = this.db!.transaction(["sessionKeys"], "readwrite");
+      const store = transaction.objectStore("sessionKeys");
       const request = store.getAll();
 
       request.onsuccess = () => {
         const keys = request.result as SessionKey[];
         const deletePromises = keys
-          .filter(key => key.expiresAt < now)
-          .map(key => {
+          .filter((key) => key.expiresAt < now)
+          .map((key) => {
             return new Promise<void>((res, rej) => {
               const delRequest = store.delete(key.peerId);
               delRequest.onsuccess = () => res();
@@ -898,7 +975,9 @@ export class DatabaseManager {
             });
           });
 
-        Promise.all(deletePromises).then(() => resolve()).catch(reject);
+        Promise.all(deletePromises)
+          .then(() => resolve())
+          .catch(reject);
       };
       request.onerror = () => reject(request.error);
     });
@@ -910,7 +989,11 @@ export class DatabaseManager {
    * Export all user data (sovereignty feature)
    * Returns a complete snapshot of all local data
    */
-  async exportAllData(options?: { includeMessages?: boolean; includeContacts?: boolean; includeSettings?: boolean; }): Promise<{
+  async exportAllData(options?: {
+    includeMessages?: boolean;
+    includeContacts?: boolean;
+    includeSettings?: boolean;
+  }): Promise<{
     version: string;
     exportedAt: number;
     identities?: Identity[];
@@ -958,10 +1041,18 @@ export class DatabaseManager {
       promises.push(Promise.resolve([]));
     }
 
-    const [identities, contacts, conversations, messages, peers, routes, sessionKeys] = await Promise.all(promises);
+    const [
+      identities,
+      contacts,
+      conversations,
+      messages,
+      peers,
+      routes,
+      sessionKeys,
+    ] = await Promise.all(promises);
 
     const exportedData: any = {
-      version: '1.0',
+      version: "1.0",
       exportedAt: Date.now(),
       identities,
     };
@@ -974,7 +1065,7 @@ export class DatabaseManager {
       exportedData.messages = messages;
     }
     if (exportOptions.includeSettings) {
-      const userProfile = localStorage.getItem('user_profile');
+      const userProfile = localStorage.getItem("user_profile");
       if (userProfile) {
         exportedData.userProfile = JSON.parse(userProfile);
       }
@@ -993,8 +1084,8 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['messages'], 'readonly');
-      const store = transaction.objectStore('messages');
+      const transaction = this.db!.transaction(["messages"], "readonly");
+      const store = transaction.objectStore("messages");
       const request = store.getAll();
 
       request.onsuccess = () => resolve(request.result);
@@ -1009,8 +1100,8 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['sessionKeys'], 'readonly');
-      const store = transaction.objectStore('sessionKeys');
+      const transaction = this.db!.transaction(["sessionKeys"], "readonly");
+      const store = transaction.objectStore("sessionKeys");
       const request = store.getAll();
 
       request.onsuccess = () => resolve(request.result);
@@ -1035,8 +1126,8 @@ export class DatabaseManager {
       sessionKeys?: SessionKey[];
     },
     options: {
-      mergeStrategy: 'overwrite' | 'merge' | 'skip-existing';
-    } = { mergeStrategy: 'merge' }
+      mergeStrategy: "overwrite" | "merge" | "skip-existing";
+    } = { mergeStrategy: "merge" },
   ): Promise<{
     imported: number;
     skipped: number;
@@ -1050,7 +1141,7 @@ export class DatabaseManager {
 
     try {
       // Validate version
-      if (data.version !== '1.0') {
+      if (data.version !== "1.0") {
         errors.push(`Unsupported export version: ${data.version}`);
         return { imported, skipped, errors };
       }
@@ -1060,7 +1151,7 @@ export class DatabaseManager {
         for (const identity of data.identities) {
           try {
             const existing = await this.getIdentity(identity.id);
-            if (existing && options.mergeStrategy === 'skip-existing') {
+            if (existing && options.mergeStrategy === "skip-existing") {
               skipped++;
             } else {
               await this.saveIdentity(identity);
@@ -1077,7 +1168,7 @@ export class DatabaseManager {
         for (const contact of data.contacts) {
           try {
             const existing = await this.getContact(contact.id);
-            if (existing && options.mergeStrategy === 'skip-existing') {
+            if (existing && options.mergeStrategy === "skip-existing") {
               skipped++;
             } else {
               await this.saveContact(contact);
@@ -1094,14 +1185,16 @@ export class DatabaseManager {
         for (const conversation of data.conversations) {
           try {
             const existing = await this.getConversation(conversation.id);
-            if (existing && options.mergeStrategy === 'skip-existing') {
+            if (existing && options.mergeStrategy === "skip-existing") {
               skipped++;
             } else {
               await this.saveConversation(conversation);
               imported++;
             }
           } catch (error) {
-            errors.push(`Failed to import conversation ${conversation.id}: ${error}`);
+            errors.push(
+              `Failed to import conversation ${conversation.id}: ${error}`,
+            );
           }
         }
       }
@@ -1123,7 +1216,7 @@ export class DatabaseManager {
         for (const peer of data.peers) {
           try {
             const existing = await this.getPeer(peer.id);
-            if (existing && options.mergeStrategy === 'skip-existing') {
+            if (existing && options.mergeStrategy === "skip-existing") {
               skipped++;
             } else {
               await this.savePeer(peer);
@@ -1142,7 +1235,9 @@ export class DatabaseManager {
             await this.saveRoute(route);
             imported++;
           } catch (error) {
-            errors.push(`Failed to import route ${route.destinationId}: ${error}`);
+            errors.push(
+              `Failed to import route ${route.destinationId}: ${error}`,
+            );
           }
         }
       }
@@ -1154,7 +1249,9 @@ export class DatabaseManager {
             await this.saveSessionKey(sessionKey);
             imported++;
           } catch (error) {
-            errors.push(`Failed to import session key ${sessionKey.peerId}: ${error}`);
+            errors.push(
+              `Failed to import session key ${sessionKey.peerId}: ${error}`,
+            );
           }
         }
       }
@@ -1162,7 +1259,10 @@ export class DatabaseManager {
       // Import user profile
       if ((data as any).userProfile) {
         try {
-          localStorage.setItem('user_profile', JSON.stringify((data as any).userProfile));
+          localStorage.setItem(
+            "user_profile",
+            JSON.stringify((data as any).userProfile),
+          );
           imported++;
         } catch (error) {
           errors.push(`Failed to import user profile: ${error}`);
@@ -1180,8 +1280,8 @@ export class DatabaseManager {
    * Requires confirmation token to prevent accidental deletion
    */
   async deleteAllData(confirmationToken: string): Promise<void> {
-    if (confirmationToken !== 'DELETE ALL MY DATA') {
-      throw new Error('Invalid confirmation token. Data not deleted.');
+    if (confirmationToken !== "DELETE ALL MY DATA") {
+      throw new Error("Invalid confirmation token. Data not deleted.");
     }
 
     await this.clearAll();
@@ -1194,17 +1294,17 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     const stores = [
-      'messages',
-      'contacts',
-      'conversations',
-      'identities',
-      'persistedPeers',
-      'routes',
-      'sessionKeys'
+      "messages",
+      "contacts",
+      "conversations",
+      "identities",
+      "persistedPeers",
+      "routes",
+      "sessionKeys",
     ];
-    const promises = stores.map(storeName => {
+    const promises = stores.map((storeName) => {
       return new Promise<void>((resolve, reject) => {
-        const transaction = this.db!.transaction([storeName], 'readwrite');
+        const transaction = this.db!.transaction([storeName], "readwrite");
         const store = transaction.objectStore(storeName);
         const request = store.clear();
 

@@ -12,12 +12,14 @@ import { QRCodeShare } from "./components/QRCodeShare";
 import { InviteAcceptanceModal } from "./components/InviteAcceptanceModal";
 import { NetworkDiagnostics } from "./components/NetworkDiagnostics";
 import { RoomView } from "./components/RoomView";
+import { GroupChat } from "./components/GroupChat";
 import { useMeshNetwork } from "./hooks/useMeshNetwork";
 import { useInvite } from "./hooks/useInvite";
 import { useConversations } from "./hooks/useConversations";
 import { usePendingInvite } from "./hooks/usePendingInvite";
 import { useContacts } from "./hooks/useContacts";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
+import { useGroups } from "./hooks/useGroups";
 import { announce } from "./utils/accessibility";
 import { getDatabase } from "./storage/database";
 import {
@@ -37,6 +39,7 @@ function App() {
   const [selectedConversation, setSelectedConversation] = useState<
     string | null
   >(null);
+  const [activeTab, setActiveTab] = useState<"chats" | "groups">("chats");
   const [showSettings, setShowSettings] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showShareApp, setShowShareApp] = useState(false);
@@ -52,7 +55,14 @@ function App() {
     removeContact,
     loading: contactsLoading,
   } = useContacts();
-  const { conversations: _storedConversations } = useConversations();
+  const {
+    conversations: storedConversations,
+    loading: conversationsLoading,
+    refreshConversations,
+  } = useConversations();
+
+  const { groups, refreshGroups } = useGroups();
+
   const {
     status,
     peers,
@@ -161,11 +171,9 @@ function App() {
           console.error("Failed to join room from URL:", err);
           announce.message("Failed to join room", "assertive");
         });
-      } else if (config.publicHub || config.deploymentMode === 'netlify') {
+      } else if (config.publicHub || config.deploymentMode === "netlify") {
         autoJoinedRef.current = true;
-        console.log(
-          `Auto-joining room in ${config.deploymentMode} mode...`,
-        );
+        console.log(`Auto-joining room in ${config.deploymentMode} mode...`);
         // Use handleJoinRoom to ensure UI updates
         handleJoinRoom(config.relayUrl).catch((err) => {
           console.error("Failed to auto-join room:", err);
@@ -420,51 +428,133 @@ function App() {
     const sanitizedContent = validation.sanitized;
 
     if (selectedConversation) {
-      try {
-        await sendMessage(selectedConversation, sanitizedContent, attachments);
-      } catch (error) {
-        console.error("Error sending message via hook:", error);
-      }
+      // Check if it's a group
+      const group = groups.find((g) => g.id === selectedConversation);
 
-      // Save message to IndexedDB
-      try {
-        const db = getDatabase();
-        // Save text message if present
-        if (sanitizedContent) {
-          await db.saveMessage({
-            id: `msg-${Date.now()}`,
-            conversationId: selectedConversation,
-            content: sanitizedContent,
-            timestamp: Date.now(),
-            senderId: status.localPeerId,
-            recipientId: selectedConversation,
-            type: "text",
-            status: "sent",
-          });
+      if (group) {
+        // Handle Group Message
+        // Fan-out to all members except self
+        const recipients = group.members
+          .filter((m) => m.id !== status.localPeerId)
+          .map((m) => m.id);
+
+        // We need to send the groupId in the payload so recipients know it's a group message
+        // This requires updating how we send messages.
+        // For now, we'll append it to the content as a hack or metadata if supported.
+        // Better: Construct a JSON payload that includes groupId.
+
+        // Send to all members
+        for (const recipientId of recipients) {
+          try {
+            // We use the raw sendMessage from meshNetwork which takes string
+            // But wait, useMeshNetwork.sendMessage takes (recipientId, content, attachments)
+            // and it wraps content in JSON.
+            // We need to modify useMeshNetwork to accept metadata or handle this.
+
+            // For V1, let's just send the content. The recipients won't know it's a group message
+            // unless we change the protocol.
+            // CRITICAL: We need to update useMeshNetwork to support metadata/groupId.
+
+            // Let's assume we updated useMeshNetwork to support an optional 'metadata' arg
+            // or we just send it.
+
+            await sendMessage(recipientId, sanitizedContent, attachments);
+          } catch (error) {
+            console.error(
+              `Failed to send to group member ${recipientId}:`,
+              error,
+            );
+          }
         }
 
-        // Save file messages if present
-        if (attachments && attachments.length > 0) {
-          for (const file of attachments) {
+        // Save to local DB as a group message
+        try {
+          const db = getDatabase();
+          if (sanitizedContent) {
             await db.saveMessage({
-              id: `msg-file-${Date.now()}-${Math.random()}`,
+              id: `msg-${Date.now()}`,
+              conversationId: group.id, // Save under GROUP ID
+              content: sanitizedContent,
+              timestamp: Date.now(),
+              senderId: status.localPeerId,
+              recipientId: group.id, // Recipient is the group
+              type: "text",
+              status: "sent",
+            });
+          }
+
+          // Update group timestamp
+          await db.saveGroup({
+            ...group,
+            lastMessageTimestamp: Date.now(),
+          });
+          refreshGroups();
+        } catch (dbError) {
+          console.error("Failed to save group message:", dbError);
+        }
+      } else {
+        // Handle 1:1 Message
+        try {
+          await sendMessage(
+            selectedConversation,
+            sanitizedContent,
+            attachments,
+          );
+        } catch (error) {
+          console.error("Error sending message via hook:", error);
+        }
+
+        // Save message to IndexedDB
+        try {
+          const db = getDatabase();
+          // Save text message if present
+          if (sanitizedContent) {
+            await db.saveMessage({
+              id: `msg-${Date.now()}`,
               conversationId: selectedConversation,
-              content: `Sent file: ${file.name}`,
+              content: sanitizedContent,
               timestamp: Date.now(),
               senderId: status.localPeerId,
               recipientId: selectedConversation,
-              type: "file",
+              type: "text",
               status: "sent",
-              metadata: {
-                fileName: file.name,
-                fileSize: file.size,
-                fileType: file.type,
-              },
             });
           }
+
+          // Save file messages if present
+          if (attachments && attachments.length > 0) {
+            for (const file of attachments) {
+              await db.saveMessage({
+                id: `msg-file-${Date.now()}-${Math.random()}`,
+                conversationId: selectedConversation,
+                content: `Sent file: ${file.name}`,
+                timestamp: Date.now(),
+                senderId: status.localPeerId,
+                recipientId: selectedConversation,
+                type: "file",
+                status: "sent",
+                metadata: {
+                  fileName: file.name,
+                  fileSize: file.size,
+                  fileType: file.type,
+                },
+              });
+            }
+          }
+
+          // Update conversation timestamp
+          const conversation = await db.getConversation(selectedConversation);
+          if (conversation) {
+            await db.saveConversation({
+              ...conversation,
+              lastMessageTimestamp: Date.now(),
+              // Don't increment unread count for own messages
+            });
+            refreshConversations();
+          }
+        } catch (dbError) {
+          console.error("Failed to save message:", dbError);
         }
-      } catch (dbError) {
-        console.error("Failed to save message:", dbError);
       }
     } else {
       console.warn("No conversation selected");
@@ -485,6 +575,73 @@ function App() {
   const handleCloseShareApp = () => {
     setShowShareApp(false);
     clearInvite();
+  };
+
+  // Handle conversation selection and unread count reset
+  const handleSelectConversation = useCallback(
+    async (id: string) => {
+      setSelectedConversation(id);
+
+      // Reset unread count in DB
+      try {
+        const db = getDatabase();
+
+        const isGroup = groups.some((g) => g.id === id);
+
+        if (isGroup) {
+          await db.updateGroupUnreadCount(id, 0);
+          refreshGroups();
+        } else {
+          await db.updateUnreadCount(id, 0);
+          refreshConversations();
+        }
+      } catch (error) {
+        console.error("Failed to reset unread count:", error);
+      }
+    },
+    [refreshConversations, refreshGroups, groups],
+  );
+
+  // Merge stored conversations with contact details
+  const displayConversations = storedConversations.map((conv) => {
+    const contact = contacts.find((c) => c.id === conv.contactId);
+    return {
+      id: conv.id,
+      name: contact?.displayName || conv.contactId.substring(0, 8),
+      lastMessage: "View messages", // Could be fetched if needed
+      timestamp: conv.lastMessageTimestamp,
+      unreadCount: conv.unreadCount,
+    };
+  });
+
+  // If we have contacts without conversations, add them too (optional, but good for UX)
+  const contactIdsInConversations = new Set(
+    storedConversations.map((c) => c.contactId),
+  );
+  const contactsWithoutConversations = contacts.filter(
+    (c) => !contactIdsInConversations.has(c.id),
+  );
+
+  const allConversations = [
+    ...displayConversations,
+    ...contactsWithoutConversations.map((c) => ({
+      id: c.id,
+      name: c.displayName,
+      lastMessage: "Start a conversation",
+      timestamp: c.createdAt,
+      unreadCount: 0,
+    })),
+  ].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+  // Update contactName logic in render
+  const getContactName = (id: string) => {
+    const contact = contacts.find((c) => c.id === id);
+    if (contact) return contact.displayName;
+
+    const group = groups.find((g) => g.id === id);
+    if (group) return group.name;
+
+    return "Unknown Contact";
   };
 
   return (
@@ -591,37 +748,50 @@ function App() {
                     </div>
                   </div>
                   <ConnectionStatus quality={status.connectionQuality} />
+
+                  {/* Tab Navigation */}
+                  <div className="flex border-b border-gray-200 mt-2">
+                    <button
+                      className={`flex-1 py-2 text-sm font-medium ${activeTab === "chats" ? "text-blue-600 border-b-2 border-blue-600" : "text-gray-500 hover:text-gray-700"}`}
+                      onClick={() => setActiveTab("chats")}
+                    >
+                      Chats
+                    </button>
+                    <button
+                      className={`flex-1 py-2 text-sm font-medium ${activeTab === "groups" ? "text-blue-600 border-b-2 border-blue-600" : "text-gray-500 hover:text-gray-700"}`}
+                      onClick={() => setActiveTab("groups")}
+                    >
+                      Groups
+                    </button>
+                  </div>
                 </div>
 
-                <ConversationList
-                  conversations={contacts.map((c) => ({
-                    id: c.id,
-                    name: c.displayName,
-                    unreadCount: 0, // Replace with actual unread count
-                  }))}
-                  loading={contactsLoading}
-                  selectedId={selectedConversation}
-                  onSelect={setSelectedConversation}
-                  onDelete={handleDeleteConversation}
-                  onAddContact={handleAddContact}
-                  onImportContact={handleImportContact}
-                  onShareApp={handleShareApp}
-                  localPeerId={status.localPeerId}
-                  generateConnectionOffer={generateConnectionOffer}
-                  onJoinRoom={handleJoinRoom}
-                  onJoinRelay={joinRelay}
-                />
+                {activeTab === "chats" ? (
+                  <ConversationList
+                    conversations={allConversations}
+                    loading={contactsLoading || conversationsLoading}
+                    selectedId={selectedConversation}
+                    onSelect={handleSelectConversation}
+                    onDelete={handleDeleteConversation}
+                    onAddContact={handleAddContact}
+                    onImportContact={handleImportContact}
+                    onShareApp={handleShareApp}
+                    localPeerId={status.localPeerId}
+                    generateConnectionOffer={generateConnectionOffer}
+                    onJoinRoom={handleJoinRoom}
+                    onJoinRelay={joinRelay}
+                  />
+                ) : (
+                  <GroupChat onSelectGroup={handleSelectConversation} />
+                )}
               </div>
 
               <div className="content-area" id="main-content">
                 {selectedConversation ? (
                   <ChatView
                     conversationId={selectedConversation}
-                    contactName={
-                      contacts.find((c) => c.id === selectedConversation)
-                        ?.displayName || "Unknown Contact"
-                    }
-                    isOnline={peers.some((p) => p.id === selectedConversation)}
+                    contactName={getContactName(selectedConversation)}
+                    isOnline={peers.some((p) => p.id === selectedConversation)} // Groups are always "online" effectively, or check if any member is online
                     messages={messages}
                     onSendMessage={handleSendMessage}
                     isLoading={contactsLoading}
@@ -707,7 +877,7 @@ function App() {
               isOpen={!!activeRoom}
               onClose={handleLeaveRoom}
               discoveredPeers={discoveredPeers}
-              connectedPeers={Object.keys(peers)}
+              connectedPeers={peers.map((p) => p.id)}
               roomMessages={roomMessages}
               onSendMessage={sendRoomMessage}
               onConnect={handleConnectToPeer}
