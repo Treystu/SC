@@ -22,8 +22,8 @@ class Logger {
   private logs: LogEntry[] = [];
   private maxLogs: number = 1000;
   private listeners: ((entry: LogEntry) => void)[] = [];
-  private dbName = 'sc-logs';
-  private storeName = 'logs';
+  private dbName = "sc-logs";
+  private storeName = "logs";
 
   private remoteUrl: string | null = null;
   private peerId: string | null = null;
@@ -41,30 +41,30 @@ class Logger {
   }
 
   private async initDB() {
-    if (typeof indexedDB === 'undefined') return;
+    if (typeof indexedDB === "undefined") return;
 
     const request = indexedDB.open(this.dbName, 1);
     request.onupgradeneeded = (event: any) => {
       const db = event.target.result;
       if (!db.objectStoreNames.contains(this.storeName)) {
-        db.createObjectStore(this.storeName, { keyPath: 'timestamp' });
+        db.createObjectStore(this.storeName, { keyPath: "timestamp" });
       }
     };
   }
 
   private async persistLog(entry: LogEntry) {
-    if (typeof indexedDB === 'undefined') return;
+    if (typeof indexedDB === "undefined") return;
 
     try {
       const request = indexedDB.open(this.dbName, 1);
       request.onsuccess = (event: any) => {
         const db = event.target.result;
-        const tx = db.transaction(this.storeName, 'readwrite');
+        const tx = db.transaction(this.storeName, "readwrite");
         const store = tx.objectStore(this.storeName);
         store.add(entry);
       };
     } catch (e) {
-      console.error('Failed to persist log', e);
+      console.error("Failed to persist log", e);
     }
   }
 
@@ -88,16 +88,16 @@ class Logger {
     // Remote logging
     if (this.remoteUrl) {
       fetch(this.remoteUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           level: LogLevel[level],
           message: `[${component}] ${message}`,
           details: data,
           timestamp: new Date(entry.timestamp).toISOString(),
-          peerId: this.peerId
-        })
-      }).catch(err => {
+          peerId: this.peerId,
+        }),
+      }).catch((_err) => {
         // Prevent infinite loops if logging fails
         // console.error('Failed to send remote log', err);
       });
@@ -107,16 +107,16 @@ class Logger {
     const prefix = `[${new Date(entry.timestamp).toISOString()}] [${LogLevel[level]}] [${component}]`;
     switch (level) {
       case LogLevel.DEBUG:
-        console.debug(prefix, message, data || '');
+        console.debug(prefix, message, data || "");
         break;
       case LogLevel.INFO:
-        console.info(prefix, message, data || '');
+        console.info(prefix, message, data || "");
         break;
       case LogLevel.WARN:
-        console.warn(prefix, message, data || '');
+        console.warn(prefix, message, data || "");
         break;
       case LogLevel.ERROR:
-        console.error(prefix, message, data || '');
+        console.error(prefix, message, data || "");
         break;
     }
   }
@@ -142,13 +142,13 @@ class Logger {
   }
 
   async getAllLogs(): Promise<LogEntry[]> {
-    if (typeof indexedDB === 'undefined') return this.logs;
+    if (typeof indexedDB === "undefined") return this.logs;
 
     return new Promise((resolve) => {
       const request = indexedDB.open(this.dbName, 1);
       request.onsuccess = (event: any) => {
         const db = event.target.result;
-        const tx = db.transaction(this.storeName, 'readonly');
+        const tx = db.transaction(this.storeName, "readonly");
         const store = tx.objectStore(this.storeName);
         const getAll = store.getAll();
         getAll.onsuccess = () => {
@@ -173,11 +173,11 @@ class Logger {
   }
 
   private notifyListeners(entry: LogEntry) {
-    this.listeners.forEach(listener => {
+    this.listeners.forEach((listener) => {
       try {
         listener(entry);
       } catch (e) {
-        console.error('Error in log listener', e);
+        console.error("Error in log listener", e);
       }
     });
   }

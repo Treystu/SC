@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { getDatabase } from "../storage/database";
 import { useBackup } from "../hooks/useBackup";
 
 export const BackupManager: React.FC = () => {

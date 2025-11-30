@@ -252,15 +252,16 @@ Secure backup functionality using Web Crypto API.
 
 ```typescript
 interface BackupData {
-  version: number; // 1
-  timestamp: number;
-  data: {
-    identity: IdentityKeyPair;
-    contacts: Contact[];
-    conversations: Conversation[];
-    messages: Message[];
-    settings: Settings;
-  };
+  version: string; // "1.0"
+  exportedAt: number;
+  identities?: Identity[];
+  contacts?: StoredContact[];
+  conversations?: StoredConversation[];
+  messages?: StoredMessage[];
+  peers?: PersistedPeer[];
+  routes?: Route[];
+  sessionKeys?: SessionKey[];
+  userProfile?: any;
 }
 
 interface EncryptedBackup {
@@ -302,33 +303,35 @@ HTTP-based signaling for public rooms.
 
 **Actions:**
 
-1.  **Join**
-    - Action: `join`
-    - Payload: `{ metadata: { ... } }`
-    - Response: `{ peers: ActivePeer[] }`
+1. **Join**
+   - Action: `join`
+   - Payload: `{ metadata: { ... } }`
+   - Response: `{ peers: ActivePeer[] }`
 
-2.  **Signal**
-    - Action: `signal`
-    - Payload: `{ to: string, type: string, signal: any }`
-    - Response: `{ success: true }`
+2. **Signal**
+   - Action: `signal`
+   - Payload: `{ to: string, type: string, signal: any }`
+   - Response: `{ success: true }`
 
-3.  **Message**
-    - Action: `message`
-    - Payload: `{ content: string }`
-    - Response: `{ success: true }`
+3. **Message**
+   - Action: `message`
+   - Payload: `{ content: string }`
+   - Response: `{ success: true }`
 
-4.  **Poll**
-    - Action: `poll`
-    - Payload: `{ since?: number }`
-    - Response:
-      ```typescript
-      {
-        signals: SignalingMessage[];
-        messages: PublicMessage[];
-        peers: ActivePeer[];
-      }
-      ```
-    - **Note:** The `since` parameter allows efficient polling by only returning messages newer than the specified timestamp.
+4. **Poll**
+   - Action: `poll`
+   - Payload: `{ since?: number }`
+   - Response:
+
+     ```typescript
+     {
+       signals: SignalingMessage[];
+       messages: PublicMessage[];
+       peers: ActivePeer[];
+     }
+     ```
+
+   - **Note:** The `since` parameter allows efficient polling by only returning messages newer than the specified timestamp.
 
 ## Error Handling
 

@@ -7,7 +7,7 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
-export const handler: Handler = async (event, context) => {
+export const handler: Handler = async (event, _context) => {
   if (event.httpMethod === "OPTIONS") {
     return { statusCode: 200, headers: CORS_HEADERS, body: "" };
   }
@@ -36,7 +36,7 @@ export const handler: Handler = async (event, context) => {
         // Register/Update Peer
         if (!peerId) throw new Error("Missing peerId");
         await peersCollection.updateOne(
-          { _id: peerId as any },
+          { _id: peerId },
           {
             $set: {
               lastSeen: new Date(),
@@ -88,7 +88,7 @@ export const handler: Handler = async (event, context) => {
 
         // Update heartbeat
         await peersCollection.updateOne(
-          { _id: peerId as any },
+          { _id: peerId },
           { $set: { lastSeen: new Date() } },
         );
 
@@ -108,7 +108,7 @@ export const handler: Handler = async (event, context) => {
         // Fetch public messages
         // If 'since' is provided, get messages after that timestamp
         // Otherwise, get last 50
-        let messageQuery: any = {};
+        const messageQuery: Record<string, any> = {};
         if (since) {
           messageQuery.timestamp = { $gt: new Date(since) };
         }
@@ -135,13 +135,11 @@ export const handler: Handler = async (event, context) => {
               id: s._id.toString(),
               _id: undefined,
             })),
-            messages: messages
-              .reverse()
-              .map((m: any) => ({
-                ...m,
-                id: m._id.toString(),
-                _id: undefined,
-              })),
+            messages: messages.reverse().map((m: any) => ({
+              ...m,
+              id: m._id.toString(),
+              _id: undefined,
+            })),
             peers: activePeers,
           }),
         };

@@ -2,18 +2,18 @@ name: E2E Tests
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
   schedule:
     # Run E2E tests nightly
-    - cron: '0 2 * * *'
+    - cron: 0 2 * * *
   workflow_dispatch:
     inputs:
       include_mobile:
-        description: 'Include mobile tests (requires emulator setup)'
+        description: Include mobile tests (requires emulator setup)
         required: false
-        default: 'false'
+        default: "false"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -35,43 +35,43 @@ jobs:
       matrix:
         browser: [chromium, firefox, webkit]
     steps:
-      - uses: actions/checkout@v6
-      
+      - uses: actions/checkout@v4
+
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
-      
+          node-version: 20
+          cache: npm
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps ${{ matrix.browser }}
-      
+
       - name: Build application
         run: |
           npm run build -w core
           npm run build -w web
-      
+
       - name: Run Web E2E tests
         run: npm run test:e2e -- --project=${{ matrix.browser }} tests/e2e/app-basics.e2e.test.ts tests/e2e/messaging.e2e.test.ts
         env:
           CI: true
-      
+
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: e2e-web-results-${{ matrix.browser }}
           path: |
             test-results/
             playwright-report/
           retention-days: 7
-      
+
       - name: Upload screenshots
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: e2e-web-screenshots-${{ matrix.browser }}
           path: screenshots/
@@ -85,43 +85,43 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
-      
+      - uses: actions/checkout@v4
+
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
-      
+          node-version: 20
+          cache: npm
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Install Playwright
         run: npx playwright install --with-deps chromium
-      
+
       - name: Build application
         run: |
           npm run build -w core
           npm run build -w web
-      
+
       - name: Run Cross-Platform Web Tests
         run: npm run test:e2e -- tests/e2e/cross-platform/web-to-web.e2e.test.ts
         env:
           CI: true
-      
+
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: e2e-cross-platform-web-results
           path: |
             test-results/
             playwright-report/
           retention-days: 7
-      
+
       - name: Upload screenshots
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: e2e-cross-platform-web-screenshots
           path: screenshots/
@@ -136,41 +136,41 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
-      
+      - uses: actions/checkout@v4
+
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
-      
+          node-version: 20
+          cache: npm
+
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
-      
+          distribution: temurin
+          java-version: 17
+
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
-      
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Install Appium
         run: |
           npm install -g appium
           appium driver install uiautomator2
-      
+
       - name: Build Android app
         working-directory: android
         run: ./gradlew assembleDebug
-      
+
       - name: Enable KVM (for emulator)
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      
+
       - name: AVD cache
         uses: actions/cache@v4
         id: avd-cache
@@ -179,7 +179,7 @@ jobs:
             ~/.android/avd/*
             ~/.android/adb*
           key: avd-33
-      
+
       - name: Create AVD and start emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -188,20 +188,20 @@ jobs:
           arch: x86_64
           profile: pixel_5
           script: echo "Emulator started"
-      
+
       - name: Start Appium server
         run: |
           appium --port 4723 &
           sleep 10
-      
+
       - name: Build web application
         run: |
           npm run build -w core
           npm run build -w web
-      
+
       - name: Install Playwright
         run: npx playwright install --with-deps chromium
-      
+
       - name: Run Android E2E tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -214,20 +214,20 @@ jobs:
           CI: true
           APPIUM_PORT: 4723
           ANDROID_APP_PATH: ./android/app/build/outputs/apk/debug/app-debug.apk
-      
+
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: e2e-android-results
           path: |
             test-results/
             playwright-report/
           retention-days: 7
-      
+
       - name: Upload screenshots
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: e2e-android-screenshots
           path: screenshots/
@@ -242,27 +242,27 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
-      
+      - uses: actions/checkout@v4
+
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
-      
+          node-version: 20
+          cache: npm
+
       - name: Setup Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: latest-stable
-      
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Install Appium
         run: |
           npm install -g appium
           appium driver install xcuitest
-      
+
       - name: Build iOS app
         working-directory: ios
         run: |
@@ -271,60 +271,60 @@ jobs:
             -configuration Debug \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO
-      
+
       - name: List simulators
         run: xcrun simctl list devices
-      
+
       - name: Boot simulator
         run: |
           SIMULATOR_ID=$(xcrun simctl create SC_Test com.apple.CoreSimulator.SimDeviceType.iPhone-15 com.apple.CoreSimulator.SimRuntime.iOS-17-0)
           xcrun simctl boot $SIMULATOR_ID
           echo "SIMULATOR_ID=$SIMULATOR_ID" >> $GITHUB_ENV
-      
+
       - name: Start Appium server
         run: |
           appium --port 4723 &
           sleep 10
-      
+
       - name: Build web application
         run: |
           npm run build -w core
           npm run build -w web
-      
+
       - name: Install Playwright
         run: npx playwright install --with-deps chromium
-      
+
       - name: Run iOS E2E tests
         run: npm run test:e2e -- tests/e2e/mobile/ios/
         env:
           CI: true
           APPIUM_PORT: 4723
           IOS_APP_PATH: ./ios/build/Build/Products/Debug-iphonesimulator/SovereignCommunications.app
-      
+
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: e2e-ios-results
           path: |
             test-results/
             playwright-report/
           retention-days: 7
-      
+
       - name: Upload screenshots
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: e2e-ios-screenshots
           path: screenshots/
           retention-days: 7
-      
+
       - name: Shutdown simulator
         if: always()
         run: xcrun simctl shutdown $SIMULATOR_ID || true
       - name: Upload screenshots
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: e2e-screenshots-ios
           path: screenshots/
@@ -338,33 +338,33 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
+
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
-      
+          node-version: 20
+          cache: npm
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Install Playwright
         run: npx playwright install --with-deps chromium
-      
+
       - name: Build application
         run: |
           npm run build -w core
           npm run build -w web
-      
+
       - name: Run visual regression tests
         run: npm run test:visual || echo "Visual tests not yet implemented"
-      
+
       - name: Upload visual diff
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: visual-diff
           path: visual-diff/
@@ -378,27 +378,27 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
-      
+      - uses: actions/checkout@v4
+
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
-      
+          node-version: 20
+          cache: npm
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Build application
         run: |
           npm run build -w core
           npm run build -w web
-      
+
       - name: Run performance tests
         run: npm run test:performance || echo "Performance tests not yet implemented"
-      
+
       - name: Upload performance results
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: performance-results
           path: performance-results/

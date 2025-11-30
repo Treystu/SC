@@ -12,6 +12,8 @@ function generateId(): string {
   return randomBytes(12).toString("hex");
 }
 
+type Document = Record<string, any>;
+
 // Mock Collection
 class MockCollection {
   private name: string;
@@ -23,7 +25,7 @@ class MockCollection {
     }
   }
 
-  async updateOne(filter: any, update: any, options?: any) {
+  async updateOne(filter: Document, update: Document, options?: Document) {
     const collection = memoryStore[this.name];
     let item = collection.find((i) => this.matches(i, filter));
 
@@ -42,22 +44,22 @@ class MockCollection {
     };
   }
 
-  async insertOne(doc: any) {
+  async insertOne(doc: Document) {
     const collection = memoryStore[this.name];
     const newDoc = { _id: generateId(), ...doc };
     collection.push(newDoc);
     return { insertedId: newDoc._id };
   }
 
-  find(filter: any) {
+  find(filter: Document) {
     const collection = memoryStore[this.name];
     let result = collection.filter((i) => this.matches(i, filter));
 
     return {
-      project: (projection: any) => {
+      project: (projection: Document) => {
         // Simple projection implementation
         result = result.map((item) => {
-          const projected: any = {};
+          const projected: Document = {};
           for (const key in projection) {
             if (projection[key] === 1) {
               projected[key] = item[key];
@@ -71,7 +73,7 @@ class MockCollection {
         });
         return this.cursor(result);
       },
-      sort: (sortOpts: any) => {
+      sort: (sortOpts: Document) => {
         result.sort((a, b) => {
           for (const key in sortOpts) {
             if (a[key] < b[key]) return sortOpts[key] === 1 ? -1 : 1;
@@ -89,7 +91,7 @@ class MockCollection {
     };
   }
 
-  async updateMany(filter: any, update: any) {
+  async updateMany(filter: Document, update: Document) {
     const collection = memoryStore[this.name];
     const items = collection.filter((i) => this.matches(i, filter));
     items.forEach((item) => this.applyUpdate(item, update));
@@ -154,15 +156,16 @@ class MockDb {
 
 const mockDb = new MockDb();
 
-let dbInstance: any = null;
+let dbInstance: MockDb | any = null;
 
-export async function connectToDatabase(): Promise<any> {
+export async function connectToDatabase(): Promise<MockDb | any> {
   if (dbInstance) return dbInstance;
 
   // Try to connect to real MongoDB if URI is available
   if (process.env.MONGODB_URI) {
     try {
       // Dynamic import to avoid bundling issues if not used
+      // @ts-expect-error - mongodb is an optional dependency for this function
       const { MongoClient } = await import("mongodb");
       const client = new MongoClient(process.env.MONGODB_URI);
       await client.connect();

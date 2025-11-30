@@ -52,26 +52,20 @@ function App() {
     removeContact,
     loading: contactsLoading,
   } = useContacts();
-  const { conversations: storedConversations } = useConversations();
+  const { conversations: _storedConversations } = useConversations();
   const {
     status,
     peers,
     messages,
     sendMessage,
     connectToPeer,
-    getStats,
     generateConnectionOffer,
     acceptConnectionOffer,
-    createManualOffer,
-    acceptManualOffer,
-    finalizeManualConnection,
     identity,
     joinRoom,
     leaveRoom,
     sendRoomMessage,
     joinRelay,
-    addStreamToPeer,
-    onPeerTrack,
     discoveredPeers,
     roomMessages,
   } = useMeshNetwork();
@@ -140,6 +134,20 @@ function App() {
     const profileManager = new ProfileManager();
     profileManager.getProfile().then(setUserProfile);
   }, []);
+
+  const handleJoinRoom = useCallback(
+    async (url: string) => {
+      // Let the caller handle errors (ConversationList)
+      await joinRoom(url);
+      setActiveRoom(url);
+    },
+    [joinRoom],
+  );
+
+  const handleLeaveRoom = useCallback(() => {
+    leaveRoom();
+    setActiveRoom(null);
+  }, [leaveRoom]);
 
   // Auto-join public hub or URL room
   useEffect(() => {
@@ -479,20 +487,6 @@ function App() {
     clearInvite();
   };
 
-  const handleJoinRoom = useCallback(
-    async (url: string) => {
-      // Let the caller handle errors (ConversationList)
-      await joinRoom(url);
-      setActiveRoom(url);
-    },
-    [joinRoom],
-  );
-
-  const handleLeaveRoom = useCallback(() => {
-    leaveRoom();
-    setActiveRoom(null);
-  }, [leaveRoom]);
-
   return (
     <ErrorBoundary>
       {/* Initialization Error Banner */}
@@ -515,10 +509,7 @@ function App() {
 
       {/* Onboarding Flow */}
       {showOnboarding && (
-        <OnboardingFlow
-          onComplete={() => setShowOnboarding(false)}
-          localPeerId={status.localPeerId}
-        />
+        <OnboardingFlow onComplete={() => setShowOnboarding(false)} />
       )}
 
       {/* Share App Modal */}

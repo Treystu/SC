@@ -1,10 +1,10 @@
-import { MeshNetwork } from './mesh/network.js';
-import { Message, MessageType } from './protocol/message.js';
+import { MeshNetwork } from "./mesh/network.js";
+import { Message, MessageType } from "./protocol/message.js";
 
 // Synchronization engine for offline-first data sync across devices
 export interface SyncItem {
   id: string;
-  type: 'message' | 'contact' | 'setting' | 'file';
+  type: "message" | "contact" | "setting" | "file";
   timestamp: number;
   data: any;
   deviceId: string;
@@ -14,7 +14,7 @@ export interface SyncItem {
 export interface SyncConflict {
   localItem: SyncItem;
   remoteItem: SyncItem;
-  resolution: 'local' | 'remote' | 'merge' | 'manual';
+  resolution: "local" | "remote" | "merge" | "manual";
 }
 
 export class SyncEngine {
@@ -26,7 +26,9 @@ export class SyncEngine {
   constructor(
     private deviceId: string,
     private network: MeshNetwork,
-    private onConflict: (conflict: SyncConflict) => Promise<'local' | 'remote' | 'merge'>
+    private onConflict: (
+      conflict: SyncConflict,
+    ) => Promise<"local" | "remote" | "merge">,
   ) {
     this.setupNetworkHandlers();
   }
@@ -39,9 +41,9 @@ export class SyncEngine {
         const payload = new TextDecoder().decode(message.payload);
         const data = JSON.parse(payload);
 
-        if (data.type === 'SYNC_REQUEST') {
+        if (data.type === "SYNC_REQUEST") {
           this.handleSyncRequest(message.header.senderId, data);
-        } else if (data.type === 'SYNC_RESPONSE') {
+        } else if (data.type === "SYNC_RESPONSE") {
           this.handleSyncResponse(data);
         }
       } catch (error) {
@@ -51,19 +53,26 @@ export class SyncEngine {
   }
 
   private async handleSyncRequest(senderPublicKey: Uint8Array, data: any) {
-    const senderId = Array.from(senderPublicKey).map(b => b.toString(16).padStart(2, '0')).join('');
+    const senderId = Array.from(senderPublicKey)
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
     const since = data.since || 0;
 
     // Get local changes since 'since'
     // In a real implementation, we would query the database
-    const changes = Array.from(this.pendingSync.values()).filter(item => item.timestamp > since);
+    const changes = Array.from(this.pendingSync.values()).filter(
+      (item) => item.timestamp > since,
+    );
 
     // Send response
-    await this.network.sendMessage(senderId, JSON.stringify({
-      type: 'SYNC_RESPONSE',
-      requestId: data.requestId,
-      changes
-    }));
+    await this.network.sendMessage(
+      senderId,
+      JSON.stringify({
+        type: "SYNC_RESPONSE",
+        requestId: data.requestId,
+        changes,
+      }),
+    );
   }
 
   private handleSyncResponse(data: any) {
@@ -75,11 +84,13 @@ export class SyncEngine {
   }
 
   // Add item to sync queue
-  async queueForSync(item: Omit<SyncItem, 'deviceId' | 'version'>): Promise<void> {
+  async queueForSync(
+    item: Omit<SyncItem, "deviceId" | "version">,
+  ): Promise<void> {
     const syncItem: SyncItem = {
       ...item,
       deviceId: this.deviceId,
-      version: Date.now()
+      version: Date.now(),
     };
 
     this.pendingSync.set(item.id, syncItem);
@@ -89,9 +100,11 @@ export class SyncEngine {
   }
 
   // Sync with remote peers
-  async sync(peerIds: string[]): Promise<{ synced: number; conflicts: number }> {
+  async sync(
+    peerIds: string[],
+  ): Promise<{ synced: number; conflicts: number }> {
     if (this.syncInProgress) {
-      throw new Error('Sync already in progress');
+      throw new Error("Sync already in progress");
     }
 
     this.syncInProgress = true;
@@ -104,7 +117,10 @@ export class SyncEngine {
 
       for (const peerId of peerIds) {
         // Request remote changes
-        const remoteChanges = await this.fetchRemoteChanges(peerId, this.lastSyncTimestamp);
+        const remoteChanges = await this.fetchRemoteChanges(
+          peerId,
+          this.lastSyncTimestamp,
+        );
 
         // Detect conflicts
         const conflictMap = this.detectConflicts(localChanges, remoteChanges);
@@ -117,7 +133,9 @@ export class SyncEngine {
         }
 
         // Apply non-conflicting remote changes
-        const nonConflicting = remoteChanges.filter(r => !conflictMap.has(r.id));
+        const nonConflicting = remoteChanges.filter(
+          (r) => !conflictMap.has(r.id),
+        );
         for (const change of nonConflicting) {
           await this.applyRemoteChange(change);
           synced++;
@@ -139,9 +157,12 @@ export class SyncEngine {
   }
 
   // Detect conflicts between local and remote changes
-  private detectConflicts(local: SyncItem[], remote: SyncItem[]): Map<string, SyncConflict> {
+  private detectConflicts(
+    local: SyncItem[],
+    remote: SyncItem[],
+  ): Map<string, SyncConflict> {
     const conflicts = new Map<string, SyncConflict>();
-    const remoteMap = new Map(remote.map(r => [r.id, r]));
+    const remoteMap = new Map(remote.map((r) => [r.id, r]));
 
     for (const localItem of local) {
       const remoteItem = remoteMap.get(localItem.id);
@@ -150,7 +171,7 @@ export class SyncEngine {
         conflicts.set(localItem.id, {
           localItem,
           remoteItem,
-          resolution: 'manual'
+          resolution: "manual",
         });
       }
     }
@@ -159,15 +180,18 @@ export class SyncEngine {
   }
 
   // Apply conflict resolution
-  private async applyResolution(conflict: SyncConflict, resolution: 'local' | 'remote' | 'merge'): Promise<void> {
-    if (resolution === 'local') {
+  private async applyResolution(
+    conflict: SyncConflict,
+    resolution: "local" | "remote" | "merge",
+  ): Promise<void> {
+    if (resolution === "local") {
       // Keep local version
       return;
-    } else if (resolution === 'remote') {
+    } else if (resolution === "remote") {
       // Apply remote version
       await this.applyRemoteChange(conflict.remoteItem);
       this.pendingSync.delete(conflict.localItem.id);
-    } else if (resolution === 'merge') {
+    } else if (resolution === "merge") {
       // Merge both versions (simple strategy: newer timestamp wins for each field)
       const merged = this.mergeItems(conflict.localItem, conflict.remoteItem);
       await this.applyRemoteChange(merged);
@@ -183,15 +207,18 @@ export class SyncEngine {
       timestamp: Math.max(local.timestamp, remote.timestamp),
       data: { ...remote.data, ...local.data },
       deviceId: this.deviceId,
-      version: Date.now()
+      version: Date.now(),
     };
   }
 
   // Fetch changes from remote peer
-  private async fetchRemoteChanges(peerId: string, since: number): Promise<SyncItem[]> {
+  private async fetchRemoteChanges(
+    peerId: string,
+    since: number,
+  ): Promise<SyncItem[]> {
     const requestId = Math.random().toString(36).substring(7);
 
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve, _reject) => {
       const timeout = setTimeout(() => {
         this.syncResponses.delete(requestId);
         resolve([]); // Return empty on timeout to avoid blocking
@@ -202,47 +229,58 @@ export class SyncEngine {
         resolve(items);
       });
 
-      this.network.sendMessage(peerId, JSON.stringify({
-        type: 'SYNC_REQUEST',
-        requestId,
-        since
-      })).catch(err => {
-        clearTimeout(timeout);
-        this.syncResponses.delete(requestId);
-        console.error('Failed to send sync request:', err);
-        resolve([]);
-      });
+      this.network
+        .sendMessage(
+          peerId,
+          JSON.stringify({
+            type: "SYNC_REQUEST",
+            requestId,
+            since,
+          }),
+        )
+        .catch((err) => {
+          clearTimeout(timeout);
+          this.syncResponses.delete(requestId);
+          console.error("Failed to send sync request:", err);
+          resolve([]);
+        });
     });
   }
 
   // Send changes to peer
-  private async sendChangesToPeer(peerId: string, changes: SyncItem[]): Promise<void> {
+  private async sendChangesToPeer(
+    peerId: string,
+    changes: SyncItem[],
+  ): Promise<void> {
     if (changes.length === 0) return;
 
     // In a real implementation, we might want to batch these or use a different message type
     // For now, we reuse the SYNC_RESPONSE format or just send a direct update
     // But since this is "pushing" changes, we can just send them as a SYNC_PUSH or similar
 
-    await this.network.sendMessage(peerId, JSON.stringify({
-      type: 'SYNC_PUSH',
-      changes
-    }));
+    await this.network.sendMessage(
+      peerId,
+      JSON.stringify({
+        type: "SYNC_PUSH",
+        changes,
+      }),
+    );
   }
 
   // Apply remote change locally
   private async applyRemoteChange(item: SyncItem): Promise<void> {
     // Apply to local database based on item type
     switch (item.type) {
-      case 'message':
+      case "message":
         // Save message to local DB
         break;
-      case 'contact':
+      case "contact":
         // Save contact to local DB
         break;
-      case 'setting':
+      case "setting":
         // Apply setting
         break;
-      case 'file':
+      case "file":
         // Save file metadata
         break;
     }
@@ -254,11 +292,17 @@ export class SyncEngine {
   }
 
   // Get sync status
-  getSyncStatus(): { pending: number; lastSync: Date | null; inProgress: boolean } {
+  getSyncStatus(): {
+    pending: number;
+    lastSync: Date | null;
+    inProgress: boolean;
+  } {
     return {
       pending: this.pendingSync.size,
-      lastSync: this.lastSyncTimestamp ? new Date(this.lastSyncTimestamp) : null,
-      inProgress: this.syncInProgress
+      lastSync: this.lastSyncTimestamp
+        ? new Date(this.lastSyncTimestamp)
+        : null,
+      inProgress: this.syncInProgress,
     };
   }
 }

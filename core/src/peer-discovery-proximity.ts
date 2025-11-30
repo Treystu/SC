@@ -35,7 +35,7 @@ export class ProximityDiscovery {
       discoveryTimeout: 30000, // remove after 30s
       maxDistance: 10, // 10 meters
       autoConnect: true,
-      ...config
+      ...config,
     };
   }
 
@@ -73,35 +73,6 @@ export class ProximityDiscovery {
    * Start periodic scanning
    */
   private async startScanning(): Promise<void> {
-    // @ts-ignore
-    if (typeof navigator !== 'undefined' && navigator.bluetooth) {
-      try {
-        // @ts-ignore - Web Bluetooth API types might not be fully available
-        if (navigator.bluetooth.requestLEScan) {
-          console.log('Starting BLE scan...');
-          // @ts-ignore
-          const scan = await navigator.bluetooth.requestLEScan({
-            acceptAllAdvertisements: true, // For broad discovery, or use filters
-            keepRepeatedDevices: true
-          });
-
-          // @ts-ignore
-          navigator.bluetooth.addEventListener('advertisementreceived', (event: any) => {
-            this.handleAdvertisement(event);
-          });
-
-          console.log('BLE scan started successfully');
-          return;
-        }
-      } catch (error) {
-        console.error('Failed to start BLE scan:', error);
-      }
-    }
-
-    // Fallback to periodic polling if LE Scan is not supported or fails
-    // Initial scan
-    this.performScan();
-
     // Periodic scans
     this.scanTimer = setInterval(() => {
       this.performScan();
@@ -132,12 +103,11 @@ export class ProximityDiscovery {
     try {
       const discovered = await this.scanForPeers();
 
-      discovered.forEach(peer => {
+      discovered.forEach((peer) => {
         this.updatePeer(peer);
       });
-
     } catch (error) {
-      console.error('Proximity scan error:', error);
+      console.error("Proximity scan error:", error);
     }
   }
 
@@ -149,8 +119,8 @@ export class ProximityDiscovery {
     // If we are using the event listener approach (requestLEScan), this might be empty
     // or used for a different fallback strategy (e.g. requestDevice)
 
-    // @ts-ignore
-    if (typeof navigator !== 'undefined' && navigator.bluetooth) {
+    // @ts-expect-error - Web Bluetooth API types might not be fully available
+    if (typeof navigator !== "undefined" && navigator.bluetooth) {
       // requestDevice requires user gesture, so we can't call it automatically in a loop.
       // This method is kept for manual triggering or fallback.
       return [];
@@ -166,7 +136,10 @@ export class ProximityDiscovery {
     const distance = this.rssiToDistance(peer.rssi);
 
     // Check if peer meets criteria
-    if (peer.rssi < this.config.rssiThreshold || distance > this.config.maxDistance) {
+    if (
+      peer.rssi < this.config.rssiThreshold ||
+      distance > this.config.maxDistance
+    ) {
       return;
     }
 
@@ -176,19 +149,19 @@ export class ProximityDiscovery {
     const updated: ProximityPeer = {
       ...peer,
       distance,
-      lastSeen: Date.now()
+      lastSeen: Date.now(),
     };
 
     this.peers.set(peer.peerId, updated);
 
     if (isNew) {
-      this.emit('peer-discovered', updated);
+      this.emit("peer-discovered", updated);
 
       if (this.config.autoConnect) {
-        this.emit('should-connect', updated);
+        this.emit("should-connect", updated);
       }
     } else {
-      this.emit('peer-updated', updated);
+      this.emit("peer-updated", updated);
     }
   }
 
@@ -231,11 +204,11 @@ export class ProximityDiscovery {
       }
     });
 
-    stale.forEach(peerId => {
+    stale.forEach((peerId) => {
       const peer = this.peers.get(peerId);
       this.peers.delete(peerId);
       if (peer) {
-        this.emit('peer-lost', peer);
+        this.emit("peer-lost", peer);
       }
     });
   }
@@ -315,7 +288,7 @@ export class ProximityDiscovery {
   private emit(event: string, data?: any): void {
     const listeners = this.listeners.get(event);
     if (listeners) {
-      listeners.forEach(callback => {
+      listeners.forEach((callback) => {
         try {
           callback(data);
         } catch (error) {
@@ -330,7 +303,7 @@ export class ProximityDiscovery {
    */
   clear(): void {
     this.peers.clear();
-    this.emit('peers-cleared');
+    this.emit("peers-cleared");
   }
 
   /**
@@ -338,16 +311,17 @@ export class ProximityDiscovery {
    */
   getStats() {
     const peers = this.getPeers();
-    const distances = peers.map(p => p.distance);
+    const distances = peers.map((p) => p.distance);
 
     return {
       totalPeers: peers.length,
-      averageDistance: distances.length > 0
-        ? distances.reduce((a, b) => a + b, 0) / distances.length
-        : 0,
+      averageDistance:
+        distances.length > 0
+          ? distances.reduce((a, b) => a + b, 0) / distances.length
+          : 0,
       closestPeer: Math.min(...distances, Infinity),
       furthestPeer: Math.max(...distances, -Infinity),
-      scanning: this.scanning
+      scanning: this.scanning,
     };
   }
 }
