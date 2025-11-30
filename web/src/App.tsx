@@ -82,6 +82,7 @@ function App() {
     joinRelay,
     discoveredPeers,
     roomMessages,
+    isJoinedToRoom,
   } = useMeshNetwork();
   const autoJoinedRef = useRef(false);
 
@@ -153,7 +154,7 @@ function App() {
     async (url: string) => {
       // Let the caller handle errors (ConversationList)
       await joinRoom(url);
-      setActiveRoom(url);
+      setSelectedConversation("public-room");
     },
     [joinRoom],
   );
@@ -178,8 +179,8 @@ function App() {
       } else if (config.publicHub || config.deploymentMode === "netlify") {
         autoJoinedRef.current = true;
         console.log(`Auto-joining room in ${config.deploymentMode} mode...`);
-        // Use handleJoinRoom to ensure UI updates
-        handleJoinRoom(config.relayUrl).catch((err) => {
+        // Use joinRoom directly to avoid setting selectedConversation (silent join)
+        joinRoom(config.relayUrl).catch((err) => {
           console.error("Failed to auto-join room:", err);
         });
       }
@@ -294,6 +295,15 @@ function App() {
   }, [status.isConnected, status.peerCount]);
 
   const handleDeleteConversation = async (id: string) => {
+    if (id === "public-room") {
+      leaveRoom();
+      if (selectedConversation === id) {
+        setSelectedConversation(null);
+      }
+      announce.message("Left public room", "polite");
+      return;
+    }
+
     try {
       await removeContact(id);
       if (selectedConversation === id) {
@@ -637,6 +647,17 @@ function App() {
     })),
   ].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
+  // Add Public Room if joined
+  if (isJoinedToRoom) {
+    allConversations.unshift({
+      id: "public-room",
+      name: "🌐 Public Room",
+      lastMessage: `${discoveredPeers.length} peers discovered`,
+      timestamp: Date.now(),
+      unreadCount: 0,
+    });
+  }
+
   // Update contactName logic in render
   const getContactName = (id: string) => {
     const contact = contacts.find((c) => c.id === id);
@@ -792,14 +813,30 @@ function App() {
 
               <div className="content-area" id="main-content">
                 {selectedConversation ? (
-                  <ChatView
-                    conversationId={selectedConversation}
-                    contactName={getContactName(selectedConversation)}
-                    isOnline={peers.some((p) => p.id === selectedConversation)} // Groups are always "online" effectively, or check if any member is online
-                    messages={messages}
-                    onSendMessage={handleSendMessage}
-                    isLoading={contactsLoading}
-                  />
+                  selectedConversation === "public-room" ? (
+                    <RoomView
+                      isOpen={true}
+                      onClose={() => setSelectedConversation(null)}
+                      discoveredPeers={discoveredPeers}
+                      connectedPeers={peers.map((p) => p.id)}
+                      roomMessages={roomMessages}
+                      onSendMessage={sendRoomMessage}
+                      onConnect={handleConnectToPeer}
+                      localPeerId={status.localPeerId}
+                      embedded={true}
+                    />
+                  ) : (
+                    <ChatView
+                      conversationId={selectedConversation}
+                      contactName={getContactName(selectedConversation)}
+                      isOnline={peers.some(
+                        (p) => p.id === selectedConversation,
+                      )} // Groups are always "online" effectively, or check if any member is online
+                      messages={messages}
+                      onSendMessage={handleSendMessage}
+                      isLoading={contactsLoading}
+                    />
+                  )
                 ) : (
                   <div className="empty-state">
                     <div className="empty-state-content">
@@ -876,7 +913,7 @@ function App() {
               </div>
             )}
 
-            {/* Room View Overlay */}
+            {/* Room View Overlay - Only if activeRoom is explicitly set (legacy/URL) */}
             <RoomView
               isOpen={!!activeRoom}
               onClose={handleLeaveRoom}

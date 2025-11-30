@@ -10,6 +10,7 @@ interface RoomViewProps {
   onSendMessage: (content: string) => void;
   onConnect: (peerId: string) => Promise<void>;
   localPeerId: string;
+  embedded?: boolean;
 }
 
 export function RoomView({
@@ -21,6 +22,7 @@ export function RoomView({
   onSendMessage,
   onConnect,
   localPeerId,
+  embedded = false,
 }: RoomViewProps) {
   const [message, setMessage] = useState("");
   const [connectingPeers, setConnectingPeers] = useState<Set<string>>(
@@ -35,7 +37,7 @@ export function RoomView({
     }
   }, [roomMessages]);
 
-  if (!isOpen) return null;
+  if (!isOpen && !embedded) return null;
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,7 +67,7 @@ export function RoomView({
   const uniqueConnected = connectedPeers.filter((p) => p !== localPeerId);
 
   return (
-    <div className="room-overlay">
+    <div className={embedded ? "room-embedded" : "room-overlay"}>
       <div className="room-container">
         <div className="room-header">
           <div className="room-title">
@@ -74,9 +76,11 @@ export function RoomView({
               {uniqueDiscovered.length + uniqueConnected.length + 1} Online
             </span>
           </div>
-          <button className="close-btn" onClick={onClose}>
-            Leave Room
-          </button>
+          {!embedded && (
+            <button className="close-btn" onClick={onClose}>
+              Leave Room
+            </button>
+          )}
         </div>
 
         <div className="room-content">

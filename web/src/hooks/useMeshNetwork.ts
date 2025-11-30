@@ -717,6 +717,7 @@ export function useMeshNetwork() {
   const [joinError, setJoinError] = useState<string | null>(null);
   const [discoveredPeers, setDiscoveredPeers] = useState<string[]>([]);
   const [roomMessages, setRoomMessages] = useState<any[]>([]);
+  const [isJoinedToRoom, setIsJoinedToRoom] = useState(false);
 
   const joinRoom = useCallback(async (url: string): Promise<void> => {
     if (!meshNetworkRef.current)
@@ -748,9 +749,11 @@ export function useMeshNetwork() {
       });
 
       await meshNetworkRef.current.joinPublicRoom(url);
+      setIsJoinedToRoom(true);
     } catch (error) {
       console.error("Failed to join room:", error);
       setJoinError(error instanceof Error ? error.message : String(error));
+      setIsJoinedToRoom(false);
       throw error;
     }
   }, []);
@@ -760,6 +763,7 @@ export function useMeshNetwork() {
       meshNetworkRef.current.leavePublicRoom();
       setDiscoveredPeers([]);
       setRoomMessages([]);
+      setIsJoinedToRoom(false);
     }
   }, []);
 
@@ -820,6 +824,7 @@ export function useMeshNetwork() {
       finalizeManualConnection,
       joinRoom,
       leaveRoom,
+      isJoinedToRoom,
       sendRoomMessage,
       joinRelay,
       addStreamToPeer,
@@ -843,6 +848,7 @@ export function useMeshNetwork() {
       finalizeManualConnection,
       joinRoom,
       leaveRoom,
+      isJoinedToRoom,
       sendRoomMessage,
       joinRelay,
       addStreamToPeer,
