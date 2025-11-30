@@ -39,6 +39,11 @@ export class MeshNetwork {
 
   private onPeerDisconnectedCallback?: (peerId: string) => void;
   private onPeerTrackCallback?: (peerId: string, track: MediaStreamTrack, stream: MediaStream) => void;
+  private onDiscoveryUpdateCallback?: (peers: string[]) => void;
+  private onPublicRoomMessageCallback?: (message: any) => void;
+
+  // State
+  private discoveredPeers: Set<string> = new Set();
 
   // Metrics tracking
   private messagesSent = 0;
@@ -291,6 +296,31 @@ export class MeshNetwork {
    */
   onPeerTrack(callback: (peerId: string, track: MediaStreamTrack, stream: MediaStream) => void): void {
     this.onPeerTrackCallback = callback;
+  }
+
+  /**
+   * Register callback for discovery updates
+   */
+  onDiscoveryUpdate(callback: (peers: string[]) => void): void {
+    this.onDiscoveryUpdateCallback = callback;
+  }
+
+  /**
+   * Register callback for public room messages
+   */
+  onPublicRoomMessage(callback: (message: any) => void): void {
+    this.onPublicRoomMessageCallback = callback;
+  }
+
+  /**
+   * Send message to public room
+   */
+  async sendPublicRoomMessage(content: string): Promise<void> {
+    if (this.httpSignaling) {
+      await this.httpSignaling.sendPublicMessage(content);
+    } else {
+      throw new Error('Not connected to a public room');
+    }
   }
 
   /**
@@ -606,6 +636,12 @@ export class MeshNetwork {
     this.httpSignaling.on('peerDiscovered', async (peer: any) => {
       if (peer._id === this.localPeerId) return;
 
+      // Track discovered peer
+      if (!this.discoveredPeers.has(peer._id)) {
+        this.discoveredPeers.add(peer._id);
+        this.onDiscoveryUpdateCallback?.(Array.from(this.discoveredPeers));
+      }
+
       // Store public key if available
       if (peer.metadata?.publicKey) {
         const pk = fromHex(peer.metadata.publicKey);
@@ -698,9 +734,22 @@ export class MeshNetwork {
     // Handle public messages
     this.httpSignaling.on('publicMessage', (msg: any) => {
       console.log('Public Room Message:', msg);
+      this.onPublicRoomMessageCallback?.(msg);
     });
 
     await this.httpSignaling.join({ agent: 'sovereign-web' });
+  }
+
+  /**
+   * Leave Public Room
+   */
+  leavePublicRoom(): void {
+    if (this.httpSignaling) {
+      this.httpSignaling.stop();
+      this.httpSignaling = undefined;
+      this.discoveredPeers.clear();
+      this.onDiscoveryUpdateCallback?.([]);
+    }
   }
 
   /**

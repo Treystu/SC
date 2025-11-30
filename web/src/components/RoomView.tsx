@@ -1,0 +1,146 @@
+import { useState, useEffect, useRef } from 'react';
+import './RoomView.css';
+
+interface RoomViewProps {
+    isOpen: boolean;
+    onClose: () => void;
+    discoveredPeers: string[];
+    connectedPeers: string[];
+    roomMessages: any[];
+    onSendMessage: (content: string) => void;
+    onConnect: (peerId: string) => void;
+    localPeerId: string;
+}
+
+export function RoomView({
+    isOpen,
+    onClose,
+    discoveredPeers,
+    connectedPeers,
+    roomMessages,
+    onSendMessage,
+    onConnect,
+    localPeerId
+}: RoomViewProps) {
+    const [message, setMessage] = useState('');
+    const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    // Auto-scroll to bottom of chat
+    useEffect(() => {
+        if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [roomMessages]);
+
+    if (!isOpen) return null;
+
+    const handleSend = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (message.trim()) {
+            onSendMessage(message);
+            setMessage('');
+        }
+    };
+
+    // Filter peers
+    const uniqueDiscovered = discoveredPeers.filter(p => !connectedPeers.includes(p) && p !== localPeerId);
+    const uniqueConnected = connectedPeers.filter(p => p !== localPeerId);
+
+    return (
+        <div className="room-overlay">
+            <div className="room-container">
+                <div className="room-header">
+                    <div className="room-title">
+                        <h2>🌐 Public Room</h2>
+                        <span className="room-status">
+                            {uniqueDiscovered.length + uniqueConnected.length + 1} Online
+                        </span>
+                    </div>
+                    <button className="close-btn" onClick={onClose}>Leave Room</button>
+                </div>
+
+                <div className="room-content">
+                    {/* Sidebar: Peers */}
+                    <div className="room-sidebar">
+                        <div className="peers-section">
+                            <h3>Connected Mesh ({uniqueConnected.length})</h3>
+                            <div className="peers-list">
+                                {uniqueConnected.length === 0 && <p className="empty-text">No active connections</p>}
+                                {uniqueConnected.map(peerId => (
+                                    <div key={peerId} className="peer-item connected">
+                                        <div className="peer-avatar">{peerId.substring(0, 2).toUpperCase()}</div>
+                                        <div className="peer-info">
+                                            <span className="peer-id">{peerId.substring(0, 12)}...</span>
+                                            <span className="peer-status">Connected</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="peers-section">
+                            <h3>Discovered ({uniqueDiscovered.length})</h3>
+                            <div className="peers-list">
+                                {uniqueDiscovered.length === 0 && <p className="empty-text">Scanning for peers...</p>}
+                                {uniqueDiscovered.map(peerId => (
+                                    <div key={peerId} className="peer-item discovered">
+                                        <div className="peer-avatar">{peerId.substring(0, 2).toUpperCase()}</div>
+                                        <div className="peer-info">
+                                            <span className="peer-id">{peerId.substring(0, 12)}...</span>
+                                            <button
+                                                className="connect-btn"
+                                                onClick={() => onConnect(peerId)}
+                                            >
+                                                Connect
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Main: Chat */}
+                    <div className="room-chat">
+                        <div className="chat-messages">
+                            {roomMessages.length === 0 && (
+                                <div className="welcome-message">
+                                    <h3>Welcome to the Room!</h3>
+                                    <p>Messages sent here are broadcast to everyone in the room.</p>
+                                    <p>Connect with peers to start private, encrypted chats.</p>
+                                </div>
+                            )}
+                            {roomMessages.map((msg, idx) => (
+                                <div key={idx} className={`chat-message ${msg.peerId === localPeerId ? 'own' : ''}`}>
+                                    <div className="message-header">
+                                        <span className="message-sender">
+                                            {msg.peerId === localPeerId ? 'You' : msg.peerId?.substring(0, 8)}
+                                        </span>
+                                        <span className="message-time">
+                                            {new Date(msg.timestamp || Date.now()).toLocaleTimeString()}
+                                        </span>
+                                    </div>
+                                    <div className="message-content">{msg.payload?.content || msg.content}</div>
+                                </div>
+                            ))}
+                            <div ref={messagesEndRef} />
+                        </div>
+
+                        <form className="chat-input-area" onSubmit={handleSend}>
+                            <input
+                                type="text"
+                                value={message}
+                                onChange={(e) => setMessage(e.target.value)}
+                                placeholder="Type a public message..."
+                                className="chat-input"
+                            />
+                            <button type="submit" className="send-btn" disabled={!message.trim()}>
+                                Send
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}

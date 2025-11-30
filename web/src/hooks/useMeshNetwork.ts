@@ -548,17 +548,42 @@ export function useMeshNetwork() {
   }, []);
 
   const [joinError, setJoinError] = useState<string | null>(null);
+  const [discoveredPeers, setDiscoveredPeers] = useState<string[]>([]);
+  const [roomMessages, setRoomMessages] = useState<any[]>([]);
 
   const joinRoom = useCallback(async (url: string): Promise<void> => {
     if (!meshNetworkRef.current) throw new Error('Mesh network not initialized');
     setJoinError(null);
+    setRoomMessages([]); // Clear messages on join
     try {
+      // Setup listeners before joining
+      meshNetworkRef.current.onDiscoveryUpdate((peers) => {
+        setDiscoveredPeers(peers);
+      });
+
+      meshNetworkRef.current.onPublicRoomMessage((msg) => {
+        setRoomMessages(prev => [...prev, msg]);
+      });
+
       await meshNetworkRef.current.joinPublicRoom(url);
     } catch (error) {
       console.error('Failed to join room:', error);
       setJoinError(error instanceof Error ? error.message : String(error));
       throw error;
     }
+  }, []);
+
+  const leaveRoom = useCallback(() => {
+    if (meshNetworkRef.current) {
+      meshNetworkRef.current.leavePublicRoom();
+      setDiscoveredPeers([]);
+      setRoomMessages([]);
+    }
+  }, []);
+
+  const sendRoomMessage = useCallback(async (content: string) => {
+    if (!meshNetworkRef.current) throw new Error('Mesh network not initialized');
+    await meshNetworkRef.current.sendPublicRoomMessage(content);
   }, []);
 
   const joinRelay = useCallback(async (url: string): Promise<void> => {
@@ -595,9 +620,13 @@ export function useMeshNetwork() {
     acceptManualOffer,
     finalizeManualConnection,
     joinRoom,
+    leaveRoom,
+    sendRoomMessage,
     joinRelay,
     addStreamToPeer,
     onPeerTrack,
+    discoveredPeers,
+    roomMessages,
     identity: meshNetworkRef.current?.getIdentity(), // Expose identity
-  }), [status, joinError, peers, messages, sendMessage, connectToPeer, getStats, generateConnectionOffer, acceptConnectionOffer, createManualOffer, acceptManualOffer, finalizeManualConnection, joinRoom, joinRelay, addStreamToPeer, onPeerTrack]);
+  }), [status, joinError, peers, messages, sendMessage, connectToPeer, getStats, generateConnectionOffer, acceptConnectionOffer, createManualOffer, acceptManualOffer, finalizeManualConnection, joinRoom, leaveRoom, sendRoomMessage, joinRelay, addStreamToPeer, onPeerTrack, discoveredPeers, roomMessages]);
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 import './sentry';
 import './App.css';
@@ -11,6 +11,7 @@ import { OnboardingFlow } from './components/Onboarding/OnboardingFlow';
 import { QRCodeShare } from './components/QRCodeShare';
 import { InviteAcceptanceModal } from './components/InviteAcceptanceModal';
 import { NetworkDiagnostics } from './components/NetworkDiagnostics';
+import { RoomView } from './components/RoomView';
 import { useMeshNetwork } from './hooks/useMeshNetwork';
 import { useInvite } from './hooks/useInvite';
 import { useConversations } from './hooks/useConversations';
@@ -27,6 +28,7 @@ import { rateLimiter } from '../../core/src/rate-limiter';
 import { config } from './config';
 
 function App() {
+  const [activeRoom, setActiveRoom] = useState<string | null>(null);
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -42,6 +44,7 @@ function App() {
     messages,
     sendMessage,
     connectToPeer,
+    getStats,
     generateConnectionOffer,
     acceptConnectionOffer,
     createManualOffer,
@@ -49,7 +52,13 @@ function App() {
     finalizeManualConnection,
     identity,
     joinRoom,
-    joinRelay
+    leaveRoom,
+    sendRoomMessage,
+    joinRelay,
+    addStreamToPeer,
+    onPeerTrack,
+    discoveredPeers,
+    roomMessages,
   } = useMeshNetwork();
   const autoJoinedRef = useRef(false);
 
@@ -391,6 +400,17 @@ function App() {
     clearInvite();
   };
 
+  const handleJoinRoom = useCallback(async (url: string) => {
+    // Let the caller handle errors (ConversationList)
+    await joinRoom(url);
+    setActiveRoom(url);
+  }, [joinRoom]);
+
+  const handleLeaveRoom = useCallback(() => {
+    leaveRoom();
+    setActiveRoom(null);
+  }, [leaveRoom]);
+
   return (
     <ErrorBoundary>
       {/* Initialization Error Banner */}
@@ -456,72 +476,74 @@ function App() {
           Skip to main content
         </a>
 
-        <header className="app-header" role="banner">
-          <h1>Sovereign Communications</h1>
-          <div className="header-controls">
-            <button
-              onClick={() => setShowDiagnostics(!showDiagnostics)}
-              className="diagnostics-btn"
-              aria-label="Network Diagnostics"
-              title="Network Diagnostics"
-              data-testid="diagnostics-btn"
-            >
-              📶
-            </button>
-            <button
-              onClick={() => setShowSettings(!showSettings)}
-              className="settings-btn"
-              aria-label="Settings"
-              title="Settings"
-              data-testid="settings-btn"
-            >
-              ⚙️
-            </button>
-            <ConnectionStatus quality={status.connectionQuality} />
-          </div>
-        </header>
+        {/* Only show main app UI if not onboarding */}
+        {!showOnboarding && (
+          <>
+            <div className="main-layout">
+              <div className="sidebar">
+                <div className="sidebar-header">
+                  <div className="user-profile">
+                    <div className="avatar">
+                      {status.localPeerId.substring(0, 2).toUpperCase()}
+                    </div>
+                    <div className="user-info">
+                      <span className="username">Me</span>
+                      <span className="status-indicator online"></span>
+                    </div>
+                    <div className="header-controls">
+                      <button
+                        onClick={() => setShowDiagnostics(!showDiagnostics)}
+                        className="diagnostics-btn"
+                        aria-label="Network Diagnostics"
+                        title="Network Diagnostics"
+                      >
+                        📶
+                      </button>
+                      <button
+                        className="settings-btn"
+                        onClick={() => setShowSettings(true)}
+                        aria-label="Settings"
+                      >
+                        ⚙️
+                      </button>
+                    </div>
+                  </div>
+                  <ConnectionStatus quality={status.connectionQuality} />
+                </div>
 
-        <div className="app-body" data-testid="app-body">
-          {!showOnboarding && (
-            <>
-              <aside className="sidebar" role="complementary" aria-label="Conversations">
-                <ErrorBoundary fallback={<div role="alert">Error loading conversations</div>}>
-                  <ConversationList
-                    conversations={contacts.map(c => ({
-                      id: c.id,
-                      name: c.displayName,
-                      unreadCount: 0, // Replace with actual unread count
-                    }))}
-                    loading={contactsLoading}
-                    selectedId={selectedConversation}
-                    onSelect={setSelectedConversation}
-                    onDelete={handleDeleteConversation}
-                    onAddContact={handleAddContact}
-                    onImportContact={handleImportContact}
-                    onShareApp={handleShareApp}
-                    localPeerId={status.localPeerId}
-                    generateConnectionOffer={generateConnectionOffer}
-                    onJoinRoom={joinRoom}
-                    onJoinRelay={joinRelay}
+                <ConversationList
+                  conversations={contacts.map(c => ({
+                    id: c.id,
+                    name: c.displayName,
+                    unreadCount: 0, // Replace with actual unread count
+                  }))}
+                  loading={contactsLoading}
+                  selectedId={selectedConversation}
+                  onSelect={setSelectedConversation}
+                  onDelete={handleDeleteConversation}
+                  onAddContact={handleAddContact}
+                  onImportContact={handleImportContact}
+                  onShareApp={handleShareApp}
+                  localPeerId={status.localPeerId}
+                  generateConnectionOffer={generateConnectionOffer}
+                  onJoinRoom={handleJoinRoom}
+                  onJoinRelay={joinRelay}
+                />
+              </div>
+
+              <div className="content-area" id="main-content">
+                {selectedConversation ? (
+                  <ChatView
+                    conversationId={selectedConversation}
+                    contactName={contacts.find(c => c.id === selectedConversation)?.displayName || 'Unknown Contact'}
+                    isOnline={peers.some(p => p.id === selectedConversation)}
+                    messages={messages}
+                    onSendMessage={handleSendMessage}
+                    isLoading={contactsLoading}
                   />
-                </ErrorBoundary>
-              </aside>
-
-              <main className="main-content" id="main-content" role="main" tabIndex={-1} data-testid="main-content">
-                <ErrorBoundary fallback={<div role="alert">Error loading chat</div>}>
-                  {selectedConversation ? (
-                    <ErrorBoundary fallback={<div role="alert">Error in ChatView</div>}>
-                      <ChatView
-                        conversationId={selectedConversation}
-                        contactName={contacts.find(c => c.id === selectedConversation)?.displayName || 'Unknown Contact'}
-                        isOnline={peers.some(p => p.id === selectedConversation)}
-                        messages={messages}
-                        onSendMessage={handleSendMessage}
-                        isLoading={contactsLoading}
-                      />
-                    </ErrorBoundary>
-                  ) : (
-                    <div className="empty-state">
+                ) : (
+                  <div className="empty-state">
+                    <div className="empty-state-content">
                       <h2>Welcome to Sovereign Communications</h2>
                       <p>Select a conversation or add a new contact to get started</p>
                       <div className="features" role="list">
@@ -545,27 +567,39 @@ function App() {
                         </div>
                       )}
                     </div>
-                  )}
-                </ErrorBoundary>
-              </main>
-            </>
-          )}
-        </div>
-
-        {/* Settings Modal */}
-        {showSettings && (
-          <div className="modal-overlay" onClick={() => setShowSettings(false)}>
-            <div className="modal-content settings-modal" onClick={(e) => e.stopPropagation()}>
-              <button
-                className="modal-close"
-                onClick={() => setShowSettings(false)}
-                aria-label="Close settings"
-              >
-                ×
-              </button>
-              <SettingsPanel />
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+
+            {/* Settings Modal */}
+            {showSettings && (
+              <div className="modal-overlay" onClick={() => setShowSettings(false)}>
+                <div className="modal-content settings-modal" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    className="modal-close"
+                    onClick={() => setShowSettings(false)}
+                    aria-label="Close settings"
+                  >
+                    ×
+                  </button>
+                  <SettingsPanel />
+                </div>
+              </div>
+            )}
+
+            {/* Room View Overlay */}
+            <RoomView
+              isOpen={!!activeRoom}
+              onClose={handleLeaveRoom}
+              discoveredPeers={discoveredPeers}
+              connectedPeers={Object.keys(peers)}
+              roomMessages={roomMessages}
+              onSendMessage={sendRoomMessage}
+              onConnect={connectToPeer}
+              localPeerId={status.localPeerId}
+            />
+          </>
         )}
       </div>
     </ErrorBoundary>
