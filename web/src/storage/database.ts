@@ -1326,11 +1326,139 @@ export class DatabaseManager {
   /**
    * Close database
    */
+  /**
+   * Close database
+   */
   close(): void {
     if (this.db) {
       this.db.close();
       this.db = null;
     }
+  }
+
+  /**
+   * Offline Queue Adapter for Core Library
+   */
+  get offlineQueue() {
+    return {
+      toArray: async () => {
+        if (!this.db) await this.init();
+        return new Promise<any[]>((resolve, reject) => {
+          const transaction = this.db!.transaction(
+            ["offlineQueue"],
+            "readonly",
+          );
+          const store = transaction.objectStore("offlineQueue");
+          const request = store.getAll();
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+      },
+      add: async (item: any) => {
+        if (!this.db) await this.init();
+        return new Promise<void>((resolve, reject) => {
+          const transaction = this.db!.transaction(
+            ["offlineQueue"],
+            "readwrite",
+          );
+          const store = transaction.objectStore("offlineQueue");
+          const request = store.put(item);
+          request.onsuccess = () => resolve();
+          request.onerror = () => reject(request.error);
+        });
+      },
+      delete: async (id: string) => {
+        if (!this.db) await this.init();
+        return new Promise<void>((resolve, reject) => {
+          const transaction = this.db!.transaction(
+            ["offlineQueue"],
+            "readwrite",
+          );
+          const store = transaction.objectStore("offlineQueue");
+          const request = store.delete(id);
+          request.onsuccess = () => resolve();
+          request.onerror = () => reject(request.error);
+        });
+      },
+      update: async (id: string, changes: any) => {
+        if (!this.db) await this.init();
+        return new Promise<void>((resolve, reject) => {
+          const transaction = this.db!.transaction(
+            ["offlineQueue"],
+            "readwrite",
+          );
+          const store = transaction.objectStore("offlineQueue");
+          // First get the item
+          const getRequest = store.get(id);
+          getRequest.onsuccess = () => {
+            const item = getRequest.result;
+            if (!item) {
+              resolve(); // Item not found, ignore
+              return;
+            }
+            // Apply changes
+            const updated = { ...item, ...changes };
+            const putRequest = store.put(updated);
+            putRequest.onsuccess = () => resolve();
+            putRequest.onerror = () => reject(putRequest.error);
+          };
+          getRequest.onerror = () => reject(getRequest.error);
+        });
+      },
+      count: async () => {
+        if (!this.db) await this.init();
+        return new Promise<number>((resolve, reject) => {
+          const transaction = this.db!.transaction(
+            ["offlineQueue"],
+            "readonly",
+          );
+          const store = transaction.objectStore("offlineQueue");
+          const request = store.count();
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+      },
+      clear: async () => {
+        if (!this.db) await this.init();
+        return new Promise<void>((resolve, reject) => {
+          const transaction = this.db!.transaction(
+            ["offlineQueue"],
+            "readwrite",
+          );
+          const store = transaction.objectStore("offlineQueue");
+          const request = store.clear();
+          request.onsuccess = () => resolve();
+          request.onerror = () => reject(request.error);
+        });
+      },
+      where: (field: string) => {
+        return {
+          below: (value: number) => {
+            return {
+              toArray: async () => {
+                if (!this.db) await this.init();
+                return new Promise<any[]>((resolve, reject) => {
+                  const transaction = this.db!.transaction(
+                    ["offlineQueue"],
+                    "readonly",
+                  );
+                  const store = transaction.objectStore("offlineQueue");
+                  const index = store.index(field);
+                  const range = IDBKeyRange.upperBound(value, false); // false = inclusive? No, below usually means strictly less than.
+                  // Dexie 'below' is < value (open upper bound). IDBKeyRange.upperBound(value, true) is < value.
+                  // Let's assume strict inequality for 'below'.
+                  const request = index.getAll(
+                    IDBKeyRange.upperBound(value, true),
+                  );
+                  request.onsuccess = () => resolve(request.result);
+                  request.onerror = () => reject(request.error);
+                });
+              },
+            };
+          },
+        };
+      },
+    };
   }
 }
 

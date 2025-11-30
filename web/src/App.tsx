@@ -22,12 +22,16 @@ import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { useGroups } from "./hooks/useGroups";
 import { announce } from "./utils/accessibility";
 import { getDatabase } from "./storage/database";
+import { setMockDatabase } from "../../core/src/database";
 import {
   generateFingerprint,
   publicKeyToBase64,
   isValidPublicKey,
   logger,
 } from "@sc/core";
+
+// Initialize core database with web implementation
+setMockDatabase(getDatabase() as any);
 import { parseConnectionOffer, hexToBytes } from "@sc/core";
 import { ProfileManager, UserProfile } from "./managers/ProfileManager";
 import { validateMessageContent } from "@sc/core";
