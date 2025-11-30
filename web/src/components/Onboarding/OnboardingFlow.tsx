@@ -1,35 +1,42 @@
-import { useState } from 'react';
-import QRCode from 'qrcode';
+import React, { useState, useRef } from 'react';
 import { useMeshNetwork } from '../../hooks/useMeshNetwork';
+import { QRCodeShare } from '../QRCodeShare';
+import { useBackup } from '../../hooks/useBackup';
 import './OnboardingFlow.css';
 
 interface OnboardingFlowProps {
   onComplete: () => void;
-  localPeerId: string;
 }
 
-type OnboardingStep = 'welcome' | 'identity' | 'add-contact' | 'privacy';
-type AddContactMethod = 'none' | 'qr' | 'manual' | 'demo';
+type Step = 'welcome' | 'identity' | 'add-contact' | 'privacy';
 
-export function OnboardingFlow({ onComplete, localPeerId }: OnboardingFlowProps) {
-  const [step, setStep] = useState<OnboardingStep>('welcome');
+export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onComplete }) => {
+  const [currentStep, setCurrentStep] = useState<Step>('welcome');
   const [displayName, setDisplayName] = useState('');
-  const [activeMethod, setActiveMethod] = useState<AddContactMethod>('none');
-  const [manualPeerId, setManualPeerId] = useState('');
-  const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle');
-  const [qrCodeUrl, setQrCodeUrl] = useState('');
-  const { connectToPeer } = useMeshNetwork();
+  const [isGenerating, setIsGenerating] = useState(false);
+  const { identity, peerId } = useMeshNetwork();
+  const { restoreBackup, isProcessing: isRestoring, status: restoreStatus, error: restoreError } = useBackup();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [restorePassword, setRestorePassword] = useState('');
+  const [showRestorePassword, setShowRestorePassword] = useState(false);
 
   const handleNext = () => {
-    switch (step) {
+    switch (currentStep) {
       case 'welcome':
-        setStep('identity');
+        setCurrentStep('identity');
         break;
       case 'identity':
-        setStep('add-contact');
+        if (displayName.trim()) {
+          setIsGenerating(true);
+          // Simulate identity generation delay
+          setTimeout(() => {
+            setIsGenerating(false);
+            setCurrentStep('add-contact');
+          }, 1500);
+        }
         break;
       case 'add-contact':
-        setStep('privacy');
+        setCurrentStep('privacy');
         break;
       case 'privacy':
         // Save onboarding completion flag
@@ -43,196 +50,132 @@ export function OnboardingFlow({ onComplete, localPeerId }: OnboardingFlowProps)
   };
 
   const handleSkip = () => {
-    localStorage.setItem('sc-onboarding-complete', 'true');
-    onComplete();
+    if (currentStep === 'add-contact') {
+      setCurrentStep('privacy');
+    }
   };
 
-  return (
-    <div className="onboarding-overlay" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
-      <div className="onboarding-container">
-        {/* Progress indicator */}
-        <div className="onboarding-progress" role="progressbar" aria-valuenow={getStepNumber(step)} aria-valuemin={1} aria-valuemax={4}>
-          <div className={`progress-dot ${step === 'welcome' || getStepNumber(step) > 1 ? 'active' : ''}`} />
-          <div className={`progress-dot ${getStepNumber(step) > 1 ? 'active' : ''}`} />
-          <div className={`progress-dot ${getStepNumber(step) > 2 ? 'active' : ''}`} />
-          <div className={`progress-dot ${getStepNumber(step) > 3 ? 'active' : ''}`} />
-        </div>
+  const handleRestoreClick = () => {
+    fileInputRef.current?.click();
+  };
 
-        {/* Welcome Screen */}
-        {step === 'welcome' && (
-          <div className="onboarding-step">
-            <div className="onboarding-icon">🔐</div>
-            <h1 id="onboarding-title">Welcome to Sovereign Communications</h1>
-            <p className="onboarding-subtitle">
-              Private, decentralized messaging with end-to-end encryption
-            </p>
-            <ul className="onboarding-features">
-              <li>✅ No central servers</li>
-              <li>✅ Military-grade encryption</li>
-              <li>✅ Direct peer-to-peer connections</li>
-              <li>✅ Your data stays on your device</li>
-            </ul>
-            <button onClick={handleNext} className="btn-primary onboarding-btn" data-testid="get-started-btn">
-              Get Started
-            </button>
-            <button onClick={handleSkip} className="btn-text">
-              Skip Tutorial
-            </button>
-          </div>
-        )}
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
 
-        {/* Identity Screen */}
-        {step === 'identity' && (
-          <div className="onboarding-step">
-            <div className="onboarding-icon">🆔</div>
-            <h2 id="onboarding-title">Your Secure Identity</h2>
-            <p>
-              We've created a unique cryptographic identity for you. 
-              This ID is how others will connect to you.
-            </p>
-            <div className="identity-display">
-              <label htmlFor="peer-id">Your Peer ID:</label>
-              <code id="peer-id" className="peer-id">{localPeerId || 'Generating...'}</code>
+    // If we suspect encryption but have no password, ask for it first
+    // For simplicity, we'll just try to restore. If it fails due to encryption, we'll show password field.
+    // Ideally, we'd peek at the file, but useBackup handles the logic.
+    
+    // However, useBackup needs the password passed in.
+    // Let's try to restore without password first.
+    const result = await restoreBackup(file, restorePassword);
+
+    if (result === null && restoreError?.includes('encrypted')) {
+        setShowRestorePassword(true);
+        // Clear error after a moment or let user see it
+    } else if (result?.success) {
+        // Success!
+        localStorage.setItem('sc-onboarding-complete', 'true');
+        setTimeout(() => {
+            window.location.reload();
+        }, 2000);
+    }
+  };
+
+  const handlePasswordSubmit = async () => {
+      if (fileInputRef.current?.files?.[0]) {
+          const result = await restoreBackup(fileInputRef.current.files[0], restorePassword);
+          if (result?.success) {
+            localStorage.setItem('sc-onboarding-complete', 'true');
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+          }
+      }
+  };
+
+  const renderStep = () => {
+    switch (currentStep) {
+      case 'welcome':
+        return (
+          <div className="step welcome">
+            <h1>Welcome to Sovereign</h1>
+            <p className="subtitle">Secure, decentralized communication for everyone.</p>
+            
+            <div className="features">
+              <div className="feature">
+                <span className="icon">🔒</span>
+                <h3>End-to-End Encrypted</h3>
+                <p>Your messages are private and secure by default.</p>
+              </div>
+              <div className="feature">
+                <span className="icon">🌐</span>
+                <h3>Decentralized</h3>
+                <p>No central server. You own your data.</p>
+              </div>
+              <div className="feature">
+                <span className="icon">⚡</span>
+                <h3>Fast & Lightweight</h3>
+                <p>Works offline and on slow networks.</p>
+              </div>
             </div>
-            <div className="form-group">
-              <label htmlFor="display-name">
-                Display Name (optional):
-              </label>
+
+            <div className="actions">
+              <button className="primary-button" onClick={handleNext}>
+                Get Started
+              </button>
+              
+              <div className="restore-section">
+                <p>Already have an account?</p>
+                <button className="secondary-button" onClick={handleRestoreClick} disabled={isRestoring}>
+                  {isRestoring ? 'Restoring...' : 'Restore from Backup'}
+                </button>
+                <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    style={{ display: 'none' }} 
+                    accept=".json" 
+                    onChange={handleFileChange}
+                />
+              </div>
+
+              {showRestorePassword && (
+                  <div className="restore-password-modal">
+                      <h3>Enter Backup Password</h3>
+                      <input 
+                        type="password" 
+                        value={restorePassword} 
+                        onChange={e => setRestorePassword(e.target.value)}
+                        placeholder="Password"
+                      />
+                      <button onClick={handlePasswordSubmit} disabled={isRestoring}>
+                          {isRestoring ? 'Decrypting...' : 'Restore'}
+                      </button>
+                  </div>
+              )}
+
+              {(restoreStatus || restoreError) && (
+                  <div className={`status-message ${restoreError ? 'error' : 'success'}`}>
+                      {restoreError || restoreStatus}
+                  </div>
+              )}
+            </div>
+          </div>
+        );
+      
+      case 'identity':
+        return (
+          <div className="step identity">
+            <h2>Create Your Identity</h2>
+            <p>Choose a display name. This is how others will see you.</p>
+            
+            <div className="input-group">
               <input
-                id="display-name"
                 type="text"
+                placeholder="Display Name"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="e.g., Alice"
-                maxLength={50}
-                className="onboarding-input"
-              />
-              <small>This name is only stored locally on your device</small>
-            </div>
-            <div className="onboarding-actions">
-              <button onClick={() => setStep('welcome')} className="btn-secondary">
-                Back
-              </button>
-              <button onClick={handleNext} className="btn-primary">
-                Continue
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Add Contact Screen */}
-        {step === 'add-contact' && (
-          <div className="onboarding-step">
-            <div className="onboarding-icon">👥</div>
-            <h2 id="onboarding-title">Connect with Others</h2>
-            
-            {activeMethod === 'none' ? (
-              <>
-                <p>
-                  To start messaging, you'll need to add contacts. There are several ways to connect:
-                </p>
-                <div className="connection-methods">
-                  <button
-                    className="method-card"
-                    onClick={() => {
-                      setActiveMethod('qr');
-                      QRCode.toDataURL(localPeerId, { width: 200, margin: 1 })
-                        .then(url => setQrCodeUrl(url))
-                        .catch(err => console.error(err));
-                    }}
-                  >
-                    <strong>📱 QR Code</strong>
-                    <p>Show your QR code to a friend</p>
-                  </button>
-                  <button
-                    className="method-card"
-                    onClick={() => setActiveMethod('manual')}
-                  >
-                    <strong>🔗 Manual Entry</strong>
-                    <p>Enter a Peer ID directly</p>
-                  </button>
-                  <button
-                    className="method-card"
-                    onClick={() => setActiveMethod('demo')}
-                  >
-                    <strong>🧪 Demo Mode</strong>
-                    <p>Connect to a demo peer</p>
-                  </button>
-                </div>
-                <div className="onboarding-tip">
-                  💡 <strong>Tip:</strong> You can also add contacts later using the "+" button.
-                </div>
-                <div className="onboarding-actions">
-                  <button onClick={() => setStep('identity')} className="btn-secondary">
-                    Back
-                  </button>
-                  <button onClick={handleNext} className="btn-primary">
-                    Continue
-                  </button>
-                </div>
-              </>
-            ) : (
-              <div className="active-method-container">
-                {activeMethod === 'qr' && (
-                  <div className="method-content">
-                    <h3>Your QR Code</h3>
-                    {qrCodeUrl && <img src={qrCodeUrl} alt="Your Peer ID QR Code" className="qr-code-img" />}
-                    <p className="peer-id-small">{localPeerId}</p>
-                    <p>Have your friend scan this code.</p>
-                  </div>
-                )}
-
-                {activeMethod === 'manual' && (
-                  <div className="method-content">
-                    <h3>Manual Entry</h3>
-                    <input
-                      type="text"
-                      value={manualPeerId}
-                      onChange={(e) => setManualPeerId(e.target.value)}
-                      placeholder="Enter Peer ID"
-                      className="onboarding-input"
-                    />
-                    <button
-                      className="btn-primary"
-                      onClick={async () => {
-                        setConnectionStatus('connecting');
-                        try {
-                          await connectToPeer(manualPeerId);
-                          setConnectionStatus('connected');
-                          setTimeout(() => {
-                            setConnectionStatus('idle');
-                            setActiveMethod('none');
-                            handleNext();
-                          }, 1500);
-                        } catch (e) {
-                          setConnectionStatus('error');
-                        }
-                      }}
-                      disabled={!manualPeerId || connectionStatus === 'connecting'}
-                    >
-                      {connectionStatus === 'connecting' ? 'Connecting...' :
-                       connectionStatus === 'connected' ? 'Connected!' :
-                       connectionStatus === 'error' ? 'Failed (Try Again)' : 'Connect'}
-                    </button>
-                  </div>
-                )}
-
-                {activeMethod === 'demo' && (
-                  <div className="method-content">
-                    <h3>Demo Mode</h3>
-                    <p>Connect to a simulated peer to test messaging.</p>
-                    <button
-                      className="btn-primary"
-                      onClick={async () => {
-                        setConnectionStatus('connecting');
-                        try {
-                          await connectToPeer('demo');
-                          setConnectionStatus('connected');
-                          setTimeout(() => {
-                            setConnectionStatus('idle');
-                            setActiveMethod('none');
-                            handleNext();
-                          }, 1500);
                         } catch (e) {
                           setConnectionStatus('error');
                         }

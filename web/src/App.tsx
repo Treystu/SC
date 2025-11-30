@@ -1,42 +1,57 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from "react";
 
-import './sentry';
-import './App.css';
-import ConversationList from './components/ConversationList';
-import ChatView from './components/ChatView';
-import { ConnectionStatus } from './components/ConnectionStatus';
-import { SettingsPanel } from './components/SettingsPanel';
-import { ErrorBoundary } from './components/ErrorBoundary';
-import { OnboardingFlow } from './components/Onboarding/OnboardingFlow';
-import { QRCodeShare } from './components/QRCodeShare';
-import { InviteAcceptanceModal } from './components/InviteAcceptanceModal';
-import { NetworkDiagnostics } from './components/NetworkDiagnostics';
-import { RoomView } from './components/RoomView';
-import { useMeshNetwork } from './hooks/useMeshNetwork';
-import { useInvite } from './hooks/useInvite';
-import { useConversations } from './hooks/useConversations';
-import { usePendingInvite } from './hooks/usePendingInvite';
-import { useContacts } from './hooks/useContacts';
-import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
-import { announce } from './utils/accessibility';
-import { getDatabase } from './storage/database';
-import { generateFingerprint, publicKeyToBase64, isValidPublicKey, logger } from '@sc/core';
-import { parseConnectionOffer, hexToBytes } from '@sc/core';
-import { ProfileManager, UserProfile } from './managers/ProfileManager';
-import { validateMessageContent } from '@sc/core';
-import { rateLimiter } from '../../core/src/rate-limiter';
-import { config } from './config';
+import "./sentry";
+import "./App.css";
+import ConversationList from "./components/ConversationList";
+import ChatView from "./components/ChatView";
+import { ConnectionStatus } from "./components/ConnectionStatus";
+import { SettingsPanel } from "./components/SettingsPanel";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import { OnboardingFlow } from "./components/Onboarding/OnboardingFlow";
+import { QRCodeShare } from "./components/QRCodeShare";
+import { InviteAcceptanceModal } from "./components/InviteAcceptanceModal";
+import { NetworkDiagnostics } from "./components/NetworkDiagnostics";
+import { RoomView } from "./components/RoomView";
+import { useMeshNetwork } from "./hooks/useMeshNetwork";
+import { useInvite } from "./hooks/useInvite";
+import { useConversations } from "./hooks/useConversations";
+import { usePendingInvite } from "./hooks/usePendingInvite";
+import { useContacts } from "./hooks/useContacts";
+import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
+import { announce } from "./utils/accessibility";
+import { getDatabase } from "./storage/database";
+import {
+  generateFingerprint,
+  publicKeyToBase64,
+  isValidPublicKey,
+  logger,
+} from "@sc/core";
+import { parseConnectionOffer, hexToBytes } from "@sc/core";
+import { ProfileManager, UserProfile } from "./managers/ProfileManager";
+import { validateMessageContent } from "@sc/core";
+import { rateLimiter } from "../../core/src/rate-limiter";
+import { config } from "./config";
 
 function App() {
   const [activeRoom, setActiveRoom] = useState<string | null>(null);
-  const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
+  const [selectedConversation, setSelectedConversation] = useState<
+    string | null
+  >(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showShareApp, setShowShareApp] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
-  const [pendingInviteData, setPendingInviteData] = useState<{ code: string; inviterName: string | null } | null>(null);
+  const [pendingInviteData, setPendingInviteData] = useState<{
+    code: string;
+    inviterName: string | null;
+  } | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const { contacts, addContact, removeContact, loading: contactsLoading } = useContacts();
+  const {
+    contacts,
+    addContact,
+    removeContact,
+    loading: contactsLoading,
+  } = useContacts();
   const { conversations: storedConversations } = useConversations();
   const {
     status,
@@ -66,8 +81,8 @@ function App() {
   useEffect(() => {
     if (status.localPeerId) {
       logger.setPeerId(status.localPeerId);
-      if (config.deploymentMode === 'netlify') {
-        logger.setRemoteUrl('/.netlify/functions/log');
+      if (config.deploymentMode === "netlify") {
+        logger.setRemoteUrl("/.netlify/functions/log");
       }
     }
   }, [status.localPeerId]);
@@ -76,7 +91,7 @@ function App() {
     status.localPeerId,
     identity?.publicKey || null,
     identity?.privateKey || null,
-    userProfile?.displayName || 'User'
+    userProfile?.displayName || "User",
   );
 
   // Check for pending invite from join.html page
@@ -84,15 +99,40 @@ function App() {
 
   // Keyboard shortcuts
   useKeyboardShortcuts([
-    { key: 'n', ctrl: true, description: 'New Conversation', action: () => document.querySelector<HTMLElement>('.add-contact-btn')?.click() },
-    { key: 'k', ctrl: true, description: 'Search', action: () => document.querySelector<HTMLElement>('.search-input')?.focus() },
-    { key: 's', ctrl: true, description: 'Settings', action: () => setShowSettings(true) },
-    { key: 'Escape', description: 'Close Modals', action: () => { setShowSettings(false); setShowDiagnostics(false); setShowShareApp(false); } }
+    {
+      key: "n",
+      ctrl: true,
+      description: "New Conversation",
+      action: () =>
+        document.querySelector<HTMLElement>(".add-contact-btn")?.click(),
+    },
+    {
+      key: "k",
+      ctrl: true,
+      description: "Search",
+      action: () =>
+        document.querySelector<HTMLElement>(".search-input")?.focus(),
+    },
+    {
+      key: "s",
+      ctrl: true,
+      description: "Settings",
+      action: () => setShowSettings(true),
+    },
+    {
+      key: "Escape",
+      description: "Close Modals",
+      action: () => {
+        setShowSettings(false);
+        setShowDiagnostics(false);
+        setShowShareApp(false);
+      },
+    },
   ]);
 
   // Check if onboarding has been completed
   useEffect(() => {
-    const onboardingComplete = localStorage.getItem('sc-onboarding-complete');
+    const onboardingComplete = localStorage.getItem("sc-onboarding-complete");
     if (!onboardingComplete) {
       setShowOnboarding(true);
     }
@@ -101,19 +141,30 @@ function App() {
     profileManager.getProfile().then(setUserProfile);
   }, []);
 
-  // Auto-join public hub if configured
+  // Auto-join public hub or URL room
   useEffect(() => {
-    if (status.isConnected && config.publicHub && !autoJoinedRef.current) {
-      autoJoinedRef.current = true;
-      console.log(`Auto-joining public hub in ${config.deploymentMode} mode...`);
+    if (status.isConnected && !autoJoinedRef.current) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const roomUrl = urlParams.get("room");
 
-      if (config.deploymentMode === 'netlify') {
-        joinRoom(config.relayUrl).catch(err => console.error('Failed to auto-join Netlify room:', err));
-      } else if (config.deploymentMode === 'server') {
-        joinRelay(config.relayUrl).catch(err => console.error('Failed to auto-join Relay server:', err));
+      if (roomUrl) {
+        autoJoinedRef.current = true;
+        handleJoinRoom(roomUrl).catch((err) => {
+          console.error("Failed to join room from URL:", err);
+          announce.message("Failed to join room", "assertive");
+        });
+      } else if (config.publicHub) {
+        autoJoinedRef.current = true;
+        console.log(
+          `Auto-joining public hub in ${config.deploymentMode} mode...`,
+        );
+        // Use handleJoinRoom to ensure UI updates
+        handleJoinRoom(config.relayUrl).catch((err) => {
+          console.error("Failed to auto-join public hub:", err);
+        });
       }
     }
-  }, [status.isConnected, joinRoom, joinRelay]);
+  }, [status.isConnected, handleJoinRoom]);
 
   // Handle pending invite from join.html page
   useEffect(() => {
@@ -121,35 +172,50 @@ function App() {
       // Instead of auto-processing, set state to show confirmation modal
       setPendingInviteData({
         code: pendingInvite.code,
-        inviterName: pendingInvite.inviterName
+        inviterName: pendingInvite.inviterName,
       });
     }
   }, [pendingInvite.code, identity]);
 
+  const handleConnectToPeer = async (peerId: string) => {
+    try {
+      await connectToPeer(peerId);
+      announce.message("Connected to peer", "polite");
+    } catch (error) {
+      console.error("Failed to connect to peer:", error);
+      alert(
+        `Failed to connect: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  };
+
   const handleAcceptInvite = async () => {
-    if (!pendingInviteData || !identity?.publicKey || !identity?.privateKey) return;
+    if (!pendingInviteData || !identity?.publicKey || !identity?.privateKey)
+      return;
 
     try {
       // Import InviteManager from core
-      const { InviteManager } = await import('@sc/core');
+      const { InviteManager } = await import("@sc/core");
       const inviteManager = new InviteManager(
         status.localPeerId,
         identity.publicKey,
         identity.privateKey,
-        userProfile?.displayName || 'User'
+        userProfile?.displayName || "User",
       );
 
       // Redeem the invite
       const result = await inviteManager.redeemInvite(
         pendingInviteData.code,
-        status.localPeerId
+        status.localPeerId,
       );
 
       if (result.success) {
         // Convert publicKey Uint8Array to base64 string for storage
         // Use Array.from to avoid stack overflow with large arrays
         const publicKeyArray = Array.from(result.contact.publicKey);
-        const publicKeyBase64 = btoa(String.fromCharCode.apply(null, publicKeyArray as any));
+        const publicKeyBase64 = btoa(
+          String.fromCharCode.apply(null, publicKeyArray as any),
+        );
 
         // Use first 16 characters as fingerprint for display
         const FINGERPRINT_LENGTH = 16;
@@ -159,7 +225,10 @@ function App() {
         await db.saveContact({
           id: result.contact.peerId,
           publicKey: publicKeyBase64,
-          displayName: result.contact.name || pendingInviteData.inviterName || 'New Contact',
+          displayName:
+            result.contact.name ||
+            pendingInviteData.inviterName ||
+            "New Contact",
           lastSeen: Date.now(),
           createdAt: Date.now(),
           fingerprint: publicKeyBase64.substring(0, FINGERPRINT_LENGTH),
@@ -173,15 +242,15 @@ function App() {
         setSelectedConversation(result.contact.peerId);
 
         announce.message(
-          `Joined from invite! Connected to ${result.contact.name || pendingInviteData.inviterName || 'your friend'}`,
-          'assertive'
+          `Joined from invite! Connected to ${result.contact.name || pendingInviteData.inviterName || "your friend"}`,
+          "assertive",
         );
       }
     } catch (error) {
-      console.error('Failed to process pending invite:', error);
+      console.error("Failed to process pending invite:", error);
       announce.message(
-        'Failed to process invite. The invite may be invalid or expired.',
-        'assertive'
+        "Failed to process invite. The invite may be invalid or expired.",
+        "assertive",
       );
     } finally {
       setPendingInviteData(null);
@@ -195,9 +264,12 @@ function App() {
   // Announce connection status changes to screen readers
   useEffect(() => {
     if (status.isConnected) {
-      announce.message(`Connected to ${status.peerCount} peer${status.peerCount === 1 ? '' : 's'}`, 'polite');
+      announce.message(
+        `Connected to ${status.peerCount} peer${status.peerCount === 1 ? "" : "s"}`,
+        "polite",
+      );
     } else {
-      announce.message('Disconnected from network', 'polite');
+      announce.message("Disconnected from network", "polite");
     }
   }, [status.isConnected, status.peerCount]);
 
@@ -207,14 +279,18 @@ function App() {
       if (selectedConversation === id) {
         setSelectedConversation(null);
       }
-      announce.message('Conversation deleted', 'polite');
+      announce.message("Conversation deleted", "polite");
     } catch (error) {
-      console.error('Failed to delete conversation:', error);
-      announce.message('Failed to delete conversation', 'assertive');
+      console.error("Failed to delete conversation:", error);
+      announce.message("Failed to delete conversation", "assertive");
     }
   };
 
-  const handleAddContact = async (peerId: string, name: string, publicKeyHex?: string) => {
+  const handleAddContact = async (
+    peerId: string,
+    name: string,
+    publicKeyHex?: string,
+  ) => {
     let finalPublicKeyHex = publicKeyHex;
 
     // If no public key provided, try to use peerId if it looks like a key, or generate a dummy one for testing
@@ -224,25 +300,28 @@ function App() {
       } else {
         // Generate a random public key for testing/demo purposes if one isn't provided
         // This allows adding "test-buddy" or other simple names
-        console.warn('Generating dummy public key for contact:', name);
+        console.warn("Generating dummy public key for contact:", name);
         const keyPair = await window.crypto.subtle.generateKey(
           {
-            name: 'Ed25519',
-            namedCurve: 'Ed25519'
+            name: "Ed25519",
+            namedCurve: "Ed25519",
           } as any,
           true,
-          ['sign', 'verify']
+          ["sign", "verify"],
         );
-        const exported = await window.crypto.subtle.exportKey('raw', keyPair.publicKey);
+        const exported = await window.crypto.subtle.exportKey(
+          "raw",
+          keyPair.publicKey,
+        );
         finalPublicKeyHex = Array.from(new Uint8Array(exported))
-          .map(b => b.toString(16).padStart(2, '0'))
-          .join('');
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("");
       }
     }
 
     if (!finalPublicKeyHex || !isValidPublicKey(finalPublicKeyHex)) {
-      console.error('Invalid public key:', finalPublicKeyHex);
-      throw new Error('Valid public key required for contact');
+      console.error("Invalid public key:", finalPublicKeyHex);
+      throw new Error("Valid public key required for contact");
     }
 
     const publicKeyBytes = hexToBytes(finalPublicKeyHex);
@@ -258,7 +337,7 @@ function App() {
       fingerprint: fingerprint, // ACTUAL FINGERPRINT
       verified: false, // Verify through key exchange
       blocked: false,
-      endpoints: [{ type: 'webrtc' }]
+      endpoints: [{ type: "webrtc" }],
     });
 
     // Create a conversation for the new contact
@@ -277,7 +356,7 @@ function App() {
       const offer = parseConnectionOffer(code) as { publicKey?: string };
 
       if (!offer || !offer.publicKey || !isValidPublicKey(offer.publicKey)) {
-        throw new Error('Invalid connection offer - missing public key');
+        throw new Error("Invalid connection offer - missing public key");
       }
 
       const publicKeyBytes = hexToBytes(offer.publicKey);
@@ -295,28 +374,28 @@ function App() {
         fingerprint: fingerprint, // ACTUAL FINGERPRINT
         verified: true, // Verified through key exchange
         blocked: false,
-        endpoints: [{ type: 'webrtc' }]
+        endpoints: [{ type: "webrtc" }],
       });
 
       setSelectedConversation(remotePeerId);
-      announce.message(`Connected to ${name}`, 'polite');
+      announce.message(`Connected to ${name}`, "polite");
     } catch (error) {
-      console.error('Failed to connect to peer from offer:', error);
-      announce.message(`Failed to connect to ${name}`, 'assertive');
+      console.error("Failed to connect to peer from offer:", error);
+      announce.message(`Failed to connect to ${name}`, "assertive");
     }
   };
 
   const handleSendMessage = async (content: string, attachments?: File[]) => {
     const validation = validateMessageContent(content);
     if (!validation.valid) {
-      console.error('Message validation failed:', validation.error);
+      console.error("Message validation failed:", validation.error);
       alert(validation.error);
       return;
     }
 
     const rateLimitResult = rateLimiter.canSendMessage(status.localPeerId);
     if (!rateLimitResult.allowed) {
-      console.error('Rate limit exceeded:', rateLimitResult.reason);
+      console.error("Rate limit exceeded:", rateLimitResult.reason);
       alert(rateLimitResult.reason);
       return;
     }
@@ -324,7 +403,7 @@ function App() {
     if (attachments && attachments.length > 0) {
       const fileRateLimitResult = rateLimiter.canSendFile(status.localPeerId);
       if (!fileRateLimitResult.allowed) {
-        console.error('File rate limit exceeded:', fileRateLimitResult.reason);
+        console.error("File rate limit exceeded:", fileRateLimitResult.reason);
         alert(fileRateLimitResult.reason);
         return;
       }
@@ -336,7 +415,7 @@ function App() {
       try {
         await sendMessage(selectedConversation, sanitizedContent, attachments);
       } catch (error) {
-        console.error('Error sending message via hook:', error);
+        console.error("Error sending message via hook:", error);
       }
 
       // Save message to IndexedDB
@@ -351,8 +430,8 @@ function App() {
             timestamp: Date.now(),
             senderId: status.localPeerId,
             recipientId: selectedConversation,
-            type: 'text',
-            status: 'sent'
+            type: "text",
+            status: "sent",
           });
         }
 
@@ -366,21 +445,21 @@ function App() {
               timestamp: Date.now(),
               senderId: status.localPeerId,
               recipientId: selectedConversation,
-              type: 'file',
-              status: 'sent',
+              type: "file",
+              status: "sent",
               metadata: {
                 fileName: file.name,
                 fileSize: file.size,
-                fileType: file.type
-              }
+                fileType: file.type,
+              },
             });
           }
         }
       } catch (dbError) {
-        console.error('Failed to save message:', dbError);
+        console.error("Failed to save message:", dbError);
       }
     } else {
-      console.warn('No conversation selected');
+      console.warn("No conversation selected");
     }
   };
 
@@ -390,8 +469,8 @@ function App() {
       await createInvite();
       setShowShareApp(true);
     } else {
-      console.warn('Identity not ready for sharing');
-      announce.message('Please wait for identity to initialize', 'assertive');
+      console.warn("Identity not ready for sharing");
+      announce.message("Please wait for identity to initialize", "assertive");
     }
   };
 
@@ -400,11 +479,14 @@ function App() {
     clearInvite();
   };
 
-  const handleJoinRoom = useCallback(async (url: string) => {
-    // Let the caller handle errors (ConversationList)
-    await joinRoom(url);
-    setActiveRoom(url);
-  }, [joinRoom]);
+  const handleJoinRoom = useCallback(
+    async (url: string) => {
+      // Let the caller handle errors (ConversationList)
+      await joinRoom(url);
+      setActiveRoom(url);
+    },
+    [joinRoom],
+  );
 
   const handleLeaveRoom = useCallback(() => {
     leaveRoom();
@@ -420,7 +502,9 @@ function App() {
             <h3>⚠️ Startup Error</h3>
             <p>{status.initializationError}</p>
             <button
-              onClick={() => navigator.clipboard.writeText(status.initializationError!)}
+              onClick={() =>
+                navigator.clipboard.writeText(status.initializationError!)
+              }
               className="copy-error-btn"
             >
               Copy Error
@@ -439,16 +523,13 @@ function App() {
 
       {/* Share App Modal */}
       {showShareApp && invite && (
-        <QRCodeShare
-          invite={invite}
-          onClose={handleCloseShareApp}
-        />
+        <QRCodeShare invite={invite} onClose={handleCloseShareApp} />
       )}
 
       {/* Invite Acceptance Modal */}
       {pendingInviteData && (
         <InviteAcceptanceModal
-          inviterName={pendingInviteData.inviterName || 'A friend'}
+          inviterName={pendingInviteData.inviterName || "A friend"}
           onAccept={handleAcceptInvite}
           onDecline={handleDeclineInvite}
         />
@@ -456,8 +537,14 @@ function App() {
 
       {/* Network Diagnostics Modal */}
       {showDiagnostics && (
-        <div className="modal-overlay" onClick={() => setShowDiagnostics(false)}>
-          <div className="modal-content diagnostics-modal" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="modal-overlay"
+          onClick={() => setShowDiagnostics(false)}
+        >
+          <div
+            className="modal-content diagnostics-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
               className="modal-close"
               onClick={() => setShowDiagnostics(false)}
@@ -470,7 +557,11 @@ function App() {
         </div>
       )}
 
-      <div className="app" role="application" aria-label="Sovereign Communications Messenger">
+      <div
+        className="app"
+        role="application"
+        aria-label="Sovereign Communications Messenger"
+      >
         {/* Skip to main content link for keyboard navigation */}
         <a href="#main-content" className="skip-link">
           Skip to main content
@@ -512,7 +603,7 @@ function App() {
                 </div>
 
                 <ConversationList
-                  conversations={contacts.map(c => ({
+                  conversations={contacts.map((c) => ({
                     id: c.id,
                     name: c.displayName,
                     unreadCount: 0, // Replace with actual unread count
@@ -535,8 +626,11 @@ function App() {
                 {selectedConversation ? (
                   <ChatView
                     conversationId={selectedConversation}
-                    contactName={contacts.find(c => c.id === selectedConversation)?.displayName || 'Unknown Contact'}
-                    isOnline={peers.some(p => p.id === selectedConversation)}
+                    contactName={
+                      contacts.find((c) => c.id === selectedConversation)
+                        ?.displayName || "Unknown Contact"
+                    }
+                    isOnline={peers.some((p) => p.id === selectedConversation)}
                     messages={messages}
                     onSendMessage={handleSendMessage}
                     isLoading={contactsLoading}
@@ -545,25 +639,48 @@ function App() {
                   <div className="empty-state">
                     <div className="empty-state-content">
                       <h2>Welcome to Sovereign Communications</h2>
-                      <p>Select a conversation or add a new contact to get started</p>
+                      <p>
+                        Select a conversation or add a new contact to get
+                        started
+                      </p>
                       <div className="features" role="list">
                         <div className="feature" role="listitem">
                           <h3>🔒 End-to-End Encrypted</h3>
-                          <p>All messages are encrypted with Ed25519 and ChaCha20-Poly1305</p>
+                          <p>
+                            All messages are encrypted with Ed25519 and
+                            ChaCha20-Poly1305
+                          </p>
                         </div>
                         <div className="feature" role="listitem">
                           <h3>🌐 Mesh Networking</h3>
-                          <p>Direct peer-to-peer communication with no central servers</p>
+                          <p>
+                            Direct peer-to-peer communication with no central
+                            servers
+                          </p>
                         </div>
                         <div className="feature" role="listitem">
                           <h3>🔗 Multi-Platform</h3>
-                          <p>Works on Web, Android, and iOS with seamless connectivity</p>
+                          <p>
+                            Works on Web, Android, and iOS with seamless
+                            connectivity
+                          </p>
                         </div>
                       </div>
                       {status.localPeerId && (
-                        <div className="peer-info" role="status" aria-live="polite">
-                          <p><strong>Your Peer ID:</strong> <span aria-label={`Peer ID ${status.localPeerId}`}>{status.localPeerId.substring(0, 16)}...</span></p>
-                          <p><strong>Connected Peers:</strong> {status.peerCount}</p>
+                        <div
+                          className="peer-info"
+                          role="status"
+                          aria-live="polite"
+                        >
+                          <p>
+                            <strong>Your Peer ID:</strong>{" "}
+                            <span aria-label={`Peer ID ${status.localPeerId}`}>
+                              {status.localPeerId.substring(0, 16)}...
+                            </span>
+                          </p>
+                          <p>
+                            <strong>Connected Peers:</strong> {status.peerCount}
+                          </p>
                         </div>
                       )}
                     </div>
@@ -574,8 +691,14 @@ function App() {
 
             {/* Settings Modal */}
             {showSettings && (
-              <div className="modal-overlay" onClick={() => setShowSettings(false)}>
-                <div className="modal-content settings-modal" onClick={(e) => e.stopPropagation()}>
+              <div
+                className="modal-overlay"
+                onClick={() => setShowSettings(false)}
+              >
+                <div
+                  className="modal-content settings-modal"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <button
                     className="modal-close"
                     onClick={() => setShowSettings(false)}
@@ -596,7 +719,7 @@ function App() {
               connectedPeers={Object.keys(peers)}
               roomMessages={roomMessages}
               onSendMessage={sendRoomMessage}
-              onConnect={connectToPeer}
+              onConnect={handleConnectToPeer}
               localPeerId={status.localPeerId}
             />
           </>

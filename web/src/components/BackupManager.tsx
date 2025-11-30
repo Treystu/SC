@@ -1,164 +1,51 @@
-import React, { useState } from 'react';
-import { getDatabase } from '../storage/database';
+import React, { useState } from "react";
+import { getDatabase } from "../storage/database";
+import { useBackup } from "../hooks/useBackup";
 
 export const BackupManager: React.FC = () => {
-  const [password, setPassword] = useState('');
-  const [restorePassword, setRestorePassword] = useState('');
+  const [password, setPassword] = useState("");
+  const [restorePassword, setRestorePassword] = useState("");
   const [includeMessages, setIncludeMessages] = useState(true);
   const [includeContacts, setIncludeContacts] = useState(true);
   const [includeSettings, setIncludeSettings] = useState(true);
   const [encrypt, setEncrypt] = useState(true);
-  const [status, setStatus] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
 
-
-  // Crypto helpers
-  const deriveKey = async (password: string, salt: Uint8Array): Promise<CryptoKey> => {
-    const enc = new TextEncoder();
-    const keyMaterial = await window.crypto.subtle.importKey(
-      "raw",
-      enc.encode(password),
-      { name: "PBKDF2" },
-      false,
-      ["deriveKey"]
-    );
-    return window.crypto.subtle.deriveKey(
-      {
-        name: "PBKDF2",
-        salt: salt as any,
-        iterations: 100000,
-        hash: "SHA-256"
-      },
-      keyMaterial,
-      { name: "AES-GCM", length: 256 },
-      false,
-      ["encrypt", "decrypt"]
-    );
-  };
-
-  const encryptData = async (data: string, password: string): Promise<{ ciphertext: string; salt: string; iv: string }> => {
-    const salt = window.crypto.getRandomValues(new Uint8Array(16));
-    const iv = window.crypto.getRandomValues(new Uint8Array(12));
-    const key = await deriveKey(password, salt);
-    const enc = new TextEncoder();
-    const encrypted = await window.crypto.subtle.encrypt(
-      { name: "AES-GCM", iv: iv },
-      key,
-      enc.encode(data)
-    );
-
-    return {
-      ciphertext: btoa(String.fromCharCode(...new Uint8Array(encrypted))),
-      salt: btoa(String.fromCharCode(...salt)),
-      iv: btoa(String.fromCharCode(...iv))
-    };
-  };
-
-  const decryptData = async (encryptedData: { ciphertext: string; salt: string; iv: string }, password: string): Promise<string> => {
-    const salt = new Uint8Array(atob(encryptedData.salt).split('').map(c => c.charCodeAt(0)));
-    const iv = new Uint8Array(atob(encryptedData.iv).split('').map(c => c.charCodeAt(0)));
-    const ciphertext = new Uint8Array(atob(encryptedData.ciphertext).split('').map(c => c.charCodeAt(0)));
-    const key = await deriveKey(password, salt);
-
-    const decrypted = await window.crypto.subtle.decrypt(
-      { name: "AES-GCM", iv: iv },
-      key,
-      ciphertext
-    );
-
-    return new TextDecoder().decode(decrypted);
-  };
+  const {
+    createBackup,
+    restoreBackup,
+    isProcessing,
+    status,
+    error,
+    clearStatus,
+  } = useBackup();
 
   const handleCreateBackup = async () => {
-    setIsProcessing(true);
-    setStatus('Creating backup...');
-
-    try {
-      const db = getDatabase();
-      const data = await db.exportAllData({ includeMessages, includeContacts, includeSettings });
-      let outputData: any = data;
-
-      if (encrypt && password) {
-        const jsonString = JSON.stringify(data);
-        const encrypted = await encryptData(jsonString, password);
-        outputData = {
-          isEncrypted: true,
-          version: '1.0',
-          ...encrypted
-        };
-      } else if (encrypt && !password) {
-        throw new Error('Password is required for encrypted backup');
-      }
-
-      const backupJson = JSON.stringify(outputData, null, 2);
-
-      // Download backup file
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const filename = `sovereign-backup-${timestamp}.json`;
-
-      const blob = new Blob([backupJson], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
-
-      setStatus('Backup created successfully!');
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      setStatus(`Error creating backup: ${errorMessage}`);
-    } finally {
-      setIsProcessing(false);
-    }
+    await createBackup({
+      includeMessages,
+      includeContacts,
+      includeSettings,
+      encrypt,
+      password: encrypt ? password : undefined,
+    });
   };
 
-  const handleRestoreBackup = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleRestoreBackup = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    setIsProcessing(true);
-    setStatus('Restoring backup...');
+    const result = await restoreBackup(file, restorePassword);
 
-    try {
-      const backupText = await file.text();
-      let backupData = JSON.parse(backupText);
-
-      if (backupData.isEncrypted) {
-        if (!restorePassword) {
-          throw new Error('This backup is encrypted. Please enter the password.');
-        }
-        try {
-          const decryptedJson = await decryptData(backupData, restorePassword);
-          backupData = JSON.parse(decryptedJson);
-        } catch (e) {
-          throw new Error('Incorrect password or corrupted backup file.');
-        }
-      }
-
-      const db = getDatabase();
-      const result = await db.importData(backupData);
-
-    if (result.errors.length > 0) {
-      setStatus(`Backup restored with ${result.errors.length} errors. Imported: ${result.imported}, Skipped: ${result.skipped}`);
-      console.error('Import errors:', result.errors);
-    } else {
-      setStatus(`Backup restored successfully! Imported: ${result.imported}, Skipped: ${result.skipped}. The application will now reload.`);
+    if (result && result.success) {
       setTimeout(() => {
         window.location.reload();
       }, 2000);
     }
-  } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      setStatus(`Error restoring backup: ${errorMessage}`);
-    } finally {
-      setIsProcessing(false);
-      // Clear the file input
-      event.target.value = '';
-    }
+
+    // Clear input
+    event.target.value = "";
   };
-
-
 
   return (
     <div className="backup-restore">
@@ -223,8 +110,11 @@ export const BackupManager: React.FC = () => {
           </div>
         )}
 
-        <button onClick={handleCreateBackup} disabled={isProcessing}>
-          {isProcessing ? 'Creating...' : 'Create Backup'}
+        <button
+          onClick={handleCreateBackup}
+          disabled={isProcessing || (encrypt && !password)}
+        >
+          {isProcessing ? "Creating..." : "Create Backup"}
         </button>
       </div>
 
@@ -256,12 +146,15 @@ export const BackupManager: React.FC = () => {
         </div>
       </div>
 
-
-
       {/* Status Message */}
-      {status && (
-        <div className={`status ${status.includes('Error') ? 'error' : 'success'}`}>
-          {status}
+      {(status || error) && (
+        <div className={`status ${error ? "error" : "success"}`}>
+          {error || status}
+          {error && (
+            <button className="close-status" onClick={clearStatus}>
+              ×
+            </button>
+          )}
         </div>
       )}
 
@@ -393,6 +286,9 @@ export const BackupManager: React.FC = () => {
           border-radius: 4px;
           margin-top: 20px;
           font-size: 14px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
         }
 
         .status.success {
@@ -405,6 +301,19 @@ export const BackupManager: React.FC = () => {
           background: #ff00001a;
           border: 1px solid #ff0000;
           color: #ff0000;
+        }
+        
+        .close-status {
+          background: none;
+          border: none;
+          color: inherit;
+          width: auto;
+          padding: 0 5px;
+          font-size: 20px;
+        }
+        .close-status:hover {
+          background: none;
+          opacity: 0.8;
         }
       `}</style>
     </div>
