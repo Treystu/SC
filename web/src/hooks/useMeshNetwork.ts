@@ -717,7 +717,6 @@ export function useMeshNetwork() {
   const [joinError, setJoinError] = useState<string | null>(null);
   const [discoveredPeers, setDiscoveredPeers] = useState<string[]>([]);
   const [roomMessages, setRoomMessages] = useState<any[]>([]);
-  const pendingAutoConnectionsRef = useRef<Set<string>>(new Set());
 
   const joinRoom = useCallback(async (url: string): Promise<void> => {
     if (!meshNetworkRef.current)
@@ -728,45 +727,6 @@ export function useMeshNetwork() {
       // Setup listeners before joining
       meshNetworkRef.current.onDiscoveryUpdate((peers) => {
         setDiscoveredPeers(peers);
-
-        // Auto-connect to discovered peers (Background Relay Opportunity)
-        const network = meshNetworkRef.current;
-        if (!network) return;
-
-        const connectedPeerIds = new Set(
-          network.getConnectedPeers().map((p) => p.id),
-        );
-        const localPeerId = network.getLocalPeerId();
-
-        peers.forEach((peerId) => {
-          if (
-            peerId !== localPeerId &&
-            !connectedPeerIds.has(peerId) &&
-            !pendingAutoConnectionsRef.current.has(peerId)
-          ) {
-            pendingAutoConnectionsRef.current.add(peerId);
-
-            // Random delay 1-5s to prevent signaling storms/glare
-            const delay = 1000 + Math.random() * 4000;
-
-            setTimeout(() => {
-              // Clean up pending set
-              pendingAutoConnectionsRef.current.delete(peerId);
-
-              // Re-check connection status
-              if (
-                network &&
-                !network.getConnectedPeers().some((p) => p.id === peerId)
-              ) {
-                console.log(`Auto-connecting to discovered peer: ${peerId}`);
-                network.connectToPeer(peerId).catch((err) => {
-                  // It's expected that some might fail or be rejected
-                  console.debug(`Auto-connect to ${peerId} result:`, err);
-                });
-              }
-            }, delay);
-          }
-        });
       });
 
       const seenMessageIds = new Set<string>();
