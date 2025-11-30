@@ -15,6 +15,7 @@ export interface MeshStatus {
   localPeerId: string;
   connectionQuality: ConnectionQuality;
   initializationError?: string;
+  joinError?: string | null;
 }
 
 export interface ReceivedMessage {
@@ -546,14 +547,28 @@ export function useMeshNetwork() {
     }));
   }, []);
 
+  const [joinError, setJoinError] = useState<string | null>(null);
+
   const joinRoom = useCallback(async (url: string): Promise<void> => {
     if (!meshNetworkRef.current) throw new Error('Mesh network not initialized');
-    await meshNetworkRef.current.joinPublicRoom(url);
+    setJoinError(null);
+    try {
+      await meshNetworkRef.current.joinPublicRoom(url);
+    } catch (error) {
+      console.error('Failed to join room:', error);
+      setJoinError(error instanceof Error ? error.message : String(error));
+      throw error;
+    }
   }, []);
 
   const joinRelay = useCallback(async (url: string): Promise<void> => {
     if (!meshNetworkRef.current) throw new Error('Mesh network not initialized');
-    await meshNetworkRef.current.joinRelay(url);
+    try {
+      await meshNetworkRef.current.joinRelay(url);
+    } catch (error) {
+      console.error('Failed to join relay:', error);
+      throw error;
+    }
   }, []);
 
   const addStreamToPeer = useCallback(async (peerId: string, stream: MediaStream) => {
@@ -568,7 +583,7 @@ export function useMeshNetwork() {
 
   // Memoized return value to prevent unnecessary re-renders
   return useMemo(() => ({
-    status,
+    status: { ...status, joinError },
     peers,
     messages,
     sendMessage,
@@ -584,5 +599,5 @@ export function useMeshNetwork() {
     addStreamToPeer,
     onPeerTrack,
     identity: meshNetworkRef.current?.getIdentity(), // Expose identity
-  }), [status, peers, messages, sendMessage, connectToPeer, getStats, generateConnectionOffer, acceptConnectionOffer, createManualOffer, acceptManualOffer, finalizeManualConnection, joinRoom, joinRelay, addStreamToPeer, onPeerTrack]);
+  }), [status, joinError, peers, messages, sendMessage, connectToPeer, getStats, generateConnectionOffer, acceptConnectionOffer, createManualOffer, acceptManualOffer, finalizeManualConnection, joinRoom, joinRelay, addStreamToPeer, onPeerTrack]);
 }

@@ -608,7 +608,12 @@ export class MeshNetwork {
 
       // Store public key if available
       if (peer.metadata?.publicKey) {
-        peerPublicKeys.set(peer._id, fromHex(peer.metadata.publicKey));
+        const pk = fromHex(peer.metadata.publicKey);
+        if (pk.length === 32) {
+          peerPublicKeys.set(peer._id, pk);
+        } else {
+          console.warn(`Invalid public key length for peer ${peer._id}: ${pk.length}`);
+        }
       }
 
       // If not already connected, initiate connection
@@ -620,22 +625,27 @@ export class MeshNetwork {
         p.onSignal((signal: any) => {
           if (signal.type === 'candidate') {
             const recipientKey = peerPublicKeys.get(peer._id);
-            if (recipientKey) {
+            if (recipientKey && recipientKey.length === 32) {
               this.httpSignaling?.sendSignal(peer._id, 'candidate', signal.candidate, recipientKey);
             } else {
-              console.error(`Cannot send candidate to ${peer._id}: missing public key`);
+              console.warn(`Cannot send candidate to ${peer._id}: missing or invalid public key`);
             }
           }
         });
 
         p.createDataChannel({ label: 'reliable', ordered: true });
-        const offer = await p.createOffer();
-        const recipientKey = peerPublicKeys.get(peer._id);
 
-        if (recipientKey) {
-          await this.httpSignaling?.sendSignal(peer._id, 'offer', offer, recipientKey);
-        } else {
-          console.error(`Cannot send offer to ${peer._id}: missing public key`);
+        try {
+          const offer = await p.createOffer();
+          const recipientKey = peerPublicKeys.get(peer._id);
+
+          if (recipientKey && recipientKey.length === 32) {
+            await this.httpSignaling?.sendSignal(peer._id, 'offer', offer, recipientKey);
+          } else {
+            console.error(`Cannot send offer to ${peer._id}: missing or invalid public key`);
+          }
+        } catch (err) {
+          console.error(`Failed to create/send offer to ${peer._id}:`, err);
         }
       }
     });

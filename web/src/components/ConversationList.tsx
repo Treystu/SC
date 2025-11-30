@@ -24,7 +24,7 @@ interface ConversationListProps {
   onShareApp?: () => void;
   localPeerId?: string;
   generateConnectionOffer?: () => Promise<string>;
-  onJoinRoom?: (url: string) => void;
+  onJoinRoom?: (url: string) => Promise<void> | void;
   onJoinRelay?: (url: string) => void;
 }
 
@@ -161,13 +161,27 @@ function ConversationList({ conversations, loading, selectedId, onSelect, onDele
               <button onClick={() => { setShowManualConnection(true); setShowMenu(false); }} data-testid="manual-connect-btn">
                 Manual Connect (WAN)
               </button>
-              <button onClick={() => {
+              <button onClick={async (e) => {
                 const defaultUrl = window.location.origin + '/.netlify/functions/room';
                 const url = prompt('Enter Public Room URL:', defaultUrl);
                 if (url) {
-                  onJoinRoom?.(url);
+                  const btn = e.currentTarget;
+                  const originalText = btn.innerText;
+                  btn.innerText = 'Joining...';
+                  btn.disabled = true;
+                  try {
+                    await onJoinRoom?.(url);
+                    alert('Successfully joined room! Discovery active.');
+                  } catch (err) {
+                    alert('Failed to join room: ' + (err instanceof Error ? err.message : String(err)));
+                  } finally {
+                    btn.innerText = originalText;
+                    btn.disabled = false;
+                    setShowMenu(false);
+                  }
+                } else {
+                  setShowMenu(false);
                 }
-                setShowMenu(false);
               }} data-testid="join-public-room-btn">
                 🌐 Join Public Room (Netlify)
               </button>

@@ -25,7 +25,7 @@ interface NetworkStats {
 }
 
 export const NetworkDiagnostics: React.FC = () => {
-  const { getStats } = useMeshNetwork();
+  const { getStats, status } = useMeshNetwork();
   const [stats, setStats] = useState<NetworkStats>({
     connectedPeers: 0,
     messagesSent: 0,
@@ -35,7 +35,8 @@ export const NetworkDiagnostics: React.FC = () => {
     packetLoss: 0,
     uptime: 0,
     bleConnections: 0,
-    webrtcConnections: 0
+    webrtcConnections: 0,
+    error: undefined
   });
 
   const [refreshInterval, setRefreshInterval] = useState(1000);
@@ -56,7 +57,7 @@ export const NetworkDiagnostics: React.FC = () => {
         let minLatency = Infinity;
         let maxLatency = 0;
         let webrtcConnections = 0;
-        
+
         newStats.peers.peers.forEach(peer => {
           if (peer.state === 'connected') {
             webrtcConnections++;
@@ -104,6 +105,7 @@ export const NetworkDiagnostics: React.FC = () => {
           uptime: uptime,
           bleConnections: 0, // Assuming no BLE connections for now
           webrtcConnections: webrtcConnections,
+          error: status.joinError || undefined
         });
 
         setLastUpload(totalBytesSent);
@@ -159,6 +161,13 @@ export const NetworkDiagnostics: React.FC = () => {
           </select>
         </div>
       </div>
+
+      {/* Error Alert */}
+      {stats.error && (
+        <div style={{ backgroundColor: '#f44336', color: 'white', padding: '10px', borderRadius: '4px', marginBottom: '20px' }}>
+          <strong>Error:</strong> {stats.error}
+        </div>
+      )}
 
       {/* Overview Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px', marginBottom: '30px' }}>
