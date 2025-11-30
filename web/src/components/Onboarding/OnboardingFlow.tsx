@@ -230,7 +230,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                     signature: new Uint8Array(0), // Dummy signature for demo
                     bootstrapPeers: [],
                   }}
-                  onClose={() => {}}
+                  onClose={handleNext}
                   embedded={true}
                 />
               )}
