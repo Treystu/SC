@@ -161,14 +161,14 @@ function App() {
           console.error("Failed to join room from URL:", err);
           announce.message("Failed to join room", "assertive");
         });
-      } else if (config.publicHub) {
+      } else if (config.publicHub || config.deploymentMode === 'netlify') {
         autoJoinedRef.current = true;
         console.log(
-          `Auto-joining public hub in ${config.deploymentMode} mode...`,
+          `Auto-joining room in ${config.deploymentMode} mode...`,
         );
         // Use handleJoinRoom to ensure UI updates
         handleJoinRoom(config.relayUrl).catch((err) => {
-          console.error("Failed to auto-join public hub:", err);
+          console.error("Failed to auto-join room:", err);
         });
       }
     }
