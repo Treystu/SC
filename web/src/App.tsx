@@ -85,17 +85,48 @@ function App() {
     roomMessages,
     isJoinedToRoom,
   } = useMeshNetwork();
-  const autoJoinedRef = useRef(false);
 
-  // Configure Logger
+  // Setup logger
+  useEffect(() => {
+    if (config.logUrl) {
+      logger.setRemoteUrl(config.logUrl);
+    }
+
+    // Capture global errors
+    const handleGlobalError = (event: ErrorEvent) => {
+      logger.error("Global", event.message, {
+        filename: event.filename,
+        lineno: event.lineno,
+        colno: event.colno,
+        error: event.error ? event.error.stack : undefined,
+      });
+    };
+
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      logger.error("Global", "Unhandled Rejection", {
+        reason: event.reason,
+      });
+    };
+
+    window.addEventListener("error", handleGlobalError);
+    window.addEventListener("unhandledrejection", handleUnhandledRejection);
+
+    return () => {
+      window.removeEventListener("error", handleGlobalError);
+      window.removeEventListener(
+        "unhandledrejection",
+        handleUnhandledRejection,
+      );
+    };
+  }, []);
+
+  // Update peer ID in logger
   useEffect(() => {
     if (status.localPeerId) {
       logger.setPeerId(status.localPeerId);
-      if (config.deploymentMode === "netlify") {
-        logger.setRemoteUrl("/.netlify/functions/log");
-      }
     }
   }, [status.localPeerId]);
+  const autoJoinedRef = useRef(false);
 
   const { invite, createInvite, clearInvite } = useInvite(
     status.localPeerId,
@@ -284,6 +315,12 @@ function App() {
   };
 
   // Announce connection status changes to screen readers
+  useEffect(() => {
+    if (status.joinError) {
+      announce.message(`Failed to join room: ${status.joinError}`, "assertive");
+    }
+  }, [status.joinError]);
+
   useEffect(() => {
     if (status.isConnected) {
       announce.message(
@@ -672,7 +709,7 @@ function App() {
 
   const handleManualConnectionInitiated = async (peerId: string) => {
     if (!contacts.some((c) => c.id === peerId)) {
-      await addContact(peerId, `Peer ${peerId.slice(0, 6)}`);
+      await handleAddContact(peerId, `Peer ${peerId.slice(0, 6)}`);
     }
     setSelectedConversation(peerId);
   };
