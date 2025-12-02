@@ -79,6 +79,25 @@
                       android:pathPrefix="/join" />
             </intent-filter>
             
+            <!-- Deep link for Netlify redirect -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https"
+                      android:host="sc.netlify.app"
+                      android:pathPrefix="/join" />
+            </intent-filter>
+
+            <!-- Custom Scheme -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="sc"
+                      android:host="join" />
+            </intent-filter>
+            
             <!-- NFC intent filter -->
             <intent-filter>
                 <action android:name="android.nfc.action.NDEF_DISCOVERED" />

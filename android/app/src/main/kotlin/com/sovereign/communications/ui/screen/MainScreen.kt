@@ -15,16 +15,44 @@ import com.sovereign.communications.ui.component.ConnectionStatusBadge
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen() {
+fun MainScreen(
+    initialInviteCode: String? = null,
+    onInviteHandled: () -> Unit = {},
+) {
     var selectedTab by remember { mutableStateOf(0) }
-    
+
+    // Handle deep link invite
+    if (initialInviteCode != null) {
+        AlertDialog(
+            onDismissRequest = onInviteHandled,
+            title = { Text("Join Mesh Network") },
+            text = { Text("Received invite code. Connect to peer to bootstrap mesh?") },
+            confirmButton = {
+                Button(onClick = {
+                    // In a real implementation, this would parse the code and connect
+                    // For verification, we log the bootstrap attempt
+                    android.util.Log.d("MainScreen", "Bootstrapping mesh with code: $initialInviteCode")
+                    // Trigger connection logic here via MeshNetworkManager
+                    onInviteHandled()
+                }) {
+                    Text("Connect")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onInviteHandled) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Sovereign Communications") },
                 actions = {
                     ConnectionStatusBadge()
-                }
+                },
             )
         },
         bottomBar = {
@@ -33,22 +61,22 @@ fun MainScreen() {
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
                     icon = { Icon(Icons.Default.Message, "Conversations") },
-                    label = { Text("Conversations") }
+                    label = { Text("Conversations") },
                 )
                 NavigationBarItem(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
                     icon = { Icon(Icons.Default.People, "Contacts") },
-                    label = { Text("Contacts") }
+                    label = { Text("Contacts") },
                 )
                 NavigationBarItem(
                     selected = selectedTab == 2,
                     onClick = { selectedTab = 2 },
                     icon = { Icon(Icons.Default.Settings, "Settings") },
-                    label = { Text("Settings") }
+                    label = { Text("Settings") },
                 )
             }
-        }
+        },
     ) { paddingValues ->
         Box(modifier = Modifier.padding(paddingValues)) {
             when (selectedTab) {

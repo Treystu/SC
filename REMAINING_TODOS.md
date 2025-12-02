@@ -36,4 +36,4 @@
 - Core messaging tests passing with demo mode
 - File transfer tests need file input trigger implementation
 - Offline/network tests need proper mocking
-- Cross-platform tests skipped pending multi-peer test infrastructure
+- Cross-platform tests skipped pending multi-peer test infrastructure- [ ] Fix room logs not showing up in debug mode

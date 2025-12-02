@@ -20,55 +20,77 @@ import com.sovereign.communications.ui.theme.SCTheme
  * Tasks 73-74: Create main activity with proper architecture
  */
 class MainActivity : ComponentActivity() {
-    
-    private lateinit var permissionManager: PermissionManager
-    private lateinit var notificationManager: NotificationManager
-    
+    private var inviteCode by mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+
         // Initialize managers
         permissionManager = PermissionManager(this)
         notificationManager = NotificationManager(this)
-        
+
         // Create notification channels
         notificationManager.createNotificationChannels()
-        
+
         // Request required permissions
         requestPermissions()
-        
+
+        // Handle deep link if present
+        handleIntent(intent)
+
         setContent {
             SCTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
+                    color = MaterialTheme.colorScheme.background,
                 ) {
                     AppContent()
                 }
             }
         }
     }
-    
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: android.content.Intent) {
+        if (intent.action == android.content.Intent.ACTION_VIEW) {
+            val data = intent.data
+            if (data != null) {
+                // Check for "code" parameter in query
+                val code = data.getQueryParameter("code")
+                if (code != null) {
+                    inviteCode = code
+                }
+            }
+        }
+    }
+
     @Composable
     fun AppContent() {
         val prefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
         var showOnboarding by remember {
             mutableStateOf(!prefs.getBoolean("onboarding_complete", false))
         }
-        
+
         if (showOnboarding) {
             OnboardingScreen(
                 localPeerId = com.sovereign.communications.SCApplication.instance.localPeerId ?: "unknown",
                 onComplete = {
                     prefs.edit().putBoolean("onboarding_complete", true).apply()
                     showOnboarding = false
-                }
+                },
             )
         } else {
-            MainScreen()
+            MainScreen(
+                initialInviteCode = inviteCode,
+                onInviteHandled = { inviteCode = null },
+            )
         }
     }
-    
+
     override fun onResume() {
         super.onResume()
         // Check if service is running, if not and permissions granted, start it
@@ -76,13 +98,13 @@ class MainActivity : ComponentActivity() {
             MeshNetworkService.start(this)
         }
     }
-    
+
     override fun onDestroy() {
         super.onDestroy()
         // Service will continue running in background
         // Only stop service when user explicitly quits from settings
     }
-    
+
     /**
      * Request required permissions on first launch
      */
@@ -99,12 +121,13 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-    
+
     /**
      * Show dialog explaining permission requirements
      */
     private fun showPermissionRationaleDialog() {
-        androidx.appcompat.app.AlertDialog.Builder(this)
+        androidx.appcompat.app.AlertDialog
+            .Builder(this)
             .setTitle("Permissions Required")
             .setMessage(
                 """
@@ -117,23 +140,20 @@ class MainActivity : ComponentActivity() {
                 🔔 Notifications: Alerts you when you receive new messages while the app is in the background.
                 
                 All permissions are essential for secure, offline mesh communication.
-                """.trimIndent()
-            )
-            .setPositiveButton("Grant Permissions") { _, _ ->
+                """.trimIndent(),
+            ).setPositiveButton("Grant Permissions") { _, _ ->
                 permissionManager.requestAllPermissions(this)
-            }
-            .setNegativeButton("Cancel") { dialog, _ ->
+            }.setNegativeButton("Cancel") { dialog, _ ->
                 dialog.dismiss()
-            }
-            .setCancelable(false)
+            }.setCancelable(false)
             .show()
     }
-    
+
     /**
      * Get permission manager instance
      */
     fun getPermissionManager(): PermissionManager = permissionManager
-    
+
     /**
      * Get notification manager instance
      */

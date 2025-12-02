@@ -1,18 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
 export const PWAInstall: React.FC = () => {
-  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [installPrompt, setInstallPrompt] =
+    useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const [showPrompt, setShowPrompt] = useState(false);
 
   useEffect(() => {
     // Check if already installed
-    if (window.matchMedia('(display-mode: standalone)').matches) {
+    if (window.matchMedia("(display-mode: standalone)").matches) {
       setIsInstalled(true);
       return;
     }
@@ -24,17 +25,20 @@ export const PWAInstall: React.FC = () => {
       setShowPrompt(true);
     };
 
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
 
     // Listen for successful install
-    window.addEventListener('appinstalled', () => {
+    window.addEventListener("appinstalled", () => {
       setIsInstalled(true);
       setShowPrompt(false);
       setInstallPrompt(null);
     });
 
     return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener(
+        "beforeinstallprompt",
+        handleBeforeInstallPrompt,
+      );
     };
   }, []);
 
@@ -44,7 +48,7 @@ export const PWAInstall: React.FC = () => {
     await installPrompt.prompt();
     const { outcome } = await installPrompt.userChoice;
 
-    if (outcome === 'accepted') {
+    if (outcome === "accepted") {
       setShowPrompt(false);
       setInstallPrompt(null);
     }
@@ -52,13 +56,20 @@ export const PWAInstall: React.FC = () => {
 
   const handleDismiss = () => {
     setShowPrompt(false);
-    localStorage.setItem('pwa-install-dismissed', 'true');
+    localStorage.setItem("pwa-install-dismissed", "true");
   };
 
   if (isInstalled || !showPrompt) return null;
 
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  const releaseUrl = "https://github.com/Treystu/SC/releases"; // Update with actual repo URL if different
+
   return (
-    <div className="pwa-install-prompt" role="dialog" aria-labelledby="install-title">
+    <div
+      className="pwa-install-prompt"
+      role="dialog"
+      aria-labelledby="install-title"
+    >
       <div className="prompt-content">
         <h3 id="install-title">Install Sovereign Communications</h3>
         <p>Install our app for a better experience:</p>
@@ -67,11 +78,27 @@ export const PWAInstall: React.FC = () => {
           <li>Faster performance</li>
           <li>Desktop icon</li>
           <li>Full-screen mode</li>
+          {isAndroid && (
+            <li>
+              <strong>Mesh Networking (Android)</strong>
+            </li>
+          )}
         </ul>
         <div className="prompt-actions">
           <button onClick={handleInstallClick} className="btn-primary">
-            Install App
+            Install Web App
           </button>
+          {isAndroid && (
+            <a
+              href={releaseUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-primary"
+              style={{ marginLeft: "10px", textDecoration: "none" }}
+            >
+              Download Android APK
+            </a>
+          )}
           <button onClick={handleDismiss} className="btn-secondary">
             Not Now
           </button>
@@ -84,20 +111,25 @@ export const PWAInstall: React.FC = () => {
 // Service worker registration and update handling
 export const useServiceWorker = () => {
   const [updateAvailable, setUpdateAvailable] = useState(false);
-  const [registration, setRegistration] = useState<ServiceWorkerRegistration | null>(null);
+  const [registration, setRegistration] =
+    useState<ServiceWorkerRegistration | null>(null);
 
   useEffect(() => {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js')
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker
+        .register("/sw.js")
         .then((reg) => {
           setRegistration(reg);
 
           // Check for updates
-          reg.addEventListener('updatefound', () => {
+          reg.addEventListener("updatefound", () => {
             const newWorker = reg.installing;
             if (newWorker) {
-              newWorker.addEventListener('statechange', () => {
-                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              newWorker.addEventListener("statechange", () => {
+                if (
+                  newWorker.state === "installed" &&
+                  navigator.serviceWorker.controller
+                ) {
                   setUpdateAvailable(true);
                 }
               });
@@ -105,14 +137,14 @@ export const useServiceWorker = () => {
           });
         })
         .catch((error) => {
-          console.error('Service worker registration failed:', error);
+          console.error("Service worker registration failed:", error);
         });
     }
   }, []);
 
   const applyUpdate = () => {
     if (registration && registration.waiting) {
-      registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+      registration.waiting.postMessage({ type: "SKIP_WAITING" });
       window.location.reload();
     }
   };

@@ -18,9 +18,16 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "typeRoots": ["../node_modules/@types", "./node_modules/@types"]
   },
   "include": ["src"],
-  "exclude": ["../core", "src/**/__tests__", "src/**/*.test.ts", "src/**/*.test.tsx", "src/**/*.spec.ts"],
+  "exclude": [
+    "../core",
+    "src/**/__tests__",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/**/*.spec.ts"
+  ],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

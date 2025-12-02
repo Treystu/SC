@@ -13,6 +13,7 @@ import { InviteAcceptanceModal } from "./components/InviteAcceptanceModal";
 import { NetworkDiagnostics } from "./components/NetworkDiagnostics";
 import { RoomView } from "./components/RoomView";
 import { GroupChat } from "./components/GroupChat";
+import { PWAInstall, UpdateNotification } from "./components/PWAInstall";
 import { useMeshNetwork } from "./hooks/useMeshNetwork";
 import { useInvite } from "./hooks/useInvite";
 import { useConversations } from "./hooks/useConversations";
@@ -721,6 +722,8 @@ function App() {
 
   return (
     <ErrorBoundary>
+      <PWAInstall />
+      <UpdateNotification />
       {/* Initialization Error Banner */}
       {status.initializationError && (
         <div className="error-banner" role="alert">

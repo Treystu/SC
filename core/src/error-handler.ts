@@ -1,4 +1,4 @@
-import { ErrorTracker } from './error-tracking.js';
+import { ErrorTracker } from "./error-tracking.js";
 
 /**
  * Error Handler - Centralized error management system
@@ -6,19 +6,19 @@ import { ErrorTracker } from './error-tracking.js';
  */
 
 export enum ErrorSeverity {
-  LOW = 'low',
-  MEDIUM = 'medium',
-  HIGH = 'high',
-  CRITICAL = 'critical'
+  LOW = "low",
+  MEDIUM = "medium",
+  HIGH = "high",
+  CRITICAL = "critical",
 }
 
 export enum ErrorCategory {
-  NETWORK = 'network',
-  CRYPTO = 'crypto',
-  STORAGE = 'storage',
-  VALIDATION = 'validation',
-  PERMISSION = 'permission',
-  SYSTEM = 'system'
+  NETWORK = "network",
+  CRYPTO = "crypto",
+  STORAGE = "storage",
+  VALIDATION = "validation",
+  PERMISSION = "permission",
+  SYSTEM = "system",
 }
 
 export interface ErrorContext {
@@ -26,7 +26,7 @@ export interface ErrorContext {
   severity: ErrorSeverity;
   message: string;
   code?: string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
   timestamp: number;
   stackTrace?: string;
   userId?: string;
@@ -37,17 +37,17 @@ export class AppError extends Error {
   public readonly category: ErrorCategory;
   public readonly severity: ErrorSeverity;
   public readonly code?: string;
-  public readonly details?: Record<string, any>;
+  public readonly details?: Record<string, unknown>;
   public readonly timestamp: number;
 
-  constructor(context: Omit<ErrorContext, 'timestamp' | 'stackTrace'>) {
+  constructor(context: Omit<ErrorContext, "timestamp" | "stackTrace">) {
     super(context.message);
     this.category = context.category;
     this.severity = context.severity;
     this.code = context.code;
     this.details = context.details;
     this.timestamp = Date.now();
-    this.name = 'AppError';
+    this.name = "AppError";
 
     if (Error.captureStackTrace) {
       Error.captureStackTrace(this, AppError);
@@ -61,7 +61,7 @@ export class ErrorHandler {
   private maxLogSize = 1000;
   private errorListeners: Array<(error: ErrorContext) => void> = [];
 
-  private constructor() { }
+  private constructor() {}
 
   static getInstance(): ErrorHandler {
     if (!ErrorHandler.instance) {
@@ -73,7 +73,10 @@ export class ErrorHandler {
   /**
    * Handle an error with automatic categorization and recovery
    */
-  handle(error: Error | AppError, additionalContext?: Partial<ErrorContext>): void {
+  handle(
+    error: Error | AppError,
+    additionalContext?: Partial<ErrorContext>,
+  ): void {
     const context = this.createErrorContext(error, additionalContext);
 
     // Log the error
@@ -86,7 +89,10 @@ export class ErrorHandler {
     this.attemptRecovery(context);
 
     // Report to monitoring service in production
-    if (typeof window !== 'undefined' && (window as any).SC_PRODUCTION) {
+    if (
+      typeof window !== "undefined" &&
+      (window as unknown as { SC_PRODUCTION: boolean }).SC_PRODUCTION
+    ) {
       this.reportToMonitoring(context);
     }
   }
@@ -96,20 +102,24 @@ export class ErrorHandler {
    */
   private createErrorContext(
     error: Error | AppError,
-    additional?: Partial<ErrorContext>
+    additional?: Partial<ErrorContext>,
   ): ErrorContext {
     const isAppError = error instanceof AppError;
 
     return {
-      category: isAppError ? error.category : (additional?.category || ErrorCategory.SYSTEM),
-      severity: isAppError ? error.severity : (additional?.severity || ErrorSeverity.MEDIUM),
+      category: isAppError
+        ? error.category
+        : additional?.category || ErrorCategory.SYSTEM,
+      severity: isAppError
+        ? error.severity
+        : additional?.severity || ErrorSeverity.MEDIUM,
       message: error.message,
       code: isAppError ? error.code : additional?.code,
       details: isAppError ? error.details : additional?.details,
       timestamp: Date.now(),
       stackTrace: error.stack,
       userId: additional?.userId,
-      sessionId: additional?.sessionId
+      sessionId: additional?.sessionId,
     };
   }
 
@@ -128,14 +138,14 @@ export class ErrorHandler {
     const logMethod = this.getLogMethod(context.severity);
     logMethod(
       `[${context.category.toUpperCase()}] ${context.message}`,
-      context.details || ''
+      context.details || "",
     );
   }
 
   /**
    * Get appropriate console method based on severity
    */
-  private getLogMethod(severity: ErrorSeverity): (...args: any[]) => void {
+  private getLogMethod(severity: ErrorSeverity): (...args: unknown[]) => void {
     switch (severity) {
       case ErrorSeverity.CRITICAL:
       case ErrorSeverity.HIGH:
@@ -173,7 +183,7 @@ export class ErrorHandler {
   private handleNetworkError(context: ErrorContext): void {
     if (context.severity !== ErrorSeverity.CRITICAL) {
       // Queue for retry
-      console.log('Queuing network operation for retry');
+      console.log("Queuing network operation for retry");
     }
   }
 
@@ -181,8 +191,8 @@ export class ErrorHandler {
    * Handle storage-related errors
    */
   private handleStorageError(context: ErrorContext): void {
-    if (context.code === 'QUOTA_EXCEEDED') {
-      console.warn('Storage quota exceeded, attempting cleanup');
+    if (context.code === "QUOTA_EXCEEDED") {
+      console.warn("Storage quota exceeded, attempting cleanup");
       // Trigger storage cleanup
     }
   }
@@ -192,7 +202,7 @@ export class ErrorHandler {
    */
   private handleCryptoError(context: ErrorContext): void {
     if (context.severity === ErrorSeverity.CRITICAL) {
-      console.error('Critical crypto error - security compromised');
+      console.error("Critical crypto error - security compromised");
       // Notify user and potentially clear sensitive data
     }
   }
@@ -203,8 +213,8 @@ export class ErrorHandler {
   private reportToMonitoring(context: ErrorContext): void {
     ErrorTracker.captureError(new AppError(context), {
       userId: context.userId,
-      action: 'handle-error',
-      metadata: context.details
+      action: "handle-error",
+      metadata: context.details,
     });
   }
 
@@ -227,11 +237,11 @@ export class ErrorHandler {
    * Notify all error listeners
    */
   private notifyListeners(context: ErrorContext): void {
-    this.errorListeners.forEach(listener => {
+    this.errorListeners.forEach((listener) => {
       try {
         listener(context);
       } catch (err) {
-        console.error('Error in error listener:', err);
+        console.error("Error in error listener:", err);
       }
     });
   }
@@ -247,14 +257,14 @@ export class ErrorHandler {
    * Get errors by category
    */
   getErrorsByCategory(category: ErrorCategory): ErrorContext[] {
-    return this.errorLog.filter(e => e.category === category);
+    return this.errorLog.filter((e) => e.category === category);
   }
 
   /**
    * Get errors by severity
    */
   getErrorsBySeverity(severity: ErrorSeverity): ErrorContext[] {
-    return this.errorLog.filter(e => e.severity === severity);
+    return this.errorLog.filter((e) => e.severity === severity);
   }
 
   /**
@@ -275,19 +285,19 @@ export class ErrorHandler {
     const stats = {
       total: this.errorLog.length,
       byCategory: {} as Record<ErrorCategory, number>,
-      bySeverity: {} as Record<ErrorSeverity, number>
+      bySeverity: {} as Record<ErrorSeverity, number>,
     };
 
     // Initialize counters
-    Object.values(ErrorCategory).forEach(cat => {
+    Object.values(ErrorCategory).forEach((cat) => {
       stats.byCategory[cat as ErrorCategory] = 0;
     });
-    Object.values(ErrorSeverity).forEach(sev => {
+    Object.values(ErrorSeverity).forEach((sev) => {
       stats.bySeverity[sev as ErrorSeverity] = 0;
     });
 
     // Count occurrences
-    this.errorLog.forEach(error => {
+    this.errorLog.forEach((error) => {
       stats.byCategory[error.category]++;
       stats.bySeverity[error.severity]++;
     });
@@ -300,23 +310,23 @@ export class ErrorHandler {
 export const errorHandler = ErrorHandler.getInstance();
 
 // Global error handlers
-if (typeof window !== 'undefined') {
-  window.addEventListener('error', (event) => {
+if (typeof window !== "undefined") {
+  window.addEventListener("error", (event) => {
     errorHandler.handle(new Error(event.message), {
       category: ErrorCategory.SYSTEM,
       severity: ErrorSeverity.HIGH,
       details: {
         filename: event.filename,
         lineno: event.lineno,
-        colno: event.colno
-      }
+        colno: event.colno,
+      },
     });
   });
 
-  window.addEventListener('unhandledrejection', (event) => {
+  window.addEventListener("unhandledrejection", (event) => {
     errorHandler.handle(new Error(String(event.reason)), {
       category: ErrorCategory.SYSTEM,
-      severity: ErrorSeverity.MEDIUM
+      severity: ErrorSeverity.MEDIUM,
     });
   });
 }

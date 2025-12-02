@@ -30,7 +30,7 @@ export class WebRTCPeer {
   private dataChannels: Map<string, RTCDataChannel> = new Map();
   private onMessageCallback?: (data: Uint8Array) => void;
   private onStateChangeCallback?: (state: ConnectionState) => void;
-  private onSignalCallback?: (signal: any) => void;
+  private onSignalCallback?: (signal: unknown) => void;
   private onTrackCallback?: (
     track: MediaStreamTrack,
     stream: MediaStream,
@@ -48,9 +48,13 @@ export class WebRTCPeer {
   private initializePeerConnection(iceServers?: RTCIceServer[]): void {
     const configuration: RTCConfiguration = {
       iceServers: iceServers || [
-        // Optional STUN servers (for NAT traversal if available)
-        // Prefer direct connections through mesh relay
+        // Public STUN servers for NAT traversal
         { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "stun:stun2.l.google.com:19302" },
+        { urls: "stun:stun3.l.google.com:19302" },
+        { urls: "stun:stun4.l.google.com:19302" },
+        { urls: "stun:global.stun.twilio.com:3478" },
       ],
       iceCandidatePoolSize: 10,
     };
@@ -254,7 +258,7 @@ export class WebRTCPeer {
   /**
    * Register callback for signaling messages (ICE candidates, etc.)
    */
-  onSignal(callback: (signal: any) => void): void {
+  onSignal(callback: (signal: unknown) => void): void {
     this.onSignalCallback = callback;
   }
 
@@ -314,7 +318,8 @@ export class WebRTCPeer {
     }
 
     return new Promise<void>((resolve) => {
-      let timeoutId: any;
+      // eslint-disable-next-line prefer-const
+      let timeoutId: ReturnType<typeof setTimeout>;
 
       const checkState = () => {
         if (this.peerConnection?.iceGatheringState === "complete") {
@@ -372,7 +377,7 @@ export class WebRTCPeer {
 export class PeerConnectionPool {
   private peers: Map<string, WebRTCPeer> = new Map();
   private onMessageCallback?: (peerId: string, data: Uint8Array) => void;
-  private onSignalCallback?: (peerId: string, signal: any) => void;
+  private onSignalCallback?: (peerId: string, signal: unknown) => void;
   private onTrackCallback?: (
     peerId: string,
     track: MediaStreamTrack,
@@ -468,7 +473,7 @@ export class PeerConnectionPool {
   /**
    * Register callback for signaling messages from any peer
    */
-  onSignal(callback: (peerId: string, signal: any) => void): void {
+  onSignal(callback: (peerId: string, signal: unknown) => void): void {
     this.onSignalCallback = callback;
   }
 
