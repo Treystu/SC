@@ -1,5 +1,5 @@
 // Service Worker for Sovereign Communications PWA
-const CACHE_NAME = "sovereign-comm-v1";
+const CACHE_NAME = "sovereign-comm-v2";
 const ASSETS_TO_CACHE = ["/", "/index.html", "/manifest.json", "/join.html"];
 
 // Store for active invite shares
@@ -85,45 +85,67 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  event.respondWith(
-    caches.match(event.request).then((response) => {
-      // Return cached response if found
-      if (response) {
-        return response;
-      }
-
-      // Clone the request
-      const fetchRequest = event.request.clone();
-
-      return fetch(fetchRequest)
+  // STRATEGY: Network First for HTML (Navigation), Cache First for Assets
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request)
         .then((response) => {
-          // Check if valid response
-          if (
-            !response ||
-            response.status !== 200 ||
-            response.type !== "basic"
-          ) {
-            return response;
-          }
-
-          // Clone the response
+          // Update cache with new version
           const responseToCache = response.clone();
-
-          // Cache the fetched response if it's a GET request
-          if (event.request.method === "GET") {
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, responseToCache);
-            });
-          }
-
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseToCache);
+          });
           return response;
         })
         .catch(() => {
-          // Return offline page if fetch fails
-          return caches.match("/index.html");
-        });
-    }),
-  );
+          // Fallback to cache if offline
+          return caches.match(event.request).then((response) => {
+            return response || caches.match("/index.html");
+          });
+        }),
+    );
+  } else {
+    // Cache First for everything else (JS, CSS, Images)
+    event.respondWith(
+      caches.match(event.request).then((response) => {
+        // Return cached response if found
+        if (response) {
+          return response;
+        }
+
+        // Clone the request
+        const fetchRequest = event.request.clone();
+
+        return fetch(fetchRequest)
+          .then((response) => {
+            // Check if valid response
+            if (
+              !response ||
+              response.status !== 200 ||
+              response.type !== "basic"
+            ) {
+              return response;
+            }
+
+            // Clone the response
+            const responseToCache = response.clone();
+
+            // Cache the fetched response if it's a GET request
+            if (event.request.method === "GET") {
+              caches.open(CACHE_NAME).then((cache) => {
+                cache.put(event.request, responseToCache);
+              });
+            }
+
+            return response;
+          })
+          .catch(() => {
+            // Return offline page if fetch fails
+            return caches.match("/index.html");
+          });
+      }),
+    );
+  }
 });
 
 // Background sync for offline messages
