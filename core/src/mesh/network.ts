@@ -253,14 +253,42 @@ export class MeshNetwork {
     // Create and send offer
     const offer = await peer.createOffer();
 
-    // Send offer via mesh signaling
-    this.sendMessage(
-      peerId,
-      JSON.stringify({
-        type: "SIGNAL",
-        signal: { type: "offer", sdp: offer },
-      }),
-    ).catch((err) => console.error("Failed to send offer:", err));
+    // Check if we can use HTTP signaling (Public Room)
+    if (this.httpSignaling && this.peerPublicKeys.has(peerId)) {
+      console.log(`Sending offer to ${peerId} via HTTP Signaling`);
+      const recipientKey = this.peerPublicKeys.get(peerId);
+      if (recipientKey) {
+        await this.httpSignaling.sendSignal(
+          peerId,
+          "offer",
+          offer,
+          recipientKey,
+        );
+
+        // Also setup candidate forwarding if not already done
+        // Note: This duplicates logic in joinPublicRoom, but ensures manual connections work
+        peer.onSignal((signal: any) => {
+          if (signal.type === "candidate") {
+            this.httpSignaling?.sendSignal(
+              peerId,
+              "candidate",
+              signal.candidate,
+              recipientKey,
+            );
+          }
+        });
+      }
+    } else {
+      // Fallback to Mesh Signaling (only works if already connected to mesh)
+      console.log(`Sending offer to ${peerId} via Mesh Signaling`);
+      this.sendMessage(
+        peerId,
+        JSON.stringify({
+          type: "SIGNAL",
+          signal: { type: "offer", sdp: offer },
+        }),
+      ).catch((err) => console.error("Failed to send offer:", err));
+    }
 
     // Set up state change handler
     peer.onStateChange((state: string) => {
@@ -761,6 +789,7 @@ export class MeshNetwork {
   private httpSignaling?: import("../transport/http-signaling.js").HttpSignalingClient;
   private wsSignaling?: import("../transport/websocket-signaling.js").WebSocketSignalingClient;
   private directory: Directory = new Directory();
+  private peerPublicKeys: Map<string, Uint8Array> = new Map();
 
   /**
    * Join a Public Chat Room (Signaling Server).
@@ -792,12 +821,11 @@ export class MeshNetwork {
         .join("");
     };
 
-    // Store peer public keys from discovery
-    const peerPublicKeys = new Map<string, Uint8Array>();
-
     // Handle new peers discovered in the room
     this.httpSignaling.on("peerDiscovered", async (peer: any) => {
       if (peer._id === this.localPeerId) return;
+
+      console.log("Discovered peer:", peer);
 
       // Track discovered peer
       if (!this.discoveredPeers.has(peer._id)) {
@@ -806,16 +834,21 @@ export class MeshNetwork {
       }
 
       // Store public key if available
-      if (peer.metadata?.publicKey) {
-        const pk = fromHex(peer.metadata.publicKey);
+      let pkHex = peer.metadata?.publicKey || peer.publicKey;
+      if (pkHex) {
+        const pk = fromHex(pkHex);
         if (pk.length === 32) {
-          peerPublicKeys.set(peer._id, pk);
+          this.peerPublicKeys.set(peer._id, pk);
         } else {
           console.warn(
             `Invalid public key length for peer ${peer._id}: ${pk.length}`,
           );
         }
+      } else {
+        console.warn(`No public key found for peer ${peer._id}`);
       }
+
+      // If not already connected, initiate connection
 
       // If not already connected, initiate connection
       if (!this.peerPool.getPeer(peer._id)) {
@@ -827,7 +860,7 @@ export class MeshNetwork {
         // Setup ICE candidate forwarding
         p.onSignal((signal: any) => {
           if (signal.type === "candidate") {
-            const recipientKey = peerPublicKeys.get(peer._id);
+            const recipientKey = this.peerPublicKeys.get(peer._id);
             if (recipientKey && recipientKey.length === 32) {
               this.httpSignaling?.sendSignal(
                 peer._id,
@@ -847,7 +880,7 @@ export class MeshNetwork {
 
         try {
           const offer = await p.createOffer();
-          const recipientKey = peerPublicKeys.get(peer._id);
+          const recipientKey = this.peerPublicKeys.get(peer._id);
 
           if (recipientKey && recipientKey.length === 32) {
             await this.httpSignaling?.sendSignal(
@@ -883,7 +916,7 @@ export class MeshNetwork {
 
         // If signal contains sender's public key, store it
         if (signal.senderPublicKey) {
-          peerPublicKeys.set(from, fromHex(signal.senderPublicKey));
+          this.peerPublicKeys.set(from, fromHex(signal.senderPublicKey));
         }
 
         const peer = this.peerPool.getOrCreatePeer(from);
@@ -893,7 +926,7 @@ export class MeshNetwork {
         // Ideally we check if listener is attached.
         peer.onSignal((sig: any) => {
           if (sig.type === "candidate") {
-            const recipientKey = peerPublicKeys.get(from);
+            const recipientKey = this.peerPublicKeys.get(from);
             if (recipientKey) {
               this.httpSignaling?.sendSignal(
                 from,
@@ -912,7 +945,7 @@ export class MeshNetwork {
         try {
           if (type === "offer") {
             const answer = await peer.createAnswer(signal);
-            const recipientKey = peerPublicKeys.get(from);
+            const recipientKey = this.peerPublicKeys.get(from);
 
             if (recipientKey) {
               await this.httpSignaling?.sendSignal(

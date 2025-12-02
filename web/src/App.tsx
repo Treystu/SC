@@ -234,6 +234,11 @@ function App() {
     try {
       await connectToPeer(peerId);
       announce.message("Connected to peer", "polite");
+      // Automatically open conversation with the peer
+      setSelectedConversation(peerId);
+      // If we are in the public room view, we might want to close it or keep it open?
+      // The user said "create a message window between those users", which implies switching to the chat view.
+      setActiveRoom(null); // Close the room view to show the chat
     } catch (error) {
       console.error("Failed to connect to peer:", error);
       alert(
