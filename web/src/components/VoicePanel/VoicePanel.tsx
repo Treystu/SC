@@ -27,6 +27,8 @@ export interface VoicePanelProps {
   className?: string;
   /** Disable the panel */
   disabled?: boolean;
+  /** External transcription text to display */
+  transcription?: string;
 }
 
 export function VoicePanel({
@@ -38,12 +40,12 @@ export function VoicePanel({
   maxDuration = 60,
   showVisualization = true,
   className = '',
-  disabled = false
+  disabled = false,
+  transcription = ''
 }: VoicePanelProps) {
   const [mode, setMode] = useState<VoicePanelMode>('idle');
   const [duration, setDuration] = useState(0);
   const [audioLevel, setAudioLevel] = useState(0);
-  const [transcribedText, setTranscribedText] = useState<string>('');
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -272,9 +274,9 @@ export function VoicePanel({
       </div>
 
       {/* Transcription display */}
-      {transcribedText && (
+      {transcription && (
         <div className="voice-transcription">
-          <p>{transcribedText}</p>
+          <p>{transcription}</p>
         </div>
       )}
     </div>
