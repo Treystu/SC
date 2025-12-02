@@ -3,7 +3,7 @@
  * Provides context-based toast notifications for user feedback
  */
 
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef, ReactNode } from 'react';
 import './Toast.css';
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info';
@@ -49,8 +49,16 @@ interface ToastProviderProps {
  */
 export function ToastProvider({ children, maxToasts = 5 }: ToastProviderProps) {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  // Store timeout IDs to clear them when toasts are removed early
+  const timeoutRefs = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const removeToast = useCallback((id: string) => {
+    // Clear timeout if toast is removed early
+    const timeoutId = timeoutRefs.current.get(id);
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutRefs.current.delete(id);
+    }
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   }, []);
 
@@ -76,13 +84,18 @@ export function ToastProvider({ children, maxToasts = 5 }: ToastProviderProps) {
 
     // Auto-remove after duration
     if (duration > 0) {
-      setTimeout(() => {
+      const timeoutId = setTimeout(() => {
+        timeoutRefs.current.delete(newToast.id);
         removeToast(newToast.id);
       }, duration);
+      timeoutRefs.current.set(newToast.id, timeoutId);
     }
   }, [maxToasts, removeToast]);
 
   const clearAll = useCallback(() => {
+    // Clear all pending timeouts
+    timeoutRefs.current.forEach((timeoutId) => clearTimeout(timeoutId));
+    timeoutRefs.current.clear();
     setToasts([]);
   }, []);
 

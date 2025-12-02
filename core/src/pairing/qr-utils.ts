@@ -164,7 +164,7 @@ export async function scanQRFromVideo(
   }
 
   return new Promise((resolve) => {
-    let animationId: number;
+    let animationId: number | undefined;
 
     const scan = () => {
       if (signal?.aborted) {
@@ -192,7 +192,9 @@ export async function scanQRFromVideo(
     };
 
     signal?.addEventListener('abort', () => {
-      cancelAnimationFrame(animationId);
+      if (animationId !== undefined) {
+        cancelAnimationFrame(animationId);
+      }
       resolve(null);
     });
 

@@ -834,7 +834,7 @@ export class MeshNetwork {
       }
 
       // Store public key if available
-      let pkHex = peer.metadata?.publicKey || peer.publicKey;
+      const pkHex = peer.metadata?.publicKey || peer.publicKey;
       if (pkHex) {
         const pk = fromHex(pkHex);
         if (pk.length === 32) {

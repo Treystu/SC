@@ -140,14 +140,13 @@ export async function splitFile(
 
   const generator = chunkFile(file, chunkSize);
   
-  while (true) {
-    const result = await generator.next();
-    if (result.done) {
-      metadata = result.value;
-      break;
-    }
+  // Iterate through the generator to collect all chunks
+  let result = await generator.next();
+  while (!result.done) {
     chunks.push(result.value);
+    result = await generator.next();
   }
+  metadata = result.value;
 
   if (!metadata) {
     throw new Error('Failed to generate file metadata');

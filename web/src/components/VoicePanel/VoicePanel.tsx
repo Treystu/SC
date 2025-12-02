@@ -34,7 +34,7 @@ export interface VoicePanelProps {
 export function VoicePanel({
   onRecordingStart,
   onRecordingStop,
-  onTranscription,
+  onTranscription: _onTranscription,
   onError,
   pushToTalk = false,
   maxDuration = 60,
@@ -55,11 +55,15 @@ export function VoicePanel({
   const durationTimerRef = useRef<number | null>(null);
   const animationFrameRef = useRef<number | null>(null);
 
-  // Cleanup on unmount
+  // Refs for cleanup functions to avoid stale closures
+  const stopRecordingRef = useRef<() => void>(() => {});
+  const cleanupRef = useRef<() => void>(() => {});
+
+  // Cleanup on unmount - use refs to avoid stale closures
   useEffect(() => {
     return () => {
-      stopRecording();
-      cleanup();
+      stopRecordingRef.current();
+      cleanupRef.current();
     };
   }, []);
 
@@ -83,6 +87,36 @@ export function VoicePanel({
     analyserRef.current = null;
     mediaRecorderRef.current = null;
   }, []);
+
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+
+    if (durationTimerRef.current) {
+      clearInterval(durationTimerRef.current);
+      durationTimerRef.current = null;
+    }
+
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+
+    setMode('idle');
+    setAudioLevel(0);
+  }, []);
+
+   // Update refs when callbacks change
+  useEffect(() => {
+    stopRecordingRef.current = stopRecording;
+    cleanupRef.current = cleanup;
+  }, [stopRecording, cleanup]);
 
   const startVisualization = useCallback(() => {
     if (!analyserRef.current || !showVisualization) return;
@@ -139,11 +173,11 @@ export function VoicePanel({
       setDuration(0);
       onRecordingStart?.();
 
-      // Start duration timer
+      // Start duration timer - use ref to get latest stopRecording
       durationTimerRef.current = window.setInterval(() => {
         setDuration(d => {
           if (d >= maxDuration) {
-            stopRecording();
+            stopRecordingRef.current();
             return d;
           }
           return d + 1;
@@ -158,32 +192,6 @@ export function VoicePanel({
       onError?.(error as Error);
     }
   }, [disabled, mode, maxDuration, onRecordingStart, onRecordingStop, onError, startVisualization]);
-
-  const stopRecording = useCallback(() => {
-    if (mode !== 'recording') return;
-
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
-    }
-
-    if (durationTimerRef.current) {
-      clearInterval(durationTimerRef.current);
-      durationTimerRef.current = null;
-    }
-
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
-
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
-
-    setMode('idle');
-    setAudioLevel(0);
-  }, [mode]);
 
   const toggleRecording = useCallback(() => {
     if (mode === 'idle') {
