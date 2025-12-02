@@ -136,7 +136,6 @@ export async function splitFile(
   chunkSize: number = DEFAULT_CHUNK_SIZE
 ): Promise<{ chunks: FileChunkPayload[]; metadata: FileChunkMetadata }> {
   const chunks: FileChunkPayload[] = [];
-  let metadata: FileChunkMetadata | undefined;
 
   const generator = chunkFile(file, chunkSize);
   
@@ -146,7 +145,7 @@ export async function splitFile(
     chunks.push(result.value);
     result = await generator.next();
   }
-  metadata = result.value;
+  const metadata = result.value;
 
   if (!metadata) {
     throw new Error('Failed to generate file metadata');
