@@ -9,6 +9,18 @@ export * from "./protocol/message.js";
 export * from "./crypto/primitives.js";
 export * from "./crypto/storage.js";
 export {
+  encryptEnvelope,
+  decryptEnvelope,
+  signEnvelope,
+  verifyEnvelope,
+  serializeEncryptedEnvelope,
+  deserializeEncryptedEnvelope,
+  serializeSignedEnvelope,
+  deserializeSignedEnvelope,
+  type EncryptedEnvelope,
+  type SignedEnvelope,
+} from "./crypto/envelope.js";
+export {
   generateFullFingerprint,
   formatFingerprint,
   isValidPublicKey,
@@ -22,6 +34,12 @@ export * from "./mesh/routing.js";
 export * from "./mesh/relay.js";
 export * from "./mesh/network.js";
 export * from "./mesh/health.js";
+export {
+  IndexedDbSeenAdapter,
+  MemorySeenAdapter,
+  createSeenAdapter,
+  type MeshSeenAdapter,
+} from "./mesh/seen-adapter.js";
 
 // Transport
 export * from "./transport/webrtc.js";
@@ -36,6 +54,18 @@ export {
   SignalingMessage,
   SignalingMessageType,
 } from "./transport/webrtc-enhanced.js";
+export {
+  WebSocketSessionEnhanced,
+  WebSocketSessionState,
+  type WebSocketSessionConfig,
+} from "./transport/websocket-session.js";
+export {
+  RTCSessionManager,
+  type RTCOutboxMessage,
+  type RTCSessionConfig,
+  type RTCSessionStats,
+  type MessagePriority,
+} from "./transport/rtc-session-manager.js";
 
 // Discovery
 export * from "./discovery/peer.js";
@@ -67,8 +97,40 @@ export {
   type ProximityPairingOptions,
 } from "./discovery/proximity.js";
 
+// Pairing utilities
+export {
+  encodePairingData,
+  decodePairingData,
+  renderQR,
+  generateQRDataURL,
+  scanQRFromVideo,
+  scanQRFromImage,
+  startCameraStream,
+  isCameraAvailable,
+  setJsQR,
+  isJsQRAvailable,
+  type QRPairingData,
+} from "./pairing/qr-utils.js";
+export {
+  AudioCalibration,
+  playAudioData,
+  calibrateBitDuration,
+  type AudioCalibrationResult,
+  type AudioPairingConfig,
+} from "./pairing/audio-calibration.js";
+
 // File transfer
 export * from "./transfer/file.js";
+export {
+  chunkFile,
+  splitFile,
+  FileReassembler,
+  DEFAULT_CHUNK_SIZE,
+  MAX_CHUNK_SIZE,
+  type FileChunkPayload,
+  type FileChunkMetadata,
+  type ReassemblyState,
+} from "./transfer/file-chunker.js";
 
 // Health check
 export {
