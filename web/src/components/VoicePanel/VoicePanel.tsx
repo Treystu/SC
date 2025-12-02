@@ -89,7 +89,10 @@ export function VoicePanel({
   }, []);
 
   const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+    // Only proceed if we have an active recorder
+    if (!mediaRecorderRef.current) return;
+    
+    if (mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
     }
 
@@ -112,7 +115,7 @@ export function VoicePanel({
     setAudioLevel(0);
   }, []);
 
-   // Update refs when callbacks change
+  // Update refs when callbacks change
   useEffect(() => {
     stopRecordingRef.current = stopRecording;
     cleanupRef.current = cleanup;
