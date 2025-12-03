@@ -57,6 +57,24 @@ export function useMeshNetwork() {
   // Initialize mesh network with persistence
   useEffect(() => {
     let retryInterval: NodeJS.Timeout;
+    let handleServiceWorkerMessage: (event: MessageEvent) => void;
+
+    // Process offline queue
+    const retryQueuedMessages = async () => {
+      if (!meshNetworkRef.current) return;
+
+      await offlineQueue.processQueue(async (msg) => {
+        try {
+          await meshNetworkRef.current!.sendMessage(
+            msg.recipientId,
+            msg.content,
+          );
+          return true; // Sent successfully
+        } catch (e) {
+          return false; // Failed to send
+        }
+      });
+    };
 
     const initMeshNetwork = async () => {
       try {
@@ -353,23 +371,6 @@ export function useMeshNetwork() {
           }
         };
 
-        // Process offline queue
-        const retryQueuedMessages = async () => {
-          if (!meshNetworkRef.current) return;
-
-          await offlineQueue.processQueue(async (msg) => {
-            try {
-              await meshNetworkRef.current!.sendMessage(
-                msg.recipientId,
-                msg.content,
-              );
-              return true; // Sent successfully
-            } catch (e) {
-              return false; // Failed to send
-            }
-          });
-        };
-
         // Set up periodic retry
         retryInterval = setInterval(retryQueuedMessages, 30000); // 30 seconds
 
@@ -397,9 +398,30 @@ export function useMeshNetwork() {
 
     initMeshNetwork();
 
+    // Listen for Service Worker sync requests
+    handleServiceWorkerMessage = async (event: MessageEvent) => {
+      if (event.data && event.data.type === "SYNC_OFFLINE_MESSAGES") {
+        console.log("Received sync request from Service Worker");
+        await retryQueuedMessages();
+      }
+    };
+
+    if (navigator.serviceWorker) {
+      navigator.serviceWorker.addEventListener(
+        "message",
+        handleServiceWorkerMessage,
+      );
+    }
+
     // Cleanup on unmount
     return () => {
       if (retryInterval) clearInterval(retryInterval);
+      if (navigator.serviceWorker && handleServiceWorkerMessage) {
+        navigator.serviceWorker.removeEventListener(
+          "message",
+          handleServiceWorkerMessage,
+        );
+      }
       if (meshNetworkRef.current) {
         meshNetworkRef.current.shutdown();
         meshNetworkRef.current = null;
@@ -722,61 +744,66 @@ export function useMeshNetwork() {
   const [roomMessages, setRoomMessages] = useState<any[]>([]);
   const [isJoinedToRoom, setIsJoinedToRoom] = useState(false);
 
-  const joinRoom = useCallback(async (url: string): Promise<void> => {
-    if (!meshNetworkRef.current)
-      throw new Error("Mesh network not initialized");
-    setJoinError(null);
-    setRoomMessages([]); // Clear messages on join
-    try {
-      // Setup listeners before joining
-      meshNetworkRef.current.onDiscoveryUpdate((peers) => {
-        setDiscoveredPeers(peers);
-      });
+  const joinRoom = useCallback(
+    async (url: string): Promise<void> => {
+      if (!meshNetworkRef.current)
+        throw new Error("Mesh network not initialized");
+      setJoinError(null);
+      setRoomMessages([]); // Clear messages on join
+      try {
+        // Setup listeners before joining
+        meshNetworkRef.current.onDiscoveryUpdate((peers) => {
+          setDiscoveredPeers(peers);
+          // Phase 1: Auto-connect is now handled within network.ts joinPublicRoom
+          // We just update the UI state here
+        });
 
-      const seenMessageIds = new Set<string>();
+        const seenMessageIds = new Set<string>();
 
-      meshNetworkRef.current.onPublicRoomMessage((msg) => {
-        // Normalize message (HttpSignaling uses 'from', we use 'peerId')
-        const normalizedMsg = {
-          ...msg,
-          peerId: msg.peerId || msg.from,
-        };
+        meshNetworkRef.current.onPublicRoomMessage((msg) => {
+          // Normalize message (HttpSignaling uses 'from', we use 'peerId')
+          const normalizedMsg = {
+            ...msg,
+            peerId: msg.peerId || msg.from,
+          };
 
-        // Deduplicate messages based on ID or content+timestamp signature
-        const msgId =
-          normalizedMsg.id ||
-          normalizedMsg._id ||
-          `${normalizedMsg.peerId}-${normalizedMsg.timestamp}-${normalizedMsg.content}`;
+          // Deduplicate messages based on ID or content+timestamp signature
+          const msgId =
+            normalizedMsg.id ||
+            normalizedMsg._id ||
+            `${normalizedMsg.peerId}-${normalizedMsg.timestamp}-${normalizedMsg.content}`;
 
-        if (!seenMessageIds.has(msgId)) {
-          seenMessageIds.add(msgId);
-          setRoomMessages((prev: any[]) => {
-            // Double check against current state to be sure
-            if (
-              prev.some(
-                (m: any) =>
-                  m.id === msgId ||
-                  m._id === msgId ||
-                  (m.peerId === normalizedMsg.peerId &&
-                    m.timestamp === normalizedMsg.timestamp &&
-                    m.content === normalizedMsg.content),
+          if (!seenMessageIds.has(msgId)) {
+            seenMessageIds.add(msgId);
+            setRoomMessages((prev: any[]) => {
+              // Double check against current state to be sure
+              if (
+                prev.some(
+                  (m: any) =>
+                    m.id === msgId ||
+                    m._id === msgId ||
+                    (m.peerId === normalizedMsg.peerId &&
+                      m.timestamp === normalizedMsg.timestamp &&
+                      m.content === normalizedMsg.content),
+                )
               )
-            )
-              return prev;
-            return [...prev, normalizedMsg];
-          });
-        }
-      });
+                return prev;
+              return [...prev, normalizedMsg];
+            });
+          }
+        });
 
-      await meshNetworkRef.current.joinPublicRoom(url);
-      setIsJoinedToRoom(true);
-    } catch (error) {
-      console.error("Failed to join room:", error);
-      setJoinError(error instanceof Error ? error.message : String(error));
-      setIsJoinedToRoom(false);
-      throw error;
-    }
-  }, []);
+        await meshNetworkRef.current.joinPublicRoom(url);
+        setIsJoinedToRoom(true);
+      } catch (error) {
+        console.error("Failed to join room:", error);
+        setJoinError(error instanceof Error ? error.message : String(error));
+        setIsJoinedToRoom(false);
+        throw error;
+      }
+    },
+    [setJoinError, setRoomMessages, setDiscoveredPeers, setIsJoinedToRoom],
+  );
 
   const leaveRoom = useCallback(() => {
     if (meshNetworkRef.current) {
@@ -827,6 +854,16 @@ export function useMeshNetwork() {
     },
     [],
   );
+
+  // Auto-join public room on initialization
+  useEffect(() => {
+    if (status.isConnected && !isJoinedToRoom) {
+      const ROOM_URL = "/.netlify/functions/room";
+      joinRoom(ROOM_URL).catch((err) => {
+        console.error("Failed to auto-join public room on init:", err);
+      });
+    }
+  }, [status.isConnected, isJoinedToRoom, joinRoom]);
 
   // Memoized return value to prevent unnecessary re-renders
   return useMemo(

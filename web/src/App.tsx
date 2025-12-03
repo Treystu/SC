@@ -203,22 +203,38 @@ function App() {
       const urlParams = new URLSearchParams(window.location.search);
       const roomUrl = urlParams.get("room");
 
+      const attemptJoin = async (url: string, retries = 3) => {
+        try {
+          console.log(`Attempting to join room: ${url}`);
+          await joinRoom(url);
+          autoJoinedRef.current = true;
+          console.log("Successfully joined room");
+        } catch (err) {
+          console.error(`Failed to join room (retries left: ${retries}):`, err);
+          if (retries > 0) {
+            setTimeout(() => attemptJoin(url, retries - 1), 2000);
+          } else {
+            announce.message(
+              "Failed to auto-join room after multiple attempts",
+              "assertive",
+            );
+          }
+        }
+      };
+
       if (roomUrl) {
-        autoJoinedRef.current = true;
-        handleJoinRoom(roomUrl).catch((err) => {
-          console.error("Failed to join room from URL:", err);
-          announce.message("Failed to join room", "assertive");
-        });
+        attemptJoin(roomUrl);
       } else if (config.publicHub || config.deploymentMode === "netlify") {
-        autoJoinedRef.current = true;
         console.log(`Auto-joining room in ${config.deploymentMode} mode...`);
         // Use joinRoom directly to avoid setting selectedConversation (silent join)
-        joinRoom(config.relayUrl).catch((err) => {
-          console.error("Failed to auto-join room:", err);
-        });
+        if (config.relayUrl) {
+          attemptJoin(config.relayUrl);
+        } else {
+          console.warn("No relay URL configured for auto-join");
+        }
       }
     }
-  }, [status.isConnected, handleJoinRoom]);
+  }, [status.isConnected, joinRoom]);
 
   // Handle pending invite from join.html page
   useEffect(() => {

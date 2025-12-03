@@ -162,16 +162,28 @@ async function syncOfflineMessages() {
     const db = await openDatabase();
     const messages = await getPendingMessages(db);
 
-    // Send each message
-    for (const message of messages) {
-      try {
-        // Attempt to send message
-        await sendMessage(message);
-        // Mark as sent
-        await markMessageAsSent(db, message.id);
-      } catch (error) {
-        console.error("Failed to send message:", error);
+    if (messages.length === 0) return;
+
+    console.log(
+      `Service Worker: Found ${messages.length} pending messages to sync`,
+    );
+
+    // Notify all open clients to process the queue
+    const clients = await self.clients.matchAll({ type: "window" });
+    if (clients && clients.length > 0) {
+      for (const client of clients) {
+        client.postMessage({
+          type: "SYNC_OFFLINE_MESSAGES",
+          count: messages.length,
+        });
       }
+    } else {
+      // No clients open. In a real P2P mesh, we can't do much without a running window
+      // unless we have a relay to POST to.
+      // For Phase 2, we'll just log this limitation.
+      console.log(
+        "Service Worker: No active clients to handle sync. Messages remain queued.",
+      );
     }
   } catch (error) {
     console.error("Background sync failed:", error);
@@ -180,39 +192,32 @@ async function syncOfflineMessages() {
 
 function openDatabase() {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open("sovereign-communications", 1);
+    // Use version 4 to match the application schema
+    const request = indexedDB.open("sovereign-communications", 4);
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
+    // We don't handle upgrades here; the main app does that.
+    // If the DB doesn't exist or is old, this might fail or open an old version,
+    // but the main app is responsible for migration.
   });
 }
 
 function getPendingMessages(db) {
   return new Promise((resolve, reject) => {
-    const transaction = db.transaction(["offline-queue"], "readonly");
-    const store = transaction.objectStore("offline-queue");
-    const request = store.getAll();
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    try {
+      const transaction = db.transaction(["offline-queue"], "readonly");
+      const store = transaction.objectStore("offline-queue");
+      const request = store.getAll();
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    } catch (e) {
+      // Store might not exist if migration hasn't run
+      resolve([]);
+    }
   });
 }
 
-function markMessageAsSent(db, messageId) {
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(["offline-queue"], "readwrite");
-    const store = transaction.objectStore("offline-queue");
-    const request = store.delete(messageId);
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
-  });
-}
-
-async function sendMessage(message) {
-  // This would interact with the mesh network
-  // For now, just a placeholder
-  console.log("Sending message:", message);
-}
-
-// Message handler for registering invite shares
+// Message handler for registering invite shares and other events
 self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "REGISTER_INVITE") {
     console.log("Service Worker: Registering invite share");
@@ -220,6 +225,8 @@ self.addEventListener("message", (event) => {
   } else if (event.data && event.data.type === "UNREGISTER_INVITE") {
     console.log("Service Worker: Unregistering invite share");
     activeInvite = null;
+  } else if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
   }
 });
 
@@ -227,20 +234,42 @@ self.addEventListener("message", (event) => {
 self.addEventListener("push", (event) => {
   console.log("Service Worker: Push notification received");
 
-  const data = event.data ? event.data.json() : {};
+  let data = {};
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch (e) {
+      console.warn("Push data is not JSON");
+    }
+  }
+
   const title = data.title || "New Message";
+  let body = data.body || "You have a new message";
+  let url = data.url || "/";
+  let icon = "/icon-192.png";
+
+  // Handle specific notification types
+  if (data.type === "peer_connection") {
+    body = `New peer connected: ${data.name || "Unknown"}`;
+    url = `/?peer=${data.peerId}`;
+  } else if (data.type === "message") {
+    body = `${data.senderName || "Someone"}: ${data.content || "Sent a message"}`;
+    url = `/?conversation=${data.conversationId}`;
+  }
+
   const options = {
-    body: data.body || "You have a new message",
-    icon: "/icon-192.png",
+    body: body,
+    icon: icon,
     badge: "/icon-192.png",
     vibrate: [200, 100, 200],
     data: {
-      url: data.url || "/",
+      url: url,
     },
     actions: [
       { action: "open", title: "Open" },
       { action: "close", title: "Dismiss" },
     ],
+    tag: data.tag || "general",
   };
 
   event.waitUntil(self.registration.showNotification(title, options));
@@ -252,6 +281,19 @@ self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
   if (event.action === "open" || !event.action) {
-    event.waitUntil(clients.openWindow(event.notification.data.url));
+    event.waitUntil(
+      clients.matchAll({ type: "window" }).then((windowClients) => {
+        // Check if there is already a window for this URL
+        for (let client of windowClients) {
+          if (client.url === event.notification.data.url && "focus" in client) {
+            return client.focus();
+          }
+        }
+        // If not, open a new window
+        if (clients.openWindow) {
+          return clients.openWindow(event.notification.data.url);
+        }
+      }),
+    );
   }
 });

@@ -2,18 +2,18 @@
  * Mesh networking core - routing table and peer management
  */
 
-import { MessageType } from '../protocol/message.js';
+import { MessageType } from "../protocol/message.js";
 
 export enum PeerState {
-  CONNECTING = 'connecting',
-  CONNECTED = 'connected',
-  DEGRADED = 'degraded',
-  DISCONNECTED = 'disconnected',
+  CONNECTING = "connecting",
+  CONNECTED = "connected",
+  DEGRADED = "degraded",
+  DISCONNECTED = "disconnected",
 }
 
 export interface PeerCapabilities {
   maxBandwidth?: number;
-  supportedTransports: ('webrtc' | 'bluetooth' | 'local')[];
+  supportedTransports: ("webrtc" | "bluetooth" | "local")[];
   protocolVersion: number;
   features: string[];
 }
@@ -32,7 +32,7 @@ export interface Peer {
   publicKey: Uint8Array;
   lastSeen: number;
   connectedAt: number;
-  transportType: 'webrtc' | 'bluetooth' | 'local';
+  transportType: "webrtc" | "bluetooth" | "local";
   connectionQuality: number; // 0-100
   bytesSent: number;
   bytesReceived: number;
@@ -46,7 +46,7 @@ export interface Peer {
 export function createPeer(
   id: string,
   publicKey: Uint8Array,
-  transportType: 'webrtc' | 'bluetooth' | 'local' = 'webrtc'
+  transportType: "webrtc" | "bluetooth" | "local" = "webrtc",
 ): Peer {
   return {
     id,
@@ -76,6 +76,7 @@ export interface RouteMetrics {
   hopCount: number;
   latency: number; // milliseconds
   reliability: number; // 0-1, success rate
+  bandwidth?: number; // bytes per second (optional)
   lastUsed: number;
 }
 
@@ -151,6 +152,7 @@ export class RoutingTable {
         hopCount: 0,
         latency: 0,
         reliability: 1.0,
+        bandwidth: 0,
         lastUsed: Date.now(),
       },
       expiresAt: Date.now() + this.ROUTE_TTL,
@@ -200,17 +202,16 @@ export class RoutingTable {
    */
   addRoute(route: Route): void {
     const existing = this.routes.get(route.destination);
-    
+
     // Route conflict resolution based on metrics
-    const shouldUpdate = !existing || 
-      this.shouldReplaceRoute(existing, route);
-    
+    const shouldUpdate = !existing || this.shouldReplaceRoute(existing, route);
+
     if (shouldUpdate) {
       // Ensure route has expiry
       if (!route.expiresAt) {
         route.expiresAt = Date.now() + this.ROUTE_TTL;
       }
-      
+
       this.routes.set(route.destination, route);
       this.cleanupExpiredRoutes();
     }
@@ -235,17 +236,32 @@ export class RoutingTable {
       if (newRoute.metrics.latency < existing.metrics.latency) {
         return true;
       }
-      
+
       // If same latency, prefer higher reliability
-      if (newRoute.metrics.latency === existing.metrics.latency &&
-          newRoute.metrics.reliability > existing.metrics.reliability) {
-        return true;
-      }
-      
-      // If metrics equal, prefer newer route
-      if (newRoute.metrics.latency === existing.metrics.latency &&
+      if (newRoute.metrics.latency === existing.metrics.latency) {
+        if (newRoute.metrics.reliability > existing.metrics.reliability) {
+          return true;
+        }
+
+        // If same reliability, prefer higher bandwidth
+        const newBw = newRoute.metrics.bandwidth || 0;
+        const existingBw = existing.metrics.bandwidth || 0;
+        if (
           newRoute.metrics.reliability === existing.metrics.reliability &&
-          newRoute.timestamp > existing.timestamp) {
+          newBw > existingBw
+        ) {
+          return true;
+        }
+      }
+
+      // If metrics equal, prefer newer route
+      if (
+        newRoute.metrics.latency === existing.metrics.latency &&
+        newRoute.metrics.reliability === existing.metrics.reliability &&
+        (newRoute.metrics.bandwidth || 0) ===
+          (existing.metrics.bandwidth || 0) &&
+        newRoute.timestamp > existing.timestamp
+      ) {
         return true;
       }
     }
@@ -270,13 +286,14 @@ export class RoutingTable {
       }
     }
 
-    toDelete.forEach(dest => this.routes.delete(dest));
+    toDelete.forEach((dest) => this.routes.delete(dest));
 
     // If still over limit, remove least recently used routes
     if (this.routes.size >= this.MAX_ROUTES) {
-      const routes = Array.from(this.routes.entries())
-        .sort((a, b) => a[1].metrics.lastUsed - b[1].metrics.lastUsed);
-      
+      const routes = Array.from(this.routes.entries()).sort(
+        (a, b) => a[1].metrics.lastUsed - b[1].metrics.lastUsed,
+      );
+
       const removeCount = this.routes.size - this.MAX_ROUTES + 100;
       for (let i = 0; i < removeCount && i < routes.length; i++) {
         this.routes.delete(routes[i][0]);
@@ -287,16 +304,25 @@ export class RoutingTable {
   /**
    * Update route metrics
    */
-  updateRouteMetrics(destination: string, latency: number, success: boolean): void {
+  updateRouteMetrics(
+    destination: string,
+    latency: number,
+    success: boolean,
+    bandwidth?: number,
+  ): void {
     const route = this.routes.get(destination);
     if (route) {
       route.metrics.latency = latency;
       route.metrics.lastUsed = Date.now();
-      
+
       // Update reliability with exponential moving average
       const alpha = 0.3;
-      route.metrics.reliability = 
+      route.metrics.reliability =
         alpha * (success ? 1 : 0) + (1 - alpha) * route.metrics.reliability;
+
+      if (bandwidth !== undefined) {
+        route.metrics.bandwidth = bandwidth;
+      }
     }
   }
 
@@ -325,11 +351,11 @@ export class RoutingTable {
    */
   markMessageSeen(messageHash: string): void {
     this.messageCache.set(messageHash, Date.now());
-    
+
     if (this.ENABLE_BLOOM) {
       this.bloomFilter.add(messageHash);
     }
-    
+
     this.cleanupMessageCache();
   }
 
@@ -347,7 +373,7 @@ export class RoutingTable {
           toDelete.push(hash);
         }
       }
-      toDelete.forEach(hash => {
+      toDelete.forEach((hash) => {
         this.messageCache.delete(hash);
         if (this.ENABLE_BLOOM) {
           this.bloomFilter.delete(hash);
@@ -357,9 +383,10 @@ export class RoutingTable {
     }
 
     // LRU eviction: sort by timestamp and remove oldest
-    const entries = Array.from(this.messageCache.entries())
-      .sort((a, b) => a[1] - b[1]);
-    
+    const entries = Array.from(this.messageCache.entries()).sort(
+      (a, b) => a[1] - b[1],
+    );
+
     const removeCount = this.messageCache.size - this.MAX_CACHE_SIZE + 100;
     for (let i = 0; i < removeCount && i < entries.length; i++) {
       this.messageCache.delete(entries[i][0]);
@@ -387,7 +414,10 @@ export class RoutingTable {
     // Update peer state based on reputation
     if (peer.metadata.reputation < 20) {
       peer.state = PeerState.DEGRADED;
-    } else if (peer.state === PeerState.DEGRADED && peer.metadata.reputation > 40) {
+    } else if (
+      peer.state === PeerState.DEGRADED &&
+      peer.metadata.reputation > 40
+    ) {
       peer.state = PeerState.CONNECTED;
     }
   }
@@ -423,9 +453,11 @@ export class RoutingTable {
   cleanupBlacklists(): void {
     const now = Date.now();
     for (const peer of this.peers.values()) {
-      if (peer.metadata.blacklisted && 
-          peer.metadata.blacklistExpiry && 
-          peer.metadata.blacklistExpiry < now) {
+      if (
+        peer.metadata.blacklisted &&
+        peer.metadata.blacklistExpiry &&
+        peer.metadata.blacklistExpiry < now
+      ) {
         this.unblacklistPeer(peer.id);
       }
     }
@@ -462,7 +494,7 @@ export class RoutingTable {
       }
     }
 
-    stale.forEach(id => this.removePeer(id));
+    stale.forEach((id) => this.removePeer(id));
     return stale;
   }
 
@@ -498,7 +530,10 @@ export class RoutingTable {
  * Message priority queue with starvation prevention
  */
 export class MessageQueue {
-  private queues: Map<MessageType, Array<{ message: any; timestamp: number; originalPriority: MessageType }>> = new Map();
+  private queues: Map<
+    MessageType,
+    Array<{ message: any; timestamp: number; originalPriority: MessageType }>
+  > = new Map();
   private readonly priorities = [
     MessageType.CONTROL_PING,
     MessageType.CONTROL_PONG,
@@ -516,10 +551,10 @@ export class MessageQueue {
     if (!this.queues.has(messageType)) {
       this.queues.set(messageType, []);
     }
-    this.queues.get(messageType)!.push({ 
-      message, 
+    this.queues.get(messageType)!.push({
+      message,
       timestamp: Date.now(),
-      originalPriority: messageType 
+      originalPriority: messageType,
     });
   }
 
@@ -547,17 +582,25 @@ export class MessageQueue {
    */
   private preventStarvation(): void {
     const now = Date.now();
-    
+
     // Check low-priority queues for old messages
     for (let i = this.priorities.length - 1; i > 0; i--) {
       const currentPriority = this.priorities[i];
       const queue = this.queues.get(currentPriority);
-      
+
       if (!queue || queue.length === 0) continue;
-      
-      const itemsToEscalate: Array<{ message: any; timestamp: number; originalPriority: MessageType }> = [];
-      const remainingItems: Array<{ message: any; timestamp: number; originalPriority: MessageType }> = [];
-      
+
+      const itemsToEscalate: Array<{
+        message: any;
+        timestamp: number;
+        originalPriority: MessageType;
+      }> = [];
+      const remainingItems: Array<{
+        message: any;
+        timestamp: number;
+        originalPriority: MessageType;
+      }> = [];
+
       for (const item of queue) {
         const age = now - item.timestamp;
         if (age > this.ESCALATION_THRESHOLD) {
@@ -566,10 +609,10 @@ export class MessageQueue {
           remainingItems.push(item);
         }
       }
-      
+
       // Update current queue
       this.queues.set(currentPriority, remainingItems);
-      
+
       // Move escalated items to higher priority queue
       if (itemsToEscalate.length > 0) {
         const higherPriority = this.priorities[i - 1];
@@ -606,7 +649,7 @@ export class MessageQueue {
   getOldestMessageAge(): number {
     const now = Date.now();
     let oldest = 0;
-    
+
     for (const queue of this.queues.values()) {
       for (const item of queue) {
         const age = now - item.timestamp;
@@ -615,7 +658,7 @@ export class MessageQueue {
         }
       }
     }
-    
+
     return oldest;
   }
 

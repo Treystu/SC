@@ -4,7 +4,7 @@
  */
 
 import { Message, MessageType, encodeMessage } from "../protocol/message.js";
-import { RoutingTable, Peer, createPeer } from "./routing.js";
+import { RoutingTable, Peer, createPeer, PeerState } from "./routing.js";
 import { MessageRelay } from "./relay.js";
 import { PeerConnectionPool } from "../transport/webrtc.js";
 import {
@@ -13,6 +13,7 @@ import {
   signMessage,
 } from "../crypto/primitives.js";
 import { Directory } from "./directory.js";
+import { ConnectionMonitor } from "../connection-quality.js";
 
 export interface MeshNetworkConfig {
   identity?: IdentityKeyPair;
@@ -52,6 +53,8 @@ export class MeshNetwork {
 
   // State
   private discoveredPeers: Set<string> = new Set();
+  private peerMonitors: Map<string, ConnectionMonitor> = new Map();
+  private healthCheckInterval: any;
 
   // Metrics tracking
   private messagesSent = 0;
@@ -96,13 +99,41 @@ export class MeshNetwork {
       this.messagesReceived++;
       this.bytesTransferred += message.payload.byteLength;
 
+      const senderId = Array.from(message.header.senderId)
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+
       // Handle Control Messages
       if (message.header.type === MessageType.CONTROL_PING) {
-        this.sendPong(message.header.senderId);
+        this.sendPong(message.header.senderId, message.header.timestamp);
         return;
       }
       if (message.header.type === MessageType.CONTROL_PONG) {
-        // TODO: Update peer last seen status
+        // Calculate RTT
+        // Payload contains the original timestamp (8 bytes / 64-bit float stored as string or bytes)
+        // For simplicity, let's assume payload is JSON string of timestamp
+        try {
+          const payloadStr = new TextDecoder().decode(message.payload);
+          const data = JSON.parse(payloadStr);
+          if (data.pingTimestamp) {
+            const rtt = Date.now() - data.pingTimestamp;
+            const monitor = this.peerMonitors.get(senderId);
+            if (monitor) {
+              monitor.updateLatency(rtt);
+              // Update routing table metrics
+              const metrics = monitor.getMetrics();
+              this.routingTable.updateRouteMetrics(
+                senderId,
+                rtt,
+                true,
+                metrics.bandwidth,
+              );
+              this.routingTable.updatePeerLastSeen(senderId);
+            }
+          }
+        } catch (e) {
+          // Ignore malformed PONG
+        }
         return;
       }
 
@@ -129,6 +160,14 @@ export class MeshNetwork {
     // Handle incoming messages from peers
     this.peerPool.onMessage((peerId: string, data: Uint8Array) => {
       this.messageRelay.processMessage(data, peerId);
+
+      // Update packet loss metrics (simplified)
+      const monitor = this.peerMonitors.get(peerId);
+      if (monitor) {
+        // In a real implementation, we'd track sequence numbers to detect loss
+        // For now, just mark activity
+        monitor.updateBandwidth(data.length, 1000); // Approximate
+      }
     });
 
     // Handle signaling messages from peers (ICE candidates, offers, answers)
@@ -160,6 +199,12 @@ export class MeshNetwork {
     this.heartbeatInterval = setInterval(() => {
       this.broadcastPing();
     }, intervalMs);
+
+    // Also start health check loop
+    if (this.healthCheckInterval) clearInterval(this.healthCheckInterval);
+    this.healthCheckInterval = setInterval(() => {
+      this.monitorConnectionHealth();
+    }, 5000); // Check every 5 seconds
   }
 
   /**
@@ -169,6 +214,10 @@ export class MeshNetwork {
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = undefined;
+    }
+    if (this.healthCheckInterval) {
+      clearInterval(this.healthCheckInterval);
+      this.healthCheckInterval = undefined;
     }
   }
 
@@ -196,10 +245,16 @@ export class MeshNetwork {
     this.peerPool.broadcast(encodedMessage);
   }
 
-  private async sendPong(recipientPublicKey: Uint8Array): Promise<void> {
+  private async sendPong(
+    recipientPublicKey: Uint8Array,
+    pingTimestamp: number,
+  ): Promise<void> {
     const recipientId = Array.from(recipientPublicKey)
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("");
+
+    // Echo back the ping timestamp
+    const payload = new TextEncoder().encode(JSON.stringify({ pingTimestamp }));
 
     const message: Message = {
       header: {
@@ -210,7 +265,7 @@ export class MeshNetwork {
         senderId: this.identity.publicKey,
         signature: new Uint8Array(65),
       },
-      payload: new Uint8Array(0),
+      payload: payload,
     };
 
     const messageBytes = encodeMessage(message);
@@ -224,6 +279,84 @@ export class MeshNetwork {
     if (peer && peer.getState() === "connected") {
       peer.send(encodedMessage);
     }
+  }
+
+  /**
+   * Monitor connection health and handle degradation
+   */
+  private peerFailureCounts: Map<string, number> = new Map();
+
+  private monitorConnectionHealth(): void {
+    this.peerMonitors.forEach((monitor, peerId) => {
+      let quality = monitor.getQuality();
+      const peer = this.routingTable.getPeer(peerId);
+
+      if (!peer) {
+        this.peerMonitors.delete(peerId);
+        this.peerFailureCounts.delete(peerId);
+        return;
+      }
+
+      // Update bandwidth metric in routing table
+      const metrics = monitor.getMetrics();
+      if (metrics.bandwidth > 0) {
+        // We pass latency and success=true (assuming if we have bandwidth we are connected)
+        // But updateRouteMetrics expects latency. We use current metric.
+        this.routingTable.updateRouteMetrics(
+          peerId,
+          metrics.latency,
+          true,
+          metrics.bandwidth,
+        );
+      }
+
+      // Check lastSeen as a fallback for silence detection
+      const lastSeenAge = Date.now() - peer.lastSeen;
+      if (lastSeenAge > 30000) {
+        // 30 seconds silence
+        quality = "offline";
+      } else if (lastSeenAge > 10000 && quality !== "offline") {
+        // 10 seconds silence
+        quality = "poor";
+      }
+
+      // Update peer state based on quality
+      if (quality === "poor" && peer.state === PeerState.CONNECTED) {
+        console.warn(
+          `Connection to peer ${peerId} is poor (Last seen: ${lastSeenAge}ms ago). Marking as degraded.`,
+        );
+        peer.state = PeerState.DEGRADED;
+      } else if (
+        (quality === "good" || quality === "excellent") &&
+        peer.state === PeerState.DEGRADED
+      ) {
+        console.log(`Connection to peer ${peerId} recovered.`);
+        peer.state = PeerState.CONNECTED;
+        this.peerFailureCounts.set(peerId, 0);
+      } else if (quality === "offline") {
+        // Track consecutive offline checks
+        const failures = (this.peerFailureCounts.get(peerId) || 0) + 1;
+        this.peerFailureCounts.set(peerId, failures);
+
+        console.warn(
+          `Peer ${peerId} is offline (Last seen: ${lastSeenAge}ms ago, Check ${failures}/6)`,
+        );
+
+        if (failures >= 6) {
+          // ~30 seconds of consecutive offline checks
+          console.error(
+            `Peer ${peerId} has been offline for too long. Disconnecting to trigger reconnection.`,
+          );
+          this.disconnectFromPeer(peerId).catch((err) =>
+            console.error(`Error disconnecting peer ${peerId}:`, err),
+          );
+          this.peerFailureCounts.delete(peerId);
+        }
+      } else {
+        // Reset failure count if healthy
+        this.peerFailureCounts.set(peerId, 0);
+      }
+    });
   }
 
   /**
@@ -315,6 +448,7 @@ export class MeshNetwork {
     );
 
     this.routingTable.addPeer(peer);
+    this.peerMonitors.set(peerId, new ConnectionMonitor()); // Start monitoring
     this.onPeerConnectedCallback?.(peerId);
 
     // Send peer announcement
@@ -326,6 +460,7 @@ export class MeshNetwork {
    */
   private handlePeerDisconnected(peerId: string): void {
     this.routingTable.removePeer(peerId);
+    this.peerMonitors.delete(peerId); // Stop monitoring
     this.onPeerDisconnectedCallback?.(peerId);
   }
 
@@ -386,6 +521,10 @@ export class MeshNetwork {
           .map((b: number) => b.toString(16).padStart(2, "0"))
           .join(""),
         endpoints: [{ type: "webrtc", signaling: this.localPeerId }],
+        capabilities: {
+          supportedTransports: ["webrtc"],
+          protocolVersion: 1,
+        },
         timestamp: Date.now(),
       }),
     );
@@ -542,9 +681,8 @@ export class MeshNetwork {
     this.routingTable.getAllPeers().forEach((peer: Peer) => {
       this.routingTable.removePeer(peer.id);
     });
-  }
-
-  /**
+    this.stopHeartbeat();
+  } /**
    * Get local identity
    */
   getIdentity(): IdentityKeyPair {
@@ -851,52 +989,75 @@ export class MeshNetwork {
       // If not already connected, initiate connection
 
       // If not already connected, initiate connection
-      if (!this.peerPool.getPeer(peer._id)) {
+      const existingPeer = this.peerPool.getPeer(peer._id);
+      if (
+        !existingPeer ||
+        existingPeer.getState() === "disconnected" ||
+        existingPeer.getState() === "failed"
+      ) {
         console.log(
-          `Discovered peer in room: ${peer._id}, initiating connection...`,
+          `Discovered peer in room: ${peer._id}, initiating connection (State: ${existingPeer?.getState() || "new"})...`,
         );
-        const p = this.peerPool.getOrCreatePeer(peer._id);
 
-        // Setup ICE candidate forwarding
-        p.onSignal((signal: any) => {
-          if (signal.type === "candidate") {
+        // Use a slight random delay to reduce collision probability when two peers discover each other simultaneously
+        const delay = Math.random() * 1000;
+        setTimeout(async () => {
+          try {
+            // Double check status after delay
+            const currentPeer = this.peerPool.getPeer(peer._id);
+            if (
+              currentPeer &&
+              (currentPeer.getState() === "connected" ||
+                currentPeer.getState() === "connecting")
+            ) {
+              return;
+            }
+
+            const p = this.peerPool.getOrCreatePeer(peer._id);
+
+            // Setup ICE candidate forwarding
+            // onSignal overwrites the previous callback, so no need to remove listeners explicitly
+            p.onSignal((signal: any) => {
+              if (signal.type === "candidate") {
+                const recipientKey = this.peerPublicKeys.get(peer._id);
+                if (recipientKey && recipientKey.length === 32) {
+                  this.httpSignaling?.sendSignal(
+                    peer._id,
+                    "candidate",
+                    signal.candidate,
+                    recipientKey,
+                  );
+                } else {
+                  // It's possible we don't have the key yet if we just discovered them
+                  // But we should have it from the discovery payload
+                  console.warn(
+                    `Cannot send candidate to ${peer._id}: missing or invalid public key`,
+                  );
+                }
+              }
+            });
+
+            p.createDataChannel({ label: "reliable", ordered: true });
+
+            const offer = await p.createOffer();
             const recipientKey = this.peerPublicKeys.get(peer._id);
+
             if (recipientKey && recipientKey.length === 32) {
-              this.httpSignaling?.sendSignal(
+              await this.httpSignaling?.sendSignal(
                 peer._id,
-                "candidate",
-                signal.candidate,
+                "offer",
+                offer,
                 recipientKey,
               );
             } else {
-              console.warn(
-                `Cannot send candidate to ${peer._id}: missing or invalid public key`,
+              console.error(
+                `Cannot send offer to ${peer._id}: missing or invalid public key`,
               );
             }
+          } catch (err) {
+            console.error(`Failed to create/send offer to ${peer._id}:`, err);
           }
-        });
-
-        p.createDataChannel({ label: "reliable", ordered: true });
-
-        try {
-          const offer = await p.createOffer();
-          const recipientKey = this.peerPublicKeys.get(peer._id);
-
-          if (recipientKey && recipientKey.length === 32) {
-            await this.httpSignaling?.sendSignal(
-              peer._id,
-              "offer",
-              offer,
-              recipientKey,
-            );
-          } else {
-            console.error(
-              `Cannot send offer to ${peer._id}: missing or invalid public key`,
-            );
-          }
-        } catch (err) {
-          console.error(`Failed to create/send offer to ${peer._id}:`, err);
-        }
+        }, delay);
       }
     });
 
