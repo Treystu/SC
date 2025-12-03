@@ -134,6 +134,7 @@ function App() {
     identity?.publicKey || null,
     identity?.privateKey || null,
     userProfile?.displayName || "User",
+    discoveredPeers, // Pass discovered peers for bootstrapping
   );
 
   // Check for pending invite from join.html page

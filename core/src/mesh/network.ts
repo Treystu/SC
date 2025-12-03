@@ -861,6 +861,19 @@ export class MeshNetwork {
     // Create offer
     await peer.createOffer();
 
+    // Set up state change handler to ensure peer is registered when connected
+    peer.onStateChange((state: string) => {
+      if (state === "connected") {
+        this.handlePeerConnected(peerId);
+      } else if (
+        state === "disconnected" ||
+        state === "failed" ||
+        state === "closed"
+      ) {
+        this.handlePeerDisconnected(peerId);
+      }
+    });
+
     // Wait for ICE gathering to complete (so candidates are included in SDP)
     await peer.waitForIceGathering();
     const offer = await peer.getLocalDescription();
@@ -890,6 +903,19 @@ export class MeshNetwork {
 
     // Create answer
     await peer.createAnswer(sdp);
+
+    // Set up state change handler to ensure peer is registered when connected
+    peer.onStateChange((state: string) => {
+      if (state === "connected") {
+        this.handlePeerConnected(peerId);
+      } else if (
+        state === "disconnected" ||
+        state === "failed" ||
+        state === "closed"
+      ) {
+        this.handlePeerDisconnected(peerId);
+      }
+    });
 
     // Wait for ICE gathering
     await peer.waitForIceGathering();

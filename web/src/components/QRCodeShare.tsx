@@ -46,7 +46,11 @@ export const QRCodeShare: React.FC<QRCodeShareProps> = ({
   }, [sharingLocal]);
 
   const generateQR = async () => {
-    const url = `${window.location.origin}/join#join=${invite.code}`;
+    // Use query parameters for Android deep link compatibility
+    const inviterParam = invite.inviterName
+      ? `&inviter=${encodeURIComponent(invite.inviterName)}`
+      : "";
+    const url = `${window.location.origin}/join?code=${invite.code}${inviterParam}`;
     setShareUrl(url);
 
     try {

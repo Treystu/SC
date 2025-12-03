@@ -1,6 +1,6 @@
 /**
  * InviteManager - Manages the lifecycle of invite codes
- * 
+ *
  * Responsibilities:
  * - Generate cryptographically secure invite codes
  * - Store and manage pending invites
@@ -8,10 +8,15 @@
  * - Handle invite expiration
  */
 
-import { randomBytes } from '@noble/hashes/utils.js';
+import { randomBytes } from "@noble/hashes/utils.js";
 
-import { signMessage, verifySignature } from '../crypto/primitives.js';
-import { InviteOptions, PendingInvite, InviteRedemptionResult, Contact } from './types.js';
+import { signMessage, verifySignature } from "../crypto/primitives.js";
+import {
+  InviteOptions,
+  PendingInvite,
+  InviteRedemptionResult,
+  Contact,
+} from "./types.js";
 
 const DEFAULT_INVITE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
 
@@ -21,17 +26,20 @@ export class InviteManager {
   private publicKey: Uint8Array;
   private privateKey: Uint8Array;
   private displayName?: string;
+  private bootstrapPeers: string[];
 
   constructor(
     peerId: string,
     publicKey: Uint8Array,
     privateKey: Uint8Array,
-    displayName?: string
+    displayName?: string,
+    bootstrapPeers?: string[],
   ) {
     this.peerId = peerId;
     this.publicKey = publicKey;
     this.privateKey = privateKey;
-    this.displayName = displayName || 'User';
+    this.displayName = displayName || "User";
+    this.bootstrapPeers = bootstrapPeers || [];
   }
 
   /**
@@ -41,19 +49,16 @@ export class InviteManager {
   private async generateSecureCode(): Promise<string> {
     const randomData = randomBytes(32);
     return Array.from(randomData)
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
   }
 
   /**
    * Get bootstrap peers for the invite
-   * This would typically come from the mesh network
-   * For now, returns an empty array as a placeholder
+   * Returns the list of known peers that can help the invitee connect
    */
   private getBootstrapPeers(): string[] {
-    // In a real implementation, this would query the mesh network
-    // for a list of known, reliable peers to help the invitee connect
-    return [];
+    return this.bootstrapPeers;
   }
 
   /**
@@ -89,23 +94,29 @@ export class InviteManager {
    * Validate an invite code
    * Checks if the code exists, is not expired, and has a valid signature
    */
-  async validateInvite(code: string): Promise<{ valid: boolean; error?: string; invite?: PendingInvite }> {
+  async validateInvite(
+    code: string,
+  ): Promise<{ valid: boolean; error?: string; invite?: PendingInvite }> {
     const invite = this.invites.get(code);
 
     if (!invite) {
-      return { valid: false, error: 'Invalid invite code' };
+      return { valid: false, error: "Invalid invite code" };
     }
 
     if (invite.expiresAt <= Date.now()) {
-      return { valid: false, error: 'Invite expired' };
+      return { valid: false, error: "Invite expired" };
     }
 
     // Verify signature
     const codeBytes = new TextEncoder().encode(code);
-    const isValidSignature = verifySignature(codeBytes, invite.signature, invite.inviterPublicKey);
+    const isValidSignature = verifySignature(
+      codeBytes,
+      invite.signature,
+      invite.inviterPublicKey,
+    );
 
     if (!isValidSignature) {
-      return { valid: false, error: 'Invalid signature' };
+      return { valid: false, error: "Invalid signature" };
     }
 
     return { valid: true, invite };
@@ -115,11 +126,14 @@ export class InviteManager {
    * Redeem an invite code
    * Validates the code and creates a contact entry for the inviter
    */
-  async redeemInvite(code: string, _recipientPeerId: string): Promise<InviteRedemptionResult> {
+  async redeemInvite(
+    code: string,
+    _recipientPeerId: string,
+  ): Promise<InviteRedemptionResult> {
     const validation = await this.validateInvite(code);
 
     if (!validation.valid || !validation.invite) {
-      throw new Error(validation.error || 'Invalid invite code');
+      throw new Error(validation.error || "Invalid invite code");
     }
 
     const invite = validation.invite;
@@ -129,7 +143,7 @@ export class InviteManager {
       peerId: invite.inviterPeerId,
       publicKey: invite.inviterPublicKey,
       name: invite.inviterName,
-      addedVia: 'invite',
+      addedVia: "invite",
       addedAt: Date.now(),
       verified: true, // Auto-verified through invite signature
     };
