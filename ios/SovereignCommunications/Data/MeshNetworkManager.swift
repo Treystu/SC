@@ -9,6 +9,7 @@ import Foundation
 import CoreData
 import CoreBluetooth
 import os.log
+import WebRTC
 
 struct Message: Codable {
     let id: UUID
@@ -31,7 +32,7 @@ struct NetworkStats {
 
 /**
  * Manages the mesh network, including peer connections, message routing, and data persistence.
- * Acts as the high-level coordinator, using BluetoothMeshManager as the transport driver.
+ * Acts as the high-level coordinator, using BluetoothMeshManager and WebRTCManager as transport drivers.
  */
 class MeshNetworkManager: NSObject, ObservableObject {
     
@@ -59,6 +60,7 @@ class MeshNetworkManager: NSObject, ObservableObject {
         super.init()
         
         BluetoothMeshManager.shared.delegate = self
+        WebRTCManager.shared.delegate = self
     }
     
     /**
@@ -67,6 +69,8 @@ class MeshNetworkManager: NSObject, ObservableObject {
     func start() {
         logger.info("Starting MeshNetworkManager")
         BluetoothMeshManager.shared.start()
+        // WebRTCManager is initialized lazily but we can ensure it's ready
+        _ = WebRTCManager.shared
     }
     
     /**
@@ -75,6 +79,7 @@ class MeshNetworkManager: NSObject, ObservableObject {
     func stop() {
         logger.info("Stopping MeshNetworkManager")
         BluetoothMeshManager.shared.stop()
+        // WebRTC cleanup if needed
     }
     
     /**
@@ -87,18 +92,29 @@ class MeshNetworkManager: NSObject, ObservableObject {
             return
         }
         
-        // Try to send immediately
+        // 1. Try WebRTC (High Bandwidth)
+        if WebRTCManager.shared.getConnectionState(for: recipientId) == .connected {
+            let success = WebRTCManager.shared.send(data: data, to: recipientId)
+            if success {
+                messagesSent += 1
+                lastMessageSentDate = Date()
+                logger.info("Message sent via WebRTC to \(recipientId)")
+                return
+            }
+        }
+        
+        // 2. Try BLE (Low Bandwidth / Proximity)
         if BluetoothMeshManager.shared.isConnected(toPeerId: recipientId) {
             let success = BluetoothMeshManager.shared.send(message: data, toPeerId: recipientId)
             if success {
                 messagesSent += 1
                 lastMessageSentDate = Date()
-                logger.info("Message sent directly to \(recipientId)")
+                logger.info("Message sent via BLE to \(recipientId)")
                 return
             }
         }
         
-        // If failed or offline, store for later (Store-and-Forward)
+        // 3. Store-and-Forward (Offline)
         logger.info("Peer \(recipientId) offline, queuing message")
         saveMessageToQueue(message: message, recipientId: recipientId)
     }
@@ -146,7 +162,14 @@ class MeshNetworkManager: NSObject, ObservableObject {
                     )
                     
                     if let data = try? JSONEncoder().encode(message) {
-                        let success = BluetoothMeshManager.shared.send(message: data, toPeerId: peerId)
+                        // Try WebRTC then BLE
+                        var success = false
+                        if WebRTCManager.shared.getConnectionState(for: peerId) == .connected {
+                            success = WebRTCManager.shared.send(data: data, to: peerId)
+                        } else {
+                            success = BluetoothMeshManager.shared.send(message: data, toPeerId: peerId)
+                        }
+                        
                         if success {
                             entity.status = "sent"
                             self.messagesSent += 1
@@ -167,6 +190,10 @@ class MeshNetworkManager: NSObject, ObservableObject {
      */
     func getStats() -> NetworkStats {
         let uptime = Date().timeIntervalSince(startTime)
+        // Count WebRTC connections
+        // Note: This is a simplification, ideally WebRTCManager exposes a count or list
+        let webrtcCount = 0 // Placeholder as WebRTCManager doesn't expose list directly yet
+        
         return NetworkStats(
             connectedPeers: connectedPeers.count,
             messagesSent: messagesSent,
@@ -176,16 +203,12 @@ class MeshNetworkManager: NSObject, ObservableObject {
             packetLoss: packetLoss,
             uptime: uptime,
             bleConnections: connectedPeers.count, // Simplified
-            webrtcConnections: webrtcConnections,
+            webrtcConnections: webrtcCount,
             error: nil
         )
     }
-}
-
-// MARK: - BluetoothMeshManagerDelegate
-
-extension MeshNetworkManager: BluetoothMeshManagerDelegate {
-    func bluetoothMeshManager(_ manager: BluetoothMeshManager, didReceiveMessage data: Data, from peerId: String) {
+    
+    private func handleIncomingMessage(data: Data, from peerId: String) {
         guard let message = try? JSONDecoder().decode(Message.self, from: data) else {
             logger.error("Failed to decode received message from \(peerId)")
             return
@@ -213,9 +236,17 @@ extension MeshNetworkManager: BluetoothMeshManagerDelegate {
         let currentLatency = Date().timeIntervalSince(message.timestamp)
         latency.average = (latency.average * Double(messagesReceived - 1) + currentLatency) / Double(messagesReceived)
     }
+}
+
+// MARK: - BluetoothMeshManagerDelegate
+
+extension MeshNetworkManager: BluetoothMeshManagerDelegate {
+    func bluetoothMeshManager(_ manager: BluetoothMeshManager, didReceiveMessage data: Data, from peerId: String) {
+        handleIncomingMessage(data: data, from: peerId)
+    }
     
     func bluetoothMeshManager(_ manager: BluetoothMeshManager, didConnectToPeer peerId: String) {
-        logger.info("Connected to peer: \(peerId)")
+        logger.info("Connected to peer via BLE: \(peerId)")
         DispatchQueue.main.async {
             if !self.connectedPeers.contains(peerId) {
                 self.connectedPeers.append(peerId)
@@ -227,9 +258,47 @@ extension MeshNetworkManager: BluetoothMeshManagerDelegate {
     }
     
     func bluetoothMeshManager(_ manager: BluetoothMeshManager, didDisconnectFromPeer peerId: String) {
-        logger.info("Disconnected from peer: \(peerId)")
+        logger.info("Disconnected from peer via BLE: \(peerId)")
         DispatchQueue.main.async {
-            self.connectedPeers.removeAll { $0 == peerId }
+            // Only remove if also not connected via WebRTC
+            if WebRTCManager.shared.getConnectionState(for: peerId) != .connected {
+                self.connectedPeers.removeAll { $0 == peerId }
+            }
         }
+    }
+}
+
+// MARK: - WebRTCManagerDelegate
+
+extension MeshNetworkManager: WebRTCManagerDelegate {
+    func webRTCManager(_ manager: WebRTCManager, didReceiveData data: Data, from peerId: String) {
+        handleIncomingMessage(data: data, from: peerId)
+    }
+    
+    func webRTCManager(_ manager: WebRTCManager, didOpenDataChannelFor peerId: String) {
+        logger.info("WebRTC Data Channel opened for: \(peerId)")
+        DispatchQueue.main.async {
+            if !self.connectedPeers.contains(peerId) {
+                self.connectedPeers.append(peerId)
+            }
+        }
+        retryPendingMessages(for: peerId)
+    }
+    
+    func webRTCManager(_ manager: WebRTCManager, didCloseDataChannelFor peerId: String) {
+        logger.info("WebRTC Data Channel closed for: \(peerId)")
+        DispatchQueue.main.async {
+            // Only remove if also not connected via BLE
+            if !BluetoothMeshManager.shared.isConnected(toPeerId: peerId) {
+                self.connectedPeers.removeAll { $0 == peerId }
+            }
+        }
+    }
+    
+    func webRTCManager(_ manager: WebRTCManager, didGenerateIceCandidate candidate: RTCIceCandidate, for peerId: String) {
+        // Send candidate via signaling channel (e.g. BLE or HTTP)
+        // This part requires a signaling mechanism which is likely handled by the upper layer or a separate SignalingManager
+        // For now, we log it
+        logger.debug("Generated ICE candidate for \(peerId)")
     }
 }

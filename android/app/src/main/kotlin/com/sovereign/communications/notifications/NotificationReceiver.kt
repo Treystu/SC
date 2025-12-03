@@ -14,24 +14,29 @@ import kotlinx.coroutines.launch
  * Task 64: Add notification actions functionality
  */
 class NotificationReceiver : BroadcastReceiver() {
-    
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-    
-    override fun onReceive(context: Context, intent: Intent) {
+
+    override fun onReceive(
+        context: Context,
+        intent: Intent,
+    ) {
         when (intent.action) {
             NotificationManager.ACTION_REPLY -> handleReplyAction(context, intent)
             NotificationManager.ACTION_MARK_READ -> handleMarkReadAction(context, intent)
         }
     }
-    
-    private fun handleReplyAction(context: Context, intent: Intent) {
+
+    private fun handleReplyAction(
+        context: Context,
+        intent: Intent,
+    ) {
         val conversationId = intent.getStringExtra("conversationId") ?: return
         val notificationId = intent.getIntExtra("notificationId", -1)
-        
+
         // Get reply text from RemoteInput
         val remoteInput = RemoteInput.getResultsFromIntent(intent)
         val replyText = remoteInput?.getCharSequence(NotificationManager.KEY_TEXT_REPLY)?.toString()
-        
+
         if (replyText != null) {
             scope.launch {
                 // Send message through mesh network
@@ -39,23 +44,25 @@ class NotificationReceiver : BroadcastReceiver() {
                     val meshManager = com.sovereign.communications.SCApplication.instance.meshNetworkManager
                     meshManager.sendMessage(
                         recipientId = conversationId,
-                        payload = replyText.toByteArray()
+                        message = replyText,
                     )
                 } catch (e: Exception) {
                     android.util.Log.e("NotificationReceiver", "Failed to send reply", e)
                 }
-                // meshNetwork.sendMessage(conversationId, replyText)
-                
+
                 // Cancel the notification
                 val notificationManager = NotificationManager(context)
                 notificationManager.cancelNotification(conversationId)
             }
         }
     }
-    
-    private fun handleMarkReadAction(context: Context, intent: Intent) {
+
+    private fun handleMarkReadAction(
+        context: Context,
+        intent: Intent,
+    ) {
         val conversationId = intent.getStringExtra("conversationId") ?: return
-        
+
         scope.launch {
             // Mark messages as read in database
             try {
@@ -64,8 +71,7 @@ class NotificationReceiver : BroadcastReceiver() {
             } catch (e: Exception) {
                 android.util.Log.e("NotificationReceiver", "Failed to mark as read", e)
             }
-            // database.messageDao().markConversationAsRead(conversationId)
-            
+
             // Cancel the notification
             val notificationManager = NotificationManager(context)
             notificationManager.cancelNotification(conversationId)
