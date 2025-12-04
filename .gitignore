@@ -195,3 +195,5 @@ dist
 
 server/relay.js
 logs/
+*.base64.txt
+*.keystore

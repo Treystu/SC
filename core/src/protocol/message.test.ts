@@ -17,7 +17,7 @@ import {
 
 describe('Message Protocol', () => {
   const mockSenderId = new Uint8Array(32).fill(1);
-  const mockSignature = new Uint8Array(65).fill(2);
+  const mockSignature = new Uint8Array(64).fill(2); // Ed25519 signatures are 64 bytes
 
   describe('Header Encoding/Decoding', () => {
     it('should encode and decode headers correctly', () => {

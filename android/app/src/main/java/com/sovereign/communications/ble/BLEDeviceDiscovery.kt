@@ -1,7 +1,14 @@
 package com.sovereign.communications.ble
 
+import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothManager
+import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
+import android.bluetooth.le.ScanSettings
+import android.bluetooth.le.ScanFilter
+import android.content.Context
+import android.os.ParcelUuid
 import android.util.Log
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.pow
@@ -9,11 +16,27 @@ import kotlin.math.pow
 /**
  * BLE Device Discovery - Task 40
  * Implements RSSI-based filtering, device caching, timeouts, and ranking
+ * FULL IMPLEMENTATION with BluetoothLeScanner
  */
-class BLEDeviceDiscovery {
+class BLEDeviceDiscovery(private val context: Context) {
     
     private val discoveredDevices = ConcurrentHashMap<String, DiscoveredDevice>()
     private val discoveryCallbacks = mutableListOf<DiscoveryCallback>()
+    private val deviceCallbacks = mutableListOf<(BluetoothDevice) -> Unit>()
+    
+    // Bluetooth components
+    private val bluetoothManager: BluetoothManager by lazy {
+        context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+    }
+    private val bluetoothAdapter: BluetoothAdapter? by lazy {
+        bluetoothManager.adapter
+    }
+    private val bluetoothLeScanner by lazy {
+        bluetoothAdapter?.bluetoothLeScanner
+    }
+    
+    private var isScanning = false
+    private val deviceMap = ConcurrentHashMap<String, BluetoothDevice>() // address -> device
     
     companion object {
         private const val TAG = "BLEDeviceDiscovery"
@@ -327,4 +350,173 @@ class BLEDeviceDiscovery {
             }
         )
     }
+    
+    /**
+     * Start scanning for BLE devices.
+     * FULL IMPLEMENTATION using BluetoothLeScanner
+     * 
+     * @param onDeviceFound Callback invoked when a device is discovered
+     */
+    fun startScanning(onDeviceFound: (BluetoothDevice) -> Unit) {
+        if (isScanning) {
+            Log.w(TAG, "BLE scanning already in progress")
+            return
+        }
+        
+        // Store callback
+        deviceCallbacks.add(onDeviceFound)
+        
+        // Check Bluetooth availability
+        if (bluetoothAdapter == null) {
+            Log.e(TAG, "Bluetooth not supported on this device")
+            return
+        }
+        
+        if (bluetoothAdapter?.isEnabled != true) {
+            Log.e(TAG, "Bluetooth is not enabled")
+            return
+        }
+        
+        val scanner = bluetoothLeScanner
+        if (scanner == null) {
+            Log.e(TAG, "BluetoothLeScanner not available")
+            return
+        }
+        
+        // Configure scan settings for balanced power/performance
+        val scanSettings = ScanSettings.Builder()
+            .setScanMode(ScanSettings.SCAN_MODE_BALANCED)
+            .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
+            .setMatchMode(ScanSettings.MATCH_MODE_AGGRESSIVE)
+            .setNumOfMatches(ScanSettings.MATCH_NUM_MAX_ADVERTISEMENT)
+            .setReportDelay(0) // Real-time reporting
+            .build()
+        
+        // Configure scan filters for Sovereign Communications service
+        val filters = mutableListOf<ScanFilter>()
+        
+        // TODO V1.1: Define and use service UUID for efficient filtering
+        // For V1.0, we scan all BLE devices and filter by application-level protocol
+        // Example for future implementation:
+        // val serviceUuid = ParcelUuid.fromString("YOUR-SERVICE-UUID-HERE")
+        // val filter = ScanFilter.Builder()
+        //     .setServiceUuid(serviceUuid)
+        //     .build()
+        // filters.add(filter)
+        
+        // Note: Without UUID filtering, battery consumption may be higher
+        // but ensures compatibility during initial rollout
+        
+        try {
+            // Start scanning
+            scanner.startScan(filters.ifEmpty { null }, scanSettings, bleScanCallback)
+            isScanning = true
+            Log.i(TAG, "BLE scanning started successfully")
+            
+            // Register callback for discovered devices
+            registerCallback(object : DiscoveryCallback {
+                override fun onDeviceDiscovered(device: DiscoveredDevice) {
+                    // Get the actual BluetoothDevice from our map
+                    val btDevice = deviceMap[device.address]
+                    if (btDevice != null) {
+                        deviceCallbacks.forEach { callback ->
+                            try {
+                                callback(btDevice)
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Error in device callback", e)
+                            }
+                        }
+                    }
+                }
+                
+                override fun onDeviceUpdated(device: DiscoveredDevice) {
+                    // Device RSSI or other properties updated
+                }
+                
+                override fun onDeviceLost(device: DiscoveredDevice) {
+                    Log.d(TAG, "Device lost: ${device.address}")
+                    deviceMap.remove(device.address)
+                }
+            })
+        } catch (e: SecurityException) {
+            Log.e(TAG, "Missing Bluetooth permissions", e)
+            isScanning = false
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start BLE scanning", e)
+            isScanning = false
+        }
+    }
+    
+    /**
+     * BLE Scan Callback - handles scan results
+     */
+    private val bleScanCallback = object : ScanCallback() {
+        override fun onScanResult(callbackType: Int, result: ScanResult) {
+            super.onScanResult(callbackType, result)
+            
+            try {
+                // Store the BluetoothDevice reference
+                deviceMap[result.device.address] = result.device
+                
+                // Process the scan result through our discovery logic
+                onScanResult(result)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error processing scan result", e)
+            }
+        }
+        
+        override fun onBatchScanResults(results: List<ScanResult>) {
+            super.onBatchScanResults(results)
+            
+            try {
+                results.forEach { result ->
+                    deviceMap[result.device.address] = result.device
+                    onScanResult(result)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error processing batch scan results", e)
+            }
+        }
+        
+        override fun onScanFailed(errorCode: Int) {
+            super.onScanFailed(errorCode)
+            
+            val errorMessage = when (errorCode) {
+                SCAN_FAILED_ALREADY_STARTED -> "Scan already started"
+                SCAN_FAILED_APPLICATION_REGISTRATION_FAILED -> "Application registration failed"
+                SCAN_FAILED_FEATURE_UNSUPPORTED -> "Feature unsupported"
+                SCAN_FAILED_INTERNAL_ERROR -> "Internal error"
+                else -> "Unknown error code: $errorCode"
+            }
+            
+            Log.e(TAG, "BLE scan failed: $errorMessage")
+            isScanning = false
+        }
+    }
+    
+    /**
+     * Stop BLE scanning
+     */
+    fun stopScanning() {
+        if (!isScanning) {
+            Log.w(TAG, "BLE scanning is not active")
+            return
+        }
+        
+        try {
+            bluetoothLeScanner?.stopScan(bleScanCallback)
+            isScanning = false
+            deviceCallbacks.clear()
+            Log.i(TAG, "BLE scanning stopped")
+        } catch (e: SecurityException) {
+            Log.e(TAG, "Missing Bluetooth permissions to stop scan", e)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to stop BLE scanning", e)
+        }
+    }
+    
+    /**
+     * Check if currently scanning
+     */
+    fun isScanning(): Boolean = isScanning
 }

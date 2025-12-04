@@ -18,7 +18,7 @@ export interface LogEntry {
   data?: any;
 }
 
-class Logger {
+export class Logger {
   private logs: LogEntry[] = [];
   private maxLogs: number = 1000;
   private listeners: ((entry: LogEntry) => void)[] = [];

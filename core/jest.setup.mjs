@@ -6,7 +6,7 @@ import { jest } from '@jest/globals';
 // Make jest available globally
 globalThis.jest = jest;
 
-jest.mock('./src/database', () => ({
-    getDatabase: jest.fn(),
+jest.mock('./src/database.js', () => ({
+    getDatabase: jest.fn().mockResolvedValue(null),
     Database: jest.fn()
 }));

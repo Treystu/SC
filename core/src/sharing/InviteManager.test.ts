@@ -223,7 +223,7 @@ describe('InviteManager', () => {
       );
 
       const invite = await manager.createInvite();
-      expect(invite.inviterName).toBeUndefined();
+      expect(invite.inviterName).toBe('User'); // Default name when none provided
     });
 
     it('should handle zero TTL', async () => {

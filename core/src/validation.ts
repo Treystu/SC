@@ -1,13 +1,15 @@
-import DOMPurify from "dompurify";
-
+import sanitizeHtml from 'sanitize-html';
 /**
  * Sanitize HTML content to prevent XSS attacks
+ * 
+ * In Node.js environment (tests), we use sanitize-html npm package for robust sanitization.
+ * In browser, DOMPurify will be used via the web bundle.
  */
 export function sanitizeHTML(html: string): string {
-  return DOMPurify.sanitize(html, {
-    ALLOWED_TAGS: [], // No HTML tags allowed in messages
-    ALLOWED_ATTR: [],
-    KEEP_CONTENT: true,
+  // Use sanitize-html to remove all HTML tags and leave only text content
+  return sanitizeHtml(html, {
+    allowedTags: [],
+    allowedAttributes: {},
   });
 }
 
@@ -15,11 +17,10 @@ export function sanitizeHTML(html: string): string {
  * Sanitize user input for display
  */
 export function sanitizeUserInput(input: string): string {
-  // Remove any HTML tags
-  const sanitized = DOMPurify.sanitize(input, {
-    ALLOWED_TAGS: [],
-    ALLOWED_ATTR: [],
-    KEEP_CONTENT: true,
+  // Remove any HTML tags using sanitize-html
+  const sanitized = sanitizeHtml(input, {
+    allowedTags: [],
+    allowedAttributes: {},
   });
 
   // Limit length

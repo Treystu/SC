@@ -1,9 +1,8 @@
 import { OfflineQueue, QueuedMessage } from './offline-queue.js';
+import * as database from './database.js';
 
-// Mock the database module
-jest.mock('./database', () => ({
-  getDatabase: jest.fn()
-}));
+// Database is mocked in jest.setup.mjs
+const mockGetDatabase = jest.mocked(database.getDatabase);
 
 describe('OfflineQueue', () => {
   let offlineQueue: OfflineQueue;
@@ -26,8 +25,9 @@ describe('OfflineQueue', () => {
       offlineQueue: mockOfflineQueueStore
     };
 
-    // @ts-ignore
-    require('./database').getDatabase.mockResolvedValue(mockDb);
+    // Mock the getDatabase function
+    // @ts-expect-error - Mock type inference issue
+    mockGetDatabase.mockResolvedValue(mockDb);
 
     offlineQueue = new OfflineQueue();
   });

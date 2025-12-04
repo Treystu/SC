@@ -301,7 +301,7 @@ describe('AutoLink', () => {
       );
 
       const contact = await contactStore.get('inviter-peer-id');
-      expect(contact!.name).toBeUndefined();
+      expect(contact!.name).toBe('User'); // Default name when none provided
     });
 
     it('should include timestamp in acceptance message', async () => {

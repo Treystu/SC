@@ -8,24 +8,20 @@ import {
   validateMessageContent
 } from './validation.js';
 
-jest.mock('dompurify', () => ({
-  __esModule: true,
-  default: {
-    sanitize: jest.fn((str: string) => str.replace(/<script>.*<\/script>/g, '').replace(/onclick=".*"/g, ''))
-  },
-  sanitize: jest.fn((str: string) => str.replace(/<script>.*<\/script>/g, '').replace(/onclick=".*"/g, ''))
-}));
-
 describe('Validation Utilities', () => {
   describe('sanitizeHTML', () => {
     it('should remove script tags', () => {
       const html = '<p>Hello</p><script>alert("xss")</script>';
-      expect(sanitizeHTML(html)).not.toContain('script');
+      const result = sanitizeHTML(html);
+      expect(result).not.toContain('<script');
+      expect(result).toContain('Hello');
     });
 
     it('should remove event handlers', () => {
       const html = '<div onclick="alert(1)">Click me</div>';
-      expect(sanitizeHTML(html)).not.toContain('onclick');
+      const result = sanitizeHTML(html);
+      expect(result).not.toContain('onclick');
+      expect(result).toContain('Click me');
     });
   });
 

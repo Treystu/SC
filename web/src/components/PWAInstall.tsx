@@ -62,7 +62,9 @@ export const PWAInstall: React.FC = () => {
   if (isInstalled || !showPrompt) return null;
 
   const isAndroid = /Android/i.test(navigator.userAgent);
-  const releaseUrl = "https://github.com/Treystu/SC/releases"; // Update with actual repo URL if different
+  
+  // Get latest APK download URL from GitHub releases
+  const apkDownloadUrl = "https://github.com/Treystu/SC/releases/latest/download/app-release.apk";
 
   return (
     <div
@@ -80,7 +82,7 @@ export const PWAInstall: React.FC = () => {
           <li>Full-screen mode</li>
           {isAndroid && (
             <li>
-              <strong>Mesh Networking (Android)</strong>
+              <strong>Full Mesh Networking (Android Native App)</strong>
             </li>
           )}
         </ul>
@@ -90,13 +92,12 @@ export const PWAInstall: React.FC = () => {
           </button>
           {isAndroid && (
             <a
-              href={releaseUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+              href={apkDownloadUrl}
+              download="sovereign-communications.apk"
               className="btn-primary"
-              style={{ marginLeft: "10px", textDecoration: "none" }}
+              style={{ marginLeft: "10px", textDecoration: "none", display: "inline-block" }}
             >
-              Download Android APK
+              📲 Download Android APK
             </a>
           )}
           <button onClick={handleDismiss} className="btn-secondary">
