@@ -177,12 +177,54 @@ class MeshNetworkManager(
         data: ByteArray,
     ) {
         // Process incoming message
-        // This logic was missing in the original file, adding basic handling
         try {
-            val message = String(data)
-            Log.d(TAG, "Received message from $peerId: $message")
-            // TODO: Parse message, verify signature, and store in DB
-            // database.saveMessage(...)
+            // Parse message content (assuming UTF-8 string for now)
+            // In production, this would parse the binary protocol format
+            val messageContent = String(data, Charsets.UTF_8)
+            Log.d(TAG, "Received message from $peerId: $messageContent")
+            
+            // Store in database
+            scope.launch {
+                try {
+                    val messageEntity = com.sovereign.communications.data.entity.MessageEntity(
+                        id = java.util.UUID.randomUUID().toString(),
+                        conversationId = peerId,
+                        content = messageContent,
+                        senderId = peerId,
+                        recipientId = com.sovereign.communications.SCApplication.instance.localPeerId ?: "me",
+                        timestamp = System.currentTimeMillis(),
+                        status = com.sovereign.communications.data.entity.MessageStatus.RECEIVED,
+                        type = com.sovereign.communications.data.entity.MessageType.TEXT
+                    )
+                    
+                    database.messageDao().insert(messageEntity)
+                    Log.d(TAG, "Message from $peerId saved to database")
+                    
+                    // Update conversation timestamp
+                    val conversation = database.conversationDao().getConversation(peerId)
+                    if (conversation != null) {
+                        database.conversationDao().insert(
+                            conversation.copy(
+                                lastMessageTimestamp = System.currentTimeMillis(),
+                                unreadCount = conversation.unreadCount + 1
+                            )
+                        )
+                    } else {
+                        // Create new conversation if it doesn't exist
+                        database.conversationDao().insert(
+                            com.sovereign.communications.data.entity.ConversationEntity(
+                                id = peerId,
+                                contactId = peerId,
+                                lastMessageTimestamp = System.currentTimeMillis(),
+                                unreadCount = 1,
+                                createdAt = System.currentTimeMillis()
+                            )
+                        )
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to save incoming message to database", e)
+                }
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to process incoming message", e)
         }
