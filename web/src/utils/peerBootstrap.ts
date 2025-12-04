@@ -18,7 +18,6 @@ export interface BootstrapData {
 
 const STORAGE_KEY = 'sc-bootstrap-peers';
 const VERSION = 1;
-const MAX_PEERS_FOR_BOOTSTRAP = 20; // URL size limit
 const BOOTSTRAP_DATA_MAX_AGE_MS = 3600000; // 1 hour in milliseconds
 const DEEP_LINK_SCHEME = 'sc';
 const NETLIFY_BASE_URL = 'https://sc.netlify.app';
