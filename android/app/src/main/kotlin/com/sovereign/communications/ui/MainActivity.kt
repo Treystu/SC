@@ -14,6 +14,7 @@ import com.sovereign.communications.service.MeshNetworkService
 import com.sovereign.communications.ui.screen.MainScreen
 import com.sovereign.communications.ui.screen.OnboardingScreen
 import com.sovereign.communications.ui.theme.SCTheme
+import com.sovereign.communications.utils.BootstrapUtils
 
 /**
  * Main activity with proper permission handling and lifecycle management
@@ -86,24 +87,23 @@ class MainActivity : ComponentActivity() {
     
     private fun handleBootstrapPeers(encodedData: String) {
         try {
-            // Decode base64url
-            var base64 = encodedData.replace('-', '+').replace('_', '/')
-            val padding = (4 - (base64.length % 4)) % 4
-            base64 += "=".repeat(padding)
+            // Decode using utility function
+            val json = BootstrapUtils.decodeBase64Url(encodedData)
             
-            val json = String(android.util.Base64.decode(base64, android.util.Base64.DEFAULT))
-            val data = org.json.JSONObject(json)
-            
-            // Store bootstrap peers for auto-connect
-            getSharedPreferences("mesh_bootstrap", Context.MODE_PRIVATE)
-                .edit()
-                .putString("bootstrap_peers", json)
-                .putLong("bootstrap_timestamp", System.currentTimeMillis())
-                .apply()
-            
-            android.util.Log.d("MainActivity", "Stored bootstrap peers for auto-connect")
+            if (json != null) {
+                // Store bootstrap peers for auto-connect
+                getSharedPreferences("mesh_bootstrap", Context.MODE_PRIVATE)
+                    .edit()
+                    .putString("bootstrap_peers", json)
+                    .putLong("bootstrap_timestamp", System.currentTimeMillis())
+                    .apply()
+                
+                android.util.Log.d("MainActivity", "Stored bootstrap peers for auto-connect")
+            } else {
+                android.util.Log.w("MainActivity", "Failed to decode bootstrap data")
+            }
         } catch (e: Exception) {
-            android.util.Log.e("MainActivity", "Failed to decode bootstrap peers", e)
+            android.util.Log.e("MainActivity", "Failed to parse bootstrap peers", e)
         }
     }
 

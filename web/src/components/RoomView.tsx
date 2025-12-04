@@ -69,6 +69,7 @@ export function RoomView({
 
   const isAndroid = /Android/i.test(navigator.userAgent);
   const apkDownloadUrl = "https://github.com/Treystu/SC/releases/latest/download/app-release.apk";
+  const DEEP_LINK_DELAY_MS = 1000; // Delay before opening deep link
 
   const handleDownloadMobileApp = () => {
     const bootstrapUrl = generateMobileBootstrapUrl(undefined, undefined, true);
@@ -78,8 +79,10 @@ export function RoomView({
       window.location.href = apkDownloadUrl;
       // Also open the deep link to set context if app is already installed
       setTimeout(() => {
-        window.location.href = bootstrapUrl.replace('https://sc.netlify.app', 'sc:');
-      }, 1000);
+        // Convert HTTPS URL to custom scheme for deep link
+        const deepLink = bootstrapUrl.replace(/^https:\/\/[^/]+/, 'sc:');
+        window.location.href = deepLink;
+      }, DEEP_LINK_DELAY_MS);
     } else {
       // For iOS or other platforms, navigate to join page
       window.location.href = bootstrapUrl;

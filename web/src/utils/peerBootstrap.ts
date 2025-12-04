@@ -18,6 +18,10 @@ export interface BootstrapData {
 
 const STORAGE_KEY = 'sc-bootstrap-peers';
 const VERSION = 1;
+const MAX_PEERS_FOR_BOOTSTRAP = 20; // URL size limit
+const BOOTSTRAP_DATA_MAX_AGE_MS = 3600000; // 1 hour in milliseconds
+const DEEP_LINK_SCHEME = 'sc';
+const NETLIFY_BASE_URL = 'https://sc.netlify.app';
 
 /**
  * Save current peer list to localStorage for mobile app bootstrap
@@ -74,9 +78,9 @@ export function loadBootstrapPeers(): BootstrapData | null {
       return null;
     }
 
-    // Filter out stale peers (older than 1 hour)
-    const oneHourAgo = Date.now() - 3600000;
-    if (data.timestamp < oneHourAgo) {
+    // Filter out stale peers (older than max age)
+    const minTimestamp = Date.now() - BOOTSTRAP_DATA_MAX_AGE_MS;
+    if (data.timestamp < minTimestamp) {
       console.log('Bootstrap data is stale, clearing');
       clearBootstrapPeers();
       return null;
@@ -186,7 +190,7 @@ export function generateMobileBootstrapUrl(
     }
   }
 
-  const baseUrl = 'https://sc.netlify.app/join';
+  const baseUrl = NETLIFY_BASE_URL + '/join';
   return `${baseUrl}?${params.toString()}`;
 }
 
@@ -218,5 +222,5 @@ export function generateAndroidDeepLink(
     }
   }
 
-  return `sc://join?${params.toString()}`;
+  return `${DEEP_LINK_SCHEME}://join?${params.toString()}`;
 }
