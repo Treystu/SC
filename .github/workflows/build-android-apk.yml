@@ -3,12 +3,23 @@ name: Build and Release Android APK
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*'           # Production releases (e.g., v1.0.0)
+      - 'staging-v*'   # Staging releases (e.g., staging-v1.0.0-beta.1)
   workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || (startsWith(github.ref, 'refs/tags/staging-') && 'staging' || 'production') }}
     
     steps:
       - name: Checkout code
@@ -51,6 +62,8 @@ jobs:
           body: |
             ## Sovereign Communications Release ${{ github.ref_name }}
             
+            **Environment**: ${{ startsWith(github.ref, 'refs/tags/staging-') && '🔶 STAGING' || '✅ PRODUCTION' }}
+            
             ### What's New
             - Full mesh networking implementation
             - Seamless webapp-to-mobile bootstrap
@@ -69,14 +82,14 @@ jobs:
             - Bluetooth LE support
             - 50MB free storage
           draft: false
-          prerelease: false
+          prerelease: ${{ startsWith(github.ref, 'refs/tags/staging-') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Upload unsigned APK as artifact (for workflow_dispatch)
+      - name: Upload signed APK as artifact (for workflow_dispatch)
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
-          name: app-release
-          path: android/app/build/outputs/apk/release/app-release-unsigned.apk
+          name: app-release-${{ github.event.inputs.environment || 'staging' }}
+          path: ${{steps.sign_app.outputs.signedReleaseFile}}
           retention-days: 7
