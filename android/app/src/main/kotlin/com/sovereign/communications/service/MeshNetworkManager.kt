@@ -191,7 +191,8 @@ class MeshNetworkManager(
                         conversationId = peerId,
                         content = messageContent,
                         senderId = peerId,
-                        recipientId = com.sovereign.communications.SCApplication.instance.localPeerId ?: "me",
+                        recipientId = com.sovereign.communications.SCApplication.instance.localPeerId 
+                            ?: java.util.UUID.randomUUID().toString(), // Generate temp ID if null
                         timestamp = System.currentTimeMillis(),
                         status = com.sovereign.communications.data.entity.MessageStatus.RECEIVED,
                         type = com.sovereign.communications.data.entity.MessageType.TEXT

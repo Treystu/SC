@@ -395,14 +395,17 @@ class BLEDeviceDiscovery(private val context: Context) {
         // Configure scan filters for Sovereign Communications service
         val filters = mutableListOf<ScanFilter>()
         
-        // Filter for our service UUID (if we have one defined)
-        // For now, scan for all devices and filter by manufacturer data or service UUID later
-        // Uncomment when service UUID is defined:
-        // val serviceUuid = ParcelUuid.fromString("00001234-0000-1000-8000-00805f9b34fb")
+        // TODO V1.1: Define and use service UUID for efficient filtering
+        // For V1.0, we scan all BLE devices and filter by application-level protocol
+        // Example for future implementation:
+        // val serviceUuid = ParcelUuid.fromString("YOUR-SERVICE-UUID-HERE")
         // val filter = ScanFilter.Builder()
         //     .setServiceUuid(serviceUuid)
         //     .build()
         // filters.add(filter)
+        
+        // Note: Without UUID filtering, battery consumption may be higher
+        // but ensures compatibility during initial rollout
         
         try {
             // Start scanning

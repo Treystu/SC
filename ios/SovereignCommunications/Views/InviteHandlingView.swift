@@ -43,8 +43,9 @@ struct InviteHandlingView: View {
                 
                 // QR Code Scanner Button
                 Button(action: {
-                    // Open QR code scanner
-                    // This would integrate with PeerDiscoveryView
+                    // TODO V1.1: Integrate with PeerDiscoveryView for QR scanning
+                    // This would present the camera scanner view
+                    // For V1.0, users can manually paste invite codes
                 }) {
                     HStack {
                         Image(systemName: "qrcode.viewfinder")
@@ -135,13 +136,13 @@ struct InviteHandlingView: View {
         }
         
         // Process the invite
+        // TODO: Replace with actual invite processing from MeshNetworkManager
+        // For V1.0, this validates format and calls the callback
         onAccept(inviteCode)
         
-        // Simulate processing delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            isProcessing = false
-            showSuccess = true
-        }
+        // Mark as complete after callback
+        isProcessing = false
+        showSuccess = true
     }
     
     private func isValidInviteCode(_ code: String) -> Bool {
