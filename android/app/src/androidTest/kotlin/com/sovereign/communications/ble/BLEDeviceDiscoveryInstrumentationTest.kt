@@ -52,9 +52,13 @@ class BLEDeviceDiscoveryInstrumentationTest {
     
     @Test
     fun testStartStopScanning() {
-        deviceDiscovery.startScanning { device -> }
+        val latch = CountDownLatch(1)
+        deviceDiscovery.startScanning { device ->
+            // Device discovered
+        }
         assertTrue("Scanning should be active", deviceDiscovery.isScanning())
-        Thread.sleep(2000)
+        // Allow time for scanning to initialize
+        latch.await(2, TimeUnit.SECONDS)
         deviceDiscovery.stopScanning()
         assertFalse("Scanning should be stopped", deviceDiscovery.isScanning())
     }

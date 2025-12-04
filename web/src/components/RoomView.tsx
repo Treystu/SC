@@ -79,8 +79,8 @@ export function RoomView({
       window.location.href = apkDownloadUrl;
       // Also open the deep link to set context if app is already installed
       setTimeout(() => {
-        // Convert HTTPS URL to custom scheme for deep link
-        const deepLink = bootstrapUrl.replace(/^https:\/\/[^/]+/, 'sc:');
+        // Convert HTTPS URL to custom scheme for deep link (sc://join?...)
+        const deepLink = bootstrapUrl.replace(/^https:\/\/[^/]+\//, 'sc://');
         window.location.href = deepLink;
       }, DEEP_LINK_DELAY_MS);
     } else {

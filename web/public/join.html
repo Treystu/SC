@@ -299,6 +299,9 @@
           loading.textContent = "Opening Android app...";
 
           // Get bootstrap peers from localStorage if available
+          // Note: This duplicates logic from peerBootstrap.ts (see web/src/utils/peerBootstrap.ts:encodeBootstrapData)
+          // Duplication necessary because join.html runs standalone without module imports
+          const MAX_PEERS_FOR_BOOTSTRAP = 20;
           let bootstrapParam = '';
           try {
             const bootstrapData = localStorage.getItem('sc-bootstrap-peers');
@@ -307,7 +310,7 @@
               // Encode for URL
               const compact = {
                 v: data.version || 1,
-                p: (data.peers || []).slice(0, 20).map(p => ({
+                p: (data.peers || []).slice(0, MAX_PEERS_FOR_BOOTSTRAP).map(p => ({
                   i: p.peerId,
                   c: p.isConnected ? 1 : 0
                 })),
@@ -323,7 +326,6 @@
           }
 
           // Try to open the Android app via deep link
-          const deepLinkUrl = `https://sc.netlify.app/join?code=${inviteCode}${inviterName ? `&inviter=${encodeURIComponent(inviterName)}` : ""}${bootstrapParam}`;
           const customSchemeUrl = `sc://join?code=${inviteCode}${inviterName ? `&inviter=${encodeURIComponent(inviterName)}` : ""}${bootstrapParam}`;
 
           // Try custom scheme first

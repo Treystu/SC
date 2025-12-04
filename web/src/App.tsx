@@ -238,13 +238,18 @@ function App() {
     }
   }, [status.isConnected, joinRoom]);
 
-  // Save bootstrap peers when in public room - for mobile app handoff
+  // Save bootstrap peers when in public room - for mobile app handoff (debounced to avoid excessive writes)
   useEffect(() => {
     if (isJoinedToRoom && (discoveredPeers.length > 0 || peers.length > 0)) {
-      const connectedPeerIds = peers.map(p => p.id);
-      saveBootstrapPeers(discoveredPeers, connectedPeerIds, activeRoom || undefined);
-      console.log('Saved bootstrap peers for mobile handoff:', 
-        discoveredPeers.length, 'discovered,', connectedPeerIds.length, 'connected');
+      // Debounce to avoid excessive localStorage writes
+      const timeoutId = setTimeout(() => {
+        const connectedPeerIds = peers.map(p => p.id);
+        saveBootstrapPeers(discoveredPeers, connectedPeerIds, activeRoom || undefined);
+        console.log('Saved bootstrap peers for mobile handoff:', 
+          discoveredPeers.length, 'discovered,', connectedPeerIds.length, 'connected');
+      }, 1000); // Wait 1 second after last change
+
+      return () => clearTimeout(timeoutId);
     }
   }, [isJoinedToRoom, discoveredPeers, peers, activeRoom]);
 

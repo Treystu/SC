@@ -21,6 +21,7 @@ const VERSION = 1;
 const BOOTSTRAP_DATA_MAX_AGE_MS = 3600000; // 1 hour in milliseconds
 const DEEP_LINK_SCHEME = 'sc';
 const NETLIFY_BASE_URL = 'https://sc.netlify.app';
+export const MAX_PEERS_FOR_BOOTSTRAP = 20; // Limit for URL size constraints
 
 /**
  * Save current peer list to localStorage for mobile app bootstrap
@@ -112,7 +113,7 @@ export function encodeBootstrapData(data: BootstrapData): string {
     // Compress data - only send peer IDs and connection status
     const compact = {
       v: data.version,
-      p: data.peers.slice(0, 20).map(p => ({ // Limit to 20 peers
+      p: data.peers.slice(0, MAX_PEERS_FOR_BOOTSTRAP).map(p => ({
         i: p.peerId,
         c: p.isConnected ? 1 : 0,
       })),
@@ -142,6 +143,11 @@ export function decodeBootstrapData(encoded: string): BootstrapData | null {
 
     const json = atob(base64);
     const compact = JSON.parse(json);
+
+    // Validate structure to prevent runtime errors with malformed data
+    if (!compact || typeof compact !== 'object' || !Array.isArray(compact.p)) {
+      throw new Error('Invalid bootstrap data structure');
+    }
 
     // Expand to full format
     return {
