@@ -50,7 +50,7 @@ describe('MessageRelay', () => {
           ttl: 10,
           timestamp: Date.now(),
           senderId: new Uint8Array(32),
-          signature: new Uint8Array(65),
+          signature: new Uint8Array(64),
         },
         payload: new TextEncoder().encode('test message'),
       };
@@ -70,7 +70,7 @@ describe('MessageRelay', () => {
           ttl: 10,
           timestamp: Date.now(),
           senderId: new Uint8Array(32),
-          signature: new Uint8Array(65),
+          signature: new Uint8Array(64),
         },
         payload: new TextEncoder().encode('duplicate test'),
       };
@@ -93,7 +93,7 @@ describe('MessageRelay', () => {
           ttl: 0,
           timestamp: Date.now(),
           senderId: new Uint8Array(32),
-          signature: new Uint8Array(65),
+          signature: new Uint8Array(64),
         },
         payload: new TextEncoder().encode('expired'),
       };
@@ -140,7 +140,7 @@ describe('MessageRelay', () => {
           ttl: 10,
           timestamp: Date.now(),
           senderId: new Uint8Array(32),
-          signature: new Uint8Array(65),
+          signature: new Uint8Array(64),
         },
         payload: new TextEncoder().encode('stored message'),
       };
@@ -159,7 +159,7 @@ describe('MessageRelay', () => {
           ttl: 10,
           timestamp: Date.now(),
           senderId: new Uint8Array(32),
-          signature: new Uint8Array(65),
+          signature: new Uint8Array(64),
         },
         payload: new TextEncoder().encode('retrieve test'),
       };
@@ -179,7 +179,7 @@ describe('MessageRelay', () => {
           ttl: 10,
           timestamp: Date.now(),
           senderId: new Uint8Array(32),
-          signature: new Uint8Array(65),
+          signature: new Uint8Array(64),
         },
         payload: new TextEncoder().encode('clear test'),
       };
@@ -222,7 +222,7 @@ describe('MessageRelay', () => {
           ttl: 10,
           timestamp: Date.now(),
           senderId: new Uint8Array(32),
-          signature: new Uint8Array(65),
+          signature: new Uint8Array(64),
         },
         payload: new TextEncoder().encode('loop test'),
       };

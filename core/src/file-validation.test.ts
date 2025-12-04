@@ -58,7 +58,7 @@ describe('File Validation', () => {
       const result = validateFile(file);
       expect(result.valid).toBe(true);
       expect(result.sanitizedName).not.toContain('..');
-      expect(result.sanitizedName).toBe('etc_passwd.jpg');
+      expect(result.sanitizedName).toBe('_etc_passwd.jpg'); // ../ becomes _, /becomes _
     });
   });
 

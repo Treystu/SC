@@ -193,7 +193,7 @@ export function encodeHeader(header: MessageHeader): Uint8Array {
   buffer.set(header.senderId, offset);
   offset += 32;
 
-  // Signature (65 bytes - compact format)
+  // Signature (64 bytes - Ed25519 signature)
   buffer.set(header.signature, offset);
 
   return buffer;
