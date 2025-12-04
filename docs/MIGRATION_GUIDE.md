@@ -83,7 +83,7 @@ if (!rateLimitResult.allowed) {
 
 ```typescript
 // After (v1.0)
-import { validateFileUpload } from '@sc/core';
+import { validateFile } from '@sc/core';
 
 const validation = validateFileUpload(file);
 if (!validation.valid) {
