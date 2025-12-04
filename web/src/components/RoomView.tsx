@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import "./RoomView.css";
+import { generateMobileBootstrapUrl } from "../utils/peerBootstrap";
 
 interface RoomViewProps {
   isOpen: boolean;
@@ -66,6 +67,25 @@ export function RoomView({
   );
   const uniqueConnected = connectedPeers.filter((p) => p !== localPeerId);
 
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  const apkDownloadUrl = "https://github.com/Treystu/SC/releases/latest/download/app-release.apk";
+
+  const handleDownloadMobileApp = () => {
+    const bootstrapUrl = generateMobileBootstrapUrl(undefined, undefined, true);
+    
+    if (isAndroid) {
+      // Direct APK download with bootstrap context
+      window.location.href = apkDownloadUrl;
+      // Also open the deep link to set context if app is already installed
+      setTimeout(() => {
+        window.location.href = bootstrapUrl.replace('https://sc.netlify.app', 'sc:');
+      }, 1000);
+    } else {
+      // For iOS or other platforms, navigate to join page
+      window.location.href = bootstrapUrl;
+    }
+  };
+
   return (
     <div className={embedded ? "room-embedded" : "room-overlay"}>
       <div className="room-container">
@@ -77,17 +97,37 @@ export function RoomView({
             </span>
           </div>
           {embedded ? (
-            <button
-              className="close-room-btn"
-              onClick={onClose}
-              title="Close view"
-            >
-              ×
-            </button>
+            <>
+              <button
+                className="download-app-btn"
+                onClick={handleDownloadMobileApp}
+                title="Download mobile app with current peers"
+                style={{ marginRight: '8px' }}
+              >
+                📲 Get Mobile App
+              </button>
+              <button
+                className="close-room-btn"
+                onClick={onClose}
+                title="Close view"
+              >
+                ×
+              </button>
+            </>
           ) : (
-            <button className="close-btn" onClick={onClose}>
-              Leave Room
-            </button>
+            <>
+              <button
+                className="download-app-btn"
+                onClick={handleDownloadMobileApp}
+                title="Download mobile app with current peers"
+                style={{ marginRight: '8px' }}
+              >
+                📲 Get Mobile App
+              </button>
+              <button className="close-btn" onClick={onClose}>
+                Leave Room
+              </button>
+            </>
           )}
         </div>
 

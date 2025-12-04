@@ -39,6 +39,7 @@ import { ProfileManager, UserProfile } from "./managers/ProfileManager";
 import { validateMessageContent } from "@sc/core";
 import { rateLimiter } from "../../core/src/rate-limiter";
 import { config } from "./config";
+import { saveBootstrapPeers } from "./utils/peerBootstrap";
 
 function App() {
   const [activeRoom, setActiveRoom] = useState<string | null>(null);
@@ -236,6 +237,16 @@ function App() {
       }
     }
   }, [status.isConnected, joinRoom]);
+
+  // Save bootstrap peers when in public room - for mobile app handoff
+  useEffect(() => {
+    if (isJoinedToRoom && (discoveredPeers.length > 0 || peers.length > 0)) {
+      const connectedPeerIds = peers.map(p => p.id);
+      saveBootstrapPeers(discoveredPeers, connectedPeerIds, activeRoom || undefined);
+      console.log('Saved bootstrap peers for mobile handoff:', 
+        discoveredPeers.length, 'discovered,', connectedPeerIds.length, 'connected');
+    }
+  }, [isJoinedToRoom, discoveredPeers, peers, activeRoom]);
 
   // Handle pending invite from join.html page
   useEffect(() => {

@@ -204,6 +204,9 @@
         <button id="install-btn" onclick="installApp()">
           📲 Install & Join
         </button>
+        <button id="apk-download-btn" class="btn-secondary" onclick="downloadAPK()" style="display: none;">
+          📥 Download Android APK
+        </button>
         <button class="btn-secondary" onclick="openInBrowser()">
           🌐 Open in Browser
         </button>
@@ -295,9 +298,33 @@
           loading.classList.add("active");
           loading.textContent = "Opening Android app...";
 
+          // Get bootstrap peers from localStorage if available
+          let bootstrapParam = '';
+          try {
+            const bootstrapData = localStorage.getItem('sc-bootstrap-peers');
+            if (bootstrapData) {
+              const data = JSON.parse(bootstrapData);
+              // Encode for URL
+              const compact = {
+                v: data.version || 1,
+                p: (data.peers || []).slice(0, 20).map(p => ({
+                  i: p.peerId,
+                  c: p.isConnected ? 1 : 0
+                })),
+                r: data.roomUrl,
+                t: data.timestamp
+              };
+              const json = JSON.stringify(compact);
+              const base64 = btoa(json).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+              bootstrapParam = `&bootstrap=${base64}`;
+            }
+          } catch (e) {
+            console.warn('Failed to load bootstrap peers:', e);
+          }
+
           // Try to open the Android app via deep link
-          const deepLinkUrl = `https://sc.netlify.app/join?code=${inviteCode}${inviterName ? `&inviter=${encodeURIComponent(inviterName)}` : ""}`;
-          const customSchemeUrl = `sc://join?code=${inviteCode}${inviterName ? `&inviter=${encodeURIComponent(inviterName)}` : ""}`;
+          const deepLinkUrl = `https://sc.netlify.app/join?code=${inviteCode}${inviterName ? `&inviter=${encodeURIComponent(inviterName)}` : ""}${bootstrapParam}`;
+          const customSchemeUrl = `sc://join?code=${inviteCode}${inviterName ? `&inviter=${encodeURIComponent(inviterName)}` : ""}${bootstrapParam}`;
 
           // Try custom scheme first
           window.location.href = customSchemeUrl;
@@ -399,6 +426,18 @@
       if (isAndroid) {
         const installBtn = document.getElementById("install-btn");
         installBtn.innerHTML = "📲 Open in App / Install";
+        
+        // Show APK download button for Android
+        const apkBtn = document.getElementById("apk-download-btn");
+        if (apkBtn) {
+          apkBtn.style.display = "block";
+        }
+      }
+      
+      // Function to download APK
+      function downloadAPK() {
+        const apkUrl = "https://github.com/Treystu/SC/releases/latest/download/app-release.apk";
+        window.location.href = apkUrl;
       }
     </script>
   </body>

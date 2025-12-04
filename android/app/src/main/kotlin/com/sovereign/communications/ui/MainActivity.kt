@@ -59,12 +59,51 @@ class MainActivity : ComponentActivity() {
         if (intent.action == android.content.Intent.ACTION_VIEW) {
             val data = intent.data
             if (data != null) {
-                // Check for "code" parameter in query
+                // Check for "code" parameter in query (invite code)
                 val code = data.getQueryParameter("code")
                 if (code != null) {
                     inviteCode = code
                 }
+                
+                // Check for "bootstrap" parameter (peer list from webapp)
+                val bootstrap = data.getQueryParameter("bootstrap")
+                if (bootstrap != null) {
+                    handleBootstrapPeers(bootstrap)
+                }
+                
+                // Check for "inviter" parameter
+                val inviter = data.getQueryParameter("inviter")
+                if (inviter != null) {
+                    // Store inviter name for display
+                    getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+                        .edit()
+                        .putString("pending_inviter", inviter)
+                        .apply()
+                }
             }
+        }
+    }
+    
+    private fun handleBootstrapPeers(encodedData: String) {
+        try {
+            // Decode base64url
+            var base64 = encodedData.replace('-', '+').replace('_', '/')
+            val padding = (4 - (base64.length % 4)) % 4
+            base64 += "=".repeat(padding)
+            
+            val json = String(android.util.Base64.decode(base64, android.util.Base64.DEFAULT))
+            val data = org.json.JSONObject(json)
+            
+            // Store bootstrap peers for auto-connect
+            getSharedPreferences("mesh_bootstrap", Context.MODE_PRIVATE)
+                .edit()
+                .putString("bootstrap_peers", json)
+                .putLong("bootstrap_timestamp", System.currentTimeMillis())
+                .apply()
+            
+            android.util.Log.d("MainActivity", "Stored bootstrap peers for auto-connect")
+        } catch (e: Exception) {
+            android.util.Log.e("MainActivity", "Failed to decode bootstrap peers", e)
         }
     }
 
