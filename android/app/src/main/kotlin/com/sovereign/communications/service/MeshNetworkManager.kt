@@ -26,7 +26,7 @@ class MeshNetworkManager(
 ) {
     private val gattServer = BLEGATTServer(context)
     private val storeAndForward = BLEStoreAndForward(context)
-    private val deviceDiscovery = BLEDeviceDiscovery()
+    private val deviceDiscovery = BLEDeviceDiscovery(context)
     private val multiHopRelay = BLEMultiHopRelay()
     private val webRTCManager = WebRTCManager(context)
 
