@@ -1,21 +1,27 @@
+import sanitizeHtml from 'sanitize-html';
 /**
  * Sanitize HTML content to prevent XSS attacks
  * 
- * In Node.js environment (tests), we use a simple regex-based approach.
+ * In Node.js environment (tests), we use sanitize-html npm package for robust sanitization.
  * In browser, DOMPurify will be used via the web bundle.
  */
 export function sanitizeHTML(html: string): string {
-  // Simple sanitization for Node.js/test environment
-  // Remove all HTML tags
-  return html.replace(/<[^>]*>/g, '');
+  // Use sanitize-html to remove all HTML tags and leave only text content
+  return sanitizeHtml(html, {
+    allowedTags: [],
+    allowedAttributes: {},
+  });
 }
 
 /**
  * Sanitize user input for display
  */
 export function sanitizeUserInput(input: string): string {
-  // Remove any HTML tags
-  const sanitized = input.replace(/<[^>]*>/g, '');
+  // Remove any HTML tags using sanitize-html
+  const sanitized = sanitizeHtml(input, {
+    allowedTags: [],
+    allowedAttributes: {},
+  });
 
   // Limit length
   return sanitized.substring(0, 10000);
