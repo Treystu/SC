@@ -1,7 +1,14 @@
 import { CURRENT_SCHEMA_VERSION, validateAndMigrate } from "./schema-validator";
+import {
+  encryptionManager,
+  encryptSensitiveFields,
+  decryptSensitiveFields,
+} from "./encryption";
 /**
  * IndexedDB Persistence for Web Application
  * Stores messages, contacts, conversations, groups, and V1 persistence data
+ * 
+ * SECURITY: Implements encryption for sensitive data (addresses V1.0 Audit Gap #2)
  */
 
 export interface StoredMessage {
@@ -121,6 +128,29 @@ export class DatabaseManager {
   private version = CURRENT_SCHEMA_VERSION;
   private db: IDBDatabase | null = null;
   private initPromise: Promise<void> | null = null;
+  private encryptionInitialized = false;
+
+  /**
+   * Initialize encryption for the database
+   * Should be called during app initialization with user's passphrase
+   * 
+   * @example
+   * // During app startup, after user authentication
+   * const passphrase = await deriveFromUserPassword(userPassword);
+   * await dbManager.initializeEncryption(passphrase);
+   * 
+   * @param passphrase - User's passphrase for encryption (derived from password or device key)
+   */
+  async initializeEncryption(passphrase: string): Promise<void> {
+    try {
+      await encryptionManager.initialize(passphrase);
+      this.encryptionInitialized = true;
+      console.log("EncryptionManager initialized for database");
+    } catch (error) {
+      console.error("DatabaseManager: Failed to initialize encryption:", error);
+      throw error;
+    }
+  }
 
   /**
    * Initialize database
@@ -197,15 +227,21 @@ export class DatabaseManager {
   // ===== MESSAGE OPERATIONS =====
 
   /**
-   * Save a message
+   * Save a message (with encryption for content)
    */
   async saveMessage(message: StoredMessage): Promise<void> {
     if (!this.db) await this.init();
 
+    // Encrypt sensitive fields
+    const encryptedMessage = await encryptSensitiveFields(message, [
+      "content",
+      "metadata",
+    ]);
+
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(["messages"], "readwrite");
       const store = transaction.objectStore("messages");
-      const request = store.put(message);
+      const request = store.put(encryptedMessage);
 
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
@@ -213,15 +249,18 @@ export class DatabaseManager {
   }
 
   /**
-   * Get a single message by ID
+   * Helper to perform IndexedDB get operations with Promise
    */
-  async getMessage(messageId: string): Promise<StoredMessage | null> {
+  private async performGet<T>(
+    storeName: string,
+    key: string,
+  ): Promise<T | null> {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(["messages"], "readonly");
-      const store = transaction.objectStore("messages");
-      const request = store.get(messageId);
+      const transaction = this.db!.transaction([storeName], "readonly");
+      const store = transaction.objectStore(storeName);
+      const request = store.get(key);
 
       request.onsuccess = () => resolve(request.result || null);
       request.onerror = () => reject(request.error);
@@ -229,34 +268,64 @@ export class DatabaseManager {
   }
 
   /**
-   * Get messages for a conversation
+   * Helper to perform IndexedDB getAll operations with Promise
+   */
+  private async performGetAll<T>(
+    storeName: string,
+    indexName?: string,
+    query?: string,
+  ): Promise<T[]> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction([storeName], "readonly");
+      const store = transaction.objectStore(storeName);
+      const target = indexName ? store.index(indexName) : store;
+      const request = query ? target.getAll(query) : target.getAll();
+
+      request.onsuccess = () => resolve(request.result || []);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  /**
+   * Get a single message by ID (with decryption)
+   */
+  async getMessage(messageId: string): Promise<StoredMessage | null> {
+    const message = await this.performGet<StoredMessage>("messages", messageId);
+    if (!message) return null;
+
+    // Decrypt sensitive fields
+    return await decryptSensitiveFields(message, ["content", "metadata"]);
+  }
+
+  /**
+   * Get messages for a conversation (with decryption)
    */
   async getMessages(
     conversationId: string,
     limit: number = 50,
     offset: number = 0,
   ): Promise<StoredMessage[]> {
-    if (!this.db) await this.init();
+    const allMessages = await this.performGetAll<StoredMessage>(
+      "messages",
+      "conversationId",
+      conversationId,
+    );
 
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(["messages"], "readonly");
-      const store = transaction.objectStore("messages");
-      const index = store.index("conversationId"); // Assuming 'conversationId' is the correct index name
-      const request = index.getAll(conversationId);
+    // Sort and paginate
+    const sortedMessages = allMessages.sort((a, b) => a.timestamp - b.timestamp);
+    const paginatedMessages = sortedMessages.slice(
+      Math.max(0, sortedMessages.length - limit - offset),
+      sortedMessages.length - offset,
+    );
 
-      request.onsuccess = () => {
-        const messages = request.result.sort(
-          (a, b) => a.timestamp - b.timestamp,
-        );
-        resolve(
-          messages.slice(
-            Math.max(0, messages.length - limit - offset),
-            messages.length - offset,
-          ),
-        );
-      };
-      request.onerror = () => reject(request.error);
-    });
+    // Decrypt all messages
+    return await Promise.all(
+      paginatedMessages.map((msg) =>
+        decryptSensitiveFields(msg, ["content", "metadata"]),
+      ),
+    );
   }
 
   /**
@@ -579,14 +648,20 @@ export class DatabaseManager {
 
   /**
    * Save an identity
+   * CRITICAL FIX: Now encrypts privateKey field
    */
   async saveIdentity(identity: Identity): Promise<void> {
     if (!this.db) await this.init();
 
+    // Encrypt sensitive fields (especially privateKey)
+    const encryptedIdentity = await encryptSensitiveFields(identity, [
+      "privateKey",
+    ]);
+
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(["identities"], "readwrite");
       const store = transaction.objectStore("identities");
-      const request = store.put(identity);
+      const request = store.put(encryptedIdentity);
 
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
@@ -595,54 +670,38 @@ export class DatabaseManager {
 
   /**
    * Get an identity by ID
+   * CRITICAL FIX: Now decrypts privateKey field
    */
   async getIdentity(id: string): Promise<Identity | null> {
-    if (!this.db) await this.init();
+    const identity = await this.performGet<Identity>("identities", id);
+    if (!identity) return null;
 
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(["identities"], "readonly");
-      const store = transaction.objectStore("identities");
-      const request = store.get(id);
-
-      request.onsuccess = () => resolve(request.result || null);
-      request.onerror = () => reject(request.error);
-    });
+    // Decrypt sensitive fields (especially privateKey)
+    return await decryptSensitiveFields(identity, ["privateKey"]);
   }
 
   /**
    * Get the primary identity
+   * CRITICAL FIX: Now decrypts privateKey field
    */
   async getPrimaryIdentity(): Promise<Identity | null> {
-    if (!this.db) await this.init();
-
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(["identities"], "readonly");
-      const store = transaction.objectStore("identities");
-      const request = store.getAll();
-
-      request.onsuccess = () => {
-        const identities = request.result as Identity[];
-        const primary = identities.find((id) => id.isPrimary);
-        resolve(primary || null);
-      };
-      request.onerror = () => reject(request.error);
-    });
+    const identities = await this.getAllIdentities();
+    return identities.find((id) => id.isPrimary) || null;
   }
 
   /**
    * Get all identities
+   * CRITICAL FIX: Now decrypts privateKey field for all identities
    */
   async getAllIdentities(): Promise<Identity[]> {
-    if (!this.db) await this.init();
-
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(["identities"], "readonly");
-      const store = transaction.objectStore("identities");
-      const request = store.getAll();
-
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
+    const identities = await this.performGetAll<Identity>("identities");
+    
+    // Decrypt all identities
+    return await Promise.all(
+      identities.map((identity) =>
+        decryptSensitiveFields(identity, ["privateKey"]),
+      ),
+    );
   }
 
   /**

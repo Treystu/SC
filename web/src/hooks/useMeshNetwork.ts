@@ -57,7 +57,6 @@ export function useMeshNetwork() {
   // Initialize mesh network with persistence
   useEffect(() => {
     let retryInterval: NodeJS.Timeout;
-    let handleServiceWorkerMessage: (event: MessageEvent) => void;
 
     // Process offline queue
     const retryQueuedMessages = async () => {
@@ -399,7 +398,7 @@ export function useMeshNetwork() {
     initMeshNetwork();
 
     // Listen for Service Worker sync requests
-    handleServiceWorkerMessage = async (event: MessageEvent) => {
+    const handleServiceWorkerMessage = async (event: MessageEvent) => {
       if (event.data && event.data.type === "SYNC_OFFLINE_MESSAGES") {
         console.log("Received sync request from Service Worker");
         await retryQueuedMessages();

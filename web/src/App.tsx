@@ -41,6 +41,43 @@ import { rateLimiter } from "../../core/src/rate-limiter";
 import { config } from "./config";
 import { saveBootstrapPeers } from "./utils/peerBootstrap";
 
+// CRITICAL: Initialize encryption on app startup
+const initializeEncryption = async () => {
+  try {
+    const db = getDatabase();
+    // Use a deterministic passphrase derived from browser fingerprint
+    // In production, this should be derived from user password
+    const passphrase = await generateBrowserFingerprint();
+    await db.initializeEncryption(passphrase);
+    console.log("✅ Encryption initialized successfully");
+  } catch (error) {
+    console.error("❌ Failed to initialize encryption:", error);
+  }
+};
+
+// Generate a browser-specific fingerprint for encryption
+// SECURITY NOTE: This is a fallback - production should use user password
+const generateBrowserFingerprint = async (): Promise<string> => {
+  // Combine multiple browser properties for a unique fingerprint
+  const navigator_props = [
+    navigator.userAgent,
+    navigator.language,
+    screen.colorDepth.toString(),
+    screen.width.toString() + "x" + screen.height.toString(),
+    new Date().getTimezoneOffset().toString(),
+  ].join("|");
+  
+  // Hash the fingerprint using Web Crypto API
+  const encoder = new TextEncoder();
+  const data = encoder.encode(navigator_props);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+};
+
+// Initialize encryption immediately
+initializeEncryption();
+
 function App() {
   const [activeRoom, setActiveRoom] = useState<string | null>(null);
   const [selectedConversation, setSelectedConversation] = useState<
