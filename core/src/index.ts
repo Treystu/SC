@@ -34,6 +34,7 @@ export * from "./mesh/routing.js";
 export * from "./mesh/relay.js";
 export * from "./mesh/network.js";
 export * from "./mesh/health.js";
+export * from "./mesh/gossip.js";
 export {
   IndexedDbSeenAdapter,
   MemorySeenAdapter,
