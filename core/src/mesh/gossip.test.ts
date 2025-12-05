@@ -114,19 +114,21 @@ describe('GossipProtocol', () => {
       gossip.stop();
     });
 
-    it('should prune old messages', async () => {
+    it('should prune old messages', () => {
+      vi.useFakeTimers();
       const message = createTestMessage('old message');
       gossip.receiveMessage(message, 'peer1');
       
       expect(gossip.getStats().messageCount).toBe(1);
       
-      // Wait for message to age
-      await new Promise(resolve => setTimeout(resolve, 6000));
+      // Advance time past maxMessageAge (5000ms from config)
+      vi.advanceTimersByTime(6000);
       
-      // Trigger prune
+      // Trigger prune manually
       gossip['pruneOldMessages']();
       
       expect(gossip.getStats().messageCount).toBe(0);
+      vi.useRealTimers();
     });
   });
 

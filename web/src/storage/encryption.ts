@@ -202,7 +202,7 @@ export async function encryptSensitiveFields<T extends Record<string, unknown>>(
 
 /**
  * Helper to decrypt sensitive fields in a stored object
- * CRITICAL FIX: Now handles Uint8Array for private keys
+ * CRITICAL FIX: Now handles Uint8Array for private keys and objects
  */
 export async function decryptSensitiveFields<T extends Record<string, unknown>>(
   obj: T,
@@ -226,7 +226,13 @@ export async function decryptSensitiveFields<T extends Record<string, unknown>>(
             if (field === "privateKey" || field === "publicKey") {
               decrypted[field] = (await encryptionManager.decryptBytes(value)) as unknown as T[keyof T];
             } else {
-              decrypted[field] = (await encryptionManager.decrypt(value)) as unknown as T[keyof T];
+              // Try to decrypt as object first, fall back to string
+              try {
+                decrypted[field] = (await encryptionManager.decryptObject(value)) as unknown as T[keyof T];
+              } catch {
+                // If object parsing fails, treat as plain string
+                decrypted[field] = (await encryptionManager.decrypt(value)) as unknown as T[keyof T];
+              }
             }
           } else {
             // Not encrypted, leave as-is

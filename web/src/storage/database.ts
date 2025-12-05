@@ -134,13 +134,18 @@ export class DatabaseManager {
    * Initialize encryption for the database
    * Should be called during app initialization with user's passphrase
    * 
+   * @example
+   * // During app startup, after user authentication
+   * const passphrase = await deriveFromUserPassword(userPassword);
+   * await dbManager.initializeEncryption(passphrase);
+   * 
    * @param passphrase - User's passphrase for encryption (derived from password or device key)
    */
   async initializeEncryption(passphrase: string): Promise<void> {
     try {
       await encryptionManager.initialize(passphrase);
       this.encryptionInitialized = true;
-      console.log("DatabaseManager: Encryption initialized");
+      console.log("EncryptionManager initialized for database");
     } catch (error) {
       console.error("DatabaseManager: Failed to initialize encryption:", error);
       throw error;

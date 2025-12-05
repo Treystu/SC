@@ -226,13 +226,15 @@ export class GossipProtocol {
 
   /**
    * Select N random peers from the active peer list
+   * Optimized to only shuffle the first N positions
    */
   private selectRandomPeers(peers: GossipPeer[], count: number): GossipPeer[] {
     if (peers.length <= count) return peers;
 
     const shuffled = [...peers];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+    // Only shuffle first 'count' positions for better performance
+    for (let i = 0; i < count; i++) {
+      const j = i + Math.floor(Math.random() * (shuffled.length - i));
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
 
@@ -241,13 +243,15 @@ export class GossipProtocol {
 
   /**
    * Select N random messages from the message list
+   * Optimized to only shuffle the first N positions
    */
   private selectRandomMessages(messages: Message[], count: number): Message[] {
     if (messages.length <= count) return messages;
 
     const shuffled = [...messages];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+    // Only shuffle first 'count' positions for better performance
+    for (let i = 0; i < count; i++) {
+      const j = i + Math.floor(Math.random() * (shuffled.length - i));
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
 
