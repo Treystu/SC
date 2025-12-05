@@ -244,25 +244,51 @@ export class DatabaseManager {
   }
 
   /**
+   * Helper to perform IndexedDB get operations with Promise
+   */
+  private async performGet<T>(
+    storeName: string,
+    key: string,
+  ): Promise<T | null> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction([storeName], "readonly");
+      const store = transaction.objectStore(storeName);
+      const request = store.get(key);
+
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  /**
+   * Helper to perform IndexedDB getAll operations with Promise
+   */
+  private async performGetAll<T>(
+    storeName: string,
+    indexName?: string,
+    query?: string,
+  ): Promise<T[]> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction([storeName], "readonly");
+      const store = transaction.objectStore(storeName);
+      const target = indexName ? store.index(indexName) : store;
+      const request = query ? target.getAll(query) : target.getAll();
+
+      request.onsuccess = () => resolve(request.result || []);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  /**
    * Get a single message by ID (with decryption)
    */
   async getMessage(messageId: string): Promise<StoredMessage | null> {
-    if (!this.db) await this.init();
-
-    const message: StoredMessage | null = await new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(["messages"], "readonly");
-      const store = transaction.objectStore("messages");
-      const request = store.get(messageId);
-
-      request.onsuccess = () => {
-        resolve(request.result || null);
-      };
-      request.onerror = () => reject(request.error);
-    });
-
-    if (!message) {
-      return null;
-    }
+    const message = await this.performGet<StoredMessage>("messages", messageId);
+    if (!message) return null;
 
     // Decrypt sensitive fields
     return await decryptSensitiveFields(message, ["content", "metadata"]);
@@ -276,30 +302,22 @@ export class DatabaseManager {
     limit: number = 50,
     offset: number = 0,
   ): Promise<StoredMessage[]> {
-    if (!this.db) await this.init();
+    const allMessages = await this.performGetAll<StoredMessage>(
+      "messages",
+      "conversationId",
+      conversationId,
+    );
 
-    const messages: StoredMessage[] = await new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(["messages"], "readonly");
-      const store = transaction.objectStore("messages");
-      const index = store.index("conversationId"); // Assuming 'conversationId' is the correct index name
-      const request = index.getAll(conversationId);
-
-      request.onsuccess = () => {
-        const sortedMessages = request.result.sort(
-          (a, b) => a.timestamp - b.timestamp,
-        );
-        const paginatedMessages = sortedMessages.slice(
-          Math.max(0, sortedMessages.length - limit - offset),
-          sortedMessages.length - offset,
-        );
-        resolve(paginatedMessages);
-      };
-      request.onerror = () => reject(request.error);
-    });
+    // Sort and paginate
+    const sortedMessages = allMessages.sort((a, b) => a.timestamp - b.timestamp);
+    const paginatedMessages = sortedMessages.slice(
+      Math.max(0, sortedMessages.length - limit - offset),
+      sortedMessages.length - offset,
+    );
 
     // Decrypt all messages
     return await Promise.all(
-      messages.map((msg) =>
+      paginatedMessages.map((msg) =>
         decryptSensitiveFields(msg, ["content", "metadata"]),
       ),
     );

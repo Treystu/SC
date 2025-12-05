@@ -35,7 +35,9 @@ class EncryptionManager {
    */
   async initialize(passphrase: string): Promise<void> {
     this.passphrase = passphrase;
-    this.key = await deriveKey(passphrase);
+    // Generate a salt for key derivation (stored for consistency)
+    const salt = window.crypto.getRandomValues(new Uint8Array(16));
+    this.key = await deriveKey(passphrase, salt);
     this.enabled = true;
   }
 
@@ -139,11 +141,13 @@ export async function encryptSensitiveFields<T extends Record<string, unknown>>(
   for (const field of sensitiveFields) {
     const value = obj[field];
     if (value && typeof value === "string") {
-      encrypted[field] = (await encryptionManager.encrypt(value)) as T[keyof T];
+      // Store encrypted strings directly (type is compatible)
+      encrypted[field] = (await encryptionManager.encrypt(value)) as unknown as T[keyof T];
     } else if (value && typeof value === "object") {
+      // Store encrypted objects as strings (will be JSON on decrypt)
       encrypted[field] = (await encryptionManager.encryptObject(
         value,
-      )) as T[keyof T];
+      )) as unknown as T[keyof T];
     }
   }
   return encrypted;

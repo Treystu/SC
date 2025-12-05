@@ -179,14 +179,9 @@ export class GossipProtocol {
     // Select random peers for this round (fanout)
     const selectedPeers = this.selectRandomPeers(activePeers, this.config.fanout);
 
-    // Decide push vs pull based on ratio
-    const isPush = Math.random() < this.config.pushPullRatio;
-
-    if (isPush) {
-      await this.pushGossip(selectedPeers);
-    } else {
-      await this.pullGossip(selectedPeers);
-    }
+    // For now, only use push gossip (pull is TODO)
+    // TODO: Implement pull gossip with digest exchange
+    await this.pushGossip(selectedPeers);
   }
 
   /**
@@ -220,7 +215,7 @@ export class GossipProtocol {
    * Pull gossip: Request messages we might have missed
    * In a real implementation, this would send digest requests to peers
    */
-  private async pullGossip(peers: GossipPeer[]): Promise<void> {
+  private async pullGossip(_peers: GossipPeer[]): Promise<void> {
     // TODO: Implement pull gossip with digest exchange
     // For now, this is a placeholder
     // In a full implementation:
