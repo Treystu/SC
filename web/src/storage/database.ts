@@ -1,7 +1,14 @@
 import { CURRENT_SCHEMA_VERSION, validateAndMigrate } from "./schema-validator";
+import {
+  encryptionManager,
+  encryptSensitiveFields,
+  decryptSensitiveFields,
+} from "./encryption";
 /**
  * IndexedDB Persistence for Web Application
  * Stores messages, contacts, conversations, groups, and V1 persistence data
+ * 
+ * SECURITY: Implements encryption for sensitive data (addresses V1.0 Audit Gap #2)
  */
 
 export interface StoredMessage {
@@ -121,6 +128,24 @@ export class DatabaseManager {
   private version = CURRENT_SCHEMA_VERSION;
   private db: IDBDatabase | null = null;
   private initPromise: Promise<void> | null = null;
+  private encryptionInitialized = false;
+
+  /**
+   * Initialize encryption for the database
+   * Should be called during app initialization with user's passphrase
+   * 
+   * @param passphrase - User's passphrase for encryption (derived from password or device key)
+   */
+  async initializeEncryption(passphrase: string): Promise<void> {
+    try {
+      await encryptionManager.initialize(passphrase);
+      this.encryptionInitialized = true;
+      console.log("DatabaseManager: Encryption initialized");
+    } catch (error) {
+      console.error("DatabaseManager: Failed to initialize encryption:", error);
+      throw error;
+    }
+  }
 
   /**
    * Initialize database
@@ -197,15 +222,21 @@ export class DatabaseManager {
   // ===== MESSAGE OPERATIONS =====
 
   /**
-   * Save a message
+   * Save a message (with encryption for content)
    */
   async saveMessage(message: StoredMessage): Promise<void> {
     if (!this.db) await this.init();
 
+    // Encrypt sensitive fields
+    const encryptedMessage = await encryptSensitiveFields(message, [
+      "content",
+      "metadata",
+    ]);
+
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(["messages"], "readwrite");
       const store = transaction.objectStore("messages");
-      const request = store.put(message);
+      const request = store.put(encryptedMessage);
 
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
@@ -213,23 +244,32 @@ export class DatabaseManager {
   }
 
   /**
-   * Get a single message by ID
+   * Get a single message by ID (with decryption)
    */
   async getMessage(messageId: string): Promise<StoredMessage | null> {
     if (!this.db) await this.init();
 
-    return new Promise((resolve, reject) => {
+    const message: StoredMessage | null = await new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(["messages"], "readonly");
       const store = transaction.objectStore("messages");
       const request = store.get(messageId);
 
-      request.onsuccess = () => resolve(request.result || null);
+      request.onsuccess = () => {
+        resolve(request.result || null);
+      };
       request.onerror = () => reject(request.error);
     });
+
+    if (!message) {
+      return null;
+    }
+
+    // Decrypt sensitive fields
+    return await decryptSensitiveFields(message, ["content", "metadata"]);
   }
 
   /**
-   * Get messages for a conversation
+   * Get messages for a conversation (with decryption)
    */
   async getMessages(
     conversationId: string,
@@ -238,25 +278,31 @@ export class DatabaseManager {
   ): Promise<StoredMessage[]> {
     if (!this.db) await this.init();
 
-    return new Promise((resolve, reject) => {
+    const messages: StoredMessage[] = await new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(["messages"], "readonly");
       const store = transaction.objectStore("messages");
       const index = store.index("conversationId"); // Assuming 'conversationId' is the correct index name
       const request = index.getAll(conversationId);
 
       request.onsuccess = () => {
-        const messages = request.result.sort(
+        const sortedMessages = request.result.sort(
           (a, b) => a.timestamp - b.timestamp,
         );
-        resolve(
-          messages.slice(
-            Math.max(0, messages.length - limit - offset),
-            messages.length - offset,
-          ),
+        const paginatedMessages = sortedMessages.slice(
+          Math.max(0, sortedMessages.length - limit - offset),
+          sortedMessages.length - offset,
         );
+        resolve(paginatedMessages);
       };
       request.onerror = () => reject(request.error);
     });
+
+    // Decrypt all messages
+    return await Promise.all(
+      messages.map((msg) =>
+        decryptSensitiveFields(msg, ["content", "metadata"]),
+      ),
+    );
   }
 
   /**
