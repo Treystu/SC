@@ -2,6 +2,8 @@
  * IndexedDB Encryption Layer
  * Implements transparent encryption for all sensitive data stored in IndexedDB
  * Addresses Critical Gap #2 from V1.0 audit
+ * 
+ * CRITICAL FIX: Properly handles salt persistence to avoid data loss
  */
 
 import { encryptData, decryptData, deriveKey } from "../utils/backupCrypto";
@@ -11,6 +13,8 @@ export interface EncryptionConfig {
   passphrase?: string;
 }
 
+const ENCRYPTION_SALT_KEY = "sc_encryption_salt";
+
 /**
  * Encryption manager for IndexedDB storage
  */
@@ -19,6 +23,7 @@ class EncryptionManager {
   private enabled: boolean = false;
   private key: CryptoKey | null = null;
   private passphrase: string | null = null;
+  private salt: Uint8Array | null = null;
 
   private constructor() {}
 
@@ -31,13 +36,29 @@ class EncryptionManager {
 
   /**
    * Initialize encryption with a passphrase
-   * Passphrase should be derived from user password or hardware-backed key
+   * CRITICAL FIX: Persists salt to localStorage to ensure consistent key derivation
+   * Previously, salt was regenerated on each init, making old data unreadable
    */
   async initialize(passphrase: string): Promise<void> {
     this.passphrase = passphrase;
-    // Generate a salt for key derivation (stored for consistency)
-    const salt = window.crypto.getRandomValues(new Uint8Array(16));
-    this.key = await deriveKey(passphrase, salt);
+    
+    // Try to retrieve existing salt from localStorage
+    const storedSalt = localStorage.getItem(ENCRYPTION_SALT_KEY);
+    
+    if (storedSalt) {
+      // Use existing salt to maintain compatibility with previously encrypted data
+      this.salt = new Uint8Array(
+        atob(storedSalt).split("").map((c) => c.charCodeAt(0))
+      );
+    } else {
+      // Generate new salt only if none exists
+      this.salt = window.crypto.getRandomValues(new Uint8Array(16));
+      // Persist salt to localStorage
+      const saltBase64 = btoa(String.fromCharCode(...this.salt));
+      localStorage.setItem(ENCRYPTION_SALT_KEY, saltBase64);
+    }
+    
+    this.key = await deriveKey(passphrase, this.salt);
     this.enabled = true;
   }
 
@@ -115,6 +136,28 @@ class EncryptionManager {
   }
 
   /**
+   * Encrypt Uint8Array data (for private keys)
+   * CRITICAL: Encrypts binary data like Ed25519 private keys
+   */
+  async encryptBytes(data: Uint8Array): Promise<string> {
+    // Convert Uint8Array to base64 string, then encrypt
+    const base64 = btoa(String.fromCharCode(...data));
+    return await this.encrypt(base64);
+  }
+
+  /**
+   * Decrypt to Uint8Array (for private keys)
+   * CRITICAL: Decrypts binary data like Ed25519 private keys
+   */
+  async decryptBytes(encryptedData: string): Promise<Uint8Array> {
+    const base64 = await this.decrypt(encryptedData);
+    // Convert base64 back to Uint8Array
+    return new Uint8Array(
+      atob(base64).split("").map((c) => c.charCodeAt(0))
+    );
+  }
+
+  /**
    * Disable encryption (for testing or if user opts out)
    */
   disable(): void {
@@ -128,6 +171,7 @@ export const encryptionManager = EncryptionManager.getInstance();
 
 /**
  * Helper to encrypt sensitive fields in a stored object
+ * CRITICAL FIX: Now handles Uint8Array for private keys
  */
 export async function encryptSensitiveFields<T extends Record<string, unknown>>(
   obj: T,
@@ -140,11 +184,14 @@ export async function encryptSensitiveFields<T extends Record<string, unknown>>(
   const encrypted = { ...obj };
   for (const field of sensitiveFields) {
     const value = obj[field];
-    if (value && typeof value === "string") {
-      // Store encrypted strings directly (type is compatible)
+    if (value instanceof Uint8Array) {
+      // CRITICAL: Encrypt Uint8Array (private keys)
+      encrypted[field] = (await encryptionManager.encryptBytes(value)) as unknown as T[keyof T];
+    } else if (value && typeof value === "string") {
+      // Encrypt strings
       encrypted[field] = (await encryptionManager.encrypt(value)) as unknown as T[keyof T];
     } else if (value && typeof value === "object") {
-      // Store encrypted objects as strings (will be JSON on decrypt)
+      // Encrypt objects
       encrypted[field] = (await encryptionManager.encryptObject(
         value,
       )) as unknown as T[keyof T];
@@ -155,6 +202,7 @@ export async function encryptSensitiveFields<T extends Record<string, unknown>>(
 
 /**
  * Helper to decrypt sensitive fields in a stored object
+ * CRITICAL FIX: Now handles Uint8Array for private keys
  */
 export async function decryptSensitiveFields<T extends Record<string, unknown>>(
   obj: T,
@@ -168,7 +216,34 @@ export async function decryptSensitiveFields<T extends Record<string, unknown>>(
   for (const field of sensitiveFields) {
     const value = obj[field];
     if (value && typeof value === "string") {
-      decrypted[field] = (await encryptionManager.decrypt(value)) as T[keyof T];
+      try {
+        // Try to decrypt - check if it looks like encrypted data
+        if (value.startsWith("{")) {
+          const parsed = JSON.parse(value);
+          if (parsed.ciphertext && parsed.salt && parsed.iv) {
+            // This is encrypted data
+            // If the field name suggests binary data, decrypt as bytes
+            if (field === "privateKey" || field === "publicKey") {
+              decrypted[field] = (await encryptionManager.decryptBytes(value)) as unknown as T[keyof T];
+            } else {
+              decrypted[field] = (await encryptionManager.decrypt(value)) as unknown as T[keyof T];
+            }
+          } else {
+            // Not encrypted, leave as-is
+            decrypted[field] = value as unknown as T[keyof T];
+          }
+        } else {
+          // Not encrypted, leave as-is
+          decrypted[field] = value as unknown as T[keyof T];
+        }
+      } catch (error) {
+        // If decryption fails, leave as-is
+        console.warn(`Failed to decrypt field ${String(field)}:`, error);
+        decrypted[field] = value as unknown as T[keyof T];
+      }
+    } else if (value instanceof Uint8Array) {
+      // Already Uint8Array (unencrypted), leave as-is
+      decrypted[field] = value as unknown as T[keyof T];
     }
   }
   return decrypted;

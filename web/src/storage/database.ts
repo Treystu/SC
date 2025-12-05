@@ -643,14 +643,20 @@ export class DatabaseManager {
 
   /**
    * Save an identity
+   * CRITICAL FIX: Now encrypts privateKey field
    */
   async saveIdentity(identity: Identity): Promise<void> {
     if (!this.db) await this.init();
 
+    // Encrypt sensitive fields (especially privateKey)
+    const encryptedIdentity = await encryptSensitiveFields(identity, [
+      "privateKey",
+    ]);
+
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(["identities"], "readwrite");
       const store = transaction.objectStore("identities");
-      const request = store.put(identity);
+      const request = store.put(encryptedIdentity);
 
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
@@ -659,54 +665,38 @@ export class DatabaseManager {
 
   /**
    * Get an identity by ID
+   * CRITICAL FIX: Now decrypts privateKey field
    */
   async getIdentity(id: string): Promise<Identity | null> {
-    if (!this.db) await this.init();
+    const identity = await this.performGet<Identity>("identities", id);
+    if (!identity) return null;
 
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(["identities"], "readonly");
-      const store = transaction.objectStore("identities");
-      const request = store.get(id);
-
-      request.onsuccess = () => resolve(request.result || null);
-      request.onerror = () => reject(request.error);
-    });
+    // Decrypt sensitive fields (especially privateKey)
+    return await decryptSensitiveFields(identity, ["privateKey"]);
   }
 
   /**
    * Get the primary identity
+   * CRITICAL FIX: Now decrypts privateKey field
    */
   async getPrimaryIdentity(): Promise<Identity | null> {
-    if (!this.db) await this.init();
-
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(["identities"], "readonly");
-      const store = transaction.objectStore("identities");
-      const request = store.getAll();
-
-      request.onsuccess = () => {
-        const identities = request.result as Identity[];
-        const primary = identities.find((id) => id.isPrimary);
-        resolve(primary || null);
-      };
-      request.onerror = () => reject(request.error);
-    });
+    const identities = await this.getAllIdentities();
+    return identities.find((id) => id.isPrimary) || null;
   }
 
   /**
    * Get all identities
+   * CRITICAL FIX: Now decrypts privateKey field for all identities
    */
   async getAllIdentities(): Promise<Identity[]> {
-    if (!this.db) await this.init();
-
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(["identities"], "readonly");
-      const store = transaction.objectStore("identities");
-      const request = store.getAll();
-
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
+    const identities = await this.performGetAll<Identity>("identities");
+    
+    // Decrypt all identities
+    return await Promise.all(
+      identities.map((identity) =>
+        decryptSensitiveFields(identity, ["privateKey"]),
+      ),
+    );
   }
 
   /**

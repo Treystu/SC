@@ -12,13 +12,15 @@ The original audit identified that the mesh network relied solely on **flood rou
 - Wastes bandwidth by sending duplicates to all peers
 - Has no mechanism to control message propagation
 
-## Solution: Epidemic Gossip Protocol
+## Solution: Push Gossip Protocol
 
-We've implemented a **hybrid push-pull gossip protocol** that:
+We've implemented a **push gossip protocol** (not hybrid push-pull as initially documented) that:
 1. **Reduces network load** by gossiping to a subset of peers (fanout)
 2. **Provides probabilistic guarantees** of message delivery
 3. **Scales to thousands of nodes** efficiently
-4. **Self-heals** from network partitions through anti-entropy
+4. **Self-heals** from network partitions through epidemic spreading
+
+**CURRENT STATUS**: Push-only implementation. Pull gossip (digest exchange) is planned but NOT yet implemented.
 
 ## Architecture
 
@@ -37,19 +39,19 @@ GossipProtocol
 Every `gossipInterval` (default: 1 second), the protocol:
 
 1. **Selects random peers** (fanout = 4 by default)
-2. **Decides push vs pull** (70/30 ratio)
-3. **Push**: Sends recent messages to selected peers
-4. **Pull**: Requests messages from peers (digest exchange)
+2. **Push**: Sends recent messages to selected peers
+
+**NOTE**: Pull gossip (step 3 in original design) is NOT yet implemented. The current implementation is push-only.
 
 ### Key Parameters
 
-| Parameter | Default | Purpose |
-|-----------|---------|---------|
-| `fanout` | 4 | Number of peers to gossip with per round |
-| `gossipInterval` | 1000ms | Frequency of gossip rounds |
-| `maxMessageAge` | 60000ms | How long to keep messages |
-| `pruneInterval` | 30000ms | How often to clean old messages |
-| `pushPullRatio` | 0.7 | Push (0.7) vs Pull (0.3) balance |
+| Parameter | Default | Purpose | Status |
+|-----------|---------|---------|--------|
+| `fanout` | 4 | Number of peers to gossip with per round | ✅ Implemented |
+| `gossipInterval` | 1000ms | Frequency of gossip rounds | ✅ Implemented |
+| `maxMessageAge` | 60000ms | How long to keep messages | ✅ Implemented |
+| `pruneInterval` | 30000ms | How often to clean old messages | ✅ Implemented |
+| `pushPullRatio` | 0.7 | Push vs Pull balance | ⏸️ Not used (push-only) |
 
 ## Usage
 
