@@ -348,6 +348,25 @@ export class DatabaseManager {
   }
 
   /**
+   * Get a message by ID
+   */
+  async getMessageById(messageId: string): Promise<StoredMessage | null> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(["messages"], "readonly");
+      const store = transaction.objectStore("messages");
+      const request = store.get(messageId);
+
+      request.onsuccess = () => {
+        const message = request.result;
+        resolve(message || null);
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  /**
    * Delete a message
    */
   async deleteMessage(messageId: string): Promise<void> {

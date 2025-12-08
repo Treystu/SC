@@ -52,4 +52,14 @@ interface MessageDao {
 
     @Query("UPDATE messages SET status = 'READ' WHERE conversationId = :conversationId AND status != 'READ'")
     suspend fun markConversationAsRead(conversationId: String)
+
+    // Additional methods for PersistenceAdapter support
+    @Query("SELECT * FROM messages WHERE id = :messageId")
+    suspend fun getMessageById(messageId: String): MessageEntity?
+
+    @Query("DELETE FROM messages WHERE id = :messageId")
+    suspend fun deleteById(messageId: String)
+
+    @Query("SELECT * FROM messages WHERE status = :status")
+    suspend fun getMessagesByStatus(status: MessageStatus): List<MessageEntity>
 }
