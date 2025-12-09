@@ -327,8 +327,11 @@ export class WebRTCTransport implements Transport {
       throw new Error(`Data channel to ${peerId} is not ready`);
     }
 
-    // Cast to any to bypass TypeScript strict type checking for WebRTC send
-    (channel as any).send(payload);
+    // WebRTC's send() accepts ArrayBuffer, Blob, or ArrayBufferView.
+    // TypeScript's strict checking has issues with Uint8Array as ArrayBufferView
+    // in some configurations, so we use a type assertion here.
+    // This is safe because Uint8Array is a valid ArrayBufferView.
+    (channel as RTCDataChannel).send(payload as unknown as ArrayBuffer);
     wrapper.bytesSent += payload.length;
   }
 

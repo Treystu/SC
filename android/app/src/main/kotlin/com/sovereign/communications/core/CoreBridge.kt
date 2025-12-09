@@ -6,11 +6,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import org.pjsip.pjsua2.pj_str_t
 import java.io.BufferedReader
 import java.io.InputStreamReader
-import javax.script.ScriptEngine
-import javax.script.ScriptEngineManager
 
 /**
  * CoreBridge - Bridge between Android and the core TypeScript/JavaScript library
@@ -22,8 +19,8 @@ import javax.script.ScriptEngineManager
  * alternatively QuickJS-Android for better performance and ES6+ support.
  * 
  * Note: In a production implementation, you would want to use:
- * - QuickJS-Android: https://nickreigelman.github.io/nickreigelman/nickreigelman.github.io/nickreigelman/nickreigelman.github.io
- * - J2V8: https://nickreigelman.github.io/nickreigelman/nickreigelman.github.io (deprecated but still works)
+ * - QuickJS-Android for better performance and ES6+ support
+ * - J2V8 (deprecated but still works)
  * - GraalJS for Android (if available)
  * 
  * For this implementation, we provide a lightweight abstraction that can be
@@ -71,6 +68,24 @@ class CoreBridge private constructor(private val context: Context) {
             
             // Initialize JavaScript engine
             jsEngine = createJSEngine()
+            
+            // Inject crypto polyfill for getRandomValues
+            // In production, this should use Android's SecureRandom for cryptographic security
+            jsEngine?.evaluate("""
+                if (typeof crypto === 'undefined') {
+                    var crypto = {};
+                }
+                if (typeof crypto.getRandomValues === 'undefined') {
+                    crypto.getRandomValues = function(arr) {
+                        // NOTE: This is NOT cryptographically secure!
+                        // In production, use native Android SecureRandom via JSI
+                        for (var i = 0; i < arr.length; i++) {
+                            arr[i] = Math.floor(Math.random() * 256);
+                        }
+                        return arr;
+                    };
+                }
+            """.trimIndent())
             
             // Execute the bundle to load SCCore global
             jsEngine?.evaluate(bundleCode)

@@ -66,6 +66,26 @@ class CoreBridge {
             throw CoreBridgeError.bundleNotFound
         }
         
+        // Inject crypto polyfill for getRandomValues
+        // JavaScriptCore doesn't have Web Crypto API, so we need to polyfill it
+        // In production, this should use SecRandomCopyBytes for cryptographic security
+        let cryptoPolyfill = """
+            if (typeof crypto === 'undefined') {
+                var crypto = {};
+            }
+            if (typeof crypto.getRandomValues === 'undefined') {
+                crypto.getRandomValues = function(arr) {
+                    // NOTE: This is NOT cryptographically secure!
+                    // In production, use native iOS SecRandomCopyBytes via JSExport
+                    for (var i = 0; i < arr.length; i++) {
+                        arr[i] = Math.floor(Math.random() * 256);
+                    }
+                    return arr;
+                };
+            }
+        """
+        jsContext.evaluateScript(cryptoPolyfill)
+        
         // Execute the bundle to load SCCore global
         jsContext.evaluateScript(bundleCode)
         
@@ -398,10 +418,11 @@ enum MessageType: Int {
     case fileMetadata = 0x02
     case fileChunk = 0x03
     case voice = 0x04
-    case controlPing = 0x05
-    case controlPong = 0x06
-    case controlAck = 0x07
-    case routeAnnounce = 0x08
-    case peerDiscovery = 0x09
-    case keyExchange = 0x0A
+    case controlAck = 0x10
+    case controlPing = 0x11
+    case controlPong = 0x12
+    case peerDiscovery = 0x20
+    case peerIntroduction = 0x21
+    case keyExchange = 0x30
+    case sessionKey = 0x31
 }

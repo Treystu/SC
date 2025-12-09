@@ -25,6 +25,21 @@ npm run build
 
 echo "Bundling for mobile platforms..."
 
+# Note: The @noble/* crypto libraries used in core don't rely on Node.js crypto module.
+# They use pure JavaScript implementations or browser's crypto.getRandomValues().
+# On Android/iOS, we need to ensure crypto.getRandomValues is available:
+# - iOS: JavaScriptCore doesn't have crypto API; inject a polyfill before loading bundle
+# - Android: Rhino doesn't have crypto API; inject a polyfill before loading bundle
+#
+# Example polyfill for CoreBridge to inject before loading the bundle:
+# ```
+# var crypto = { getRandomValues: function(arr) { 
+#     for (var i = 0; i < arr.length; i++) arr[i] = Math.floor(Math.random() * 256); 
+#     return arr; 
+# }};
+# ```
+# For production, use a secure native random number generator.
+
 # Bundle the mobile-safe exports for mobile (no DOM, pure JS)
 # Use browser platform to get browser-compatible polyfills
 npx esbuild \
