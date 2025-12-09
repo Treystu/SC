@@ -8,6 +8,39 @@ export * from './storage.js';
 export * from './envelope.js';
 
 // Re-export specific commonly-used items for convenience
+import {
+  generateIdentity,
+  generateKeyPair,
+  generateKey,
+  generateNonce,
+  generateSessionKey,
+  generateEphemeralKeyPair,
+  signMessage,
+  verifySignature,
+  batchVerifySignatures,
+  encryptMessage,
+  decryptMessage,
+  performKeyExchange,
+  deriveSharedSecret,
+  deriveSessionKey,
+  generateFingerprint,
+  rotateSessionKey,
+  shouldRotateKey,
+  timingSafeEqual,
+  secureWipe,
+  validateEntropy,
+  incrementNonce,
+  randomBytes,
+  NonceManager,
+  initializeRatchet,
+  ratchetStep,
+  deriveMessageKey,
+  type IdentityKeyPair,
+  type SessionKey,
+  type RatchetState,
+} from './primitives.js';
+
+// Re-export the imported items
 export {
   generateIdentity,
   generateKeyPair,
@@ -32,13 +65,13 @@ export {
   incrementNonce,
   randomBytes,
   NonceManager,
-  type IdentityKeyPair,
-  type SessionKey,
-  type RatchetState,
   initializeRatchet,
   ratchetStep,
   deriveMessageKey,
-} from './primitives.js';
+  type IdentityKeyPair,
+  type SessionKey,
+  type RatchetState,
+};
 
 /**
  * CryptoManager class - High-level encryption/decryption API
@@ -52,8 +85,6 @@ export class CryptoManager {
    * Generate a random 32-byte symmetric key
    */
   generateKey(): Uint8Array {
-    // Import at function call to avoid circular dependency
-    const { generateKey } = require('./primitives.js');
     return generateKey();
   }
 
@@ -63,9 +94,7 @@ export class CryptoManager {
    * @param key - 32-byte encryption key
    * @returns Encrypted data with nonce prepended
    */
-  async encrypt(message: string | Uint8Array, key: Uint8Array): Promise<Uint8Array> {
-    const { encryptMessage, generateNonce } = require('./primitives.js');
-    
+  encrypt(message: string | Uint8Array, key: Uint8Array): Uint8Array {
     const plaintext = typeof message === 'string' 
       ? this.encoder.encode(message)
       : message;
@@ -87,9 +116,7 @@ export class CryptoManager {
    * @param key - 32-byte decryption key
    * @returns Decrypted string
    */
-  async decrypt(encrypted: Uint8Array, key: Uint8Array): Promise<string> {
-    const { decryptMessage } = require('./primitives.js');
-    
+  decrypt(encrypted: Uint8Array, key: Uint8Array): string {
     // Extract nonce (first 24 bytes) and ciphertext
     const nonce = encrypted.slice(0, 24);
     const ciphertext = encrypted.slice(24);
@@ -104,9 +131,7 @@ export class CryptoManager {
    * @param privateKey - 32-byte Ed25519 private key
    * @returns 64-byte signature
    */
-  async sign(message: string | Uint8Array, privateKey: Uint8Array): Promise<Uint8Array> {
-    const { signMessage } = require('./primitives.js');
-    
+  sign(message: string | Uint8Array, privateKey: Uint8Array): Uint8Array {
     const data = typeof message === 'string'
       ? this.encoder.encode(message)
       : message;
@@ -121,9 +146,7 @@ export class CryptoManager {
    * @param publicKey - 32-byte Ed25519 public key
    * @returns true if valid, false otherwise
    */
-  async verify(message: string | Uint8Array, signature: Uint8Array, publicKey: Uint8Array): Promise<boolean> {
-    const { verifySignature } = require('./primitives.js');
-    
+  verify(message: string | Uint8Array, signature: Uint8Array, publicKey: Uint8Array): boolean {
     const data = typeof message === 'string'
       ? this.encoder.encode(message)
       : message;
@@ -137,8 +160,7 @@ export class CryptoManager {
    * @param peerPublicKey - Peer's public key
    * @returns 32-byte shared secret
    */
-  async deriveSharedSecret(privateKey: Uint8Array, peerPublicKey: Uint8Array): Promise<Uint8Array> {
-    const { deriveSharedSecret } = require('./primitives.js');
+  deriveSecret(privateKey: Uint8Array, peerPublicKey: Uint8Array): Uint8Array {
     return deriveSharedSecret(privateKey, peerPublicKey);
   }
 }
@@ -154,8 +176,7 @@ export class KeyManager {
   /**
    * Generate a new Ed25519 identity keypair
    */
-  async generateIdentityKeyPair(): Promise<void> {
-    const { generateIdentity } = require('./primitives.js');
+  generateIdentityKeyPair(): void {
     const keypair = generateIdentity();
     this.publicKey = keypair.publicKey;
     this.privateKey = keypair.privateKey;
@@ -165,7 +186,7 @@ export class KeyManager {
    * Get the public key
    * @throws Error if keypair not generated
    */
-  async getPublicKey(): Promise<Uint8Array> {
+  getPublicKey(): Uint8Array {
     if (!this.publicKey) {
       throw new Error('Keypair not generated. Call generateIdentityKeyPair first.');
     }
@@ -176,7 +197,7 @@ export class KeyManager {
    * Get the private key
    * @throws Error if keypair not generated
    */
-  async getPrivateKey(): Promise<Uint8Array> {
+  getPrivateKey(): Uint8Array {
     if (!this.privateKey) {
       throw new Error('Keypair not generated. Call generateIdentityKeyPair first.');
     }
@@ -194,7 +215,6 @@ export class KeyManager {
    * Clear the stored keypair from memory
    */
   clear(): void {
-    const { secureWipe } = require('./primitives.js');
     if (this.privateKey) {
       secureWipe(this.privateKey);
     }
