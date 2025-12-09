@@ -8,6 +8,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.BufferedReader
 import java.io.InputStreamReader
+import java.security.SecureRandom
 
 /**
  * CoreBridge - Bridge between Android and the core TypeScript/JavaScript library
@@ -32,6 +33,9 @@ class CoreBridge private constructor(private val context: Context) {
         private const val TAG = "CoreBridge"
         private const val CORE_BUNDLE_FILE = "sc-core.bundle.js"
         
+        // Hex validation regex - only valid hex characters allowed
+        private val HEX_PATTERN = Regex("^[0-9a-fA-F]*$")
+        
         @Volatile
         private var instance: CoreBridge? = null
         
@@ -43,14 +47,36 @@ class CoreBridge private constructor(private val context: Context) {
                 instance ?: CoreBridge(context.applicationContext).also { instance = it }
             }
         }
+        
+        /**
+         * Validate that a string contains only valid hex characters
+         * @throws IllegalArgumentException if the string contains invalid characters
+         */
+        private fun validateHex(hex: String, paramName: String) {
+            if (!HEX_PATTERN.matches(hex)) {
+                throw IllegalArgumentException("Invalid hex string for $paramName: contains non-hex characters")
+            }
+        }
     }
     
     // JavaScript engine abstraction
     private var jsEngine: JSEngine? = null
     private var isInitialized = false
     
+    // Secure random number generator for crypto operations
+    private val secureRandom = SecureRandom()
+    
     // Cached identity
     private var localIdentity: CoreIdentity? = null
+    
+    /**
+     * Generate cryptographically secure random bytes
+     */
+    private fun generateSecureRandomBytes(count: Int): ByteArray {
+        val bytes = ByteArray(count)
+        secureRandom.nextBytes(bytes)
+        return bytes
+    }
     
     /**
      * Initialize the core library
@@ -66,21 +92,29 @@ class CoreBridge private constructor(private val context: Context) {
             // Load the core bundle from assets
             val bundleCode = loadBundleFromAssets()
             
-            // Initialize JavaScript engine
-            jsEngine = createJSEngine()
+            // Initialize JavaScript engine with secure random callback
+            val engine = createJSEngine()
+            jsEngine = engine
+            
+            // Register native secure random function
+            if (engine is RhinoJSEngine) {
+                engine.registerSecureRandomCallback { count ->
+                    generateSecureRandomBytes(count)
+                }
+            }
             
             // Inject crypto polyfill for getRandomValues
-            // In production, this should use Android's SecureRandom for cryptographic security
+            // Uses native Android SecureRandom for cryptographic security
             jsEngine?.evaluate("""
                 if (typeof crypto === 'undefined') {
                     var crypto = {};
                 }
                 if (typeof crypto.getRandomValues === 'undefined') {
                     crypto.getRandomValues = function(arr) {
-                        // NOTE: This is NOT cryptographically secure!
-                        // In production, use native Android SecureRandom via JSI
+                        // Use native Android SecureRandom via bridge callback
+                        var bytes = _nativeSecureRandomBytes(arr.length);
                         for (var i = 0; i < arr.length; i++) {
-                            arr[i] = Math.floor(Math.random() * 256);
+                            arr[i] = bytes[i];
                         }
                         return arr;
                     };
@@ -158,6 +192,7 @@ class CoreBridge private constructor(private val context: Context) {
     suspend fun generateFingerprint(publicKeyHex: String): Result<String> = withContext(Dispatchers.IO) {
         try {
             ensureInitialized()
+            validateHex(publicKeyHex, "publicKeyHex")
             
             val result = jsEngine?.evaluate("""
                 (function() {
@@ -179,6 +214,7 @@ class CoreBridge private constructor(private val context: Context) {
     suspend fun signMessage(message: ByteArray, privateKeyHex: String): Result<ByteArray> = withContext(Dispatchers.IO) {
         try {
             ensureInitialized()
+            validateHex(privateKeyHex, "privateKeyHex")
             
             val messageHex = message.joinToString("") { "%02x".format(it) }
             
@@ -211,6 +247,7 @@ class CoreBridge private constructor(private val context: Context) {
     ): Result<Boolean> = withContext(Dispatchers.IO) {
         try {
             ensureInitialized()
+            validateHex(publicKeyHex, "publicKeyHex")
             
             val messageHex = message.joinToString("") { "%02x".format(it) }
             val signatureHex = signature.joinToString("") { "%02x".format(it) }
@@ -373,6 +410,7 @@ class CoreBridge private constructor(private val context: Context) {
      * Clean up resources
      */
     fun cleanup() {
+        (jsEngine as? RhinoJSEngine)?.close()
         jsEngine = null
         localIdentity = null
         isInitialized = false
@@ -396,6 +434,11 @@ interface JSEngine {
 }
 
 /**
+ * Callback type for secure random byte generation
+ */
+typealias SecureRandomCallback = (Int) -> ByteArray
+
+/**
  * Simple Rhino-based JavaScript engine implementation
  * Note: Rhino is included in Android SDK but has limited ES6 support
  * For production, consider using QuickJS-Android
@@ -403,11 +446,41 @@ interface JSEngine {
 class RhinoJSEngine : JSEngine {
     private val context: org.mozilla.javascript.Context
     private val scope: org.mozilla.javascript.Scriptable
+    private var secureRandomCallback: SecureRandomCallback? = null
     
     init {
         context = org.mozilla.javascript.Context.enter()
         context.optimizationLevel = -1 // Interpreted mode for Android
         scope = context.initStandardObjects()
+    }
+    
+    /**
+     * Register a callback for generating secure random bytes
+     * This is called from JavaScript via _nativeSecureRandomBytes(count)
+     */
+    fun registerSecureRandomCallback(callback: SecureRandomCallback) {
+        secureRandomCallback = callback
+        
+        // Create a native function that JavaScript can call
+        val nativeFunction = object : org.mozilla.javascript.BaseFunction() {
+            override fun call(
+                cx: org.mozilla.javascript.Context?,
+                scope: org.mozilla.javascript.Scriptable?,
+                thisObj: org.mozilla.javascript.Scriptable?,
+                args: Array<out Any>?
+            ): Any {
+                val count = (args?.getOrNull(0) as? Number)?.toInt() ?: 0
+                val bytes = callback(count)
+                // Convert ByteArray to JavaScript array
+                val jsArray = cx?.newArray(scope, bytes.size) ?: return org.mozilla.javascript.Undefined.instance
+                for (i in bytes.indices) {
+                    org.mozilla.javascript.ScriptableObject.putProperty(jsArray, i, (bytes[i].toInt() and 0xFF))
+                }
+                return jsArray
+            }
+        }
+        
+        org.mozilla.javascript.ScriptableObject.putProperty(scope, "_nativeSecureRandomBytes", nativeFunction)
     }
     
     override fun evaluate(script: String): Any? {
@@ -416,6 +489,18 @@ class RhinoJSEngine : JSEngine {
         } catch (e: Exception) {
             Log.e("RhinoJSEngine", "Error evaluating script: ${e.message}")
             throw e
+        }
+    }
+    
+    /**
+     * Release Rhino context resources
+     * Must be called from the same thread that created the context
+     */
+    fun close() {
+        try {
+            org.mozilla.javascript.Context.exit()
+        } catch (e: Exception) {
+            Log.w("RhinoJSEngine", "Error closing Rhino context: ${e.message}")
         }
     }
 }

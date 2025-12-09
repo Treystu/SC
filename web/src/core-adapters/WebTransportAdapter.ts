@@ -123,7 +123,13 @@ export class WebTransportAdapter implements Transport {
     } else {
       // Otherwise, initiate a new connection and send offer via signaling
       const offer = await this.transport.createSignalingOffer?.(peerId);
-      if (offer && this.signalingCallback) {
+      if (offer) {
+        if (!this.signalingCallback) {
+          throw new Error(
+            `Cannot connect to peer ${peerId}: signaling callback not set. ` +
+            `Call setSignalingCallback() before initiating connections.`
+          );
+        }
         await this.signalingCallback(peerId, offer);
       }
     }

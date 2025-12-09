@@ -8,6 +8,7 @@
 import Foundation
 import JavaScriptCore
 import os.log
+import Security
 
 /// CoreBridge - Bridge between iOS and the core TypeScript/JavaScript library
 ///
@@ -35,7 +36,10 @@ class CoreBridge {
     // MARK: - Initialization
     
     private init() {
-        jsContext = JSContext()!
+        guard let context = JSContext() else {
+            fatalError("Failed to initialize JSContext - JavaScriptCore unavailable")
+        }
+        jsContext = context
         
         // Set up error handling
         jsContext.exceptionHandler = { [weak self] context, exception in
@@ -50,6 +54,14 @@ class CoreBridge {
         }
         jsContext.setObject(consoleLog, forKeyedSubscript: "consoleLog" as NSString)
         jsContext.evaluateScript("var console = { log: consoleLog, error: consoleLog, warn: consoleLog };")
+        
+        // Register secure random function for crypto polyfill
+        let secureRandomBytes: @convention(block) (Int) -> [UInt8] = { count in
+            var bytes = [UInt8](repeating: 0, count: count)
+            _ = SecRandomCopyBytes(kSecRandomDefault, count, &bytes)
+            return bytes
+        }
+        jsContext.setObject(secureRandomBytes, forKeyedSubscript: "_nativeSecureRandomBytes" as NSString)
     }
     
     // MARK: - Initialization
@@ -67,18 +79,17 @@ class CoreBridge {
         }
         
         // Inject crypto polyfill for getRandomValues
-        // JavaScriptCore doesn't have Web Crypto API, so we need to polyfill it
-        // In production, this should use SecRandomCopyBytes for cryptographic security
+        // Uses native SecRandomCopyBytes via the _nativeSecureRandomBytes bridge
         let cryptoPolyfill = """
             if (typeof crypto === 'undefined') {
                 var crypto = {};
             }
             if (typeof crypto.getRandomValues === 'undefined') {
                 crypto.getRandomValues = function(arr) {
-                    // NOTE: This is NOT cryptographically secure!
-                    // In production, use native iOS SecRandomCopyBytes via JSExport
+                    // Use native iOS SecRandomCopyBytes for cryptographic security
+                    var bytes = _nativeSecureRandomBytes(arr.length);
                     for (var i = 0; i < arr.length; i++) {
-                        arr[i] = Math.floor(Math.random() * 256);
+                        arr[i] = bytes[i];
                     }
                     return arr;
                 };
@@ -392,7 +403,7 @@ extension CoreBridge {
         // Get sender ID bytes
         let senderIdData = hexToData(id.publicKey)
         
-        // Encode the message
+        // Encode the message (with placeholder signature)
         let encodedMessage = try await encodeMessage(
             type: type.rawValue,
             ttl: 10,
@@ -406,9 +417,18 @@ extension CoreBridge {
             privateKeyHex: id.privateKey
         )
         
-        // Return combined message with signature
-        // In real implementation, the signature would be embedded in the header
-        return encodedMessage
+        // Embed signature into the encoded message at offset 44 (after version, type, ttl, reserved, timestamp, senderId)
+        // Header structure: version(1) + type(1) + ttl(1) + reserved(1) + timestamp(8) + senderId(32) = 44 bytes
+        var signedMessage = encodedMessage
+        let signatureOffset = 44
+        guard signedMessage.count >= signatureOffset + 64, signature.count >= 64 else {
+            throw CoreBridgeError.evaluationFailed("Invalid message or signature length")
+        }
+        
+        // Replace placeholder signature with actual signature (first 64 bytes)
+        signedMessage.replaceSubrange(signatureOffset..<(signatureOffset + 64), with: signature.prefix(64))
+        
+        return signedMessage
     }
 }
 

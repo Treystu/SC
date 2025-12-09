@@ -173,9 +173,11 @@ export class WebRTCTransport implements Transport {
       console.debug(`Data channel ${channel.label} closed for ${peerId}`);
     };
 
-    channel.onerror = (error) => {
-      console.error(`Data channel ${channel.label} error for ${peerId}:`, error);
-      this.events?.onError?.(new Error(`Data channel error: ${error}`), peerId);
+    channel.onerror = (event) => {
+      // RTCErrorEvent contains the actual error in event.error
+      const errorMessage = (event as RTCErrorEvent).error?.message || 'Unknown data channel error';
+      console.error(`Data channel ${channel.label} error for ${peerId}:`, errorMessage);
+      this.events?.onError?.(new Error(`Data channel error: ${errorMessage}`), peerId);
     };
 
     channel.onmessage = (event) => {

@@ -113,8 +113,9 @@ export class MockTransport implements Transport {
     this.isRunning = false;
     this.unregisterFromNetwork();
 
-    // Disconnect all peers
-    for (const peerId of this.peers.keys()) {
+    // Disconnect all peers - create snapshot of keys to avoid modifying during iteration
+    const peerIds = Array.from(this.peers.keys());
+    for (const peerId of peerIds) {
       await this.disconnect(peerId);
     }
 

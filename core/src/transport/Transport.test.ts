@@ -183,17 +183,15 @@ describe("Transport Abstraction", () => {
       const transport1 = new MockTransport("peer-1");
       const transport2 = new MockTransport("peer-2");
 
-      await transport1.start({ onMessage: jest.fn() });
+      const errors: Error[] = [];
+      await transport1.start({
+        onMessage: jest.fn(),
+        onError: (err: Error) => errors.push(err),
+      });
       await transport2.start({ onMessage: jest.fn() });
       await transport1.connect("peer-2");
 
       transport1.updateConfig({ failSends: true });
-
-      const errors: Error[] = [];
-      transport1["events"] = {
-        onMessage: jest.fn(),
-        onError: (err: Error) => errors.push(err),
-      };
 
       await expect(transport1.send("peer-2", new Uint8Array([1]))).rejects.toThrow();
       expect(errors.length).toBe(1);

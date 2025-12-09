@@ -31,14 +31,13 @@ echo "Bundling for mobile platforms..."
 # - iOS: JavaScriptCore doesn't have crypto API; inject a polyfill before loading bundle
 # - Android: Rhino doesn't have crypto API; inject a polyfill before loading bundle
 #
-# Example polyfill for CoreBridge to inject before loading the bundle:
-# ```
-# var crypto = { getRandomValues: function(arr) { 
-#     for (var i = 0; i < arr.length; i++) arr[i] = Math.floor(Math.random() * 256); 
-#     return arr; 
-# }};
-# ```
-# For production, use a secure native random number generator.
+# SECURITY: The crypto.getRandomValues polyfill MUST use platform-specific
+# cryptographically secure random number generators:
+# - Android: Use java.security.SecureRandom via native bridge callback
+# - iOS: Use SecRandomCopyBytes via JSExport native bridge
+#
+# See CoreBridge.kt and CoreBridge.swift for production-ready implementations
+# that expose native secure random to JavaScript.
 
 # Bundle the mobile-safe exports for mobile (no DOM, pure JS)
 # Use browser platform to get browser-compatible polyfills
