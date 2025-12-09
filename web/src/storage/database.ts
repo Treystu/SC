@@ -1522,7 +1522,6 @@ export class DatabaseManager {
                   );
                   const store = transaction.objectStore("offlineQueue");
                   const index = store.index(field);
-                  const range = IDBKeyRange.upperBound(value, false); // false = inclusive? No, below usually means strictly less than.
                   // Dexie 'below' is < value (open upper bound). IDBKeyRange.upperBound(value, true) is < value.
                   // Let's assume strict inequality for 'below'.
                   const request = index.getAll(

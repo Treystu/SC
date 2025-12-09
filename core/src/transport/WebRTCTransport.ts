@@ -504,8 +504,6 @@ export class WebRTCTransport implements Transport {
     }
 
     return new Promise<void>((resolve) => {
-      let timeoutId: ReturnType<typeof setTimeout>;
-
       const checkState = () => {
         if (wrapper.connection.iceGatheringState === "complete") {
           clearTimeout(timeoutId);
@@ -516,7 +514,7 @@ export class WebRTCTransport implements Transport {
 
       wrapper.connection.addEventListener("icegatheringstatechange", checkState);
 
-      timeoutId = setTimeout(() => {
+      const timeoutId = setTimeout(() => {
         wrapper.connection.removeEventListener("icegatheringstatechange", checkState);
         resolve(); // Resolve anyway on timeout
       }, timeoutMs);
