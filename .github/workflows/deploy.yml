@@ -97,7 +97,7 @@ jobs:
           keyPassword: ${{ secrets.KEY_PASSWORD }}
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: release-apk
           path: ${{ steps.sign_app.outputs.signedReleaseFile }}
@@ -140,7 +140,7 @@ jobs:
             -exportPath $PWD/build
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: release-ipa
           path: ios/build/SovereignCommunications.ipa
