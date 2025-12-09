@@ -44,6 +44,7 @@ class CoreDataStack {
         return container
     }()
     
+    /// The managed object context for use on the main queue (alias for viewContext for backwards compatibility)
     var mainContext: NSManagedObjectContext {
         return persistentContainer.viewContext
     }

@@ -433,14 +433,21 @@ class KeychainManager {
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
         
-        guard status == errSecSuccess, let privateKey = item else {
+        guard status == errSecSuccess, let privateKeyRef = item else {
             throw KeychainError.unhandledError(status: status)
         }
+        
+        // Safely cast to SecKey
+        guard CFGetTypeID(privateKeyRef) == SecKeyGetTypeID() else {
+            logger.error("Retrieved item is not a SecKey")
+            throw KeychainError.unexpectedDataFormat
+        }
+        let privateKey = privateKeyRef as! SecKey
         
         // Sign the data
         var error: Unmanaged<CFError>?
         guard let signature = SecKeyCreateSignature(
-            privateKey as! SecKey,
+            privateKey,
             .ecdsaSignatureMessageX962SHA256,
             data as CFData,
             &error
