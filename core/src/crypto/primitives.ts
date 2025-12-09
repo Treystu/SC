@@ -647,11 +647,15 @@ export const generateKeyPair = generateIdentity;
  * 
  * @param privateKey - Our private key (32 bytes)
  * @param peerPublicKey - Peer's public key (32 bytes)
+ * @param salt - Optional salt for HKDF derivation
+ * @param info - Optional info/context for HKDF derivation
  * @returns Derived 32-byte shared secret
  */
 export function deriveSharedSecret(
   privateKey: Uint8Array,
-  peerPublicKey: Uint8Array
+  peerPublicKey: Uint8Array,
+  salt?: Uint8Array,
+  info?: Uint8Array
 ): Uint8Array {
-  return performKeyExchange(privateKey, peerPublicKey);
+  return performKeyExchange(privateKey, peerPublicKey, salt, info);
 }

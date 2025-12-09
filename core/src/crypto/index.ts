@@ -115,14 +115,35 @@ export class CryptoManager {
    * @param encrypted - Encrypted data with nonce prepended
    * @param key - 32-byte decryption key
    * @returns Decrypted string
+   * @throws Error if encrypted data is too short
    */
   decrypt(encrypted: Uint8Array, key: Uint8Array): string {
+    if (encrypted.length < 24) {
+      throw new Error('Encrypted data too short: must be at least 24 bytes (nonce size)');
+    }
     // Extract nonce (first 24 bytes) and ciphertext
     const nonce = encrypted.slice(0, 24);
     const ciphertext = encrypted.slice(24);
     
     const plaintext = decryptMessage(ciphertext, key, nonce);
     return this.decoder.decode(plaintext);
+  }
+
+  /**
+   * Decrypt a message and return raw bytes (Uint8Array)
+   * @param encrypted - Encrypted data with nonce prepended
+   * @param key - 32-byte decryption key
+   * @returns Decrypted Uint8Array
+   * @throws Error if encrypted data is too short
+   */
+  decryptBytes(encrypted: Uint8Array, key: Uint8Array): Uint8Array {
+    if (encrypted.length < 24) {
+      throw new Error('Encrypted data too short: must be at least 24 bytes (nonce size)');
+    }
+    // Extract nonce (first 24 bytes) and ciphertext
+    const nonce = encrypted.slice(0, 24);
+    const ciphertext = encrypted.slice(24);
+    return decryptMessage(ciphertext, key, nonce);
   }
 
   /**
@@ -185,23 +206,25 @@ export class KeyManager {
   /**
    * Get the public key
    * @throws Error if keypair not generated
+   * @returns A copy of the public key to prevent external modification
    */
   getPublicKey(): Uint8Array {
     if (!this.publicKey) {
       throw new Error('Keypair not generated. Call generateIdentityKeyPair first.');
     }
-    return this.publicKey;
+    return new Uint8Array(this.publicKey);
   }
 
   /**
    * Get the private key
    * @throws Error if keypair not generated
+   * @returns A copy of the private key to prevent external modification
    */
   getPrivateKey(): Uint8Array {
     if (!this.privateKey) {
       throw new Error('Keypair not generated. Call generateIdentityKeyPair first.');
     }
-    return this.privateKey;
+    return new Uint8Array(this.privateKey);
   }
 
   /**
