@@ -15,7 +15,7 @@
     "@sc/core": "*",
     "@types/qrcode": "^1.5.6",
     "qrcode": "^1.5.4",
-    "react": "18.3.1",
+    "react": "19.2.1",
     "react-dom": "18.3.1"
   },
   "devDependencies": {
