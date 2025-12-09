@@ -33,6 +33,11 @@ struct NetworkStats {
 /**
  * Manages the mesh network, including peer connections, message routing, and data persistence.
  * Acts as the high-level coordinator, using BluetoothMeshManager and WebRTCManager as transport drivers.
+ * 
+ * Unified with @sc/core architecture:
+ * - Uses IOSPersistenceAdapter for message queue persistence
+ * - Consistent with Web and Android implementations
+ * - Binary-safe message handling
  */
 class MeshNetworkManager: NSObject, ObservableObject {
     
@@ -41,6 +46,9 @@ class MeshNetworkManager: NSObject, ObservableObject {
     private let context: NSManagedObjectContext
     private let startTime: Date
     private let logger = Logger(subsystem: "com.sovereign.communications", category: "MeshNetworkManager")
+    
+    // Unified persistence adapter (matches Web/Android)
+    private let persistenceAdapter: IOSPersistenceAdapter
     
     @Published var connectedPeers: [String] = [] // List of connected Peer IDs
     
@@ -57,6 +65,7 @@ class MeshNetworkManager: NSObject, ObservableObject {
     private override init() {
         self.context = CoreDataStack.shared.viewContext
         self.startTime = Date()
+        self.persistenceAdapter = IOSPersistenceAdapter(context: context)
         super.init()
         
         BluetoothMeshManager.shared.delegate = self
@@ -71,6 +80,11 @@ class MeshNetworkManager: NSObject, ObservableObject {
         BluetoothMeshManager.shared.start()
         // WebRTCManager is initialized lazily but we can ensure it's ready
         _ = WebRTCManager.shared
+        
+        // Retry any queued messages from persistence
+        Task {
+            await retryQueuedMessages()
+        }
     }
     
     /**
@@ -80,6 +94,83 @@ class MeshNetworkManager: NSObject, ObservableObject {
         logger.info("Stopping MeshNetworkManager")
         BluetoothMeshManager.shared.stop()
         // WebRTC cleanup if needed
+    }
+    
+    /**
+     * Retry queued messages from persistence adapter
+     * Called on startup and when new peers connect
+     */
+    private func retryQueuedMessages() async {
+        do {
+            let queuedMessages = await persistenceAdapter.getAllMessages()
+            logger.info("Retrying \(queuedMessages.count) queued messages from persistence")
+            
+            for (id, storedMessage) in queuedMessages {
+                let peerId = storedMessage.destinationPeerId
+                
+                if isConnected(toPeerId: peerId) {
+                    // Attempt to send
+                    let success = await sendStoredMessage(storedMessage, toPeerId: peerId)
+                    
+                    if success {
+                        // Remove from queue on success
+                        await persistenceAdapter.removeMessage(id: id)
+                        logger.info("Successfully sent queued message \(id) to \(peerId)")
+                    } else {
+                        // Update retry metadata
+                        await persistenceAdapter.updateMessage(
+                            id: id,
+                            attempts: storedMessage.attempts + 1,
+                            lastAttempt: Date(),
+                            success: false
+                        )
+                    }
+                } else {
+                    logger.debug("Peer \(peerId) not connected, keeping message \(id) in queue")
+                }
+            }
+            
+            // Prune expired messages
+            await persistenceAdapter.pruneExpired(now: Date())
+            
+        } catch {
+            logger.error("Failed to retry queued messages: \(error.localizedDescription)")
+        }
+    }
+    
+    /**
+     * Check if connected to a peer via any transport
+     */
+    private func isConnected(toPeerId peerId: String) -> Bool {
+        return BluetoothMeshManager.shared.isConnected(toPeerId: peerId) ||
+               WebRTCManager.shared.getConnectionState(for: peerId) == .connected
+    }
+    
+    /**
+     * Send a stored message (from queue)
+     */
+    private func sendStoredMessage(_ storedMessage: IOSPersistenceAdapter.CoreStoredMessage, toPeerId peerId: String) async -> Bool {
+        let data = storedMessage.message.payload
+        
+        // Try WebRTC first
+        if WebRTCManager.shared.getConnectionState(for: peerId) == .connected {
+            if WebRTCManager.shared.send(data: data, to: peerId) {
+                messagesSent += 1
+                lastMessageSentDate = Date()
+                return true
+            }
+        }
+        
+        // Fallback to BLE
+        if BluetoothMeshManager.shared.isConnected(toPeerId: peerId) {
+            if BluetoothMeshManager.shared.send(message: data, toPeerId: peerId) {
+                messagesSent += 1
+                lastMessageSentDate = Date()
+                return true
+            }
+        }
+        
+        return false
     }
     
     /**
@@ -114,74 +205,60 @@ class MeshNetworkManager: NSObject, ObservableObject {
             }
         }
         
-        // 3. Store-and-Forward (Offline)
+        // 3. Store-and-Forward (Offline) - Use unified persistence
         logger.info("Peer \(recipientId) offline, queuing message")
-        saveMessageToQueue(message: message, recipientId: recipientId)
-    }
-    
-    /**
-     * Save message to CoreData queue
-     */
-    private func saveMessageToQueue(message: Message, recipientId: String) {
-        context.perform {
-            let entity = MessageEntity(context: self.context)
-            entity.id = message.id.uuidString
-            entity.conversationId = recipientId // Using recipientId as conversationId for now
-            entity.senderId = UserDefaults.standard.string(forKey: "localPeerId") ?? "unknown"
-            entity.content = message.payload
-            entity.timestamp = message.timestamp
-            entity.status = "pending"
-            // Messages are encrypted at the mesh network layer before being stored
-            // The payload has already been encrypted when received from the mesh network
-            entity.isEncrypted = true
-            
-            CoreDataStack.shared.save(context: self.context)
+        Task {
+            await queueMessage(payload: data, recipientId: recipientId)
         }
     }
     
     /**
-     * Retry sending pending messages for a peer
+     * Queue message using unified persistence adapter
+     */
+    private func queueMessage(payload: Data, recipientId: String) async {
+        do {
+            let id = UUID().uuidString
+            
+            // Get local peer ID
+            let senderIdString = UserDefaults.standard.string(forKey: "localPeerId") ?? UUID().uuidString
+            let senderIdData = senderIdString.data(using: .utf8) ?? Data(repeating: 0, count: 32)
+            
+            // Create message using core structure
+            let message = IOSPersistenceAdapter.CoreMessage(
+                header: IOSPersistenceAdapter.MessageHeader(
+                    version: 1,
+                    type: 0, // TEXT type
+                    ttl: 10,
+                    timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                    senderId: senderIdData.count >= 32 ? senderIdData.prefix(32) : (senderIdData + Data(repeating: 0, count: 32 - senderIdData.count)),
+                    signature: Data(repeating: 0, count: 64) // Placeholder - should be signed
+                ),
+                payload: payload
+            )
+            
+            let storedMessage = IOSPersistenceAdapter.CoreStoredMessage(
+                message: message,
+                destinationPeerId: recipientId,
+                attempts: 0,
+                lastAttempt: Date(),
+                expiresAt: Date().addingTimeInterval(IOSPersistenceAdapter.DEFAULT_MESSAGE_EXPIRATION_MS)
+            )
+            
+            // Save to unified persistence adapter
+            await persistenceAdapter.saveMessage(id: id, message: storedMessage)
+            logger.info("Message queued with ID: \(id)")
+            
+        } catch {
+            logger.error("Failed to queue message for \(recipientId): \(error.localizedDescription)")
+        }
+    }
+    
+    /**
+     * Retry sending pending messages for a peer (called when peer connects)
      */
     private func retryPendingMessages(for peerId: String) {
-        context.perform {
-            let fetchRequest: NSFetchRequest<MessageEntity> = MessageEntity.fetchRequest()
-            fetchRequest.predicate = NSPredicate(format: "conversationId == %@ AND status == %@", peerId, "pending")
-            fetchRequest.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: true)]
-            
-            do {
-                let pendingMessages = try self.context.fetch(fetchRequest)
-                if pendingMessages.isEmpty { return }
-                
-                self.logger.info("Retrying \(pendingMessages.count) messages for \(peerId)")
-                
-                for entity in pendingMessages {
-                    let message = Message(
-                        id: UUID(uuidString: entity.id) ?? UUID(),
-                        timestamp: entity.timestamp,
-                        payload: entity.content
-                    )
-                    
-                    if let data = try? JSONEncoder().encode(message) {
-                        // Try WebRTC then BLE
-                        var success = false
-                        if WebRTCManager.shared.getConnectionState(for: peerId) == .connected {
-                            success = WebRTCManager.shared.send(data: data, to: peerId)
-                        } else {
-                            success = BluetoothMeshManager.shared.send(message: data, toPeerId: peerId)
-                        }
-                        
-                        if success {
-                            entity.status = "sent"
-                            self.messagesSent += 1
-                        }
-                    }
-                }
-                
-                CoreDataStack.shared.save(context: self.context)
-                
-            } catch {
-                self.logger.error("Failed to fetch pending messages: \(error.localizedDescription)")
-            }
+        Task {
+            await retryQueuedMessages()
         }
     }
 

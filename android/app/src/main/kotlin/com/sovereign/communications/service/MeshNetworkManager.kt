@@ -9,6 +9,7 @@ import com.sovereign.communications.ble.BLEGATTServer
 import com.sovereign.communications.ble.BLEMultiHopRelay
 import com.sovereign.communications.ble.BLEStoreAndForward
 import com.sovereign.communications.data.SCDatabase
+import com.sovereign.communications.data.adapter.AndroidPersistenceAdapter
 import com.sovereign.communications.util.RateLimiter
 import com.sovereign.communications.webrtc.WebRTCManager
 import kotlinx.coroutines.CoroutineScope
@@ -19,6 +20,11 @@ import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Manages the mesh network, including peer connections, message routing, and data persistence.
+ * 
+ * Unified with @sc/core architecture:
+ * - Uses AndroidPersistenceAdapter for message queue persistence
+ * - Consistent with Web and iOS implementations
+ * - Binary-safe message handling
  */
 class MeshNetworkManager(
     private val context: Context,
@@ -29,6 +35,9 @@ class MeshNetworkManager(
     private val deviceDiscovery = BLEDeviceDiscovery(context)
     private val multiHopRelay = BLEMultiHopRelay()
     private val webRTCManager = WebRTCManager(context)
+    
+    // Unified persistence adapter (matches Web/iOS)
+    private val persistenceAdapter = AndroidPersistenceAdapter(context, database)
 
     private val connectedClients = ConcurrentHashMap<String, BLEGATTClient>() // peerId -> Client
     private val connectedDevices = ConcurrentHashMap<String, BluetoothDevice>() // peerId -> Device
@@ -56,13 +65,18 @@ class MeshNetworkManager(
             handleIncomingMessage(peerId, data)
         }
 
-        // Start Store-and-Forward service
+        // Start Store-and-Forward service with persistence adapter integration
         storeAndForward.startForwarding(
             isPeerReachable = { peerId -> isPeerConnected(peerId) },
             sendMessage = { queuedMessage ->
                 sendDirectly(queuedMessage.destinationId, queuedMessage.payload)
             },
         )
+        
+        // Retry any queued messages from persistence
+        scope.launch {
+            retryQueuedMessages()
+        }
 
         // Start device discovery
         deviceDiscovery.startScanning { device ->
@@ -70,6 +84,49 @@ class MeshNetworkManager(
         }
 
         Log.d(TAG, "MeshNetworkManager started")
+    }
+    
+    /**
+     * Retry queued messages from persistence adapter
+     * Called on startup and when new peers connect
+     */
+    private suspend fun retryQueuedMessages() {
+        try {
+            val queuedMessages = persistenceAdapter.getAllMessages()
+            Log.d(TAG, "Retrying ${queuedMessages.size} queued messages from persistence")
+            
+            queuedMessages.forEach { (id, storedMessage) ->
+                val peerId = storedMessage.destinationPeerId
+                
+                if (isPeerConnected(peerId)) {
+                    // Attempt to send
+                    val payload = storedMessage.message.payload
+                    val success = sendDirectly(peerId, payload)
+                    
+                    if (success) {
+                        // Remove from queue on success
+                        persistenceAdapter.removeMessage(id)
+                        Log.d(TAG, "Successfully sent queued message $id to $peerId")
+                    } else {
+                        // Update retry metadata
+                        persistenceAdapter.updateMessage(
+                            id,
+                            storedMessage.attempts + 1,
+                            System.currentTimeMillis(),
+                            false
+                        )
+                    }
+                } else {
+                    Log.d(TAG, "Peer $peerId not connected, keeping message $id in queue")
+                }
+            }
+            
+            // Prune expired messages
+            persistenceAdapter.pruneExpired(System.currentTimeMillis())
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to retry queued messages", e)
+        }
     }
 
     /**
@@ -236,17 +293,48 @@ class MeshNetworkManager(
         payload: ByteArray,
     ) {
         Log.d(TAG, "Queuing message for $recipientId")
-        val id =
-            java.util.UUID
-                .randomUUID()
-                .toString()
-        storeAndForward.storeMessage(
-            id = id,
-            destinationId = recipientId,
-            payload = payload,
-            priority = 1, // Default priority
-            ttl = 86400, // 24 hours TTL
-        )
+        scope.launch {
+            try {
+                val id = java.util.UUID.randomUUID().toString()
+                
+                // Create message using core structure
+                val message = AndroidPersistenceAdapter.CoreMessage(
+                    header = AndroidPersistenceAdapter.MessageHeader(
+                        version = 1,
+                        type = 0, // TEXT type
+                        ttl = 10,
+                        timestamp = System.currentTimeMillis(),
+                        senderId = com.sovereign.communications.SCApplication.instance.localPeerId
+                            ?.toByteArray() ?: ByteArray(32), // Use actual sender ID
+                        signature = ByteArray(64) // Placeholder - should be signed
+                    ),
+                    payload = payload
+                )
+                
+                val storedMessage = AndroidPersistenceAdapter.CoreStoredMessage(
+                    message = message,
+                    destinationPeerId = recipientId,
+                    attempts = 0,
+                    lastAttempt = System.currentTimeMillis(),
+                    expiresAt = System.currentTimeMillis() + AndroidPersistenceAdapter.DEFAULT_MESSAGE_EXPIRATION_MS
+                )
+                
+                // Save to unified persistence adapter
+                persistenceAdapter.saveMessage(id, storedMessage)
+                Log.d(TAG, "Message queued with ID: $id")
+                
+                // Also use BLEStoreAndForward for backward compatibility
+                storeAndForward.storeMessage(
+                    id = id,
+                    destinationId = recipientId,
+                    payload = payload,
+                    priority = 1,
+                    ttl = 86400, // 24 hours
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to queue message for $recipientId", e)
+            }
+        }
     }
 
     /**
@@ -263,8 +351,10 @@ class MeshNetworkManager(
             connectedDevices[peerId] = device
             Log.d(TAG, "Peer connected: $peerId")
 
-            // Trigger retry of queued messages for this peer
-            // The StoreAndForward loop will pick this up automatically via isPeerReachable check
+            // Retry queued messages for this peer using unified persistence
+            scope.launch {
+                retryQueuedMessages()
+            }
 
             // Initiate WebRTC upgrade if possible
             // webRTCManager.createPeerConnection(peerId) { offer -> ... }
