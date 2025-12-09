@@ -607,3 +607,51 @@ export function deriveMessageKey(chainKey: Uint8Array): { messageKey: Uint8Array
 
   return { messageKey, nextChainKey };
 }
+
+/**
+ * Generate a symmetric encryption key (32 bytes for XChaCha20-Poly1305)
+ * This is a convenience function for generating random symmetric keys.
+ * 
+ * @returns 32-byte random key suitable for symmetric encryption
+ * @throws Error if entropy validation fails
+ */
+export function generateKey(): Uint8Array {
+  const key = randomBytes(32);
+  
+  if (!validateEntropy(key)) {
+    throw new Error('Insufficient entropy for key generation');
+  }
+  
+  return key;
+}
+
+/**
+ * Generate a nonce for XChaCha20-Poly1305 encryption (24 bytes)
+ * Nonces must NEVER be reused with the same key.
+ * 
+ * @returns 24-byte random nonce
+ */
+export function generateNonce(): Uint8Array {
+  return randomBytes(24);
+}
+
+/**
+ * Alias for generateIdentity for API compatibility
+ * Generates a new Ed25519 keypair for signing and identity
+ */
+export const generateKeyPair = generateIdentity;
+
+/**
+ * Derive a shared secret using X25519 ECDH
+ * Alias for performKeyExchange for API compatibility
+ * 
+ * @param privateKey - Our private key (32 bytes)
+ * @param peerPublicKey - Peer's public key (32 bytes)
+ * @returns Derived 32-byte shared secret
+ */
+export function deriveSharedSecret(
+  privateKey: Uint8Array,
+  peerPublicKey: Uint8Array
+): Uint8Array {
+  return performKeyExchange(privateKey, peerPublicKey);
+}

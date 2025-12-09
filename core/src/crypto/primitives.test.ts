@@ -1,5 +1,9 @@
 import {
   generateIdentity,
+  generateKeyPair,
+  generateKey,
+  generateNonce,
+  deriveSharedSecret,
   signMessage,
   verifySignature,
   encryptMessage,
@@ -485,6 +489,62 @@ describe('Cryptographic Primitives', () => {
       const tooShort = new Uint8Array(10);
 
       expect(() => decryptMessage(tooShort, sessionKey.key, sessionKey.nonce)).toThrow(/too short/);
+    });
+  });
+
+  describe('API Compatibility Aliases', () => {
+    it('generateKeyPair should be an alias for generateIdentity', () => {
+      const keypair = generateKeyPair();
+      expect(keypair.publicKey).toHaveLength(32);
+      expect(keypair.privateKey).toHaveLength(32);
+    });
+
+    it('generateKey should return a 32-byte key', () => {
+      const key = generateKey();
+      expect(key).toHaveLength(32);
+      expect(key).toBeInstanceOf(Uint8Array);
+      
+      // Key should have good entropy
+      expect(validateEntropy(key)).toBe(true);
+    });
+
+    it('generateKey should return unique keys each time', () => {
+      const key1 = generateKey();
+      const key2 = generateKey();
+      expect(timingSafeEqual(key1, key2)).toBe(false);
+    });
+
+    it('generateNonce should return a 24-byte nonce', () => {
+      const nonce = generateNonce();
+      expect(nonce).toHaveLength(24);
+      expect(nonce).toBeInstanceOf(Uint8Array);
+    });
+
+    it('generateNonce should return unique nonces each time', () => {
+      const nonce1 = generateNonce();
+      const nonce2 = generateNonce();
+      expect(timingSafeEqual(nonce1, nonce2)).toBe(false);
+    });
+
+    it('deriveSharedSecret should derive same secret as performKeyExchange', () => {
+      const keypair1 = generateKeyPair();
+      const keypair2 = generateKeyPair();
+      
+      const secret1 = deriveSharedSecret(keypair1.privateKey, keypair2.publicKey);
+      const secret2 = performKeyExchange(keypair1.privateKey, keypair2.publicKey);
+      
+      expect(timingSafeEqual(secret1, secret2)).toBe(true);
+    });
+
+    it('generateKey and generateNonce should work for encryption/decryption', () => {
+      const key = generateKey();
+      const nonce = generateNonce();
+      const plaintext = new TextEncoder().encode('Test message with new API');
+      
+      const ciphertext = encryptMessage(plaintext, key, nonce);
+      const decrypted = decryptMessage(ciphertext, key, nonce);
+      
+      expect(decrypted).toEqual(plaintext);
     });
   });
 });
