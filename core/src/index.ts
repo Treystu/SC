@@ -265,5 +265,24 @@ export { logger, LogLevel, type LogEntry } from "./logger.js";
 // Database
 export { type Database, getDatabase, setMockDatabase } from "./database.js";
 
+// Performance Optimizations
+export {
+  LRUCache,
+  BufferPool,
+  bufferPool,
+  MessageBatcher,
+  BloomFilter,
+  ConnectionPool,
+  MetricsCollector,
+  type BatchConfig,
+  type BatchItem,
+  type ConnectionPoolConfig,
+  type PooledConnection,
+  type PerformanceMetrics,
+} from "./performance-optimizations.js";
+
+// Cache Manager
+export { CacheManager, MediaCache, type CacheEntry, type CacheStats } from "./cache-manager.js";
+
 // Version
 export const VERSION = "0.1.0";
