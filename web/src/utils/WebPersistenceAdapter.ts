@@ -6,30 +6,42 @@ import { getDatabase } from "../storage/database";
  * Uses IndexedDB for persistent storage of queued messages
  *
  * This adapter enables true "sneakernet" capability by persisting
- * messages that cannot be delivered immediately, allowing them to be
- * exported and imported on another device.
+ * messages that cannot be delivered immediately.
+ * 
+ * Payload Storage Strategy:
+ * - Raw message stored in metadata as complete Message object
+ * - Content field stores human-readable preview for UI
+ * - Sender ID extracted from message.header.senderId (Ed25519 public key)
+ * - Only QUEUED messages are deleted on successful delivery
+ * - Conversation history messages (SENT/DELIVERED) are preserved
  */
 export class WebPersistenceAdapter implements PersistenceAdapter {
   private db = getDatabase();
+  
+  // Constants for unification
+  private static readonly DEFAULT_MESSAGE_EXPIRATION_MS = 86400000; // 24 hours
 
   async saveMessage(id: string, message: StoredMessage): Promise<void> {
-    // Extract content from payload
-    let content = "";
+    // Extract sender ID from message header (Ed25519 public key as Uint8Array)
+    const senderIdBase64 = this.uint8ArrayToBase64(message.message.header.senderId);
+    
+    // Create human-readable preview for UI
+    let preview = "";
     try {
       const payload = new TextDecoder().decode(message.message.payload);
       const data = JSON.parse(payload);
-      content = data.text || data.content || "";
+      preview = (data.text || data.content || "").substring(0, 50);
+      if (preview.length === 50) preview += "...";
     } catch (e) {
-      // If not JSON, store as binary indicator
-      content = "[Encrypted or Binary Data]";
+      preview = `[Binary Data: ${message.message.payload.length} bytes]`;
     }
 
     await this.db.saveMessage({
       id: id,
       conversationId: message.destinationPeerId,
-      content: content,
+      content: preview, // Human-readable preview only
       timestamp: message.message.header.timestamp,
-      senderId: "me",
+      senderId: senderIdBase64,
       recipientId: message.destinationPeerId,
       type: "text",
       status: "queued",
@@ -37,7 +49,8 @@ export class WebPersistenceAdapter implements PersistenceAdapter {
         attempts: message.attempts,
         lastAttempt: message.lastAttempt,
         expiresAt: message.expiresAt,
-        rawMessage: message.message, // Store complete message for reconstruction
+        rawMessage: message.message, // Complete message for reconstruction
+        payloadSize: message.message.payload.length,
       },
     });
 
@@ -62,7 +75,7 @@ export class WebPersistenceAdapter implements PersistenceAdapter {
         destinationPeerId: dbMessage.recipientId,
         attempts: metadata.attempts || 0,
         lastAttempt: metadata.lastAttempt || Date.now(),
-        expiresAt: metadata.expiresAt || Date.now() + 86400000, // 24 hours
+        expiresAt: metadata.expiresAt || Date.now() + WebPersistenceAdapter.DEFAULT_MESSAGE_EXPIRATION_MS,
       };
     } catch (error) {
       console.error(`[WebPersistenceAdapter] Failed to get message ${id}:`, error);
@@ -72,15 +85,10 @@ export class WebPersistenceAdapter implements PersistenceAdapter {
 
   async removeMessage(id: string): Promise<void> {
     try {
-      // Update status instead of deleting (preserve history)
-      const message = await this.db.getMessageById(id);
-      if (message) {
-        await this.db.saveMessage({
-          ...message,
-          status: "sent",
-        });
-        console.log(`[WebPersistenceAdapter] Marked message ${id} as sent`);
-      }
+      // Delete from queue - this is for queued/relay messages only
+      // Conversation history messages are stored separately and never deleted via this method
+      await this.db.deleteMessage(id);
+      console.log(`[WebPersistenceAdapter] Deleted queued/relay message ${id}`);
     } catch (error) {
       console.error(`[WebPersistenceAdapter] Failed to remove message ${id}:`, error);
     }
@@ -102,7 +110,7 @@ export class WebPersistenceAdapter implements PersistenceAdapter {
           destinationPeerId: dbMessage.recipientId,
           attempts: metadata.attempts || 0,
           lastAttempt: metadata.lastAttempt || Date.now(),
-          expiresAt: metadata.expiresAt || Date.now() + 86400000,
+          expiresAt: metadata.expiresAt || Date.now() + WebPersistenceAdapter.DEFAULT_MESSAGE_EXPIRATION_MS,
         });
       }
 
@@ -145,5 +153,27 @@ export class WebPersistenceAdapter implements PersistenceAdapter {
       console.error("[WebPersistenceAdapter] Failed to get size:", error);
       return 0;
     }
+  }
+  
+  /**
+   * Convert Uint8Array to Base64 string (unified encoding)
+   */
+  private uint8ArrayToBase64(uint8Array: Uint8Array): string {
+    const binaryString = Array.from(uint8Array)
+      .map(byte => String.fromCharCode(byte))
+      .join('');
+    return btoa(binaryString);
+  }
+  
+  /**
+   * Convert Base64 string to Uint8Array (unified decoding)
+   */
+  private base64ToUint8Array(base64: string): Uint8Array {
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes;
   }
 }

@@ -6,7 +6,6 @@ import com.sovereign.communications.data.SCDatabase
 import com.sovereign.communications.data.entity.MessageEntity
 import com.sovereign.communications.data.entity.MessageStatus
 import com.sovereign.communications.data.entity.MessageType
-import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
 
@@ -16,13 +15,18 @@ import java.util.concurrent.ConcurrentHashMap
  * 
  * This adapter bridges the gap between the core library's MessageRelay
  * and Android's Room database persistence layer.
+ * 
+ * Payload Storage Strategy:
+ * - Raw message bytes stored as Base64 in metadata for security and size efficiency
+ * - Content field stores human-readable preview for UI/debugging
+ * - Sender ID extracted from message.header.senderId (Ed25519 public key)
  */
 class AndroidPersistenceAdapter(
     private val context: Context,
     private val database: SCDatabase
 ) {
     // Cache for quick lookups
-    private val messageCache = ConcurrentHashMap<String, StoredMessage>()
+    private val messageCache = ConcurrentHashMap<String, CoreStoredMessage>()
     
     companion object {
         private const val TAG = "AndroidPersistenceAdapter"
@@ -30,49 +34,74 @@ class AndroidPersistenceAdapter(
     }
     
     /**
-     * StoredMessage matches the core library's interface
+     * Core library's StoredMessage structure
+     * Contains the complete Message with header and binary payload
      */
-    data class StoredMessage(
+    data class CoreStoredMessage(
+        val message: CoreMessage,
         val destinationPeerId: String,
-        val payload: ByteArray,
-        val attempts: Int = 0,
-        val lastAttempt: Long = 0,
-        val expiresAt: Long,
-        val priority: Int = 1,
-        val messageId: String
+        val attempts: Int,
+        val lastAttempt: Long,
+        val expiresAt: Long
+    )
+    
+    /**
+     * Core Message structure (matches @sc/core)
+     */
+    data class CoreMessage(
+        val header: MessageHeader,
+        val payload: ByteArray
+    )
+    
+    data class MessageHeader(
+        val version: Int,
+        val type: Int,
+        val ttl: Int,
+        val timestamp: Long,
+        val senderId: ByteArray,
+        val signature: ByteArray
     )
     
     /**
      * Save a message to persistent storage
      * Called by core library when message delivery fails
      */
-    suspend fun saveMessage(id: String, message: StoredMessage) {
+    suspend fun saveMessage(id: String, message: CoreStoredMessage) {
         try {
-            // Encode senderId (Uint8Array) to Base64 for storage
+            // Extract sender ID from message header (Ed25519 public key)
             val senderIdBase64 = Base64.encodeToString(
-                message.messageId.toByteArray(), 
+                message.message.header.senderId, 
                 Base64.NO_WRAP
             )
             
-            // Store raw payload as Base64 to preserve binary data
-            val payloadBase64 = Base64.encodeToString(message.payload, Base64.NO_WRAP)
+            // Serialize the complete message for secure storage
+            val messageBytes = serializeMessage(message.message)
+            val messageBase64 = Base64.encodeToString(messageBytes, Base64.NO_WRAP)
+            
+            // Create human-readable preview for UI (first 100 bytes of payload)
+            val preview = try {
+                val previewBytes = message.message.payload.take(100).toByteArray()
+                String(previewBytes, Charsets.UTF_8).take(50) + "..."
+            } catch (e: Exception) {
+                "[Binary Data: ${message.message.payload.size} bytes]"
+            }
             
             // Convert to Room entity
             val entity = MessageEntity(
                 id = id,
                 conversationId = message.destinationPeerId,
-                content = payloadBase64, // Store Base64-encoded payload
+                content = preview, // Human-readable preview only
                 senderId = senderIdBase64,
                 recipientId = message.destinationPeerId,
-                timestamp = System.currentTimeMillis(),
+                timestamp = message.message.header.timestamp,
                 status = MessageStatus.QUEUED,
                 type = MessageType.TEXT,
                 metadata = JSONObject().apply {
                     put("attempts", message.attempts)
                     put("lastAttempt", message.lastAttempt)
                     put("expiresAt", message.expiresAt)
-                    put("priority", message.priority)
-                    put("isBase64Encoded", true) // Flag to indicate Base64 encoding
+                    put("rawMessage", messageBase64) // Complete message in Base64
+                    put("payloadSize", message.message.payload.size)
                 }.toString()
             )
             
@@ -87,26 +116,14 @@ class AndroidPersistenceAdapter(
     /**
      * Retrieve a specific message by ID
      */
-    suspend fun getMessage(id: String): StoredMessage? {
+    suspend fun getMessage(id: String): CoreStoredMessage? {
         // Check cache first
         messageCache[id]?.let { return it }
         
         // Load from database
         return try {
             val entity = database.messageDao().getMessageById(id) ?: return null
-            
-            // Parse metadata
-            val metadata = JSONObject(entity.metadata ?: "{}")
-            
-            StoredMessage(
-                destinationPeerId = entity.recipientId,
-                payload = entity.content.toByteArray(Charsets.UTF_8),
-                attempts = metadata.optInt("attempts", 0),
-                lastAttempt = metadata.optLong("lastAttempt", 0),
-                expiresAt = metadata.optLong("expiresAt", System.currentTimeMillis() + 86400000),
-                priority = metadata.optInt("priority", 1),
-                messageId = id
-            ).also {
+            deserializeStoredMessage(entity)?.also {
                 messageCache[id] = it
             }
         } catch (e: Exception) {
@@ -132,23 +149,13 @@ class AndroidPersistenceAdapter(
      * Get all stored messages for retry
      * Used by store-and-forward mechanism
      */
-    suspend fun getAllMessages(): Map<String, StoredMessage> {
+    suspend fun getAllMessages(): Map<String, CoreStoredMessage> {
         return try {
             val queuedMessages = database.messageDao().getMessagesByStatus(MessageStatus.QUEUED)
             
-            queuedMessages.associate { entity ->
-                val metadata = JSONObject(entity.metadata ?: "{}")
-                
-                entity.id to StoredMessage(
-                    destinationPeerId = entity.recipientId,
-                    payload = entity.content.toByteArray(Charsets.UTF_8),
-                    attempts = metadata.optInt("attempts", 0),
-                    lastAttempt = metadata.optLong("lastAttempt", 0),
-                    expiresAt = metadata.optLong("expiresAt", System.currentTimeMillis() + 86400000),
-                    priority = metadata.optInt("priority", 1),
-                    messageId = entity.id
-                )
-            }.also { messages ->
+            queuedMessages.mapNotNull { entity ->
+                deserializeStoredMessage(entity)?.let { entity.id to it }
+            }.toMap().also { messages ->
                 messageCache.putAll(messages)
             }
         } catch (e: Exception) {
@@ -216,5 +223,99 @@ class AndroidPersistenceAdapter(
         } catch (e: Exception) {
             android.util.Log.e(TAG, "Failed to update message $id", e)
         }
+    }
+    
+    /**
+     * Serialize a message to bytes (simple format for storage)
+     */
+    private fun serializeMessage(message: CoreMessage): ByteArray {
+        // Simple serialization: header fields + payload
+        val header = message.header
+        val buffer = mutableListOf<Byte>()
+        
+        // Version (1 byte)
+        buffer.add(header.version.toByte())
+        // Type (1 byte)
+        buffer.add(header.type.toByte())
+        // TTL (1 byte)
+        buffer.add(header.ttl.toByte())
+        // Timestamp (8 bytes, big-endian)
+        val timestampBytes = ByteArray(8)
+        for (i in 0..7) {
+            timestampBytes[i] = (header.timestamp shr (56 - i * 8)).toByte()
+        }
+        buffer.addAll(timestampBytes.toList())
+        // SenderId (32 bytes)
+        buffer.addAll(header.senderId.toList())
+        // Signature (64 bytes)
+        buffer.addAll(header.signature.toList())
+        // Payload (variable)
+        buffer.addAll(message.payload.toList())
+        
+        return buffer.toByteArray()
+    }
+    
+    /**
+     * Deserialize StoredMessage from database entity
+     */
+    private fun deserializeStoredMessage(entity: MessageEntity): CoreStoredMessage? {
+        return try {
+            val metadata = JSONObject(entity.metadata ?: "{}")
+            val messageBase64 = metadata.optString("rawMessage", null) ?: return null
+            val messageBytes = Base64.decode(messageBase64, Base64.NO_WRAP)
+            
+            // Deserialize message
+            val message = deserializeMessage(messageBytes)
+            
+            CoreStoredMessage(
+                message = message,
+                destinationPeerId = entity.recipientId,
+                attempts = metadata.optInt("attempts", 0),
+                lastAttempt = metadata.optLong("lastAttempt", 0),
+                expiresAt = metadata.optLong("expiresAt", System.currentTimeMillis() + DEFAULT_MESSAGE_EXPIRATION_MS)
+            )
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "Failed to deserialize message ${entity.id}", e)
+            null
+        }
+    }
+    
+    /**
+     * Deserialize message from bytes
+     */
+    private fun deserializeMessage(bytes: ByteArray): CoreMessage {
+        var offset = 0
+        
+        // Version (1 byte)
+        val version = bytes[offset++].toInt() and 0xFF
+        // Type (1 byte)
+        val type = bytes[offset++].toInt() and 0xFF
+        // TTL (1 byte)
+        val ttl = bytes[offset++].toInt() and 0xFF
+        // Timestamp (8 bytes)
+        var timestamp = 0L
+        for (i in 0..7) {
+            timestamp = (timestamp shl 8) or (bytes[offset++].toLong() and 0xFF)
+        }
+        // SenderId (32 bytes)
+        val senderId = bytes.copyOfRange(offset, offset + 32)
+        offset += 32
+        // Signature (64 bytes)
+        val signature = bytes.copyOfRange(offset, offset + 64)
+        offset += 64
+        // Payload (rest)
+        val payload = bytes.copyOfRange(offset, bytes.size)
+        
+        return CoreMessage(
+            header = MessageHeader(
+                version = version,
+                type = type,
+                ttl = ttl,
+                timestamp = timestamp,
+                senderId = senderId,
+                signature = signature
+            ),
+            payload = payload
+        )
     }
 }

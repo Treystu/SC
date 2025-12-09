@@ -35,7 +35,7 @@ This document provides detailed instructions for conducting cross-platform integ
 
 ```bash
 # Build core library
-cd /home/runner/work/SC/SC/core
+cd core
 npm run build
 
 # Build web app

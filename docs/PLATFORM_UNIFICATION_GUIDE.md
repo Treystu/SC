@@ -81,7 +81,7 @@ interface PersistenceAdapter {
   - Export/import for sneakernet
 
 ### Android Implementation
-- **Location**: `android/app/src/main/kotlin/com/sovereign/communications/data/adapter/AndroidPersistenceAdapter.kt` (to be created)
+- **Location**: `android/app/src/main/kotlin/com/sovereign/communications/data/adapter/AndroidPersistenceAdapter.kt` ✅
 - **Storage**: Room database
 - **Requirements**:
   - Use `BLEStoreAndForward` persistence mechanism
@@ -90,7 +90,7 @@ interface PersistenceAdapter {
   - Handle process death scenarios
 
 ### iOS Implementation
-- **Location**: `ios/SovereignCommunications/Data/IOSPersistenceAdapter.swift` (to be created)
+- **Location**: `ios/SovereignCommunications/Data/Adapter/IOSPersistenceAdapter.swift` ✅
 - **Storage**: Core Data
 - **Requirements**:
   - Port `BLEStoreAndForward` logic from Android
