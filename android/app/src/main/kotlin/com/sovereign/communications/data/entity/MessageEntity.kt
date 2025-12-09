@@ -36,11 +36,13 @@ data class MessageEntity(
     val readAt: Long? = null,
     val editedAt: Long? = null,
     val hasAttachment: Boolean = false,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val metadata: String? = null
 )
 
 enum class MessageStatus {
     PENDING,
+    QUEUED,
     SENT,
     DELIVERED,
     READ,

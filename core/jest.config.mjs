@@ -36,10 +36,7 @@ export default {
   transform: {
     '^.+\\.ts$': ['ts-jest', {
       useESM: true,
-      tsconfig: {
-        module: 'ESNext',
-        moduleResolution: 'bundler',
-      }
+      tsconfig: '<rootDir>/tsconfig.test.json'
     }],
   },
   transformIgnorePatterns: [],

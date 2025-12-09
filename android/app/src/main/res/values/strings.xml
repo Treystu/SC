@@ -25,9 +25,14 @@
     
     <!-- Connection status -->
     <string name="connected">Connected</string>
-    <string name="offline">Offline</string>
-    <string name="searching_peers">Searching for peers...</string>
-    <string name="connected_to_peers">Connected to %1$d peer(s)</string>
+    <string name="disconnected">Disconnected</string>
+    <string name="searching_contacts">Searching for contacts...</string>
+    <string name="connected_to_contacts">Connected to %1$d contact(s)</string>
+    
+    <!-- Security -->
+    <string name="end_to_end_encrypted">End-to-end encrypted</string>
+    <string name="verified_contact">Verified contact</string>
+    <string name="unverified_contact">Unverified contact</string>
     
     <!-- Permissions -->
     <string name="permission_required">Permission Required</string>
