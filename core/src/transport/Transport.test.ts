@@ -3,12 +3,10 @@
  */
 
 import {
-  Transport,
   TransportMessage,
   TransportEvents,
   TransportPeerId,
   DefaultTransportRegistry,
-  transportRegistry,
 } from "./Transport.js";
 import { MockTransport, clearMockNetwork, getMockNetworkPeers } from "./__mocks__/MockTransport.js";
 
