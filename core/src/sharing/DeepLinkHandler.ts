@@ -102,7 +102,7 @@ export class DeepLinkManager {
   /**
    * Check if user has completed onboarding
    */
-  private async isUserOnboarded(): Promise<boolean> {
+  async isUserOnboarded(): Promise<boolean> {
     const onboardingComplete = await this.storage.get('onboarding_complete');
     return onboardingComplete === 'true';
   }
@@ -163,7 +163,8 @@ export class DeepLinkManager {
         let params: DeepLinkParams = {};
 
         // Check hash first (legacy format: /join#CODE)
-        if (urlObj.hash) {
+        // Only accept hash if host is sc.app (for HTTPS URLs)
+        if (urlObj.hash && (urlObj.protocol === 'sc:' || urlObj.host === 'sc.app')) {
           const hashValue = urlObj.hash.substring(1);
           if (hashValue.includes('=')) {
             // Hash with params: #key=value&key2=value2
@@ -268,7 +269,7 @@ export class DeepLinkManager {
     const code = await this.storage.get('pendingInvite');
     if (!code) return null;
 
-    const inviterName = await this.storage.get('pendingInviterName') || undefined;
+    const inviterName = await this.storage.get('pendingInviterName') ?? undefined;
     return { code, inviterName };
   }
 

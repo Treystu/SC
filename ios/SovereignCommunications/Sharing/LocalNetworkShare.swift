@@ -174,6 +174,10 @@ class LocalNetworkShare: NSObject {
         stopBrowsing()
         disconnect()
     }
+    
+    deinit {
+        cleanup()
+    }
 }
 
 // MARK: - MCSessionDelegate

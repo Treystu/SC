@@ -246,7 +246,12 @@ export class BufferPool {
   }
 
   /**
-   * Acquire, use, and release in one operation
+   * Acquire, use, and release in one operation.
+   * 
+   * SECURITY NOTE: For cryptographic material, callers must ensure that
+   * sensitive data is not exposed via thrown errors. The buffer is cleared
+   * before being returned to the pool, but error messages may contain
+   * references to data that was in the buffer.
    */
   withBuffer<T>(size: number, fn: (buffer: Uint8Array) => T): T {
     const buffer = this.acquire(size);
@@ -291,18 +296,10 @@ export class BufferPool {
    */
   private normalizeSize(size: number): number {
     // Common sizes for mesh network operations
-    if (size <= 64) return 64;
-    if (size <= 128) return 128;
-    if (size <= 256) return 256;
-    if (size <= 512) return 512;
-    if (size <= 1024) return 1024;
-    if (size <= 2048) return 2048;
-    if (size <= 4096) return 4096;
-    if (size <= 8192) return 8192;
-    if (size <= 16384) return 16384;
-    if (size <= 32768) return 32768;
-    if (size <= 65536) return 65536;
-
+    const commonSizes = [64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536];
+    for (const s of commonSizes) {
+      if (size <= s) return s;
+    }
     // For larger sizes, round up to nearest power of 2
     return Math.pow(2, Math.ceil(Math.log2(size)));
   }
@@ -576,7 +573,9 @@ export class BloomFilter {
   }
 
   /**
-   * Count set bits in a 32-bit integer
+   * Count set bits in a 32-bit integer using SWAR (SIMD Within A Register)
+   * Algorithm: Brian Kernighan's population count with parallel bit counting
+   * Reference: https://graphics.stanford.edu/~seander/bithacks.html#CountBitsSetParallel
    */
   private popCount(n: number): number {
     n = n - ((n >>> 1) & 0x55555555);
@@ -611,6 +610,15 @@ export class ConnectionPool {
   private readonly idleTimeoutMs: number;
   private cleanupTimer?: ReturnType<typeof setInterval>;
 
+  /**
+   * ConnectionPool manages peer connections with idle timeout eviction.
+   * 
+   * IMPORTANT: Callers MUST call destroy() when done with the pool to prevent
+   * resource leaks. The cleanup timer runs indefinitely until destroy() is called.
+   * 
+   * Alternative: Use lazy initialization by calling startCleanupTimer() manually
+   * after adding the first connection, and stopCleanupTimer() when the pool is empty.
+   */
   constructor(config: ConnectionPoolConfig = {}) {
     this.maxConnections = config.maxConnections || 100;
     this.idleTimeoutMs = config.idleTimeoutMs || 300000; // 5 minutes
@@ -819,17 +827,18 @@ export class MetricsCollector {
     this.lastMessageCount = 0;
   }
 
+  /**
+   * Returns memory usage in MB.
+   * - In Node.js, returns process heap usage.
+   * - In browsers, returns 0 (no reliable standard API for JS heap usage).
+   * @returns {number} Memory usage in MB, or 0 if unavailable.
+   */
   private getMemoryUsage(): number {
-    // Browser environment
-    if (
-      typeof performance !== 'undefined' &&
-      'memory' in performance
-    ) {
-      const memory = (performance as unknown as { memory?: { usedJSHeapSize?: number } }).memory;
-      return memory?.usedJSHeapSize
-        ? memory.usedJSHeapSize / (1024 * 1024)
-        : 0;
+    // Node.js environment
+    if (typeof process !== 'undefined' && process.memoryUsage) {
+      return process.memoryUsage().heapUsed / (1024 * 1024);
     }
+    // Browser: no reliable standard API for JS heap usage
     return 0;
   }
 }

@@ -147,7 +147,7 @@ class ShareManager {
         let filter = CIFilter.qrCodeGenerator()
         
         filter.message = Data(string.utf8)
-        filter.correctionLevel = "M"
+        filter.correctionLevel = "H"  // High error correction (~30% recovery) for better scanning reliability
         
         guard let outputImage = filter.outputImage else { return nil }
         
@@ -168,8 +168,16 @@ class ShareManager {
     /// - Returns: The extracted invite code, or nil if not an invite URL
     func handleIncomingURL(_ url: URL) -> String? {
         // Handle custom scheme: sc://join/CODE
+        // Ensure there are at least 3 path components: ["/", "join", "CODE"]
         if url.scheme == "sc" && url.host == "join" {
-            return url.pathComponents.last
+            // pathComponents for "sc://join/ABC123" would be ["/", "ABC123"]
+            // We need to ensure there's an actual code after the host
+            if url.pathComponents.count >= 2,
+               let code = url.pathComponents.last,
+               !code.isEmpty && code != "/" {
+                return code
+            }
+            return nil
         }
         
         // Handle HTTPS: https://sc.app/join?code=CODE
