@@ -94,7 +94,7 @@ describe('Advanced Message Relay Features', () => {
         payload: new TextEncoder().encode('test'),
       };
 
-      relay.storeMessage(message, 'offline-peer');
+      await relay.storeMessage(message, 'offline-peer');
 
       const stats = relay.getStats();
       expect(stats.messagesStored).toBe(1);
@@ -117,7 +117,7 @@ describe('Advanced Message Relay Features', () => {
         payload: new TextEncoder().encode('test'),
       };
 
-      relay.storeMessage(message, 'peer1');
+      await relay.storeMessage(message, 'peer1');
 
       // Peer comes online
       const peer = createPeer('peer1', new Uint8Array(32), 'webrtc');
@@ -126,7 +126,7 @@ describe('Advanced Message Relay Features', () => {
       const storedStatsBefore = await relay.getStoredMessagesStats();
       expect(storedStatsBefore.total).toBe(1);
 
-      relay.retryStoredMessages();
+      await relay.retryStoredMessages();
 
       // Message should still be stored until successfully sent
       const storedStatsAfter = await relay.getStoredMessagesStats();
@@ -147,7 +147,7 @@ describe('Advanced Message Relay Features', () => {
           payload: new TextEncoder().encode(`message${i}`),
         };
 
-        relay.storeMessage(message, `peer${i}`);
+        await relay.storeMessage(message, `peer${i}`);
       }
 
       const storedStats = await relay.getStoredMessagesStats();

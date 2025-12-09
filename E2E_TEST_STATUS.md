@@ -1,12 +1,34 @@
 # E2E Cross-Platform Tests Status Report
 
-**Date**: 2025-11-18  
-**Branch**: copilot/add-e2e-integration-tests-again  
+**Date**: 2025-12-09  
+**Branch**: copilot/implement-gossip-relay-protocol  
 **Status**: ✅ Framework Complete, Tests Functional with Documented Limitations
 
 ## Executive Summary
 
 The cross-platform E2E testing framework has been successfully implemented and is functional. All infrastructure, test files, documentation, and CI/CD workflows are in place. Basic web tests are passing successfully. Cross-platform tests (web-to-web, mobile) require additional runtime infrastructure (signaling server, mobile emulators) which is documented.
+
+## Recent Updates (2025-12-09)
+
+### New E2E Tests Added
+1. **peer-discovery.e2e.test.ts** - Tests for peer discovery functionality
+   - Discovery methods (QR, manual entry, network discovery)
+   - QR code display and fingerprint verification
+   - Local network discovery status
+   - Identity management and backup
+   - Offline support and encryption verification
+
+2. **mesh-relay.e2e.test.ts** - Tests for mesh relay and gossip protocol
+   - Message routing and store-and-forward
+   - Gossip protocol statistics
+   - Network health monitoring
+   - Message fragmentation
+   - Multi-hop routing and broadcast messages
+
+### Cross-Platform Framework Enhancements
+- Added group messaging methods (`sendMessageToGroup`, `waitForGroupMessage`)
+- Added `createGroup` method to test coordinator
+- Added `IOSClient` alias export for backwards compatibility
 
 ## Issues Fixed
 
@@ -126,9 +148,11 @@ The cross-platform E2E testing framework has been successfully implemented and i
 - Test coordinator with unified API
 - Common operations: sendMessage, waitForMessage, addContact, getPeerCount, etc.
 
-✅ **Test Files** (6 files, 1,390 lines total)
+✅ **Test Files** (8 files total)
 - tests/e2e/app-basics.e2e.test.ts (8.1KB)
 - tests/e2e/messaging.e2e.test.ts (8.8KB)
+- tests/e2e/peer-discovery.e2e.test.ts (11.6KB) - **NEW**
+- tests/e2e/mesh-relay.e2e.test.ts (9.5KB) - **NEW**
 - tests/e2e/cross-platform/web-to-web.e2e.test.ts (6.1KB)
 - tests/e2e/cross-platform/multi-platform.e2e.test.ts (7.6KB)
 - tests/e2e/mobile/android/web-to-android.e2e.test.ts (4.1KB)

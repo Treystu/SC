@@ -43,6 +43,15 @@ export abstract class PlatformClient {
   abstract takeScreenshot(name: string): Promise<void>;
   abstract goOffline(): Promise<void>;
   abstract goOnline(): Promise<void>;
+  
+  // Group messaging methods (with default implementations that can be overridden)
+  async sendMessageToGroup(message: string): Promise<void> {
+    throw new Error('sendMessageToGroup not implemented for this platform');
+  }
+  
+  async waitForGroupMessage(message: string, timeout?: number): Promise<boolean> {
+    throw new Error('waitForGroupMessage not implemented for this platform');
+  }
 
   getId(): string {
     return this.clientId;
@@ -134,6 +143,20 @@ export class WebClient extends PlatformClient {
 
   async goOnline(): Promise<void> {
     await this.page.context().setOffline(false);
+  }
+
+  async sendMessageToGroup(message: string): Promise<void> {
+    await this.page.fill('[data-testid="group-message-input"]', message);
+    await this.page.click('[data-testid="send-group-message-btn"]');
+  }
+
+  async waitForGroupMessage(message: string, timeout = 10000): Promise<boolean> {
+    try {
+      await this.page.waitForSelector(`[data-testid="group-message"]:has-text("${message}")`, { timeout });
+      return true;
+    } catch {
+      return false;
+    }
   }
 }
 
@@ -271,6 +294,28 @@ export class AndroidClient extends PlatformClient {
       command: 'cmd connectivity airplane-mode disable',
     });
   }
+
+  async sendMessageToGroup(message: string): Promise<void> {
+    if (!this.driver) throw new Error('Driver not initialized');
+    
+    const messageInput = await this.driver.$('android=new UiSelector().resourceId("group_message_input")');
+    await messageInput.setValue(message);
+    
+    const sendButton = await this.driver.$('android=new UiSelector().resourceId("send_group_button")');
+    await sendButton.click();
+  }
+
+  async waitForGroupMessage(message: string, timeout = 10000): Promise<boolean> {
+    if (!this.driver) throw new Error('Driver not initialized');
+    
+    try {
+      const messageElement = await this.driver.$(`android=new UiSelector().resourceId("group_message").textContains("${message}")`);
+      await messageElement.waitForExist({ timeout });
+      return true;
+    } catch {
+      return false;
+    }
+  }
 }
 
 /**
@@ -398,6 +443,28 @@ export class iOSClient extends PlatformClient {
     if (!this.driver) throw new Error('Driver not initialized');
     console.warn('iOS online mode not supported in simulator');
   }
+
+  async sendMessageToGroup(message: string): Promise<void> {
+    if (!this.driver) throw new Error('Driver not initialized');
+    
+    const messageInput = await this.driver.$('~group-message-input');
+    await messageInput.setValue(message);
+    
+    const sendButton = await this.driver.$('~send-group-button');
+    await sendButton.click();
+  }
+
+  async waitForGroupMessage(message: string, timeout = 10000): Promise<boolean> {
+    if (!this.driver) throw new Error('Driver not initialized');
+    
+    try {
+      const messageElement = await this.driver.$(`-ios predicate string:name == "group-message" AND label CONTAINS "${message}"`);
+      await messageElement.waitForExist({ timeout });
+      return true;
+    } catch {
+      return false;
+    }
+  }
 }
 
 /**
@@ -462,6 +529,20 @@ export class CrossPlatformTestCoordinator {
   }
 
   /**
+   * Create a group with multiple clients
+   */
+  async createGroup(clients: PlatformClient[]): Promise<void> {
+    // Connect all clients to each other
+    for (let i = 0; i < clients.length; i++) {
+      for (let j = i + 1; j < clients.length; j++) {
+        await this.connectClients(clients[i], clients[j]);
+      }
+    }
+    // Wait for mesh network to establish
+    await this.waitForMeshNetwork(clients.length - 1, 30000);
+  }
+
+  /**
    * Wait for all clients to establish peer connections
    */
   async waitForMeshNetwork(expectedPeerCount = 1, timeout = 30000): Promise<void> {
@@ -522,3 +603,8 @@ export async function waitForCondition(
   }
   throw new Error('Timeout waiting for condition');
 }
+
+/**
+ * Alias for iOS client (backwards compatibility)
+ */
+export const IOSClient = iOSClient;

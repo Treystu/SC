@@ -65,6 +65,41 @@ export {
   type WebRTCTransportConfig,
 } from "./transport/WebRTCTransport.js";
 
+// BLE Transport (platform-agnostic interface)
+export {
+  MockBleTransport,
+  BleAdvertisingMode,
+  BleScanMode,
+  BLE_MESH_SERVICE_UUID,
+  BLE_TX_CHARACTERISTIC_UUID,
+  BLE_RX_CHARACTERISTIC_UUID,
+  BLE_VERSION_CHARACTERISTIC_UUID,
+  BLE_METADATA_CHARACTERISTIC_UUID,
+  DEFAULT_BLE_CONFIG,
+  type BleTransport,
+  type BleTransportConfig,
+  type BleTransportEvents,
+  type BleDeviceInfo,
+  type BlePeerInfo,
+  type BleTransportFactory,
+} from "./transport/BleTransport.js";
+
+// Wi-Fi Direct Transport (platform-agnostic interface)
+export {
+  MockWifiDirectTransport,
+  WifiDirectRole,
+  WifiDirectDeviceStatus,
+  DEFAULT_WIFI_DIRECT_CONFIG,
+  type WifiDirectTransport,
+  type WifiDirectTransportConfig,
+  type WifiDirectTransportEvents,
+  type WifiDirectDeviceInfo,
+  type WifiDirectGroupInfo,
+  type WifiDirectPeerInfo,
+  type WifiDirectServiceRecord,
+  type WifiDirectTransportFactory,
+} from "./transport/WifiDirectTransport.js";
+
 // Legacy Transport (for backwards compatibility)
 export * from "./transport/webrtc.js";
 export {
@@ -93,6 +128,26 @@ export {
 
 // Discovery
 export * from "./discovery/peer.js";
+
+export {
+  MDNSBroadcaster,
+  MDNSDiscoverer,
+  MDNSManager,
+  MDNS_SERVICE_TYPE,
+  MDNS_DEFAULT_PORT,
+  TXT_RECORD_KEYS,
+  parseCapabilities,
+  serializeCapabilities,
+  parseTxtRecord,
+  buildTxtRecord,
+  filterService,
+  type MDNSServiceInfo,
+  type MDNSCapabilities,
+  type MDNSBroadcasterConfig,
+  type MDNSDiscovererConfig,
+  type MDNSEventType,
+  type MDNSEventCallback,
+} from "./discovery/mdns.js";
 
 export {
   QRCodeDiscoveryV2,
