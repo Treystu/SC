@@ -34,7 +34,7 @@ class IOSPersistenceAdapter {
     private let cacheQueue = DispatchQueue(label: "com.sc.persistence.cache", attributes: .concurrent)
     
     // Constants for unification
-    private static let DEFAULT_MESSAGE_EXPIRATION_MS: TimeInterval = 86400 // 24 hours
+    private static let DEFAULT_MESSAGE_EXPIRATION_SECONDS: TimeInterval = 86400 // 24 hours in seconds
     
     /**
      * Core library's StoredMessage structure
@@ -86,9 +86,10 @@ class IOSPersistenceAdapter {
             entity.senderId = senderIdBase64
             
             // Create human-readable preview for UI
-            let preview: String
+            var preview: String
             if let payloadString = String(data: message.message.payload.prefix(100), encoding: .utf8) {
-                preview = String(payloadString.prefix(50))
+                let truncated = String(payloadString.prefix(50))
+                preview = truncated
                 if payloadString.count > 50 {
                     preview += "..."
                 }

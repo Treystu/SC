@@ -297,6 +297,21 @@ class MeshNetworkManager(
             try {
                 val id = java.util.UUID.randomUUID().toString()
                 
+                // Get local peer ID
+                val senderIdString = com.sovereign.communications.SCApplication.instance.localPeerId
+                    ?: run {
+                        Log.w(TAG, "Local peer ID not set, using placeholder")
+                        "placeholder_" + java.util.UUID.randomUUID().toString()
+                    }
+                val senderIdBytes = senderIdString.toByteArray()
+                val senderId = if (senderIdBytes.size >= 32) {
+                    senderIdBytes.copyOf(32)
+                } else {
+                    ByteArray(32).also {
+                        System.arraycopy(senderIdBytes, 0, it, 0, minOf(senderIdBytes.size, 32))
+                    }
+                }
+                
                 // Create message using core structure
                 val message = AndroidPersistenceAdapter.CoreMessage(
                     header = AndroidPersistenceAdapter.MessageHeader(
@@ -304,8 +319,7 @@ class MeshNetworkManager(
                         type = 0, // TEXT type
                         ttl = 10,
                         timestamp = System.currentTimeMillis(),
-                        senderId = com.sovereign.communications.SCApplication.instance.localPeerId
-                            ?.toByteArray() ?: ByteArray(32), // Use actual sender ID
+                        senderId = senderId,
                         signature = ByteArray(64) // Placeholder - should be signed
                     ),
                     payload = payload

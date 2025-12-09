@@ -241,7 +241,7 @@ class MeshNetworkManager: NSObject, ObservableObject {
                 destinationPeerId: recipientId,
                 attempts: 0,
                 lastAttempt: Date(),
-                expiresAt: Date().addingTimeInterval(IOSPersistenceAdapter.DEFAULT_MESSAGE_EXPIRATION_MS)
+                expiresAt: Date().addingTimeInterval(IOSPersistenceAdapter.DEFAULT_MESSAGE_EXPIRATION_SECONDS)
             )
             
             // Save to unified persistence adapter
