@@ -1,6 +1,7 @@
 package com.sovereign.communications.data.adapter
 
 import android.content.Context
+import android.util.Base64
 import com.sovereign.communications.data.SCDatabase
 import com.sovereign.communications.data.entity.MessageEntity
 import com.sovereign.communications.data.entity.MessageStatus
@@ -25,6 +26,7 @@ class AndroidPersistenceAdapter(
     
     companion object {
         private const val TAG = "AndroidPersistenceAdapter"
+        private const val DEFAULT_MESSAGE_EXPIRATION_MS = 86400000L // 24 hours
     }
     
     /**
@@ -46,12 +48,21 @@ class AndroidPersistenceAdapter(
      */
     suspend fun saveMessage(id: String, message: StoredMessage) {
         try {
+            // Encode senderId (Uint8Array) to Base64 for storage
+            val senderIdBase64 = Base64.encodeToString(
+                message.messageId.toByteArray(), 
+                Base64.NO_WRAP
+            )
+            
+            // Store raw payload as Base64 to preserve binary data
+            val payloadBase64 = Base64.encodeToString(message.payload, Base64.NO_WRAP)
+            
             // Convert to Room entity
             val entity = MessageEntity(
                 id = id,
                 conversationId = message.destinationPeerId,
-                content = String(message.payload, Charsets.UTF_8), // Decode for DB storage
-                senderId = "me", // Placeholder - should come from identity
+                content = payloadBase64, // Store Base64-encoded payload
+                senderId = senderIdBase64,
                 recipientId = message.destinationPeerId,
                 timestamp = System.currentTimeMillis(),
                 status = MessageStatus.QUEUED,
@@ -61,6 +72,7 @@ class AndroidPersistenceAdapter(
                     put("lastAttempt", message.lastAttempt)
                     put("expiresAt", message.expiresAt)
                     put("priority", message.priority)
+                    put("isBase64Encoded", true) // Flag to indicate Base64 encoding
                 }.toString()
             )
             
