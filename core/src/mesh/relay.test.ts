@@ -145,7 +145,7 @@ describe('MessageRelay', () => {
         payload: new TextEncoder().encode('stored message'),
       };
 
-      relay.storeMessage(message, 'offline-peer');
+      await relay.storeMessage(message, 'offline-peer');
 
       const stats = await relay.getStats();
       expect(stats.messagesStored).toBe(1);
@@ -164,14 +164,14 @@ describe('MessageRelay', () => {
         payload: new TextEncoder().encode('retrieve test'),
       };
 
-      relay.storeMessage(message, 'offline-peer');
+      await relay.storeMessage(message, 'offline-peer');
       const storedStats = await relay.getStoredMessagesStats();
 
       expect(storedStats.total).toBeGreaterThan(0);
       expect(storedStats.byDestination).toHaveProperty('offline-peer');
     });
 
-    it('should retry stored messages', () => {
+    it('should retry stored messages', async () => {
       const message: Message = {
         header: {
           version: 0x01,
@@ -184,8 +184,8 @@ describe('MessageRelay', () => {
         payload: new TextEncoder().encode('clear test'),
       };
 
-      relay.storeMessage(message, 'peer-1');
-      relay.retryStoredMessages();
+      await relay.storeMessage(message, 'peer-1');
+      await relay.retryStoredMessages();
 
       expect(relay).toBeDefined();
     });

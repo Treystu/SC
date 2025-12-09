@@ -5,7 +5,7 @@
 import { GossipProtocol } from './gossip.js';
 import { Message, MessageType } from '../protocol/message.js';
 
-describe.skip('GossipProtocol', () => {
+describe('GossipProtocol', () => {
   let gossip: GossipProtocol;
 
   beforeEach(() => {
@@ -176,7 +176,7 @@ function createTestMessage(content: string): Message {
       ttl: 10,
       timestamp: Date.now(),
       senderId: new Uint8Array(32),
-      signature: new Uint8Array(65),
+      signature: new Uint8Array(64),
     },
     payload: new TextEncoder().encode(content),
   };
