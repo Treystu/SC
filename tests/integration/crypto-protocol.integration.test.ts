@@ -32,12 +32,7 @@ describe('Crypto-Protocol Integration', () => {
       // Sign the entire encoded message (Ed25519 produces 64-byte signature)
       const signature = signMessage(messageBytes, identity.privateKey);
       
-      // Pad to 65 bytes for protocol's compact signature format
-      // Ed25519 signature is already 64 bytes
-      // Use signature directly
-      // Ed25519 signature is already 64 bytes // Extra byte for compact format
-      
-      // Update message header with real signature
+      // Update message header with real signature (Ed25519 signature is already 64 bytes)
       message.header.signature = signature;
 
       // Encode the final message with real signature
@@ -86,10 +81,7 @@ describe('Crypto-Protocol Integration', () => {
       const messageBytes = encodeMessage(message);
       const signature = signMessage(messageBytes, identity.privateKey);
       
-      // Pad to 65 bytes for protocol's compact signature format
-      // Ed25519 signature is already 64 bytes
-      // Use signature directly
-      // Ed25519 signature is already 64 bytes // Extra byte for compact format
+      // Update message header with real signature (Ed25519 signature is already 64 bytes)
       message.header.signature = signature;
       
       // Encode with real signature
