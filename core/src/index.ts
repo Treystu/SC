@@ -43,7 +43,29 @@ export {
   type MeshSeenAdapter,
 } from "./mesh/seen-adapter.js";
 
-// Transport
+// Transport Abstraction Layer
+export {
+  type Transport,
+  type TransportPeerId,
+  type TransportMessage,
+  type TransportEvents,
+  type TransportConfig,
+  type TransportPeerInfo,
+  type TransportConnectionState,
+  type SignalingData,
+  type TransportFactory,
+  type TransportRegistry,
+  DefaultTransportRegistry,
+  transportRegistry,
+} from "./transport/Transport.js";
+
+// WebRTC Transport (new abstraction)
+export {
+  WebRTCTransport,
+  type WebRTCTransportConfig,
+} from "./transport/WebRTCTransport.js";
+
+// Legacy Transport (for backwards compatibility)
 export * from "./transport/webrtc.js";
 export {
   WebRTCPeerEnhanced,
