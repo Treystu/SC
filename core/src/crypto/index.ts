@@ -81,6 +81,25 @@ export class CryptoManager {
   private encoder = new TextEncoder();
   private decoder = new TextDecoder();
 
+  /** Minimum size for encrypted data (nonce size) */
+  private static readonly NONCE_SIZE = 24;
+
+  /**
+   * Validate and extract nonce/ciphertext from encrypted data
+   * @param encrypted - Encrypted data with nonce prepended
+   * @returns Object containing nonce and ciphertext
+   * @throws Error if encrypted data is too short
+   */
+  private extractNonceAndCiphertext(encrypted: Uint8Array): { nonce: Uint8Array; ciphertext: Uint8Array } {
+    if (encrypted.length < CryptoManager.NONCE_SIZE) {
+      throw new Error(`Encrypted data too short: must be at least ${CryptoManager.NONCE_SIZE} bytes (nonce size)`);
+    }
+    return {
+      nonce: encrypted.slice(0, CryptoManager.NONCE_SIZE),
+      ciphertext: encrypted.slice(CryptoManager.NONCE_SIZE),
+    };
+  }
+
   /**
    * Generate a random 32-byte symmetric key
    */
@@ -118,13 +137,7 @@ export class CryptoManager {
    * @throws Error if encrypted data is too short
    */
   decrypt(encrypted: Uint8Array, key: Uint8Array): string {
-    if (encrypted.length < 24) {
-      throw new Error('Encrypted data too short: must be at least 24 bytes (nonce size)');
-    }
-    // Extract nonce (first 24 bytes) and ciphertext
-    const nonce = encrypted.slice(0, 24);
-    const ciphertext = encrypted.slice(24);
-    
+    const { nonce, ciphertext } = this.extractNonceAndCiphertext(encrypted);
     const plaintext = decryptMessage(ciphertext, key, nonce);
     return this.decoder.decode(plaintext);
   }
@@ -137,12 +150,7 @@ export class CryptoManager {
    * @throws Error if encrypted data is too short
    */
   decryptBytes(encrypted: Uint8Array, key: Uint8Array): Uint8Array {
-    if (encrypted.length < 24) {
-      throw new Error('Encrypted data too short: must be at least 24 bytes (nonce size)');
-    }
-    // Extract nonce (first 24 bytes) and ciphertext
-    const nonce = encrypted.slice(0, 24);
-    const ciphertext = encrypted.slice(24);
+    const { nonce, ciphertext } = this.extractNonceAndCiphertext(encrypted);
     return decryptMessage(ciphertext, key, nonce);
   }
 
