@@ -197,3 +197,6 @@ server/relay.js
 logs/
 *.base64.txt
 *.keystore
+
+# Mobile bundle output
+mobile-bundle/

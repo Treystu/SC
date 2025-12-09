@@ -20,7 +20,7 @@ import {
   TransportPeerInfo,
   TransportConnectionState,
   SignalingData,
-} from "../Transport";
+} from "../Transport.js";
 
 /**
  * Configuration options specific to MockTransport.

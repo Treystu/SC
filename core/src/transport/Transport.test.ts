@@ -9,8 +9,8 @@ import {
   TransportPeerId,
   DefaultTransportRegistry,
   transportRegistry,
-} from "./Transport";
-import { MockTransport, clearMockNetwork, getMockNetworkPeers } from "./__mocks__/MockTransport";
+} from "./Transport.js";
+import { MockTransport, clearMockNetwork, getMockNetworkPeers } from "./__mocks__/MockTransport.js";
 
 describe("Transport Abstraction", () => {
   afterEach(() => {
