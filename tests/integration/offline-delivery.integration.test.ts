@@ -1,14 +1,46 @@
 import { MessageRelay, MemoryPersistenceAdapter } from '../../core/src/mesh/relay';
-import { RoutingTable, Peer, PeerState } from '../../core/src/mesh/routing';
+import { RoutingTable } from '../../core/src/mesh/routing';
 import { Message, MessageType } from '../../core/src/protocol/message';
-import { OfflineQueue } from '../../core/src/offline-queue';
-import { Database, openDb } from '../../core/src/storage/database';
+
+/**
+ * Mock offline queue for testing without Dexie DB
+ */
+class MockOfflineQueue {
+  private queue: Map<string, Message[]> = new Map();
+
+  async enqueue(recipientId: string, message: Message): Promise<void> {
+    const messages = this.queue.get(recipientId) || [];
+    messages.push(message);
+    this.queue.set(recipientId, messages);
+  }
+
+  async dequeue(recipientId: string): Promise<Message | undefined> {
+    const messages = this.queue.get(recipientId) || [];
+    return messages.shift();
+  }
+
+  async size(): Promise<number> {
+    let total = 0;
+    for (const messages of this.queue.values()) {
+      total += messages.length;
+    }
+    return total;
+  }
+
+  async getMessagesFor(recipientId: string): Promise<Message[]> {
+    return this.queue.get(recipientId) || [];
+  }
+
+  async clear(): Promise<void> {
+    this.queue.clear();
+  }
+}
 
 class MockNetwork {
-  peers: Map<string, { relay: MessageRelay, queue: OfflineQueue, online: boolean }> = new Map();
+  peers: Map<string, { relay: MessageRelay, queue: MockOfflineQueue, online: boolean }> = new Map();
   deliveredMessages: Map<string, Message[]> = new Map();
 
-  register(peerId: string, relay: MessageRelay, queue: OfflineQueue) {
+  register(peerId: string, relay: MessageRelay, queue: MockOfflineQueue) {
     this.peers.set(peerId, { relay, queue, online: true });
     this.deliveredMessages.set(peerId, []);
   }
@@ -32,34 +64,28 @@ class MockNetwork {
 }
 
 describe('Offline Message Delivery Integration Test', () => {
-  let db: Database;
-  beforeEach(async () => {
-    db = await openDb('test-db', 1, {
-      upgrade(db) {
-        db.createObjectStore('offline-queue');
-      },
-    });
-  });
-
-  afterEach(async () => {
-    await db.close();
-  });
-
   it('should queue message when peer is offline and deliver when online', async () => {
     const network = new MockNetwork();
     
-    const senderRelay = new MessageRelay('sender', new RoutingTable('sender'));
-    const senderQueue = new OfflineQueue(db);
+    const senderRelay = new MessageRelay('sender', new RoutingTable());
+    const senderQueue = new MockOfflineQueue();
     network.register('sender', senderRelay, senderQueue);
 
-    const receiverRelay = new MessageRelay('receiver', new RoutingTable('receiver'));
-    const receiverQueue = new OfflineQueue(db);
+    const receiverRelay = new MessageRelay('receiver', new RoutingTable());
+    const receiverQueue = new MockOfflineQueue();
     network.register('receiver', receiverRelay, receiverQueue);
     
     network.setOnlineStatus('receiver', false);
 
     const message: Message = {
-      header: { type: MessageType.TEXT, ttl: 1, timestamp: Date.now(), senderId: new Uint8Array(), signature: new Uint8Array() },
+      header: {
+        version: 1,
+        type: MessageType.TEXT,
+        ttl: 1,
+        timestamp: Date.now(),
+        senderId: new Uint8Array(32),
+        signature: new Uint8Array(64),
+      },
       payload: new TextEncoder().encode('hello'),
     };
 

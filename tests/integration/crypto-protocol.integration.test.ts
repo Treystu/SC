@@ -21,7 +21,7 @@ describe('Crypto-Protocol Integration', () => {
           ttl: 10,
           timestamp: Date.now(),
           senderId: identity.publicKey,
-          signature: new Uint8Array(65), // Zero placeholder
+          signature: new Uint8Array(64), // Zero placeholder
         },
         payload: new TextEncoder().encode('Test message'),
       };
@@ -33,12 +33,12 @@ describe('Crypto-Protocol Integration', () => {
       const signature = signMessage(messageBytes, identity.privateKey);
       
       // Pad to 65 bytes for protocol's compact signature format
-      const signature65 = new Uint8Array(65);
-      signature65.set(signature, 0);
-      signature65[64] = 0; // Extra byte for compact format
+      // Ed25519 signature is already 64 bytes
+      // Use signature directly
+      // Ed25519 signature is already 64 bytes // Extra byte for compact format
       
       // Update message header with real signature
-      message.header.signature = signature65;
+      message.header.signature = signature;
 
       // Encode the final message with real signature
       const encodedFinal = encodeMessage(message);
@@ -51,7 +51,7 @@ describe('Crypto-Protocol Integration', () => {
       const verifyMessage: Message = {
         header: {
           ...decoded.header,
-          signature: new Uint8Array(65), // Use placeholder for verification
+          signature: new Uint8Array(64), // Use placeholder for verification
         },
         payload: decoded.payload,
       };
@@ -77,7 +77,7 @@ describe('Crypto-Protocol Integration', () => {
           ttl: 10,
           timestamp: Date.now(),
           senderId: identity.publicKey,
-          signature: new Uint8Array(65), // Zero placeholder
+          signature: new Uint8Array(64), // Zero placeholder
         },
         payload: new TextEncoder().encode('Original message'),
       };
@@ -87,10 +87,10 @@ describe('Crypto-Protocol Integration', () => {
       const signature = signMessage(messageBytes, identity.privateKey);
       
       // Pad to 65 bytes for protocol's compact signature format
-      const signature65 = new Uint8Array(65);
-      signature65.set(signature, 0);
-      signature65[64] = 0; // Extra byte for compact format
-      message.header.signature = signature65;
+      // Ed25519 signature is already 64 bytes
+      // Use signature directly
+      // Ed25519 signature is already 64 bytes // Extra byte for compact format
+      message.header.signature = signature;
       
       // Encode with real signature
       let encodedFinal = encodeMessage(message);
@@ -111,7 +111,7 @@ describe('Crypto-Protocol Integration', () => {
       const verifyMessage: Message = {
         header: {
           ...tamperedMessage.header,
-          signature: new Uint8Array(65), // Placeholder
+          signature: new Uint8Array(64), // Placeholder
         },
         payload: tamperedMessage.payload,
       };

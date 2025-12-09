@@ -284,5 +284,26 @@ export {
 // Cache Manager
 export { CacheManager, MediaCache, type CacheEntry, type CacheStats } from "./cache-manager.js";
 
+// Storage
+export {
+  MemoryStorageAdapter,
+  TypedMemoryStorage,
+  type StorageAdapter,
+} from "./storage/memory.js";
+
+// Backup & Restore
+export {
+  BackupManager,
+  BackupScheduler,
+  RestoreManager,
+  BackupMigrator,
+  type BackupData,
+  type BackupMetadata,
+  type BackupOptions,
+  type RestoreOptions,
+  type RestoreResult,
+  type ConflictResolution,
+} from "./backup/index.js";
+
 // Version
 export const VERSION = "0.1.0";
