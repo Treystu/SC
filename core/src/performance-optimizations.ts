@@ -237,6 +237,8 @@ export class BufferPool {
 
     if (pool.length < this.maxPoolSize) {
       // Clear the buffer before pooling (security)
+      // NOTE: For cryptographic material, use crypto/primitives.ts secure deletion
+      // This basic clearing is sufficient for general-purpose buffers
       buffer.fill(0);
       pool.push(buffer);
     }

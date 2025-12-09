@@ -1,4 +1,7 @@
 import SwiftUI
+import os.log
+
+private let logger = Logger(subsystem: "com.sovereign.communications", category: "App")
 
 @main
 struct SovereignCommunicationsApp: App {
@@ -29,9 +32,9 @@ struct SovereignCommunicationsApp: App {
     private func initializeEncryption() {
         do {
             try KeychainManager.shared.initializeEncryption()
-            print("✅ Encryption initialized successfully")
+            logger.info("✅ Encryption initialized successfully")
         } catch {
-            print("❌ Failed to initialize encryption: \(error)")
+            logger.error("❌ Failed to initialize encryption: \(error.localizedDescription)")
             // In production, you might want to show an alert or handle this gracefully
         }
     }
@@ -54,11 +57,11 @@ struct SovereignCommunicationsApp: App {
     
     /// Handle incoming URLs (deep links and universal links)
     private func handleIncomingURL(_ url: URL) {
-        print("📲 Received URL: \(url)")
+        logger.info("📲 Received URL: \(url.absoluteString, privacy: .public)")
         
         // Use ShareManager to parse the URL
         if let inviteCode = ShareManager.shared.handleIncomingURL(url) {
-            print("✅ Extracted invite code: \(String(inviteCode.prefix(16)))...")
+            logger.info("✅ Extracted invite code (truncated for security)")
             
             // Store the pending invite for processing
             UserDefaults.standard.set(inviteCode, forKey: "pendingInviteCode")

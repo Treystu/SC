@@ -108,7 +108,7 @@ class ShareManager {
     
     /// Share peer info using native share sheet
     /// - Parameters:
-    ///   - peerInfo: The peer info to share
+    ///   - peerInfo: The peer info to share (from QRCodeScannerView module)
     ///   - viewController: The presenting view controller
     func sharePeerInfo(_ peerInfo: PeerInfo, from viewController: UIViewController) {
         let shareText = """

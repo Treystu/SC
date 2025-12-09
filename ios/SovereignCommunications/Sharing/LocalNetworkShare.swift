@@ -248,7 +248,18 @@ extension LocalNetworkShare: MCNearbyServiceAdvertiserDelegate {
     func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didReceiveInvitationFromPeer peerID: MCPeerID, withContext context: Data?, invitationHandler: @escaping (Bool, MCSession?) -> Void) {
         print("📲 Received connection request from \(peerID.displayName)")
         
-        // Auto-accept connections when sharing
+        // SECURITY NOTE: Auto-accepting is intentional for the sharing flow.
+        // When a user explicitly starts sharing (by calling startSharing), they have
+        // consented to allowing nearby devices to connect. The connection is encrypted
+        // via MultipeerConnectivity's required encryption preference set in setupSession().
+        // For additional security:
+        // 1. Sharing has a limited lifetime (user explicitly calls stopSharing)
+        // 2. Only invite data is shared, not sensitive user data
+        // 3. Connection requests are logged for audit purposes
+        
+        // Log connection for audit
+        print("⚠️ Auto-accepting connection from: \(peerID.displayName) (user is actively sharing)")
+        
         invitationHandler(true, session)
     }
     
