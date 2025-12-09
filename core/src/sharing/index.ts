@@ -7,3 +7,4 @@ export * from './InviteManager.js';
 export * from './SharePayload.js';
 export * from './AutoLink.js';
 export * from './util.js';
+export * from './DeepLinkHandler.js';

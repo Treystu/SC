@@ -85,5 +85,25 @@
     <string>Photo library access is required to save received images.</string>
     <key>NSFaceIDUsageDescription</key>
     <string>Face ID is used to secure your identity keys.</string>
+    
+    <!-- URL Schemes for Deep Linking -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>com.sovereign.communications</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>sc</string>
+            </array>
+        </dict>
+    </array>
+    
+    <!-- Local Network Bonjour Services -->
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_sc-app-share._tcp</string>
+        <string>_sc-app-share._udp</string>
+    </array>
 </dict>
 </plist>

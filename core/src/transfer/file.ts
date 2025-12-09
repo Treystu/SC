@@ -406,3 +406,120 @@ export class FileTransferManager {
     this.cleanupStaleTransfers();
   }
 }
+
+/**
+ * Event names for file transfer
+ */
+export enum FileTransferEvents {
+  CHUNK_RECEIVED = 'chunk_received',
+  FILE_REASSEMBLED = 'file_reassembled',
+  PROGRESS = 'progress',
+  ERROR = 'error',
+  COMPLETE = 'complete',
+  CANCELLED = 'cancelled',
+}
+
+/**
+ * Simple file transfer class with EventEmitter pattern
+ * Used for peer-to-peer file transfers
+ */
+export class FileTransfer {
+  private static readonly DEFAULT_CHUNK_SIZE = 64 * 1024; // 64KB
+  private listeners: Map<string, Set<(...args: unknown[]) => void>> = new Map();
+  private sendFn: (chunk: Uint8Array, index: number, total: number) => void;
+
+  constructor(sendFn: (chunk: Uint8Array, index: number, total: number) => void) {
+    this.sendFn = sendFn;
+  }
+
+  /**
+   * Register event listener
+   */
+  on(event: FileTransferEvents | string, callback: (...args: unknown[]) => void): this {
+    if (!this.listeners.has(event)) {
+      this.listeners.set(event, new Set());
+    }
+    this.listeners.get(event)!.add(callback);
+    return this;
+  }
+
+  /**
+   * Remove event listener
+   */
+  off(event: FileTransferEvents | string, callback: (...args: unknown[]) => void): this {
+    const listeners = this.listeners.get(event);
+    if (listeners) {
+      listeners.delete(callback);
+    }
+    return this;
+  }
+
+  /**
+   * Emit event
+   */
+  emit(event: FileTransferEvents | string, ...args: unknown[]): boolean {
+    const listeners = this.listeners.get(event);
+    if (listeners && listeners.size > 0) {
+      listeners.forEach(callback => callback(...args));
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Send a file by chunking and emitting through the send function
+   */
+  sendFile(file: Uint8Array, chunkSize: number = FileTransfer.DEFAULT_CHUNK_SIZE): void {
+    const totalChunks = Math.ceil(file.length / chunkSize);
+    
+    for (let i = 0; i < totalChunks; i++) {
+      const start = i * chunkSize;
+      const end = Math.min(start + chunkSize, file.length);
+      const chunk = file.slice(start, end);
+      
+      this.sendFn(chunk, i, totalChunks);
+      this.emit(FileTransferEvents.PROGRESS, i + 1, totalChunks);
+    }
+    
+    this.emit(FileTransferEvents.COMPLETE);
+  }
+
+  /**
+   * Receive and reassemble chunks
+   */
+  private receivedChunks: Map<number, Uint8Array> = new Map();
+  private expectedTotal: number = 0;
+
+  receiveChunk(chunk: Uint8Array, index: number, total: number): void {
+    this.expectedTotal = total;
+    this.receivedChunks.set(index, chunk);
+    
+    this.emit(FileTransferEvents.CHUNK_RECEIVED, chunk, index, total);
+    
+    if (this.receivedChunks.size === total) {
+      const file = this.reassembleFile();
+      this.emit(FileTransferEvents.FILE_REASSEMBLED, file);
+    }
+  }
+
+  /**
+   * Reassemble chunks into complete file
+   */
+  private reassembleFile(): Uint8Array {
+    const chunks = [...this.receivedChunks.entries()]
+      .sort(([a], [b]) => a - b)
+      .map(([, chunk]) => chunk);
+    
+    const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
+    const file = new Uint8Array(totalLength);
+    
+    let offset = 0;
+    for (const chunk of chunks) {
+      file.set(chunk, offset);
+      offset += chunk.length;
+    }
+    
+    this.receivedChunks.clear();
+    return file;
+  }
+}

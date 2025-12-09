@@ -75,7 +75,7 @@ describe('Mesh Network Integration', () => {
           ttl: 10,
           timestamp: Date.now(),
           senderId: identity.publicKey,
-          signature: new Uint8Array(65),
+          signature: new Uint8Array(64), // 64-byte Ed25519 signature
         },
         payload: new TextEncoder().encode('Test'),
       };
@@ -100,7 +100,7 @@ describe('Mesh Network Integration', () => {
           ttl: 0, // Already expired
           timestamp: Date.now(),
           senderId: identity.publicKey,
-          signature: new Uint8Array(65),
+          signature: new Uint8Array(64), // 64-byte Ed25519 signature
         },
         payload: new TextEncoder().encode('Test'),
       };

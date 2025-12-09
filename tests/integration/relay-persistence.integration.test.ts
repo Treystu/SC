@@ -5,16 +5,17 @@ import { Message, MessageType } from '../../core/src/protocol/message';
 describe('Relay Persistence Integration Test', () => {
   it('should persist stored messages across relay restarts', async () => {
     const persistence = new MemoryPersistenceAdapter();
-    const routingTable = new RoutingTable('local-peer');
+    const routingTable = new RoutingTable({ maxCacheSize: 1000 });
     let relay = new MessageRelay('local-peer', routingTable, {}, persistence);
 
     const message: Message = {
       header: {
+        version: 1,
         type: MessageType.TEXT,
         ttl: 1,
         timestamp: Date.now(),
-        senderId: new Uint8Array(),
-        signature: new Uint8Array(),
+        senderId: new Uint8Array(32),
+        signature: new Uint8Array(64),
       },
       payload: new TextEncoder().encode('test message'),
     };
