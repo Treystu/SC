@@ -56,9 +56,15 @@ class CoreBridge {
         jsContext.evaluateScript("var console = { log: consoleLog, error: consoleLog, warn: consoleLog };")
         
         // Register secure random function for crypto polyfill
+        let logger = self.logger
         let secureRandomBytes: @convention(block) (Int) -> [UInt8] = { count in
             var bytes = [UInt8](repeating: 0, count: count)
-            _ = SecRandomCopyBytes(kSecRandomDefault, count, &bytes)
+            let status = SecRandomCopyBytes(kSecRandomDefault, count, &bytes)
+            if status != errSecSuccess {
+                logger.error("SecRandomCopyBytes failed with status: \(status)")
+                // Return zeros on failure - the crypto operations will likely fail
+                // but this prevents undefined behavior
+            }
             return bytes
         }
         jsContext.setObject(secureRandomBytes, forKeyedSubscript: "_nativeSecureRandomBytes" as NSString)

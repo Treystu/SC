@@ -472,6 +472,8 @@ class RhinoJSEngine : JSEngine {
                 val count = (args?.getOrNull(0) as? Number)?.toInt() ?: 0
                 val bytes = callback(count)
                 // Convert ByteArray to JavaScript array
+                // Note: Rhino doesn't provide bulk array initialization from ByteArray,
+                // so individual element setting is the standard approach
                 val jsArray = cx?.newArray(scope, bytes.size) ?: return org.mozilla.javascript.Undefined.instance
                 for (i in bytes.indices) {
                     org.mozilla.javascript.ScriptableObject.putProperty(jsArray, i, (bytes[i].toInt() and 0xFF))
