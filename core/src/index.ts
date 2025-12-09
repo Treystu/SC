@@ -20,6 +20,7 @@ export {
   type EncryptedEnvelope,
   type SignedEnvelope,
 } from "./crypto/envelope.js";
+export { CryptoManager, KeyManager } from "./crypto/index.js";
 export {
   generateFullFingerprint,
   formatFingerprint,

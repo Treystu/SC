@@ -10,6 +10,7 @@
     },
     "scripts": {
         "start": "ts-node relay.ts",
-        "build": "tsc"
+        "build": "tsc",
+        "test": "echo \"No tests yet for server package\""
     }
 }
