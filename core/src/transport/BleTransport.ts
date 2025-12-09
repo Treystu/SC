@@ -15,12 +15,10 @@
 import {
   Transport,
   TransportPeerId,
-  TransportMessage,
   TransportEvents,
   TransportConfig,
   TransportPeerInfo,
   TransportConnectionState,
-  SignalingData,
   transportRegistry,
 } from "./Transport.js";
 
@@ -349,7 +347,7 @@ export class MockBleTransport implements BleTransport {
 
   // BLE-specific methods
 
-  async startAdvertising(advertisingData?: Uint8Array): Promise<void> {
+  async startAdvertising(_advertisingData?: Uint8Array): Promise<void> {
     this._isAdvertising = true;
     this.events?.onAdvertisingStateChanged?.(true);
   }
@@ -363,7 +361,7 @@ export class MockBleTransport implements BleTransport {
     return this._isAdvertising;
   }
 
-  async startScanning(filterUuids?: string[]): Promise<void> {
+  async startScanning(_filterUuids?: string[]): Promise<void> {
     this._isScanning = true;
     this.events?.onScanningStateChanged?.(true);
 

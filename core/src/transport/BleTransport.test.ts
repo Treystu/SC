@@ -4,12 +4,9 @@
 
 import {
   MockBleTransport,
-  BleAdvertisingMode,
-  BleScanMode,
   BLE_MESH_SERVICE_UUID,
   DEFAULT_BLE_CONFIG,
   BleTransportEvents,
-  BleDeviceInfo,
 } from "./BleTransport.js";
 
 describe("BleTransport", () => {

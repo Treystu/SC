@@ -243,13 +243,10 @@ test.describe('Offline Support', () => {
     // Go offline
     await context.setOffline(true);
     
-    // Wait for offline indicator
-    await page.waitForTimeout(1000);
-    
-    // Look for offline indicator
+    // Wait for offline indicator to appear
     const offlineIndicator = page.locator('[data-testid="offline-indicator"], .offline-banner, text=/offline/i');
     if (await offlineIndicator.count() > 0) {
-      await expect(offlineIndicator).toBeVisible();
+      await expect(offlineIndicator).toBeVisible({ timeout: 5000 });
     }
     
     // Go back online
@@ -277,7 +274,6 @@ test.describe('Offline Support', () => {
       await page.locator('[data-testid="send-message-btn"]').click();
       
       // Message should be queued (shown with pending status)
-      const pendingStatus = page.locator('[data-testid*="pending"], .message-pending');
       // The message should be visible even if pending
     }
     

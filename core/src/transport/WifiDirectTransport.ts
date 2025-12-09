@@ -12,12 +12,10 @@
 import {
   Transport,
   TransportPeerId,
-  TransportMessage,
   TransportEvents,
   TransportConfig,
   TransportPeerInfo,
   TransportConnectionState,
-  SignalingData,
   transportRegistry,
 } from "./Transport.js";
 
@@ -486,7 +484,7 @@ export class MockWifiDirectTransport implements WifiDirectTransport {
     }
 
     return {
-      groupOwnerAddress: this._groupInfo.isOwner ? "192.168.49.1" : "192.168.49.1",
+      groupOwnerAddress: "192.168.49.1", // Group owner is always at this address in P2P
       isGroupOwner: this._groupInfo.isOwner,
     };
   }

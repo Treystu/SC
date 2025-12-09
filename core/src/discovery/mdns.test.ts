@@ -550,7 +550,7 @@ describe('MDNSManager', () => {
     });
 
     it('should exclude self when broadcasting', async () => {
-      const broadcaster = await manager.startBroadcasting({
+      await manager.startBroadcasting({
         serviceName: 'TestNode',
       });
       const discoverer = await manager.startDiscovery();

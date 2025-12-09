@@ -132,11 +132,15 @@ test.describe('Mesh Relay Features', () => {
     test('should handle network reconnection', async ({ page, context }) => {
       // Go offline
       await context.setOffline(true);
-      await page.waitForTimeout(1000);
       
       // Go back online
       await context.setOffline(false);
-      await page.waitForTimeout(2000);
+      
+      // Wait for a specific condition that indicates the app has reconnected
+      const connectionStatus = page.locator('[data-testid="connection-status"]');
+      if (await connectionStatus.count() > 0) {
+        await expect(connectionStatus).toContainText(/online|connected/i, { timeout: 5000 });
+      }
       
       // App should recover
       const app = page.locator('#root, #app, .app');
@@ -170,8 +174,7 @@ test.describe('Message Fragmentation', () => {
       await page.locator('[data-testid="send-message-btn"]').click();
       
       // Message should be sent (may be truncated in display)
-      await page.waitForTimeout(500);
-      await expect(page.locator(`text=${largeMessage.substring(0, 100)}`)).toBeVisible();
+      await expect(page.locator(`text=${largeMessage.substring(0, 100)}`)).toBeVisible({ timeout: 5000 });
     }
   });
 
