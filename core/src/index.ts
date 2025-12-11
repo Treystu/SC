@@ -43,6 +43,9 @@ export {
   type MeshSeenAdapter,
 } from "./mesh/seen-adapter.js";
 
+// DHT (Kademlia)
+export * from "./mesh/dht/index.js";
+
 // Transport Abstraction Layer
 export {
   type Transport,
