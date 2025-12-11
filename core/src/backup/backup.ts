@@ -92,7 +92,7 @@ export class BackupManager {
   /**
    * Create an incremental backup (only changed data since last backup)
    */
-  async createIncrementalBackup(lastBackupTime: number): Promise<BackupData> {
+  async createIncrementalBackup(_lastBackupTime: number): Promise<BackupData> {
     const entries = await this.storage.entries();
     const data: Record<string, string> = {};
 
