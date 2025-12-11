@@ -4,7 +4,7 @@
 
 import { KBucket, KBucketManager } from './bucket';
 import type { DHTContact } from './types';
-import { generateNodeId, nodeIdsEqual, copyNodeId } from './node-id';
+import { generateNodeId, nodeIdsEqual } from './node-id';
 
 describe('KBucket', () => {
   let bucket: KBucket;
