@@ -37,6 +37,8 @@ import {
   copyNodeId,
   generateIdInBucket,
   NODE_ID_BITS,
+  xorDistance,
+  isCloser,
 } from './node-id.js';
 
 /**
@@ -215,7 +217,7 @@ export class KademliaRoutingTable {
    */
   async findNode(targetId: NodeId): Promise<NodeLookupResult> {
     if (this.activeLookups >= this.config.maxConcurrentLookups) {
-      return Promise.reject(new Error('Max concurrent lookups exceeded'));
+      throw new Error('Max concurrent lookups exceeded');
     }
     this.activeLookups++;
     const startTime = Date.now();
@@ -408,11 +410,22 @@ export class KademliaRoutingTable {
 
     await Promise.allSettled(storePromises);
 
-    // Only store locally if we're one of the k closest nodes to the key
-    const isAmongClosest = result.closestNodes.some(node => 
-      nodeIdsEqual(node.nodeId, this.localNodeId)
-    );
-    if (isAmongClosest) {
+    // Check if we should store locally (if we're among k closest nodes to the key)
+    // Since findNode excludes the local node, we need to check our distance separately
+    const localDistance = xorDistance(this.localNodeId, key);
+    let shouldStoreLocally = false;
+    
+    if (result.closestNodes.length < this.config.k) {
+      // Not enough nodes, we should store locally
+      shouldStoreLocally = true;
+    } else {
+      // Check if we're closer than the furthest of the k closest
+      const furthestNode = result.closestNodes[result.closestNodes.length - 1];
+      const furthestDistance = xorDistance(furthestNode.nodeId, key);
+      shouldStoreLocally = isCloser(localDistance, furthestDistance);
+    }
+    
+    if (shouldStoreLocally) {
       const keyHex = nodeIdToHex(key);
       this.valueStore.set(keyHex, value);
       stored++;
@@ -763,10 +776,14 @@ export class KademliaRoutingTable {
 
       // Republish if we're the original publisher
       if (nodeIdsEqual(value.publisherId, this.localNodeId)) {
-        // Validate hex string before parsing
+        // Validate hex string before parsing - must be non-empty and have valid hex chars
+        if (keyHex.length === 0 || keyHex.length % 2 !== 0) {
+          // Skip empty or odd-length hex strings
+          continue;
+        }
         const hexMatch = keyHex.match(/^[0-9a-fA-F]+$/);
-        if (!hexMatch || keyHex.length % 2 !== 0) {
-          // Skip invalid hex strings
+        if (!hexMatch) {
+          // Skip strings with invalid hex characters
           continue;
         }
         const byteArray = keyHex.match(/.{2}/g);

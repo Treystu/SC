@@ -355,7 +355,6 @@ export class NetworkStateManager {
    * 
    * The estimation formula uses configurable parameters:
    * - BASE_BUCKET_THRESHOLD: Base multiplier before bucket adjustment (default: 10)
-   *   Represents the expected minimum bucket index when network has decent coverage
    * - BUCKET_SCALING_DIVISOR: How much each bucket index affects the estimate (default: 16)
    *   Higher values = less aggressive scaling, lower = more aggressive
    * 
@@ -365,14 +364,16 @@ export class NetworkStateManager {
   private estimateNetworkSize(bucketDistribution: number[]): number {
     /**
      * Base threshold for bucket-based network size estimation.
-     * When the highest non-empty bucket index is above this, network is considered larger.
+     * Lower bucket indices (distant nodes) suggest a larger network since we can
+     * "see" further into the ID space. When highestNonEmptyBucket/BUCKET_SCALING_DIVISOR
+     * exceeds BASE_BUCKET_THRESHOLD, the coverage factor decreases (smaller estimate).
      */
     const BASE_BUCKET_THRESHOLD = 10;
     
     /**
      * Divisor for bucket index in network size calculation.
      * Controls how aggressively the estimate scales with bucket coverage.
-     * A value of 16 means every 16 bucket positions halves the coverage factor.
+     * A value of 16 means every 16 bucket positions adjusts the exponent by 1.
      */
     const BUCKET_SCALING_DIVISOR = 16;
 
