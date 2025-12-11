@@ -78,6 +78,7 @@ export class NetworkStateManager {
   private listeners: Map<NetworkEventType, Set<NetworkEventListener>> = new Map();
   private monitorInterval?: ReturnType<typeof setInterval>;
   private lastTopology?: NetworkTopology;
+  private onErrorCallback?: (error: Error, context: string) => void;
   
   /** Event history for debugging */
   private eventHistory: NetworkEvent[] = [];
@@ -85,10 +86,19 @@ export class NetworkStateManager {
 
   constructor(
     routingTable: KademliaRoutingTable,
-    thresholds?: Partial<HealthThresholds>
+    thresholds?: Partial<HealthThresholds>,
+    onError?: (error: Error, context: string) => void
   ) {
     this.routingTable = routingTable;
     this.thresholds = { ...DEFAULT_HEALTH_THRESHOLDS, ...thresholds };
+    this.onErrorCallback = onError;
+  }
+
+  /**
+   * Set error callback
+   */
+  setOnError(callback: (error: Error, context: string) => void): void {
+    this.onErrorCallback = callback;
   }
 
   /**
@@ -147,7 +157,13 @@ export class NetworkStateManager {
       try {
         listener(event);
       } catch (error) {
-        console.error('Error in network event listener:', error);
+        // Report error via callback or silently ignore
+        if (this.onErrorCallback) {
+          this.onErrorCallback(
+            error instanceof Error ? error : new Error(String(error)),
+            'network event listener'
+          );
+        }
       }
     });
   }
@@ -469,9 +485,14 @@ export function createNetworkStateManager(
     thresholds?: Partial<HealthThresholds>;
     monitorInterval?: number;
     autoStart?: boolean;
+    onError?: (error: Error, context: string) => void;
   }
 ): NetworkStateManager {
-  const manager = new NetworkStateManager(routingTable, options?.thresholds);
+  const manager = new NetworkStateManager(
+    routingTable,
+    options?.thresholds,
+    options?.onError
+  );
   
   if (options?.autoStart !== false) {
     manager.startMonitoring(options?.monitorInterval);

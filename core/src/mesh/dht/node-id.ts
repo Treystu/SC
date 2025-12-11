@@ -222,8 +222,16 @@ export function getClosestContacts<T extends { nodeId: NodeId }>(
  * Generate a random node ID within a specific bucket's range
  * Useful for bucket refresh operations
  * 
+ * In Kademlia, a node ID falls into bucket i if the XOR distance between
+ * the local ID and the target has its highest set bit at position i.
+ * 
+ * To generate an ID in bucket i, we need:
+ * 1. All bits before position i to match the local ID (so XOR gives 0)
+ * 2. The bit at position i to differ from local ID (so XOR gives 1)
+ * 3. Bits after position i can be random (won't affect bucket assignment)
+ * 
  * @param localId - Local node's ID
- * @param bucketIndex - Target bucket index
+ * @param bucketIndex - Target bucket index (0 = furthest, 159 = closest)
  * @returns Random node ID that would fall into the specified bucket
  */
 export function generateIdInBucket(localId: NodeId, bucketIndex: number): NodeId {
@@ -231,25 +239,33 @@ export function generateIdInBucket(localId: NodeId, bucketIndex: number): NodeId
     throw new Error(`Invalid bucket index: ${bucketIndex}`);
   }
 
+  // Start with a random ID (provides randomness for suffix bits)
   const result = generateNodeId();
   
-  // Copy local ID bits up to the bucket index
+  // Calculate which byte and bit position we're targeting
+  // bucketIndex 0 = bit 0 of byte 0 (MSB), bucketIndex 8 = bit 0 of byte 1, etc.
   const byteIndex = Math.floor(bucketIndex / 8);
   const bitIndex = bucketIndex % 8;
   
-  // Copy bytes before the target byte
+  // Copy all bytes before the target byte from local ID
+  // These bits must match local ID so XOR produces 0
   for (let i = 0; i < byteIndex; i++) {
     result[i] = localId[i];
   }
   
-  // Handle the target byte - keep bits before the target, flip the target bit
-  const mask = 0x80 >> bitIndex; // Mask for the target bit
-  const prefixMask = (0xFF << (8 - bitIndex)) & 0xFF; // Mask for prefix bits
+  // Handle the target byte with bit manipulation:
+  // - mask: isolates the target bit (e.g., bitIndex=0 -> 0x80, bitIndex=7 -> 0x01)
+  // - prefixMask: covers bits before the target (e.g., bitIndex=3 -> 0xE0 = 11100000)
+  const mask = 0x80 >> bitIndex;
+  const prefixMask = (0xFF << (8 - bitIndex)) & 0xFF;
   
-  // Keep prefix bits same as local, flip target bit, randomize suffix
-  result[byteIndex] = (localId[byteIndex] & prefixMask) | // Keep prefix
-                      (mask ^ (localId[byteIndex] & mask)) | // Flip target bit
-                      (result[byteIndex] & (~prefixMask & ~mask & 0xFF)); // Random suffix
+  // Construct the target byte:
+  // 1. Keep prefix bits same as local (localId[byteIndex] & prefixMask)
+  // 2. Flip the target bit (XOR: mask ^ (localId[byteIndex] & mask))
+  // 3. Keep random suffix bits from generated ID (result[byteIndex] & ~prefixMask & ~mask)
+  result[byteIndex] = (localId[byteIndex] & prefixMask) |
+                      (mask ^ (localId[byteIndex] & mask)) |
+                      (result[byteIndex] & (~prefixMask & ~mask & 0xFF));
   
   return result;
 }

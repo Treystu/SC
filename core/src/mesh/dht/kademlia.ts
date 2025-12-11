@@ -790,6 +790,14 @@ export class KademliaRoutingTable {
   }
 
   /**
+   * Check if a specific bucket is empty (for bootstrap bucket population)
+   */
+  isBucketEmpty(bucketIndex: number): boolean {
+    const bucket = this.bucketManager.getBucket(bucketIndex);
+    return !bucket || bucket.size === 0;
+  }
+
+  /**
    * Clear all data
    */
   clear(): void {

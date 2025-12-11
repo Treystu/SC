@@ -307,8 +307,7 @@ export class DHTBootstrap {
     const bucketIndices = [0, 40, 80, 120, 159].filter(i => i < 160);
     
     for (const bucketIndex of bucketIndices) {
-      const bucket = this.routingTable['bucketManager'].getBucket(bucketIndex);
-      if (bucket && bucket.size === 0) {
+      if (this.routingTable.isBucketEmpty(bucketIndex)) {
         // Bucket is empty, try to populate it
         const randomId = this.generateRandomIdInBucket(bucketIndex);
         lookupPromises.push(
