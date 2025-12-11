@@ -4,7 +4,7 @@
 
 import { KademliaRoutingTable } from './kademlia';
 import type { DHTContact, DHTValue, FindNodeRequest, PingRequest, StoreRequest, FindValueRequest, DHTMessageType } from './types';
-import { generateNodeId, nodeIdToHex, nodeIdsEqual, generateDHTKey } from './node-id';
+import { generateNodeId, nodeIdToHex, generateDHTKey } from './node-id';
 
 describe('KademliaRoutingTable', () => {
   let routingTable: KademliaRoutingTable;

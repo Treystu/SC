@@ -180,11 +180,11 @@ export class KBucket {
    * Update a contact's last seen time
    */
   updateLastSeen(nodeId: NodeId): boolean {
-    const contact = this.contacts.find(c => nodeIdsEqual(c.nodeId, nodeId));
-    if (!contact) return false;
+    const index = this.contacts.findIndex(c => nodeIdsEqual(c.nodeId, nodeId));
+    if (index === -1) return false;
 
-    // Move to front and update timestamp
-    this.contacts = this.contacts.filter(c => !nodeIdsEqual(c.nodeId, nodeId));
+    // Splice out, update timestamp, and move to front - more efficient than filter
+    const [contact] = this.contacts.splice(index, 1);
     contact.lastSeen = Date.now();
     this.contacts.unshift(contact);
     return true;

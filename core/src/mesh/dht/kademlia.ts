@@ -88,6 +88,9 @@ export class KademliaRoutingTable {
   
   /** Republish interval handle */
   private republishIntervalHandle?: ReturnType<typeof setInterval>;
+  
+  /** Number of currently active findNode lookups */
+  private activeLookups = 0;
 
   constructor(localNodeId: NodeId, config?: Partial<Omit<KademliaConfig, 'localNodeId'>>) {
     this.localNodeId = copyNodeId(localNodeId);
@@ -208,79 +211,88 @@ export class KademliaRoutingTable {
 
   /**
    * Find the k closest nodes to a target (iterative lookup)
+   * Enforces maxConcurrentLookups from config.
    */
   async findNode(targetId: NodeId): Promise<NodeLookupResult> {
+    if (this.activeLookups >= this.config.maxConcurrentLookups) {
+      return Promise.reject(new Error('Max concurrent lookups exceeded'));
+    }
+    this.activeLookups++;
     const startTime = Date.now();
     this.stats.totalLookups++;
 
-    // Start with k closest nodes from local routing table
-    let closestNodes = this.getClosestContacts(targetId, this.config.k);
-    const queried = new Set<string>();
-    let queriesMade = 0;
-    let hasMoreToQuery = true;
+    try {
+      // Start with k closest nodes from local routing table
+      let closestNodes = this.getClosestContacts(targetId, this.config.k);
+      const queried = new Set<string>();
+      let queriesMade = 0;
+      let hasMoreToQuery = true;
 
-    // Iterative lookup
-    while (hasMoreToQuery) {
-      // Find alpha unqueried nodes closest to target
-      const toQuery = closestNodes
-        .filter(node => !queried.has(nodeIdToHex(node.nodeId)))
-        .slice(0, this.config.alpha);
+      // Iterative lookup
+      while (hasMoreToQuery) {
+        // Find alpha unqueried nodes closest to target
+        const toQuery = closestNodes
+          .filter(node => !queried.has(nodeIdToHex(node.nodeId)))
+          .slice(0, this.config.alpha);
 
-      if (toQuery.length === 0) {
-        hasMoreToQuery = false;
-        continue;
-      }
+        if (toQuery.length === 0) {
+          hasMoreToQuery = false;
+          continue;
+        }
 
-      // Query nodes in parallel
-      const responses = await Promise.allSettled(
-        toQuery.map(async (node) => {
-          queried.add(nodeIdToHex(node.nodeId));
-          queriesMade++;
-          return this.sendFindNode(node, targetId);
-        })
-      );
+        // Query nodes in parallel
+        const responses = await Promise.allSettled(
+          toQuery.map(async (node) => {
+            queried.add(nodeIdToHex(node.nodeId));
+            queriesMade++;
+            return this.sendFindNode(node, targetId);
+          })
+        );
 
-      // Process responses
-      let improved = false;
-      for (const response of responses) {
-        if (response.status === 'fulfilled' && response.value) {
-          const newNodes = response.value;
-          for (const newNode of newNodes) {
-            // Add to routing table
-            this.addContact(newNode);
-            
-            // Check if this improves our closest set
-            if (!closestNodes.some(n => nodeIdsEqual(n.nodeId, newNode.nodeId))) {
-              closestNodes.push(newNode);
-              improved = true;
+        // Process responses
+        let improved = false;
+        for (const response of responses) {
+          if (response.status === 'fulfilled' && response.value) {
+            const newNodes = response.value;
+            for (const newNode of newNodes) {
+              // Add to routing table
+              this.addContact(newNode);
+              
+              // Check if this improves our closest set
+              if (!closestNodes.some(n => nodeIdsEqual(n.nodeId, newNode.nodeId))) {
+                closestNodes.push(newNode);
+                improved = true;
+              }
             }
           }
         }
+
+        // Re-sort and trim
+        closestNodes = sortByDistance(closestNodes, targetId).slice(0, this.config.k);
+
+        // Stop if we're not making progress
+        if (!improved) {
+          hasMoreToQuery = false;
+        }
       }
 
-      // Re-sort and trim
-      closestNodes = sortByDistance(closestNodes, targetId).slice(0, this.config.k);
-
-      // Stop if we're not making progress
-      if (!improved) {
-        hasMoreToQuery = false;
+      const duration = Date.now() - startTime;
+      const found = closestNodes.some(n => nodeIdsEqual(n.nodeId, targetId));
+      
+      if (found) {
+        this.stats.successfulLookups++;
       }
-    }
+      this.stats.totalLookupTime += duration;
 
-    const duration = Date.now() - startTime;
-    const found = closestNodes.some(n => nodeIdsEqual(n.nodeId, targetId));
-    
-    if (found) {
-      this.stats.successfulLookups++;
+      return {
+        closestNodes,
+        queriesMade,
+        duration,
+        found,
+      };
+    } finally {
+      this.activeLookups--;
     }
-    this.stats.totalLookupTime += duration;
-
-    return {
-      closestNodes,
-      queriesMade,
-      duration,
-      found,
-    };
   }
 
   /**
@@ -396,10 +408,15 @@ export class KademliaRoutingTable {
 
     await Promise.allSettled(storePromises);
 
-    // Also store locally if we're one of the closest
-    const keyHex = nodeIdToHex(key);
-    this.valueStore.set(keyHex, value);
-    stored++;
+    // Only store locally if we're one of the k closest nodes to the key
+    const isAmongClosest = result.closestNodes.some(node => 
+      nodeIdsEqual(node.nodeId, this.localNodeId)
+    );
+    if (isAmongClosest) {
+      const keyHex = nodeIdToHex(key);
+      this.valueStore.set(keyHex, value);
+      stored++;
+    }
 
     return stored;
   }
@@ -687,12 +704,16 @@ export class KademliaRoutingTable {
       clearTimeout(pending.timeout);
       this.pendingRequests.delete(response.messageId);
       
-      // Update RTT for the responding contact
+      // Update RTT for the responding contact via addContact to properly update LRU
       const rtt = Date.now() - pending.sentAt;
-      const contact = this.getContact(response.senderId);
-      if (contact) {
-        contact.rtt = rtt;
-        contact.lastSeen = Date.now();
+      const existingContact = this.getContact(response.senderId);
+      if (existingContact) {
+        // Re-add with updated info to trigger proper LRU update
+        this.addContact({
+          ...existingContact,
+          rtt,
+          lastSeen: Date.now(),
+        });
       }
       
       pending.resolve(response);
@@ -717,8 +738,13 @@ export class KademliaRoutingTable {
     for (const bucket of bucketsToRefresh) {
       // Generate a random ID in this bucket's range and look it up
       const randomId = generateIdInBucket(this.localNodeId, bucket.index);
-      await this.findNode(randomId);
-      bucket.markRefreshed();
+      try {
+        await this.findNode(randomId);
+        // Only mark as refreshed if lookup succeeded
+        bucket.markRefreshed();
+      } catch {
+        // Lookup failed, don't mark bucket as refreshed so it will be retried
+      }
     }
   }
 
@@ -737,9 +763,17 @@ export class KademliaRoutingTable {
 
       // Republish if we're the original publisher
       if (nodeIdsEqual(value.publisherId, this.localNodeId)) {
-        const key = new Uint8Array(
-          keyHex.match(/.{2}/g)!.map(byte => parseInt(byte, 16))
-        );
+        // Validate hex string before parsing
+        const hexMatch = keyHex.match(/^[0-9a-fA-F]+$/);
+        if (!hexMatch || keyHex.length % 2 !== 0) {
+          // Skip invalid hex strings
+          continue;
+        }
+        const byteArray = keyHex.match(/.{2}/g);
+        if (!byteArray) {
+          continue;
+        }
+        const key = new Uint8Array(byteArray.map(byte => parseInt(byte, 16)));
         await this.store(key, value);
       }
     }

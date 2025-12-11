@@ -57,29 +57,48 @@ export interface DHTEndpoint {
 
 /**
  * K-Bucket configuration
+ * 
+ * These parameters control individual bucket behavior. They are inherited
+ * by KademliaConfig to ensure consistent behavior across the routing table.
  */
 export interface KBucketConfig {
-  /** Maximum number of contacts per bucket (k parameter) */
+  /** 
+   * Maximum number of contacts per bucket (k parameter).
+   * Standard Kademlia uses k=20. Higher values increase redundancy but use more memory.
+   */
   k: number;
-  /** Ping timeout in milliseconds */
+  /** 
+   * Ping timeout in milliseconds.
+   * How long to wait for a ping response before considering a node unresponsive.
+   */
   pingTimeout: number;
-  /** Number of nodes to query in parallel (alpha parameter) */
+  /** 
+   * Number of nodes to query in parallel (alpha parameter).
+   * Standard Kademlia uses alpha=3. Higher values speed up lookups but increase load.
+   */
   alpha: number;
 }
 
 /**
  * Kademlia routing table configuration
+ * 
+ * Extends KBucketConfig to inherit k, alpha, and pingTimeout parameters.
+ * These inherited parameters are used consistently across bucket management
+ * and routing table operations:
+ * - k: Used for both bucket size and number of closest nodes to return
+ * - alpha: Used for parallel queries in both findNode and findValue
+ * - pingTimeout: Used for RPC timeout in bucket eviction and liveness checks
  */
 export interface KademliaConfig extends KBucketConfig {
   /** Local node ID */
   localNodeId: NodeId;
   /** Bucket refresh interval in milliseconds */
   refreshInterval: number;
-  /** Value replication factor */
+  /** Value replication factor (typically same as k) */
   replicationFactor: number;
-  /** Maximum concurrent lookups */
+  /** Maximum concurrent lookups to prevent resource exhaustion */
   maxConcurrentLookups: number;
-  /** Republish interval in milliseconds */
+  /** Republish interval in milliseconds for stored values */
   republishInterval: number;
 }
 

@@ -296,15 +296,25 @@ export class DHTBootstrap {
   }
 
   /**
-   * Populate buckets with random lookups
+   * Populate buckets with random lookups.
+   * 
+   * Instead of only checking 5 fixed bucket indices, we check a larger sample
+   * to ensure better coverage of the routing table.
    */
   private async populateBuckets(): Promise<void> {
     // Perform lookups to populate different parts of the routing table
     const lookupPromises: Promise<unknown>[] = [];
     
-    // Generate random IDs in different buckets and look them up
-    // This helps ensure good coverage of the ID space
-    const bucketIndices = [0, 40, 80, 120, 159].filter(i => i < 160);
+    // Generate bucket indices at regular intervals for better coverage
+    // We sample every 10th bucket plus key boundary buckets
+    const bucketIndices: number[] = [];
+    for (let i = 0; i < 160; i += 10) {
+      bucketIndices.push(i);
+    }
+    // Add the final bucket if not already included
+    if (!bucketIndices.includes(159)) {
+      bucketIndices.push(159);
+    }
     
     for (const bucketIndex of bucketIndices) {
       if (this.routingTable.isBucketEmpty(bucketIndex)) {

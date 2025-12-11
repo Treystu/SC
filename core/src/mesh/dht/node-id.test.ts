@@ -20,7 +20,6 @@ import {
   getClosestContacts,
   generateIdInBucket,
   NODE_ID_BYTES,
-  NODE_ID_BITS,
 } from './node-id';
 
 describe('Node ID Utilities', () => {
@@ -297,9 +296,9 @@ describe('Node ID Utilities', () => {
         const generatedId = generateIdInBucket(localId, bucketIndex);
         const actualBucket = getBucketIndex(localId, generatedId);
         
-        // The generated ID should fall in the target bucket or very close
-        // Due to randomization, it might be off by a bit in some edge cases
-        expect(Math.abs(actualBucket - bucketIndex)).toBeLessThanOrEqual(1);
+        // The generated ID should fall in exactly the target bucket
+        // The implementation deterministically places the ID in the correct bucket
+        expect(actualBucket).toBe(bucketIndex);
       }
     });
 
