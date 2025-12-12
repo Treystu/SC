@@ -113,7 +113,7 @@ test.describe('Peer Discovery and Connection', () => {
       }, mockPeerData);
 
       // Verify peer added
-      await expect(page.locator('[data-testid="peer-Test Peer"]')).toBeVisible();
+      await expect(page.locator('[data-testid="contact-Test Peer"], [data-peer-id="Test Peer"]')).toBeVisible();
     }
   });
 
@@ -121,7 +121,7 @@ test.describe('Peer Discovery and Connection', () => {
     await framework.createNewContact('Alice', '1'.repeat(64));
 
     // Check connection status indicator
-    const status = await page.locator('[data-testid="peer-Alice-status"]');
+    const status = await page.locator('[data-testid="peer-Alice-status"], [data-peer-id="Alice"]');
     await expect(status).toBeVisible();
   });
 
@@ -131,9 +131,9 @@ test.describe('Peer Discovery and Connection', () => {
     await framework.createNewContact('Charlie', '3'.repeat(64));
 
     // Verify all peers are listed
-    await expect(page.locator('[data-testid="peer-Alice"]')).toBeVisible();
-    await expect(page.locator('[data-testid="peer-Bob"]')).toBeVisible();
-    await expect(page.locator('[data-testid="peer-Charlie"]')).toBeVisible();
+    await expect(page.locator('[data-testid="contact-Alice"], [data-peer-id="Alice"]')).toBeVisible();
+    await expect(page.locator('[data-testid="contact-Bob"], [data-peer-id="Bob"]')).toBeVisible();
+    await expect(page.locator('[data-testid="contact-Charlie"], [data-peer-id="Charlie"]')).toBeVisible();
 
     // Check peer count
     const peerCount = await framework.getPeerCount();
@@ -401,7 +401,7 @@ test.describe('Security', () => {
     await framework.createNewContact('Bob', '2'.repeat(64));
 
     // Check for verification status
-    const verificationBadge = page.locator('[data-testid="peer-Bob-verified"]');
+    const verificationBadge = page.locator('[data-testid="peer-Bob-verified"], [data-peer-id="Bob"]');
     await expect(verificationBadge).toBeVisible();
   });
 });

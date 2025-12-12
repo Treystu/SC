@@ -48,7 +48,7 @@ test.describe('Conversation Flow', () => {
     // Send a message
     await page.click('.conversation-item');
     await page.fill('[data-testid="message-input"]', 'Hello, Test Contact!');
-    await page.click('[data-testid="send-btn"]');
+    await page.click('[data-testid="send-message-btn"]');
 
     // Verify that the message is displayed
     await expect(page.locator('.message-content')).toHaveText('Hello, Test Contact!');

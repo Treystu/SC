@@ -19,6 +19,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const [message, setMessage] = useState('');
   const [attachments, setAttachments] = useState<File[]>([]);
   const [isRecording, setIsRecording] = useState(false);
+  const [showFileDialog, setShowFileDialog] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
@@ -49,11 +50,19 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
   };
 
-  const handleSend = () => {
+  const handleSend = (mode: "message" | "attachments" = "message") => {
     const trimmedMessage = message.trim();
-    if (!trimmedMessage && attachments.length === 0) return;
+    if (mode === "message") {
+      if (!trimmedMessage && attachments.length === 0) return;
+      onSendMessage(
+        trimmedMessage,
+        attachments.length > 0 ? attachments : undefined,
+      );
+    } else {
+      if (attachments.length === 0) return;
+      onSendMessage(trimmedMessage, attachments);
+    }
 
-    onSendMessage(trimmedMessage, attachments.length > 0 ? attachments : undefined);
     setMessage('');
     setAttachments([]);
 
@@ -66,6 +75,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     setAttachments((prev) => [...prev, ...files]);
+    setShowFileDialog(false);
   };
 
   const removeAttachment = (index: number) => {
@@ -132,9 +142,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         {/* Action Buttons */}
         <div style={{ display: 'flex', gap: '8px' }}>
           <button
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => {
+              setShowFileDialog(true);
+              fileInputRef.current?.click();
+            }}
             disabled={disabled}
             data-testid="attach-file-btn"
+            aria-controls="file-upload-dialog"
             style={{
               background: '#374151',
               border: 'none',
@@ -156,6 +170,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             onChange={handleFileSelect}
             style={{ display: 'none' }}
             data-testid="file-input"
+            aria-label="Upload file"
           />
 
           <button
@@ -204,9 +219,10 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
         {/* Send Button */}
         <button
-          onClick={handleSend}
+          onClick={() => handleSend("message")}
           disabled={disabled || (!message.trim() && attachments.length === 0)}
           data-testid="send-message-btn"
+          aria-label="Send message"
           style={{
             background: disabled || (!message.trim() && attachments.length === 0) ? '#4b5563' : '#10b981',
             border: 'none',
@@ -220,7 +236,57 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         >
           Send
         </button>
+        {attachments.length > 0 && (
+          <button
+            onClick={() => handleSend("attachments")}
+            disabled={disabled}
+            data-testid="send-file-btn"
+            style={{
+              background: disabled ? '#4b5563' : '#3b82f6',
+              border: 'none',
+              borderRadius: '6px',
+              padding: '10px 12px',
+              cursor: disabled ? 'not-allowed' : 'pointer',
+              color: 'white',
+              fontSize: '14px',
+              fontWeight: '500',
+            }}
+          >
+            Send Attachments
+          </button>
+        )}
       </div>
+
+      {showFileDialog && (
+        <div
+          id="file-upload-dialog"
+          data-testid="file-upload-dialog"
+          style={{
+            marginTop: '8px',
+            background: '#111827',
+            border: '1px solid #1f2937',
+            borderRadius: '6px',
+            padding: '8px 12px',
+            color: '#f9fafb',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>Choose files to send</span>
+            <button
+              onClick={() => setShowFileDialog(false)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#9ca3af',
+                cursor: 'pointer',
+              }}
+              aria-label="Close file dialog"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Helper Text */}
       <div style={{ marginTop: '8px', color: '#9ca3af', fontSize: '12px' }}>

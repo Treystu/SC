@@ -112,6 +112,7 @@ export const BackupManager: React.FC = () => {
         <button
           onClick={handleCreateBackup}
           disabled={isProcessing || (encrypt && !password)}
+          data-testid="backup-identity-btn"
         >
           {isProcessing ? "Creating..." : "Create Backup"}
         </button>

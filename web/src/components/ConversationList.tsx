@@ -14,6 +14,8 @@ interface Conversation {
   lastMessage?: string;
   timestamp?: number;
   unreadCount: number;
+  verified?: boolean;
+  online?: boolean;
 }
 
 interface ConversationListProps {
@@ -30,6 +32,7 @@ interface ConversationListProps {
   onJoinRoom?: (url: string) => Promise<void> | void;
   onJoinRelay?: (url: string) => void;
   onInitiateConnection?: (peerId: string) => void;
+  connectionStatus?: boolean;
 }
 
 // Memoized conversation item component
@@ -49,13 +52,17 @@ const ConversationItem = memo(
       className={`conversation-item ${isSelected ? "selected" : ""}`}
       onClick={() => onSelect(conv.id)}
       data-testid={`contact-${conv.name}`}
+      data-peer-id={conv.id}
     >
-      <div className="conversation-avatar">
+      <div className="conversation-avatar" data-testid={`peer-${conv.name}`}>
         {conv.name.charAt(0).toUpperCase()}
       </div>
       <div className="conversation-info">
         <div className="conversation-header">
           <span className="conversation-name">{conv.name}</span>
+          <span className="conversation-status" data-testid={`peer-${conv.name}-status`}>
+            {conv.online !== undefined ? (conv.online ? "online" : "offline") : connectionStatus ? "online" : "offline"}
+          </span>
           {conv.timestamp && (
             <span className="conversation-time">
               {new Date(conv.timestamp).toLocaleTimeString([], {
@@ -71,6 +78,11 @@ const ConversationItem = memo(
       </div>
       {conv.unreadCount > 0 && (
         <div className="unread-badge">{conv.unreadCount}</div>
+      )}
+      {conv.verified && (
+        <span className="verification-badge" data-testid={`peer-${conv.name}-verified`}>
+          ✓
+        </span>
       )}
       <button
         className="delete-btn"
@@ -104,6 +116,7 @@ function ConversationList({
   onJoinRoom,
   onJoinRelay,
   onInitiateConnection,
+  connectionStatus = false,
 }: ConversationListProps) {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -141,7 +154,7 @@ function ConversationList({
   );
 
   return (
-    <div className="conversation-list">
+    <div className="conversation-list" data-testid="peer-list">
       <AddContactDialog
         isOpen={showAddDialog}
         onClose={() => setShowAddDialog(false)}
