@@ -4,7 +4,7 @@
 
 import { MessageType } from "../protocol/message.js";
 import type { KademliaRoutingTable, DHTContact } from "./dht/index.js";
-import { peerToDHTContact, isValidDHTPeer } from "./dht/index.js";
+import { peerToDHTContact, isValidDHTPeer, peerIdToDHTKey } from "./dht/index.js";
 
 export enum PeerState {
   CONNECTING = "connecting",
@@ -189,12 +189,8 @@ export class RoutingTable {
     if (this.dhtRoutingTable && (this.mode === RoutingMode.DHT || this.mode === RoutingMode.HYBRID)) {
       if (isValidDHTPeer(peer)) {
         const dhtContact = peerToDHTContact(peer);
-        const result = this.dhtRoutingTable.addContact(dhtContact);
-        
-        // Note: If result.needsPing is set, the DHT routing table has detected
-        // a stale contact that should be pinged. The ping operation is handled
-        // by the transport layer through the RPC sender configured on the DHT
-        // routing table via setRpcSender(). No action needed here.
+        // Add valid peer to DHT routing table in DHT or HYBRID mode
+        this.dhtRoutingTable.addContact(dhtContact);
       }
     }
   }
@@ -591,7 +587,6 @@ export class RoutingTable {
     }
 
     // Convert peer ID to node ID for lookup
-    const { peerIdToDHTKey } = await import('./dht/index.js');
     const targetKey = peerIdToDHTKey(peerId);
     
     const result = await this.dhtRoutingTable.findNode(targetKey);

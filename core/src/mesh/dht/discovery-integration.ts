@@ -27,6 +27,8 @@ export async function bootstrapFromQRCode(
     endpoints: peerInfo.endpoints.map(ep => ({
       type: ep.type,
       address: ep.address,
+      // Preserve signaling information for WebRTC endpoints
+      ...(ep.signaling && { signaling: ep.signaling }),
     })),
   });
 }
@@ -159,7 +161,7 @@ export function createDHTDiscoveryHandler(
         // Bootstrap failure is non-fatal, log for debugging
         // In production, this would use a configured logger
         if (typeof console !== 'undefined' && console.warn) {
-          console.warn('DHT bootstrap from discovered peer failed:', error);
+          console.warn(`DHT bootstrap from discovered peer ${peerInfo.peerId} failed:`, error);
         }
       }
     }
@@ -168,6 +170,16 @@ export function createDHTDiscoveryHandler(
 
 /**
  * Check if a peer has sufficient information for DHT bootstrap
+ * 
+ * @param peerInfo - Peer information to validate
+ * @returns True if peer can be used for bootstrap
+ */
+/**
+ * Check if a peer has sufficient information for DHT bootstrap
+ * 
+ * Note: This performs basic structural validation only. Cryptographic
+ * validation of the Ed25519 public key occurs during bootstrap when
+ * the peer is contacted and its signature is verified.
  * 
  * @param peerInfo - Peer information to validate
  * @returns True if peer can be used for bootstrap

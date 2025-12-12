@@ -18,14 +18,6 @@ import {
 // Generate a unique node ID for this peer
 const myNodeId = generateNodeId();
 
-// Or derive from your identity's public key (recommended)
-import { nodeIdFromPublicKey } from '@sc/core';
-// Get your Ed25519 public key from IdentityManager or CryptoManager
-// Example: const identity = await identityManager.loadIdentity();
-// const myPublicKey = identity.publicKey; // 32-byte Uint8Array
-const myPublicKey = /* your Ed25519 public key (32 bytes) */;
-const myNodeId = nodeIdFromPublicKey(myPublicKey);
-
 // Create DHT routing table
 const dhtRoutingTable = new KademliaRoutingTable(myNodeId, {
   k: 20,              // Standard Kademlia parameter
@@ -91,6 +83,12 @@ try {
 ```typescript
 import { bootstrapFromManualEntry } from '@sc/core';
 
+// Helper to convert hex string to Uint8Array
+function hexToUint8Array(hexString: string): Uint8Array {
+  const bytes = hexString.match(/.{1,2}/g)?.map(byte => parseInt(byte, 16)) || [];
+  return new Uint8Array(bytes);
+}
+
 // User enters peer information manually
 const manualPeerInfo = {
   peerId: 'abc123def456...',
@@ -124,6 +122,12 @@ import {
 const discoverer = new MDNSDiscoverer('_sc._tcp', {
   filter: (service) => service.txtRecord.webrtc === '1',
 });
+
+// Helper to convert hex string to Uint8Array
+function hexToUint8Array(hexString: string): Uint8Array {
+  const bytes = hexString.match(/.{1,2}/g)?.map(byte => parseInt(byte, 16)) || [];
+  return new Uint8Array(bytes);
+}
 
 const discoveredPeers: any[] = [];
 
@@ -416,11 +420,20 @@ describe('DHT Integration', () => {
       dhtRoutingTable,
     });
     
+    // Helper to create test public key
+    function createTestPublicKey(seed: number): Uint8Array {
+      const key = new Uint8Array(32);
+      for (let i = 0; i < 32; i++) {
+        key[i] = (i * seed) % 256;
+      }
+      return key;
+    }
+    
     // Add test peers
     for (let i = 0; i < 10; i++) {
       const peer = createPeer(
         `peer-${i}`,
-        generateMockPublicKey(),
+        createTestPublicKey(i + 1),
         'webrtc'
       );
       routingTable.addPeer(peer);

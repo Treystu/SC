@@ -5,7 +5,7 @@
  * including bootstrap from discovery mechanisms.
  */
 
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { describe, it, expect } from '@jest/globals';
 import {
   RoutingTable,
   RoutingMode,
@@ -15,7 +15,6 @@ import {
 import {
   KademliaRoutingTable,
   generateNodeId,
-  nodeIdFromPublicKey,
   bootstrapFromQRCode,
   bootstrapFromManualEntry,
   peerToDHTContact,
@@ -23,31 +22,41 @@ import {
 } from '../../core/src/mesh/dht/index.js';
 import type { PeerInfo } from '../../core/src/discovery/peer.js';
 
+// Counter for deterministic test key generation
+let mockKeyCounter = 0;
+
 // Helper to generate a mock public key for testing
 // Note: Uses crypto.getRandomValues when available (browser/Node 15+)
-// Falls back to deterministic pattern for environments without crypto API
+// Falls back to deterministic pattern for consistent test behavior
 function generateMockPublicKey(): Uint8Array {
   const key = new Uint8Array(32);
   if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
     crypto.getRandomValues(key);
   } else if (typeof globalThis !== 'undefined' && (globalThis as any).Buffer) {
     // Node.js fallback with crypto
-    const nodeCrypto = require('crypto');
-    return new Uint8Array(nodeCrypto.randomBytes(32));
-  } else {
-    // Final fallback: deterministic pattern for testing
-    // This is acceptable for unit tests where we don't need cryptographic security
-    for (let i = 0; i < 32; i++) {
-      key[i] = (i * 7 + Date.now()) % 256;
+    try {
+      // Use dynamic import for ES modules compatibility
+      const nodeCrypto = (globalThis as any).require('crypto');
+      return new Uint8Array(nodeCrypto.randomBytes(32));
+    } catch {
+      // Fall through to deterministic pattern
     }
   }
+  
+  // Deterministic pattern for testing - uses counter for consistency
+  // This is acceptable for unit tests where we don't need cryptographic security
+  for (let i = 0; i < 32; i++) {
+    key[i] = (i * 7 + mockKeyCounter * 13) % 256;
+  }
+  mockKeyCounter++;
   return key;
 }
 
 // Helper to create a mock peer
 function createMockPeer(id?: string, publicKey?: Uint8Array): Peer {
   const pk = publicKey || generateMockPublicKey();
-  const peerId = id || Buffer.from(pk).toString('hex');
+  // Convert to hex string for peer ID (cross-platform compatible)
+  const peerId = id || Array.from(pk).map(b => b.toString(16).padStart(2, '0')).join('');
   return createPeer(peerId, pk, 'webrtc');
 }
 
@@ -201,7 +210,7 @@ describe('DHT Routing Integration', () => {
       const publicKey = generateMockPublicKey();
       const peerInfo: PeerInfo = {
         publicKey,
-        peerId: Buffer.from(publicKey).toString('hex').slice(0, 40),
+        peerId: Array.from(publicKey).map(b => b.toString(16).padStart(2, '0')).join(''),
         displayName: 'QR Test Peer',
         endpoints: [
           { type: 'webrtc', signaling: 'relay-1' },
@@ -227,7 +236,7 @@ describe('DHT Routing Integration', () => {
       const dhtRoutingTable = new KademliaRoutingTable(localNodeId);
 
       const publicKey = generateMockPublicKey();
-      const peerId = Buffer.from(publicKey).toString('hex').slice(0, 40);
+      const peerId = Array.from(publicKey).map(b => b.toString(16).padStart(2, '0')).join('');
       const address = '192.168.1.100:8080';
 
       // Mock RPC sender
@@ -288,7 +297,6 @@ describe('DHT Routing Integration', () => {
         routingTable.addPeer(peer);
       }
 
-      const dhtStats = dhtRoutingTable.getStats();
       // getBucketDistribution() is the correct API method
       const distribution = dhtRoutingTable.getBucketDistribution();
       

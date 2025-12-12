@@ -750,10 +750,19 @@ const dhtRoutingTable = new KademliaRoutingTable(localNodeId, {
 // Find a peer using DHT
 const closestNodes = await routingTable.findPeerViaDHT(targetPeerId);
 
+// Helper to calculate XOR distance
+function calculateDistance(nodeId1: Uint8Array, nodeId2: Uint8Array): string {
+  const distance = new Uint8Array(nodeId1.length);
+  for (let i = 0; i < nodeId1.length; i++) {
+    distance[i] = nodeId1[i] ^ nodeId2[i];
+  }
+  return Array.from(distance).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 // closestNodes contains the k closest peers to the target
 for (const node of closestNodes) {
   console.log('Node:', node.peerId);
-  console.log('Distance:', node.nodeId);
+  console.log('Node ID:', Array.from(node.nodeId).map(b => b.toString(16).padStart(2, '0')).join(''));
   console.log('Last seen:', node.lastSeen);
 }
 ```
@@ -825,12 +834,23 @@ stateManager.start();
 For production deployments, configure regional bootstrap nodes:
 
 ```typescript
-import { getRegionalBootstrapNodes } from '@sc/core';
+import { getRegionalBootstrapNodes, DHTBootstrap } from '@sc/core';
 
-// Get bootstrap nodes for your region
-const bootstrapNodes = getRegionalBootstrapNodes('north-america');
+// Note: getRegionalBootstrapNodes() returns a placeholder implementation
+// In production, configure your own bootstrap nodes:
+const bootstrapNodes = [
+  {
+    nodeId: /* bootstrap node's DHT ID */,
+    peerId: 'bootstrap-1',
+    endpoints: [{ type: 'webrtc', address: 'bootstrap1.example.com:8080' }],
+    trusted: true,
+  },
+  // Add more bootstrap nodes...
+];
 
-// Add to DHT bootstrap
+// Or use regional nodes when available:
+// const bootstrapNodes = getRegionalBootstrapNodes('north-america');
+
 const bootstrap = new DHTBootstrap(dhtRoutingTable, {
   bootstrapNodes,
   minBootstrapNodes: 2,
