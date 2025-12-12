@@ -50,6 +50,10 @@ const DEFAULT_OPTIONS: ReachabilityOptions = {
   cacheTimeout: 60000,     // 1 minute
 };
 
+interface Unrefable {
+  unref: () => void;
+}
+
 export class ReachabilityVerifier {
   private options: ReachabilityOptions;
   private cache = new Map<string, ReachabilityResult>();
@@ -201,6 +205,7 @@ export class ReachabilityVerifier {
         this.pendingPings.delete(pingId);
         reject(new Error('Ping timeout'));
       }, timeout);
+      this.unrefTimeout(timeoutHandle);
 
       this.pendingPings.set(pingId, {
         resolve: (result) => {
@@ -412,7 +417,29 @@ export class ReachabilityVerifier {
    * Delay helper
    */
   private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise(resolve => {
+      // Used for simple backoff; no cancellation/rejection path is needed
+      const handle = setTimeout(resolve, ms);
+      this.unrefTimeout(handle);
+    });
+  }
+
+  /**
+   * Ensure timers don't keep the event loop alive in Node environments
+   */
+  private unrefTimeout(handle: unknown): void {
+    // In browser runtimes this is a no-op; Node supports unref to avoid holding the event loop
+    if (this.isUnrefable(handle)) {
+      handle.unref();
+    }
+  }
+
+  private isUnrefable(handle: unknown): handle is Unrefable {
+    if (!handle || typeof handle !== 'object') {
+      return false;
+    }
+    const maybe = handle as Partial<Unrefable>;
+    return typeof maybe.unref === 'function';
   }
 
   /**
