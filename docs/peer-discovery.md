@@ -630,9 +630,239 @@ Expected results:
 - Ensure peer is actually listening
 - Try DNS name instead of IP
 
+## Kademlia DHT Mode
+
+### Overview
+
+Sovereign Communications supports **Kademlia DHT-based routing** as an alternative to flood-based routing. This provides more efficient peer discovery and message routing in large networks.
+
+### Routing Modes
+
+The mesh network supports three routing modes:
+
+1. **FLOOD** (default) - Traditional flood-based routing for simplicity and reliability
+2. **DHT** - Pure Kademlia DHT routing for scalability
+3. **HYBRID** - DHT for discovery, flood for delivery (best of both)
+
+### Enabling DHT Mode
+
+```typescript
+import {
+  RoutingTable,
+  RoutingMode,
+  KademliaRoutingTable,
+  generateNodeId,
+} from '@sc/core';
+
+// Create DHT routing table
+const localNodeId = generateNodeId();
+const dhtRoutingTable = new KademliaRoutingTable(localNodeId);
+
+// Create mesh routing table with DHT mode
+const routingTable = new RoutingTable({
+  mode: RoutingMode.DHT, // or RoutingMode.HYBRID
+  dhtRoutingTable,
+});
+
+// Start DHT maintenance tasks
+dhtRoutingTable.start();
+```
+
+### Bootstrap from Discovery
+
+DHT automatically integrates with all discovery mechanisms:
+
+#### Bootstrap from QR Code
+
+```typescript
+import { bootstrapFromQRCode } from '@sc/core';
+
+// Scan QR code
+const peerInfo = QRCodeDiscoveryV2.parseQRData(scannedData);
+
+if (peerInfo.valid) {
+  // Bootstrap DHT from scanned peer
+  const result = await bootstrapFromQRCode(
+    dhtRoutingTable,
+    peerInfo.info
+  );
+  
+  console.log('Bootstrap success:', result.success);
+  console.log('Nodes discovered:', result.nodesDiscovered);
+}
+```
+
+#### Bootstrap from Manual Entry
+
+```typescript
+import { bootstrapFromManualEntry } from '@sc/core';
+
+const result = await bootstrapFromManualEntry(
+  dhtRoutingTable,
+  peerId,
+  publicKey,
+  '192.168.1.100:8080',
+  'manual'
+);
+
+if (result.success) {
+  console.log(`Bootstrapped with ${result.nodesDiscovered} nodes`);
+}
+```
+
+#### Bootstrap from Multiple Peers
+
+```typescript
+import { bootstrapFromDiscoveredPeers } from '@sc/core';
+
+// After mDNS or other bulk discovery
+const result = await bootstrapFromDiscoveredPeers(
+  dhtRoutingTable,
+  discoveredPeers,
+  3 // Minimum required bootstrap nodes
+);
+```
+
+### DHT Features
+
+- **Iterative Lookup**: Find peers in O(log n) hops
+- **Value Storage**: Store and retrieve metadata in the DHT
+- **K-bucket Management**: Automatic routing table optimization
+- **Bucket Refresh**: Periodic bucket maintenance
+- **Network State Awareness**: Track network health and topology
+
+### DHT Configuration
+
+```typescript
+const dhtRoutingTable = new KademliaRoutingTable(localNodeId, {
+  k: 20,                    // Bucket size (contacts per bucket)
+  alpha: 3,                 // Parallel queries
+  pingTimeout: 5000,        // Ping timeout (ms)
+  refreshInterval: 3600000, // Bucket refresh (1 hour)
+  republishInterval: 3600000, // Value republish (1 hour)
+  maxConcurrentLookups: 10, // Max parallel lookups
+});
+```
+
+### Using DHT for Peer Lookup
+
+```typescript
+// Find a peer using DHT
+const closestNodes = await routingTable.findPeerViaDHT(targetPeerId);
+
+// closestNodes contains the k closest peers to the target
+for (const node of closestNodes) {
+  console.log('Node:', node.peerId);
+  console.log('Distance:', node.nodeId);
+  console.log('Last seen:', node.lastSeen);
+}
+```
+
+### DHT Statistics
+
+```typescript
+const stats = dhtRoutingTable.getStats();
+
+console.log('Nodes in DHT:', stats.nodeCount);
+console.log('Active buckets:', stats.activeBuckets);
+console.log('Total lookups:', stats.totalLookups);
+console.log('Success rate:', 
+  (stats.successfulLookups / stats.totalLookups) * 100
+);
+console.log('Average lookup time:', stats.avgLookupTime, 'ms');
+```
+
+### Network State Monitoring
+
+```typescript
+import { NetworkStateManager } from '@sc/core';
+
+const stateManager = new NetworkStateManager(dhtRoutingTable);
+
+stateManager.on('stateChange', (event) => {
+  console.log('Network state:', event.data.state);
+  // DISCONNECTED, BOOTSTRAPPING, DEGRADED, CONNECTED
+});
+
+stateManager.on('healthWarning', (event) => {
+  console.log('Health warning:', event.data);
+});
+
+stateManager.start();
+```
+
+### Performance Comparison
+
+| Metric | Flood Routing | DHT Routing |
+|--------|---------------|-------------|
+| Discovery Time | O(n) hops | O(log n) hops |
+| Bandwidth Usage | High (floods) | Low (targeted) |
+| Scalability | Up to ~100 peers | Thousands of peers |
+| Resilience | High (redundant) | Medium (depends on k) |
+| Complexity | Low | Medium |
+
+### When to Use DHT Mode
+
+**Use DHT when:**
+- Network has >50 peers
+- Bandwidth is limited
+- Need global peer discovery
+- Want efficient routing
+
+**Use FLOOD when:**
+- Network has <50 peers
+- Reliability is critical
+- Simple deployment needed
+- Low latency is priority
+
+**Use HYBRID when:**
+- Best of both worlds
+- Medium to large networks
+- Variable network conditions
+
+### Regional Bootstrap Nodes
+
+For production deployments, configure regional bootstrap nodes:
+
+```typescript
+import { getRegionalBootstrapNodes } from '@sc/core';
+
+// Get bootstrap nodes for your region
+const bootstrapNodes = getRegionalBootstrapNodes('north-america');
+
+// Add to DHT bootstrap
+const bootstrap = new DHTBootstrap(dhtRoutingTable, {
+  bootstrapNodes,
+  minBootstrapNodes: 2,
+});
+
+await bootstrap.bootstrap();
+```
+
+### Integration with Existing Code
+
+DHT mode is **fully backward compatible**. Existing code continues to work:
+
+```typescript
+// Old code - still works
+const routingTable = new RoutingTable();
+
+// New code - explicit flood mode
+const routingTable = new RoutingTable({
+  mode: RoutingMode.FLOOD
+});
+
+// DHT mode - opt-in
+const routingTable = new RoutingTable({
+  mode: RoutingMode.DHT,
+  dhtRoutingTable,
+});
+```
+
 ## References
 
 - RFC 6762: Multicast DNS
 - RFC 6763: DNS-Based Service Discovery
 - ITU-T Q.23: DTMF Signaling
 - Bluetooth Core Specification 5.0+
+- Kademlia: A Peer-to-peer Information System Based on the XOR Metric (Maymounkov & Mazières, 2002)
