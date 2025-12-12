@@ -23,14 +23,22 @@ import {
 } from '../../core/src/mesh/dht/index.js';
 import type { PeerInfo } from '../../core/src/discovery/peer.js';
 
-// Helper to generate a mock public key
+// Helper to generate a mock public key for testing
+// Note: Uses crypto.getRandomValues when available (browser/Node 15+)
+// Falls back to deterministic pattern for environments without crypto API
 function generateMockPublicKey(): Uint8Array {
   const key = new Uint8Array(32);
   if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
     crypto.getRandomValues(key);
+  } else if (typeof globalThis !== 'undefined' && (globalThis as any).Buffer) {
+    // Node.js fallback with crypto
+    const nodeCrypto = require('crypto');
+    return new Uint8Array(nodeCrypto.randomBytes(32));
   } else {
+    // Final fallback: deterministic pattern for testing
+    // This is acceptable for unit tests where we don't need cryptographic security
     for (let i = 0; i < 32; i++) {
-      key[i] = Math.floor(Math.random() * 256);
+      key[i] = (i * 7 + Date.now()) % 256;
     }
   }
   return key;
@@ -281,8 +289,8 @@ describe('DHT Routing Integration', () => {
       }
 
       const dhtStats = dhtRoutingTable.getStats();
-      const distribution = dhtStats.bucketDistribution ?? 
-                          dhtRoutingTable.getBucketDistribution();
+      // getBucketDistribution() is the correct API method
+      const distribution = dhtRoutingTable.getBucketDistribution();
       
       // Should have peers in multiple buckets
       const nonEmptyBuckets = distribution.filter((count: number) => count > 0);

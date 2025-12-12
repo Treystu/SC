@@ -191,12 +191,10 @@ export class RoutingTable {
         const dhtContact = peerToDHTContact(peer);
         const result = this.dhtRoutingTable.addContact(dhtContact);
         
-        // If DHT says we need to ping a contact, handle it
-        // (In a full implementation, this would trigger a ping operation)
-        if (result.needsPing) {
-          // Schedule ping operation (implementation depends on transport layer)
-          // For now, we just note that it's needed
-        }
+        // Note: If result.needsPing is set, the DHT routing table has detected
+        // a stale contact that should be pinged. The ping operation is handled
+        // by the transport layer through the RPC sender configured on the DHT
+        // routing table via setRpcSender(). No action needed here.
       }
     }
   }

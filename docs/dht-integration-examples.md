@@ -18,9 +18,12 @@ import {
 // Generate a unique node ID for this peer
 const myNodeId = generateNodeId();
 
-// Or derive from your public key
+// Or derive from your identity's public key (recommended)
 import { nodeIdFromPublicKey } from '@sc/core';
-const myPublicKey = /* your Ed25519 public key */;
+// Get your Ed25519 public key from IdentityManager or CryptoManager
+// Example: const identity = await identityManager.loadIdentity();
+// const myPublicKey = identity.publicKey; // 32-byte Uint8Array
+const myPublicKey = /* your Ed25519 public key (32 bytes) */;
 const myNodeId = nodeIdFromPublicKey(myPublicKey);
 
 // Create DHT routing table

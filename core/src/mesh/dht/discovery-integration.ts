@@ -156,8 +156,11 @@ export function createDHTDiscoveryHandler(
       try {
         await bootstrapFromQRCode(routingTable, peerInfo);
       } catch (error) {
-        // Bootstrap failure is non-fatal, just log it
-        console.warn('DHT bootstrap from discovered peer failed:', error);
+        // Bootstrap failure is non-fatal, log for debugging
+        // In production, this would use a configured logger
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn('DHT bootstrap from discovered peer failed:', error);
+        }
       }
     }
   };

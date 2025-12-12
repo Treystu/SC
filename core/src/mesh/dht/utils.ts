@@ -18,9 +18,13 @@ import { nodeIdFromPublicKey, generateDHTKey, nodeIdToHex } from './node-id.js';
 export function peerToDHTContact(peer: Peer): DHTContact {
   const nodeId = nodeIdFromPublicKey(peer.publicKey);
   
+  // Note: Mesh peers may not have explicit addresses for all transport types.
+  // DHT endpoints are informational and used for routing hints, not direct connections.
   const endpoints: DHTEndpoint[] = [{
     type: peer.transportType,
-    address: undefined, // Mesh peers don't always have explicit addresses
+    // Address is optional in DHTEndpoint - undefined is valid for WebRTC peers
+    // that use signaling rather than direct addressing
+    address: undefined,
   }];
   
   return {
@@ -141,10 +145,11 @@ export function nodeIdToPeerId(nodeId: NodeId): string {
  * 2^i nodes in a uniform network.
  * 
  * @param bucketDistribution - Array of contact counts per bucket
- * @returns Estimated network size
+ * @returns Estimated network size (capped at 10 billion)
  */
 export function estimateNetworkSize(bucketDistribution: number[]): number {
   let estimate = 0;
+  const MAX_REALISTIC_NETWORK_SIZE = 10_000_000_000; // 10 billion nodes
   
   for (let i = 0; i < bucketDistribution.length; i++) {
     const contacts = bucketDistribution[i];
@@ -152,14 +157,30 @@ export function estimateNetworkSize(bucketDistribution: number[]): number {
       // Bucket i represents nodes at distance 2^(159-i) to 2^(160-i)
       // If we have contacts in this bucket, estimate there are
       // (contacts / k) * 2^(160-i) nodes in that range
-      const bucketSize = Math.pow(2, 160 - i);
       const k = 20; // Standard k value
-      estimate += (contacts / k) * bucketSize;
+      const exponent = 160 - i;
+      
+      // Prevent overflow by checking exponent
+      if (exponent > 30) {
+        // For very large buckets, cap contribution at max value
+        estimate = MAX_REALISTIC_NETWORK_SIZE;
+        break;
+      }
+      
+      const bucketSize = Math.pow(2, exponent);
+      const contribution = (contacts / k) * bucketSize;
+      
+      // Cap at max to prevent overflow
+      if (estimate + contribution > MAX_REALISTIC_NETWORK_SIZE) {
+        estimate = MAX_REALISTIC_NETWORK_SIZE;
+        break;
+      }
+      
+      estimate += contribution;
     }
   }
   
-  // This can overflow, so cap at a reasonable value
-  return Math.min(estimate, Number.MAX_SAFE_INTEGER);
+  return Math.min(estimate, MAX_REALISTIC_NETWORK_SIZE);
 }
 
 /**
