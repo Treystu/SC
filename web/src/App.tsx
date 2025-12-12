@@ -255,7 +255,9 @@ function App() {
   useEffect(() => {
     const onboardingComplete = localStorage.getItem("sc-onboarding-complete");
     const shouldSkipOnboarding =
-      typeof navigator !== "undefined" && (navigator as any).webdriver === true;
+      typeof navigator !== "undefined" &&
+      "webdriver" in navigator &&
+      navigator.webdriver === true;
 
     if (!onboardingComplete) {
       if (shouldSkipOnboarding) {
