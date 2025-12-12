@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
-import { FileTransferManager, FileMetadata, FileChunk, TransferState } from './file';
+import { FileTransferManager, TransferState } from './file';
 
 describe('File Transfer', () => {
   let manager: FileTransferManager;
@@ -283,14 +283,26 @@ describe('File Transfer', () => {
       expect(queued).toBeDefined();
       expect(active).toBeDefined();
 
+      const activeCountBefore = states.filter(
+        state => manager.getTransferState(state.fileId)?.status === 'active'
+      ).length;
+
       if (active) {
         manager.completeTransfer(active.fileId);
       }
 
-      manager.processQueue();
-
       const updatedQueued = queued ? manager.getTransferState(queued.fileId) : undefined;
+      const activeCountAfter = states.filter(
+        state => manager.getTransferState(state.fileId)?.status === 'active'
+      ).length;
+      const pendingCountAfter = states.filter(
+        state => manager.getTransferState(state.fileId)?.status === 'pending'
+      ).length;
+
       expect(updatedQueued?.status).toBe('active');
+      expect(activeCountAfter).toBeLessThanOrEqual(5);
+      expect(activeCountAfter).toBe(activeCountBefore);
+      expect(pendingCountAfter).toBe(0);
     });
   });
 

@@ -318,7 +318,7 @@ export class FileTransferManager {
   private getActiveTransferCount(): number {
     let count = 0;
     for (const state of this.activeTransfers.values()) {
-      if (state.status === 'active' || state.status === 'paused') {
+      if (state.status === 'active') {
         count++;
       }
     }
@@ -405,7 +405,14 @@ export class FileTransferManager {
   resumeTransfer(fileId: string): void {
     const state = this.activeTransfers.get(fileId);
     if (state) {
-      state.status = 'active';
+      if (this.getActiveTransferCount() >= FileTransferManager.MAX_CONCURRENT_TRANSFERS) {
+        state.status = 'pending';
+        if (!this.transferQueue.includes(fileId)) {
+          this.transferQueue.push(fileId);
+        }
+      } else {
+        state.status = 'active';
+      }
     }
   }
 
