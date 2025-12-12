@@ -55,3 +55,27 @@ export {
   type NetworkEvent,
   type NetworkEventListener,
 } from './network-state.js';
+
+// DHT utilities
+export {
+  peerToDHTContact,
+  peersToDHTContacts,
+  peerIdToDHTKey,
+  publicKeyToNodeId,
+  dhtContactToPeerInfo,
+  createMetadataKey,
+  isValidDHTPeer,
+  nodeIdToPeerId,
+  estimateNetworkSize,
+  calculateHealthScore,
+} from './utils.js';
+
+// Discovery integration
+export {
+  bootstrapFromQRCode,
+  bootstrapFromManualEntry,
+  bootstrapFromDiscoveredPeers,
+  getRegionalBootstrapNodes,
+  createDHTDiscoveryHandler,
+  isValidBootstrapPeer,
+} from './discovery-integration.js';
