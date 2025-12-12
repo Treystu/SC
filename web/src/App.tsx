@@ -174,9 +174,12 @@ function App() {
   // Persist identity for tests and offline access
   useEffect(() => {
     if (identity?.publicKey && identity?.privateKey) {
-      const publicKeyBase64 = btoa(
-        String.fromCharCode(...Array.from(identity.publicKey)),
-      );
+      const toBase64 = (bytes: Uint8Array) =>
+        typeof Buffer !== "undefined"
+          ? Buffer.from(bytes).toString("base64")
+          : btoa(String.fromCharCode(...Array.from(bytes)));
+
+      const publicKeyBase64 = toBase64(identity.publicKey);
       localStorage.setItem(
         "identity",
         JSON.stringify({
@@ -251,9 +254,11 @@ function App() {
   useEffect(() => {
     const onboardingComplete = localStorage.getItem("sc-onboarding-complete");
     const shouldSkipOnboarding =
-      typeof navigator !== "undefined" &&
-      "webdriver" in navigator &&
-      navigator.webdriver === true;
+      import.meta.env.MODE === "test" ||
+      import.meta.env.VITE_E2E === "true" ||
+      (typeof navigator !== "undefined" &&
+        "webdriver" in navigator &&
+        navigator.webdriver === true);
 
     if (!onboardingComplete) {
       if (shouldSkipOnboarding) {

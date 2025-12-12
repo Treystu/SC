@@ -147,7 +147,7 @@ function ConversationList({
 
   const handleAddContact = useCallback(
     (peerId: string, name: string) => {
-      return Promise.resolve(onAddContact?.(peerId, name));
+      return onAddContact?.(peerId, name);
     },
     [onAddContact],
   );

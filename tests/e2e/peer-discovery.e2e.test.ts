@@ -248,6 +248,8 @@ test.describe('Offline Support', () => {
       .locator('[data-testid="offline-indicator"]')
       .or(page.locator('.offline-banner'))
       .or(page.getByText(/offline/i));
+    const offlineCount = await offlineIndicator.count();
+    expect(offlineCount).toBeGreaterThan(0);
     await expect(offlineIndicator.first()).toBeVisible({ timeout: 5000 });
     
     // Go back online
