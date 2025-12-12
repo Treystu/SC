@@ -140,7 +140,7 @@ export function SettingsPanel() {
           <button
             onClick={() => setShowDeleteDialog(true)}
             className="danger-btn"
-            data-testid="backup-identity-btn"
+            data-testid="delete-all-local-data-btn"
           >
             Delete All Local Data
           </button>
