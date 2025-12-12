@@ -3,6 +3,8 @@
  */
 
 import { MessageType } from "../protocol/message.js";
+import type { KademliaRoutingTable, DHTContact } from "./dht/index.js";
+import { peerToDHTContact, isValidDHTPeer, peerIdToDHTKey } from "./dht/index.js";
 
 export enum PeerState {
   CONNECTING = "connecting",
@@ -89,12 +91,28 @@ export interface Route {
   expiresAt: number;
 }
 
+/**
+ * Routing mode for the mesh network
+ */
+export enum RoutingMode {
+  /** Traditional flood-based routing (default) */
+  FLOOD = "flood",
+  /** Kademlia DHT-based routing */
+  DHT = "dht",
+  /** Hybrid: use DHT for discovery, flood for delivery */
+  HYBRID = "hybrid",
+}
+
 export interface RoutingConfig {
   maxCacheSize?: number;
   cacheTTL?: number;
   routeTTL?: number;
   maxRoutes?: number;
   enableBloomFilter?: boolean;
+  /** Routing mode (default: FLOOD for backward compatibility) */
+  mode?: RoutingMode;
+  /** DHT routing table (required if mode is DHT or HYBRID) */
+  dhtRoutingTable?: KademliaRoutingTable;
 }
 
 /**
@@ -110,6 +128,8 @@ export class RoutingTable {
   private readonly ROUTE_TTL: number;
   private readonly MAX_ROUTES: number;
   private readonly ENABLE_BLOOM: boolean;
+  private readonly mode: RoutingMode;
+  private dhtRoutingTable?: KademliaRoutingTable;
 
   constructor(config: RoutingConfig = {}) {
     this.MAX_CACHE_SIZE = config.maxCacheSize || 10000;
@@ -117,6 +137,13 @@ export class RoutingTable {
     this.ROUTE_TTL = config.routeTTL || 300000; // 5 minutes
     this.MAX_ROUTES = config.maxRoutes || 10000;
     this.ENABLE_BLOOM = config.enableBloomFilter !== false;
+    this.mode = config.mode || RoutingMode.FLOOD;
+    this.dhtRoutingTable = config.dhtRoutingTable;
+
+    // Validate configuration
+    if ((this.mode === RoutingMode.DHT || this.mode === RoutingMode.HYBRID) && !this.dhtRoutingTable) {
+      throw new Error(`DHT routing table required for ${this.mode} mode`);
+    }
   }
 
   /**
@@ -157,6 +184,15 @@ export class RoutingTable {
       },
       expiresAt: Date.now() + this.ROUTE_TTL,
     });
+
+    // If DHT mode is enabled, also add to DHT routing table
+    if (this.dhtRoutingTable && (this.mode === RoutingMode.DHT || this.mode === RoutingMode.HYBRID)) {
+      if (isValidDHTPeer(peer)) {
+        const dhtContact = peerToDHTContact(peer);
+        // Add valid peer to DHT routing table in DHT or HYBRID mode
+        this.dhtRoutingTable.addContact(dhtContact);
+      }
+    }
   }
 
   /**
@@ -523,6 +559,45 @@ export class RoutingTable {
       cacheSize: this.messageCache.size,
       memoryUsage: this.getMemoryUsage().bytes,
     };
+  }
+
+  /**
+   * Get the current routing mode
+   */
+  getRoutingMode(): RoutingMode {
+    return this.mode;
+  }
+
+  /**
+   * Get the DHT routing table (if enabled)
+   */
+  getDHTRoutingTable(): KademliaRoutingTable | undefined {
+    return this.dhtRoutingTable;
+  }
+
+  /**
+   * Find a peer using DHT lookup (DHT/HYBRID mode only)
+   * 
+   * @param peerId - Peer ID to find
+   * @returns Promise resolving to closest known peers
+   */
+  async findPeerViaDHT(peerId: string): Promise<DHTContact[]> {
+    if (!this.dhtRoutingTable) {
+      throw new Error('DHT routing table not configured');
+    }
+
+    // Convert peer ID to node ID for lookup
+    const targetKey = peerIdToDHTKey(peerId);
+    
+    const result = await this.dhtRoutingTable.findNode(targetKey);
+    return result.closestNodes;
+  }
+
+  /**
+   * Check if DHT routing is enabled
+   */
+  isDHTEnabled(): boolean {
+    return this.mode === RoutingMode.DHT || this.mode === RoutingMode.HYBRID;
   }
 }
 
