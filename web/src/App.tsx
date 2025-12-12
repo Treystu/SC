@@ -177,14 +177,10 @@ function App() {
       const publicKeyBase64 = btoa(
         String.fromCharCode(...Array.from(identity.publicKey)),
       );
-      const privateKeyBase64 = btoa(
-        String.fromCharCode(...Array.from(identity.privateKey)),
-      );
       localStorage.setItem(
         "identity",
         JSON.stringify({
           publicKey: publicKeyBase64,
-          privateKey: privateKeyBase64,
         }),
       );
     } else if (status.localPeerId) {
