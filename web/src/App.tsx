@@ -253,6 +253,7 @@ function App() {
   // Check if onboarding has been completed
   useEffect(() => {
     const onboardingComplete = localStorage.getItem("sc-onboarding-complete");
+    // Heuristic to skip onboarding during automated runs (Playwright/CI)
     const shouldSkipOnboarding =
       import.meta.env.MODE === "test" ||
       import.meta.env.VITE_E2E === "true" ||

@@ -201,6 +201,7 @@ function ConversationList({
             <div className="add-menu">
               <button
                 onClick={async () => {
+                  // Fast path to seed a demo conversation for automated tests
                   const demoId = `peer-${Date.now().toString(16)}`;
                   await handleAddContact(demoId, "Test Peer");
                   setShowMenu(false);
