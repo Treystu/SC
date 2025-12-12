@@ -232,8 +232,8 @@ test.describe('Offline Support', () => {
     await context.setOffline(true);
     
     // App should still be functional
-    const app = page.locator('#root, #app, .app');
-    await expect(app).toBeVisible();
+    const app = page.locator('.app');
+    await expect(app.first()).toBeVisible();
     
     // Go back online
     await context.setOffline(false);
@@ -244,10 +244,11 @@ test.describe('Offline Support', () => {
     await context.setOffline(true);
     
     // Wait for offline indicator to appear
-    const offlineIndicator = page.locator('[data-testid="offline-indicator"], .offline-banner, text=/offline/i');
-    if (await offlineIndicator.count() > 0) {
-      await expect(offlineIndicator).toBeVisible({ timeout: 5000 });
-    }
+    const offlineIndicator = page
+      .locator('[data-testid="offline-indicator"]')
+      .or(page.locator('.offline-banner'))
+      .or(page.getByText(/offline/i));
+    await expect(offlineIndicator.first()).toBeVisible({ timeout: 5000 });
     
     // Go back online
     await context.setOffline(false);

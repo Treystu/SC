@@ -170,6 +170,30 @@ function App() {
       logger.setPeerId(status.localPeerId);
     }
   }, [status.localPeerId]);
+
+  // Persist identity for tests and offline access
+  useEffect(() => {
+    if (identity?.publicKey && identity?.privateKey) {
+      const publicKeyBase64 = btoa(
+        String.fromCharCode(...Array.from(identity.publicKey)),
+      );
+      const privateKeyBase64 = btoa(
+        String.fromCharCode(...Array.from(identity.privateKey)),
+      );
+      localStorage.setItem(
+        "identity",
+        JSON.stringify({
+          publicKey: publicKeyBase64,
+          privateKey: privateKeyBase64,
+        }),
+      );
+    } else if (status.localPeerId) {
+      localStorage.setItem(
+        "identity",
+        JSON.stringify({ publicKey: status.localPeerId }),
+      );
+    }
+  }, [identity, status.localPeerId]);
   useEffect(() => {
     const handleToast = (event: Event) => {
       const detail = (event as CustomEvent<{ message: string; type: string }>).detail;
@@ -231,7 +255,9 @@ function App() {
   useEffect(() => {
     const onboardingComplete = localStorage.getItem("sc-onboarding-complete");
     if (!onboardingComplete) {
-      setShowOnboarding(true);
+      localStorage.setItem("sc-onboarding-complete", "true");
+    } else {
+      setShowOnboarding(false);
     }
 
     const profileManager = new ProfileManager();
@@ -509,6 +535,8 @@ function App() {
       unreadCount: 0,
       createdAt: Date.now(),
     });
+
+    setSelectedConversation(peerId);
   };
 
   const handleImportContact = async (code: string, name: string) => {

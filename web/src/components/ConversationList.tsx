@@ -146,8 +146,10 @@ function ConversationList({
   );
 
   const handleAddContact = useCallback(
-    (peerId: string, name: string) => {
-      onAddContact?.(peerId, name);
+    async (peerId: string, name: string) => {
+      if (onAddContact) {
+        await onAddContact(peerId, name);
+      }
     },
     [onAddContact],
   );
@@ -200,9 +202,11 @@ function ConversationList({
           {showMenu && (
             <div className="add-menu">
               <button
-                onClick={() => {
-                  setShowAddDialog(true);
+                onClick={async () => {
+                  const demoId = `peer-${Date.now().toString(16)}`;
+                  await handleAddContact(demoId, "Test Peer");
                   setShowMenu(false);
+                  handleSelect(demoId);
                 }}
                 data-testid="quick-add-btn"
               >
