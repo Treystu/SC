@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
-import { FileTransferManager, FileMetadata, FileChunk } from './file';
+import { FileTransferManager, FileMetadata, FileChunk, TransferState } from './file';
 
 describe('File Transfer', () => {
   let manager: FileTransferManager;
@@ -48,6 +48,17 @@ describe('File Transfer', () => {
       const meta2 = await manager.createFileMetadata(testData, 'file2.bin', 'application/octet-stream');
 
       expect(meta1.fileId).not.toBe(meta2.fileId);
+    });
+
+    it('should respect Uint8Array views when computing metadata', async () => {
+      const source = new Uint8Array([10, 20, 30, 40, 50]);
+      const view = source.subarray(1, 4); // [20, 30, 40]
+
+      const metadata = await manager.createFileMetadata(view, 'view.bin', 'application/octet-stream');
+      const isValid = await manager.verifyFileChecksum(view, metadata.checksum);
+
+      expect(metadata.fileSize).toBe(view.length);
+      expect(isValid).toBe(true);
     });
   });
 
@@ -251,6 +262,35 @@ describe('File Transfer', () => {
       
       // Implementation may allow more concurrent transfers
       expect(activeCount).toBeGreaterThan(0);
+    });
+
+    it('should activate queued transfers when capacity is available', async () => {
+      const states: TransferState[] = [];
+
+      for (let i = 0; i < 6; i++) {
+        const testData = new Uint8Array(100);
+        const metadata = await manager.createFileMetadata(
+          testData,
+          `file${i}.bin`,
+          'application/octet-stream'
+        );
+        states.push(manager.initializeTransfer(metadata));
+      }
+
+      const queued = states.find(state => state.status === 'pending');
+      const active = states.find(state => state.status === 'active');
+
+      expect(queued).toBeDefined();
+      expect(active).toBeDefined();
+
+      if (active) {
+        manager.completeTransfer(active.fileId);
+      }
+
+      manager.processQueue();
+
+      const updatedQueued = queued ? manager.getTransferState(queued.fileId) : undefined;
+      expect(updatedQueued?.status).toBe('active');
     });
   });
 
