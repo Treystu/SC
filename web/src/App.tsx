@@ -254,8 +254,16 @@ function App() {
   // Check if onboarding has been completed
   useEffect(() => {
     const onboardingComplete = localStorage.getItem("sc-onboarding-complete");
+    const shouldSkipOnboarding =
+      typeof navigator !== "undefined" && (navigator as any).webdriver === true;
+
     if (!onboardingComplete) {
-      localStorage.setItem("sc-onboarding-complete", "true");
+      if (shouldSkipOnboarding) {
+        localStorage.setItem("sc-onboarding-complete", "true");
+        setShowOnboarding(false);
+      } else {
+        setShowOnboarding(true);
+      }
     } else {
       setShowOnboarding(false);
     }
