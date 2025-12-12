@@ -27,7 +27,7 @@ allprojects {
             force 'androidx.lifecycle:lifecycle-runtime-compose:2.10.0'
             force 'androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0'
             force 'androidx.lifecycle:lifecycle-runtime-ktx:2.10.0'
-            // Navigation aligned with compose BOM
+            // Navigation aligned with compose BOM; prevents navigation-compose from resolving to SDK 34-only builds on compileSdk 36
             force 'androidx.navigation:navigation-compose:2.9.6'
         }
     }

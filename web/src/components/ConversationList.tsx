@@ -42,11 +42,13 @@ const ConversationItem = memo(
     isSelected,
     onSelect,
     onDelete,
+    connectionStatus,
   }: {
     conv: Conversation;
     isSelected: boolean;
     onSelect: (id: string) => void;
     onDelete: (id: string) => void;
+    connectionStatus?: boolean;
   }) => (
     <div
       className={`conversation-item ${isSelected ? "selected" : ""}`}
@@ -61,7 +63,11 @@ const ConversationItem = memo(
         <div className="conversation-header">
           <span className="conversation-name">{conv.name}</span>
           <span className="conversation-status" data-testid={`peer-${conv.name}-status`}>
-            {conv.online !== undefined ? (conv.online ? "online" : "offline") : connectionStatus ? "online" : "offline"}
+            {/*
+              conv.online is derived from live peer presence; if unavailable,
+              fall back to overall mesh connectionStatus to signal connectivity.
+            */}
+            {(conv.online ?? connectionStatus) ? "online" : "offline"}
           </span>
           {conv.timestamp && (
             <span className="conversation-time">
@@ -304,6 +310,7 @@ function ConversationList({
                 isSelected={selectedId === conv.id}
                 onSelect={handleSelect}
                 onDelete={handleDelete}
+                connectionStatus={connectionStatus}
               />
             ))
           )}

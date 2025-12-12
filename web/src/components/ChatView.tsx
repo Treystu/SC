@@ -64,6 +64,7 @@ function ChatView({
             {isOnline ? "Online" : "Offline"}
           </span>
         </div>
+        {/* Placeholder controls until voice call handling is fully wired into signaling */}
         <div className="call-controls">
           <button
             data-testid="voice-call-btn"

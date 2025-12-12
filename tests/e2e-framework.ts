@@ -43,7 +43,7 @@ export class E2ETestFramework {
     await this.page.click(`[data-testid="contact-${contactName}"]`);
     const fileInput = await this.page.locator('[data-testid="file-input"]');
     await fileInput.setInputFiles(filePath);
-    await this.page.click('[data-testid="send-file-btn"]');
+    await this.page.click('[data-testid="send-message-btn"]');
   }
 
   async waitForFileTransferComplete(fileName: string) {
@@ -162,5 +162,4 @@ export class E2ETestFramework {
     await this.page.context().unroute('**/*');
   }
 }
-
 

@@ -50,18 +50,14 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
   };
 
-  const handleSend = (mode: "message" | "attachments" = "message") => {
+  const handleSend = () => {
     const trimmedMessage = message.trim();
-    if (mode === "message") {
-      if (!trimmedMessage && attachments.length === 0) return;
-      onSendMessage(
-        trimmedMessage,
-        attachments.length > 0 ? attachments : undefined,
-      );
-    } else {
-      if (attachments.length === 0) return;
-      onSendMessage(trimmedMessage, attachments);
-    }
+    if (!trimmedMessage && attachments.length === 0) return;
+
+    onSendMessage(
+      trimmedMessage,
+      attachments.length > 0 ? attachments : undefined,
+    );
 
     setMessage('');
     setAttachments([]);
@@ -143,8 +139,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         <div style={{ display: 'flex', gap: '8px' }}>
           <button
             onClick={() => {
-              setShowFileDialog(true);
-              fileInputRef.current?.click();
+              setShowFileDialog((prev) => !prev);
             }}
             disabled={disabled}
             data-testid="attach-file-btn"
@@ -219,7 +214,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
         {/* Send Button */}
         <button
-          onClick={() => handleSend("message")}
+          onClick={handleSend}
           disabled={disabled || (!message.trim() && attachments.length === 0)}
           data-testid="send-message-btn"
           aria-label="Send message"
@@ -236,25 +231,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         >
           Send
         </button>
-        {attachments.length > 0 && (
-          <button
-            onClick={() => handleSend("attachments")}
-            disabled={disabled}
-            data-testid="send-file-btn"
-            style={{
-              background: disabled ? '#4b5563' : '#3b82f6',
-              border: 'none',
-              borderRadius: '6px',
-              padding: '10px 12px',
-              cursor: disabled ? 'not-allowed' : 'pointer',
-              color: 'white',
-              fontSize: '14px',
-              fontWeight: '500',
-            }}
-          >
-            Send Attachments
-          </button>
-        )}
       </div>
 
       {showFileDialog && (
@@ -270,20 +246,37 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             color: '#f9fafb',
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
             <span>Choose files to send</span>
-            <button
-              onClick={() => setShowFileDialog(false)}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: '#9ca3af',
-                cursor: 'pointer',
-              }}
-              aria-label="Close file dialog"
-            >
-              ×
-            </button>
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  background: '#2563eb',
+                  border: 'none',
+                  borderRadius: '6px',
+                  padding: '6px 10px',
+                  cursor: 'pointer',
+                  color: '#f9fafb',
+                  fontSize: '13px',
+                }}
+                aria-label="Open file picker"
+              >
+                Browse
+              </button>
+              <button
+                onClick={() => setShowFileDialog(false)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#9ca3af',
+                  cursor: 'pointer',
+                }}
+                aria-label="Close file dialog"
+              >
+                ×
+              </button>
+            </div>
           </div>
         </div>
       )}

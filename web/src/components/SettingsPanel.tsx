@@ -123,7 +123,7 @@ export function SettingsPanel() {
               {status.localPeerId || "Not connected"}
             </div>
             <div data-testid="fingerprint" className="mono-text">
-              {(status.localPeerId || "").substring(0, 16) || "fingerprint"}
+              {(status.localPeerId || "").substring(0, 16) || "No fingerprint"}
             </div>
           </div>
         </div>

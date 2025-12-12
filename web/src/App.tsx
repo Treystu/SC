@@ -78,8 +78,6 @@ const generateBrowserFingerprint = async (): Promise<string> => {
 // Initialize encryption immediately
 initializeEncryption();
 
-const PUBLIC_KEY_FALLBACK = "public-key-unavailable";
-
 function App() {
   const [activeRoom, setActiveRoom] = useState<string | null>(null);
   const [selectedConversation, setSelectedConversation] = useState<
@@ -812,6 +810,29 @@ function App() {
     setSelectedConversation(peerId);
   };
 
+  const handleGenerateIdentity = () => {
+    if (identity?.publicKey) {
+      setIdentityGenerated(true);
+      setIdentityPublicKey(
+        btoa(String.fromCharCode(...identity.publicKey)),
+      );
+      return;
+    }
+
+    if (status.localPeerId) {
+      setIdentityGenerated(true);
+      setIdentityPublicKey(status.localPeerId);
+      return;
+    }
+
+    setIdentityGenerated(true);
+    setIdentityPublicKey("Identity not yet available");
+    announce.message(
+      "Identity is still initializing. Please try again.",
+      "assertive",
+    );
+  };
+
   return (
     <ErrorBoundary>
       <PWAInstall />
@@ -951,12 +972,6 @@ function App() {
                       </button>
                     </div>
                   </div>
-                  <div data-testid="connection-status" className="connection-status">
-                    <ConnectionStatus quality={status.connectionQuality} />
-                    <span className="peer-count" data-testid="peer-count">
-                      {status.peerCount}
-                    </span>
-                  </div>
 
                   {/* Tab Navigation */}
                   <div className="flex border-b border-gray-200 mt-2">
@@ -1034,14 +1049,7 @@ function App() {
                       </p>
                       <button
                         data-testid="generate-identity-btn"
-                        onClick={() => {
-                          setIdentityGenerated(true);
-                          setIdentityPublicKey(
-                            identity?.publicKey
-                              ? btoa(String.fromCharCode(...identity.publicKey))
-                              : status.localPeerId || PUBLIC_KEY_FALLBACK,
-                          );
-                        }}
+                        onClick={handleGenerateIdentity}
                       >
                         Generate Identity
                       </button>

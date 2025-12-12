@@ -196,16 +196,16 @@ test.describe('Identity Management', () => {
   test('should allow identity backup', async ({ page }) => {
     // Open settings
     const settingsButton = page.locator('[data-testid="settings-btn"], .settings-button, [aria-label="Settings"]');
-    if (await settingsButton.count() > 0) {
-      await settingsButton.click();
-      
-      // Look for backup option
-      const backupButton = page.locator('[data-testid="backup-identity-btn"], text=/Backup|Export/i');
-      if (await backupButton.count() > 0) {
-        await expect(backupButton).toBeVisible();
+      if (await settingsButton.count() > 0) {
+        await settingsButton.click();
+        
+        // Look for backup option
+        const backupButton = page.locator('[data-testid="create-backup-btn"], text=/Backup|Export/i');
+        if (await backupButton.count() > 0) {
+          await expect(backupButton).toBeVisible();
+        }
       }
-    }
-  });
+    });
 
   test('should show public key', async ({ page }) => {
     // Public key should be accessible

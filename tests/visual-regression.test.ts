@@ -28,8 +28,13 @@ test.describe('Visual Regression Tests @visual', () => {
   });
 
   test('should show identity setup', async ({ page }) => {
-    await page.click('[data-testid="generate-identity-btn"]', { trial: true }).catch(() => {});
-    await expect(page.locator('[data-testid="public-key-display"], body')).toBeVisible();
+    const generateButton = page.locator('[data-testid="generate-identity-btn"]');
+    if (await generateButton.count() === 0) {
+      throw new Error("Generate identity button not found");
+    }
+    await generateButton.first().click();
+
+    await expect(page.locator('[data-testid="public-key-display"]')).toBeVisible();
   });
 
   test('should show peer list', async ({ page }) => {
@@ -55,11 +60,36 @@ test.describe('Visual Regression Tests @visual', () => {
   });
 
   test('should show QR code UI when available', async ({ page }) => {
-    const qrButton = page.locator('[data-testid="add-peer-btn"], [data-testid=\"share-my-info-btn\"]');
-    if (await qrButton.count() > 0) {
-      await qrButton.first().click();
+    const addPeerButton = page.locator('[data-testid="add-peer-btn"]');
+    const shareInfoButton = page.locator('[data-testid="share-my-info-btn"]');
+
+    if (await addPeerButton.count() > 0) {
+      await addPeerButton.first().click();
+    } else if (await shareInfoButton.count() > 0) {
+      await shareInfoButton.first().click();
+    } else {
+      throw new Error("No QR trigger button found");
     }
-    await expect(page.locator('[data-testid=\"qr-code-display\"], canvas, svg').first()).toBeVisible({ timeout: 5000 });
+
+    const qrDisplay = page.locator('[data-testid="qr-code-display"]');
+    if (await qrDisplay.count() > 0) {
+      await expect(qrDisplay.first()).toBeVisible({ timeout: 5000 });
+      return;
+    }
+
+    const canvasQr = page.locator('canvas');
+    if (await canvasQr.count() > 0) {
+      await expect(canvasQr.first()).toBeVisible({ timeout: 5000 });
+      return;
+    }
+
+    const svgQr = page.locator('svg');
+    if (await svgQr.count() > 0) {
+      await expect(svgQr.first()).toBeVisible({ timeout: 5000 });
+      return;
+    }
+
+    throw new Error("No QR code element available");
   });
 
   test('should show settings panel', async ({ page }) => {
