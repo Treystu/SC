@@ -1,5 +1,5 @@
 //
-//  MeshNetworkManager.swift
+//  MeshNetworkManager.swif
 //  SovereignCommunications
 //
 //  Created by Your Name on 2023-10-27.
@@ -10,6 +10,7 @@ import CoreData
 import CoreBluetooth
 import os.log
 import WebRTC
+import Network
 
 struct Message: Codable {
     let id: UUID
@@ -18,248 +19,159 @@ struct Message: Codable {
 }
 
 struct NetworkStats {
-    var connectedPeers: Int
-    var messagesSent: Int
-    var messagesReceived: Int
+    var connectedPeers: In
+    var messagesSent: In
+    var messagesReceived: In
     var bandwidth: (upload: Double, download: Double)
     var latency: (average: Double, min: Double, max: Double)
     var packetLoss: Double
     var uptime: TimeInterval
-    var bleConnections: Int
-    var webrtcConnections: Int
+    var bleConnections: In
+    var webrtcConnections: In
     var error: String?
 }
 
 /**
  * Manages the mesh network, including peer connections, message routing, and data persistence.
  * Acts as the high-level coordinator, using BluetoothMeshManager and WebRTCManager as transport drivers.
- * 
+ *
  * Unified with @sc/core architecture:
  * - Uses IOSPersistenceAdapter for message queue persistence
  * - Consistent with Web and Android implementations
  * - Binary-safe message handling
  */
 class MeshNetworkManager: NSObject, ObservableObject {
-    
+
     static let shared = MeshNetworkManager()
-    
-    private let context: NSManagedObjectContext
+
+    private let context: NSManagedObjectContex
     private let startTime: Date
     private let logger = Logger(subsystem: "com.sovereign.communications", category: "MeshNetworkManager")
-    
+
     // Unified persistence adapter (matches Web/Android)
     private let persistenceAdapter: IOSPersistenceAdapter
-    
+
     @Published var connectedPeers: [String] = [] // List of connected Peer IDs
-    
+
     private var messagesSent: Int = 0
     private var messagesReceived: Int = 0
-    
+
     private var lastMessageSentDate: Date?
     private var lastMessageReceivedDate: Date?
 
     private var latency: (average: Double, min: Double, max: Double) = (0, 0, 0)
     private var bandwidth: (upload: Double, download: Double) = (0, 0)
     private var packetLoss: Double = 0
-    
+
     private override init() {
-        self.context = CoreDataStack.shared.viewContext
+        self.context = CoreDataStack.shared.viewContex
         self.startTime = Date()
         self.persistenceAdapter = IOSPersistenceAdapter(context: context)
         super.init()
-        
+
         BluetoothMeshManager.shared.delegate = self
         WebRTCManager.shared.delegate = self
+
+        setupJSBridge()
     }
-    
+
+    private func setupJSBridge() {
+        // Handle outbound messages from JS Core -> Native Transports
+        JSBridge.shared.outboundCallback = { [weak self] peerId, data in
+            self?.routeOutboundPacket(data, to: peerId)
+        }
+
+        // Handle application messages from JS Core -> UI
+        JSBridge.shared.applicationMessageCallback = { [weak self] jsonString in
+            self?.handleCoreApplicationMessage(jsonString)
+        }
+
+        LocalNetworkManager.shared.delegate = self
+    }
+
     /**
-     * Starts the mesh network.
+     * Starts the network.
      */
     func start() {
-        logger.info("Starting MeshNetworkManager")
+        logger.info("Starting MeshNetworkManager and JS Bridge")
         BluetoothMeshManager.shared.start()
-        // WebRTCManager is initialized lazily but we can ensure it's ready
+        LocalNetworkManager.shared.start()
         _ = WebRTCManager.shared
-        
-        // Retry any queued messages from persistence
-        Task {
-            await retryQueuedMessages()
-        }
     }
-    
+
     /**
-     * Stops the mesh network.
+     * Stops the network.
      */
     func stop() {
         logger.info("Stopping MeshNetworkManager")
         BluetoothMeshManager.shared.stop()
-        // WebRTC cleanup if needed
+        LocalNetworkManager.shared.stop()
     }
-    
+
+    // MARK: - Core Routing
+
     /**
-     * Retry queued messages from persistence adapter
-     * Called on startup and when new peers connect
+     * Route a packet from JS Core to the appropriate Native Transpor
      */
-    private func retryQueuedMessages() async {
-        do {
-            let queuedMessages = await persistenceAdapter.getAllMessages()
-            logger.info("Retrying \(queuedMessages.count) queued messages from persistence")
-            
-            for (id, storedMessage) in queuedMessages {
-                let peerId = storedMessage.destinationPeerId
-                
-                if isConnected(toPeerId: peerId) {
-                    // Attempt to send
-                    let success = await sendStoredMessage(storedMessage, toPeerId: peerId)
-                    
-                    if success {
-                        // Remove from queue on success
-                        await persistenceAdapter.removeMessage(id: id)
-                        logger.info("Successfully sent queued message \(id) to \(peerId)")
-                    } else {
-                        // Update retry metadata
-                        await persistenceAdapter.updateMessage(
-                            id: id,
-                            attempts: storedMessage.attempts + 1,
-                            lastAttempt: Date(),
-                            success: false
-                        )
-                    }
-                } else {
-                    logger.debug("Peer \(peerId) not connected, keeping message \(id) in queue")
-                }
-            }
-            
-            // Prune expired messages
-            await persistenceAdapter.pruneExpired(now: Date())
-            
-        } catch {
-            logger.error("Failed to retry queued messages: \(error.localizedDescription)")
-        }
-    }
-    
-    /**
-     * Check if connected to a peer via any transport
-     */
-    private func isConnected(toPeerId peerId: String) -> Bool {
-        return BluetoothMeshManager.shared.isConnected(toPeerId: peerId) ||
-               WebRTCManager.shared.getConnectionState(for: peerId) == .connected
-    }
-    
-    /**
-     * Send a stored message (from queue)
-     */
-    private func sendStoredMessage(_ storedMessage: IOSPersistenceAdapter.CoreStoredMessage, toPeerId peerId: String) async -> Bool {
-        let data = storedMessage.message.payload
-        
-        // Try WebRTC first
+    private func routeOutboundPacket(_ data: Data, to peerId: String) {
+        // 1. Try WebRTC
         if WebRTCManager.shared.getConnectionState(for: peerId) == .connected {
             if WebRTCManager.shared.send(data: data, to: peerId) {
                 messagesSent += 1
-                lastMessageSentDate = Date()
-                return true
+                return
             }
         }
-        
-        // Fallback to BLE
+
+        // 2. Try Local Network (TCP)
+        LocalNetworkManager.shared.send(data: data, to: peerId)
+        // We don't check success here as send is async, but assume success for flow
+        // Or check connection existence first?
+
+        // 3. Try BLE
         if BluetoothMeshManager.shared.isConnected(toPeerId: peerId) {
             if BluetoothMeshManager.shared.send(message: data, toPeerId: peerId) {
                 messagesSent += 1
-                lastMessageSentDate = Date()
-                return true
+                return
             }
         }
-        
-        return false
+
+        // logger.warning("Failed to route outbound packet to \(peerId) - No transport available")
+        // Note: JS Core should handle queuing/persistence if retry is needed,
+        // provided we gave it a configured PersistenceAdapter.
     }
-    
+
     /**
-     * Sends a message to a recipient in the mesh network.
+     * Handle decrypted application message from JS Core
      */
-    func sendMessage(recipientId: String, messageContent: String) {
-        let message = Message(id: UUID(), timestamp: Date(), payload: messageContent)
-        guard let data = try? JSONEncoder().encode(message) else {
-            logger.error("Failed to encode message")
+    private func handleCoreApplicationMessage(_ jsonString: String) {
+        guard let data = jsonString.data(using: .utf8),
+              let message = try? JSONDecoder().decode(Message.self, from: data) else {
+            logger.error("Failed to decode application message from Core")
             return
         }
-        
-        // 1. Try WebRTC (High Bandwidth)
-        if WebRTCManager.shared.getConnectionState(for: recipientId) == .connected {
-            let success = WebRTCManager.shared.send(data: data, to: recipientId)
-            if success {
-                messagesSent += 1
-                lastMessageSentDate = Date()
-                logger.info("Message sent via WebRTC to \(recipientId)")
-                return
-            }
+
+        // Save to CoreData for UI
+        context.perform {
+            let entity = MessageEntity(context: self.context)
+            entity.id = message.id.uuidString
+            entity.conversationId = "sub-sender-id" // TODO: Extract real sender from message wrapper
+            entity.senderId = "unknown" // JS Core message usually wraps senderId
+            entity.content = message.payload
+            entity.timestamp = message.timestamp
+            entity.status = "delivered"
+            entity.isEncrypted = false
+
+            CoreDataStack.shared.save(context: self.context)
         }
-        
-        // 2. Try BLE (Low Bandwidth / Proximity)
-        if BluetoothMeshManager.shared.isConnected(toPeerId: recipientId) {
-            let success = BluetoothMeshManager.shared.send(message: data, toPeerId: recipientId)
-            if success {
-                messagesSent += 1
-                lastMessageSentDate = Date()
-                logger.info("Message sent via BLE to \(recipientId)")
-                return
-            }
-        }
-        
-        // 3. Store-and-Forward (Offline) - Use unified persistence
-        logger.info("Peer \(recipientId) offline, queuing message")
-        Task {
-            await queueMessage(payload: data, recipientId: recipientId)
-        }
+
+        messagesReceived += 1
     }
-    
+
     /**
-     * Queue message using unified persistence adapter
+     * Sends a message from UI -> JS Core.
      */
-    private func queueMessage(payload: Data, recipientId: String) async {
-        do {
-            let id = UUID().uuidString
-            
-            // Get local peer ID
-            let senderIdString = UserDefaults.standard.string(forKey: "localPeerId") ?? UUID().uuidString
-            let senderIdData = senderIdString.data(using: .utf8) ?? Data(repeating: 0, count: 32)
-            
-            // Create message using core structure
-            let message = IOSPersistenceAdapter.CoreMessage(
-                header: IOSPersistenceAdapter.MessageHeader(
-                    version: 1,
-                    type: 0, // TEXT type
-                    ttl: 10,
-                    timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                    senderId: senderIdData.count >= 32 ? senderIdData.prefix(32) : (senderIdData + Data(repeating: 0, count: 32 - senderIdData.count)),
-                    signature: Data(repeating: 0, count: 64) // Placeholder - should be signed
-                ),
-                payload: payload
-            )
-            
-            let storedMessage = IOSPersistenceAdapter.CoreStoredMessage(
-                message: message,
-                destinationPeerId: recipientId,
-                attempts: 0,
-                lastAttempt: Date(),
-                expiresAt: Date().addingTimeInterval(IOSPersistenceAdapter.DEFAULT_MESSAGE_EXPIRATION_SECONDS)
-            )
-            
-            // Save to unified persistence adapter
-            await persistenceAdapter.saveMessage(id: id, message: storedMessage)
-            logger.info("Message queued with ID: \(id)")
-            
-        } catch {
-            logger.error("Failed to queue message for \(recipientId): \(error.localizedDescription)")
-        }
-    }
-    
-    /**
-     * Retry sending pending messages for a peer (called when peer connects)
-     */
-    private func retryPendingMessages(for peerId: String) {
-        Task {
-            await retryQueuedMessages()
-        }
+    func sendMessage(recipientId: String, messageContent: String) {
+        JSBridge.shared.sendMessage(to: recipientId, content: messageContent)
     }
 
     /**
@@ -267,10 +179,6 @@ class MeshNetworkManager: NSObject, ObservableObject {
      */
     func getStats() -> NetworkStats {
         let uptime = Date().timeIntervalSince(startTime)
-        // Count WebRTC connections
-        // Note: This is a simplification, ideally WebRTCManager exposes a count or list
-        let webrtcCount = 0 // Placeholder as WebRTCManager doesn't expose list directly yet
-        
         return NetworkStats(
             connectedPeers: connectedPeers.count,
             messagesSent: messagesSent,
@@ -279,39 +187,16 @@ class MeshNetworkManager: NSObject, ObservableObject {
             latency: latency,
             packetLoss: packetLoss,
             uptime: uptime,
-            bleConnections: connectedPeers.count, // Simplified
-            webrtcConnections: webrtcCount,
+            bleConnections: connectedPeers.count,
+            webrtcConnections: 0,
             error: nil
         )
     }
-    
-    private func handleIncomingMessage(data: Data, from peerId: String) {
-        guard let message = try? JSONDecoder().decode(Message.self, from: data) else {
-            logger.error("Failed to decode received message from \(peerId)")
-            return
-        }
-        
-        logger.info("Received message from \(peerId): \(message.payload)")
-        messagesReceived += 1
-        lastMessageReceivedDate = Date()
-        
-        // Save received message
-        context.perform {
-            let entity = MessageEntity(context: self.context)
-            entity.id = message.id.uuidString
-            entity.conversationId = peerId
-            entity.senderId = peerId
-            entity.content = message.payload
-            entity.timestamp = message.timestamp
-            entity.status = "delivered" // Received
-            entity.isEncrypted = false
-            
-            CoreDataStack.shared.save(context: self.context)
-        }
-        
-        // Update stats (simplified)
-        let currentLatency = Date().timeIntervalSince(message.timestamp)
-        latency.average = (latency.average * Double(messagesReceived - 1) + currentLatency) / Double(messagesReceived)
+
+    // MARK: - Incoming Transport Handlers
+
+    private func passToCore(data: Data, from peerId: String) {
+        JSBridge.shared.handleIncomingPacket(data: data, from: peerId)
     }
 }
 
@@ -319,9 +204,9 @@ class MeshNetworkManager: NSObject, ObservableObject {
 
 extension MeshNetworkManager: BluetoothMeshManagerDelegate {
     func bluetoothMeshManager(_ manager: BluetoothMeshManager, didReceiveMessage data: Data, from peerId: String) {
-        handleIncomingMessage(data: data, from: peerId)
+        passToCore(data: data, from: peerId)
     }
-    
+
     func bluetoothMeshManager(_ manager: BluetoothMeshManager, didConnectToPeer peerId: String) {
         logger.info("Connected to peer via BLE: \(peerId)")
         DispatchQueue.main.async {
@@ -329,18 +214,13 @@ extension MeshNetworkManager: BluetoothMeshManagerDelegate {
                 self.connectedPeers.append(peerId)
             }
         }
-        
-        // Trigger Sneakernet retry
-        retryPendingMessages(for: peerId)
+        // TODO: Inform JS Core about connection status change?
     }
-    
+
     func bluetoothMeshManager(_ manager: BluetoothMeshManager, didDisconnectFromPeer peerId: String) {
         logger.info("Disconnected from peer via BLE: \(peerId)")
         DispatchQueue.main.async {
-            // Only remove if also not connected via WebRTC
-            if WebRTCManager.shared.getConnectionState(for: peerId) != .connected {
-                self.connectedPeers.removeAll { $0 == peerId }
-            }
+            self.connectedPeers.removeAll { $0 == peerId }
         }
     }
 }
@@ -349,33 +229,235 @@ extension MeshNetworkManager: BluetoothMeshManagerDelegate {
 
 extension MeshNetworkManager: WebRTCManagerDelegate {
     func webRTCManager(_ manager: WebRTCManager, didReceiveData data: Data, from peerId: String) {
-        handleIncomingMessage(data: data, from: peerId)
+        passToCore(data: data, from: peerId)
     }
-    
+
     func webRTCManager(_ manager: WebRTCManager, didOpenDataChannelFor peerId: String) {
-        logger.info("WebRTC Data Channel opened for: \(peerId)")
         DispatchQueue.main.async {
             if !self.connectedPeers.contains(peerId) {
                 self.connectedPeers.append(peerId)
             }
         }
-        retryPendingMessages(for: peerId)
     }
-    
+
     func webRTCManager(_ manager: WebRTCManager, didCloseDataChannelFor peerId: String) {
-        logger.info("WebRTC Data Channel closed for: \(peerId)")
         DispatchQueue.main.async {
-            // Only remove if also not connected via BLE
-            if !BluetoothMeshManager.shared.isConnected(toPeerId: peerId) {
-                self.connectedPeers.removeAll { $0 == peerId }
+             self.connectedPeers.removeAll { $0 == peerId }
+        }
+    }
+
+    func webRTCManager(_ manager: WebRTCManager, didGenerateIceCandidate candidate: RTCIceCandidate, for peerId: String) {
+        // Handled by signaling layer
+    }
+}
+
+// MARK: - LocalNetworkManagerDelegate
+
+extension MeshNetworkManager: LocalNetworkManagerDelegate {
+    func didReceiveData(_ data: Data, from peerId: String) {
+        passToCore(data: data, from: peerId)
+    }
+
+    func didConnect(peerId: String) {
+        logger.info("Connected to peer via Local Network: \(peerId)")
+        DispatchQueue.main.async {
+            if !self.connectedPeers.contains(peerId) {
+                self.connectedPeers.append(peerId)
             }
         }
     }
-    
-    func webRTCManager(_ manager: WebRTCManager, didGenerateIceCandidate candidate: RTCIceCandidate, for peerId: String) {
-        // Send candidate via signaling channel (e.g. BLE or HTTP)
-        // This part requires a signaling mechanism which is likely handled by the upper layer or a separate SignalingManager
-        // For now, we log it
-        logger.debug("Generated ICE candidate for \(peerId)")
+
+    func didDisconnect(peerId: String) {
+        logger.info("Disconnected from peer via Local Network: \(peerId)")
+        DispatchQueue.main.async {
+            self.connectedPeers.removeAll { $0 == peerId }
+        }
+    }
+}
+
+// MARK: - Local Discovery & Transport (mDNS + TCP)
+
+protocol LocalNetworkManagerDelegate: AnyObject {
+    func didReceiveData(_ data: Data, from peerId: String)
+    func didConnect(peerId: String)
+    func didDisconnect(peerId: String)
+}
+
+class LocalNetworkManager {
+    static let shared = LocalNetworkManager()
+
+    private let serviceType = "_sc._tcp"
+    private var listener: NWListener?
+    private var browser: NWBrowser?
+
+    // PeerID -> Connection
+    private var connections: [String: NWConnection] = [:]
+    // Connection -> PeerID (reverse lookup)
+    private var connectionMap: [UUID: String] = [:]
+
+    weak var delegate: LocalNetworkManagerDelegate?
+    private let logger = Logger(subsystem: "com.sovereign.communications", category: "LocalNetwork")
+
+    // Internal queue
+    private let queue = DispatchQueue(label: "com.sovereign.localnetwork")
+
+    func start() {
+        startAdvertising()
+        startBrowsing()
+    }
+
+    func stop() {
+        stopAdvertising()
+        stopBrowsing()
+        // Close all
+        for conn in connections.values {
+            conn.cancel()
+        }
+        connections.removeAll()
+        connectionMap.removeAll()
+    }
+
+    func send(data: Data, to peerId: String) {
+        guard let connection = connections[peerId] else {
+            logger.warning("No local connection to \(peerId)")
+            return
+        }
+
+        // Framing: Length Prefix (4 bytes)
+        var length = UInt32(data.count).bigEndian
+        let lengthData = Data(bytes: &length, count: 4)
+
+        connection.send(content: lengthData + data, completion: .contentProcessed({ error in
+            if let error = error {
+                self.logger.error("Send failed: \(error.localizedDescription)")
+            }
+        }))
+    }
+
+    private func startAdvertising() {
+        do {
+            listener = try NWListener(using: .tcp)
+            listener?.service = NWListener.Service(type: serviceType)
+            listener?.newConnectionHandler = { [weak self] connection in
+                self?.handleNewConnection(connection)
+            }
+            listener?.start(queue: queue)
+            logger.info("Started mDNS advertising: \(self.serviceType)")
+        } catch {
+            logger.error("Failed to start listener: \(error.localizedDescription)")
+        }
+    }
+
+    private func stopAdvertising() {
+        listener?.cancel()
+        listener = nil
+    }
+
+    private func startBrowsing() {
+        browser = NWBrowser(for: .bonjour(type: serviceType, domain: nil), using: .tcp)
+        browser?.browseResultsChangedHandler = { [weak self] results, changes in
+            for result in results {
+                self?.connect(to: result.endpoint)
+            }
+        }
+        browser?.start(queue: queue)
+        logger.info("Started mDNS browsing")
+    }
+
+    private func stopBrowsing() {
+        browser?.cancel()
+        browser = nil
+    }
+
+    private func connect(to endpoint: NWEndpoint) {
+        let connection = NWConnection(to: endpoint, using: .tcp)
+        handleNewConnection(connection, initiated: true)
+    }
+
+    private func handleNewConnection(_ connection: NWConnection, initiated: Bool = false) {
+        // Unique ID for this connection object until we know the PeerID
+        let connectionUUID = UUID()
+
+        connection.stateUpdateHandler = { [weak self] state in
+            switch state {
+            case .ready:
+                self?.logger.info("Local connection ready: \(connection)")
+                self?.receiveNextPacket(connection, uuid: connectionUUID)
+            case .failed(let error):
+                self?.logger.error("Local connection failed: \(error.localizedDescription)")
+                self?.cleanupConnection(uuid: connectionUUID)
+            case .cancelled:
+                self?.cleanupConnection(uuid: connectionUUID)
+            default:
+                break
+            }
+        }
+        connection.start(queue: queue)
+    }
+
+    private func cleanupConnection(uuid: UUID) {
+        queue.async { [weak self] in
+             if let self = self {
+                if let peerId = self.connectionMap[uuid] {
+                    self.connections.removeValue(forKey: peerId)
+                    self.connectionMap.removeValue(forKey: uuid)
+                    self.delegate?.didDisconnect(peerId: peerId)
+                }
+             }
+        }
+    }
+
+    private func receiveNextPacket(_ connection: NWConnection, uuid: UUID) {
+        // Read 4 bytes length
+        connection.receive(minimumIncompleteLength: 4, maximumLength: 4) { [weak self] content, context, isComplete, error in
+            if let data = content, data.count == 4 {
+                let length = data.withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
+                self?.readBody(connection, length: Int(length), uuid: uuid)
+            } else {
+                if let error = error {
+                     self?.logger.error("Receive error: \(error.localizedDescription)")
+                }
+                connection.cancel()
+            }
+        }
+    }
+
+    private func readBody(_ connection: NWConnection, length: Int, uuid: UUID) {
+        connection.receive(minimumIncompleteLength: length, maximumLength: length) { [weak self] content, context, isComplete, error in
+            if let data = content, data.count == length {
+                self?.handlePacket(data, connection: connection, uuid: uuid)
+                self?.receiveNextPacket(connection, uuid: uuid) // loop
+            } else {
+                connection.cancel()
+            }
+        }
+    }
+
+    private func handlePacket(_ data: Data, connection: NWConnection, uuid: UUID) {
+        queue.async { [weak self] in
+            guard let self = self else { return }
+            // Identify sender if unknown
+            if self.connectionMap[uuid] == nil {
+                // Extract Header (first 108 bytes, SenderID at offset 11, length 32)
+                if data.count >= 43 {
+                    // Offset 11 is start of SenderID (32 bytes)
+                    let senderIdBytes = data.subdata(in: 11..<43)
+                    let peerId = senderIdBytes.map { String(format: "%02x", $0) }.joined()
+
+                    // Register
+                    self.connections[peerId] = connection
+                    self.connectionMap[uuid] = peerId
+                    self.delegate?.didConnect(peerId: peerId)
+                    self.logger.info("Identified peer on local network: \(peerId)")
+
+                    self.delegate?.didReceiveData(data, from: peerId)
+                }
+            } else {
+                // Known peer
+                if let peerId = self.connectionMap[uuid] {
+                    self.delegate?.didReceiveData(data, from: peerId)
+                }
+            }
+        }
     }
 }

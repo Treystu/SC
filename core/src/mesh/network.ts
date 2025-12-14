@@ -12,8 +12,13 @@ import {
   IdentityKeyPair,
   signMessage,
 } from "../crypto/primitives.js";
-import { Directory } from "./directory.js";
 import { ConnectionMonitor } from "../connection-quality.js";
+import { DHT } from "./dht.js";
+import {
+  DiscoveryManager,
+  DiscoveryPeer,
+  DiscoveryProvider,
+} from "./discovery.js";
 
 export interface MeshNetworkConfig {
   identity?: IdentityKeyPair;
@@ -37,6 +42,8 @@ export class MeshNetwork {
   private localPeerId: string;
   private defaultTTL: number;
   private maxPeers: number;
+  private dht: DHT;
+  public discovery: DiscoveryManager;
 
   // Callbacks
   private messageListeners: Set<(message: Message) => void> = new Set();
@@ -49,7 +56,10 @@ export class MeshNetwork {
     stream: MediaStream,
   ) => void;
   private onDiscoveryUpdateCallback?: (peers: string[]) => void;
-  private onPublicRoomMessageCallback?: (message: any) => void;
+  private outboundTransportCallback?: (
+    peerId: string,
+    data: Uint8Array,
+  ) => Promise<void>;
 
   // State
   private discoveredPeers: Set<string> = new Set();
@@ -73,7 +83,7 @@ export class MeshNetwork {
     this.maxPeers = config.maxPeers || 50;
 
     // Initialize components
-    this.routingTable = new RoutingTable();
+    this.routingTable = new RoutingTable(this.localPeerId);
     this.messageRelay = new MessageRelay(
       this.localPeerId,
       this.routingTable,
@@ -81,6 +91,40 @@ export class MeshNetwork {
       config.persistence as PersistenceAdapter,
     );
     this.peerPool = new PeerConnectionPool();
+
+    // Initialize DHT
+    this.dht = new DHT(this.routingTable, async (peerId, type, payload) => {
+      const message: Message = {
+        header: {
+          version: 0x01,
+          type,
+          ttl: this.defaultTTL,
+          timestamp: Date.now(),
+          senderId: this.identity.publicKey,
+          signature: new Uint8Array(64),
+        },
+        payload,
+      };
+
+      const messageBytes = encodeMessage(message);
+      message.header.signature = signMessage(
+        messageBytes,
+        this.identity.privateKey,
+      );
+      const encodedMessage = encodeMessage(message);
+
+      const peer = this.peerPool.getPeer(peerId);
+      if (peer && peer.getState() === "connected") {
+        peer.send(encodedMessage);
+      } else if (this.outboundTransportCallback) {
+        // Fallback to external transport
+        await this.outboundTransportCallback(peerId, encodedMessage);
+      }
+    });
+
+    // Initialize Discovery Manager
+    this.discovery = new DiscoveryManager();
+    this.discovery.onPeerDiscovered(this.handleDiscoveredPeer.bind(this));
 
     this.setupMessageHandlers();
   }
@@ -108,6 +152,18 @@ export class MeshNetwork {
         this.sendPong(message.header.senderId, message.header.timestamp);
         return;
       }
+
+      // Handle DHT Messages
+      if (
+        message.header.type === MessageType.DHT_FIND_NODE ||
+        message.header.type === MessageType.DHT_FOUND_NODES ||
+        message.header.type === MessageType.DHT_FIND_VALUE ||
+        message.header.type === MessageType.DHT_STORE
+      ) {
+        this.dht.handleMessage(message);
+        return;
+      }
+
       if (message.header.type === MessageType.CONTROL_PONG) {
         // Calculate RTT
         // Payload contains the original timestamp (8 bytes / 64-bit float stored as string or bytes)
@@ -120,14 +176,7 @@ export class MeshNetwork {
             const monitor = this.peerMonitors.get(senderId);
             if (monitor) {
               monitor.updateLatency(rtt);
-              // Update routing table metrics
-              const metrics = monitor.getMetrics();
-              this.routingTable.updateRouteMetrics(
-                senderId,
-                rtt,
-                true,
-                metrics.bandwidth,
-              );
+              // Update peer last seen timestamp
               this.routingTable.updatePeerLastSeen(senderId);
             }
           }
@@ -153,7 +202,33 @@ export class MeshNetwork {
         const encodedMessage = encodeMessage(message);
         this.messagesSent++;
         this.bytesTransferred += encodedMessage.byteLength;
+
+        // Broadcast via WebRTC
         this.peerPool.broadcast(encodedMessage, excludePeerId);
+
+        // Broadcast via Native/External Transport
+        if (this.outboundTransportCallback) {
+          // In a real flood, we might just ask the native layer to "broadcast"
+          // or we iterate known external peers.
+          // For now, let's assume the native layer handles "broadcast" if we pass a special target or
+          // we iterate here if we knew them.
+          // Simplest Native Bridge: we just emit the packet and let Native handle routing if it's a "broadcast"?
+          // Or we rely on the Native Bridge to be smart.
+          // Let's iterate known non-WebRTC peers from routing table?
+
+          // UNIFICATION PLAN: "Flood routing... works for 500 users... Task 2.1: Implement DHT"
+          // With DHT, we shouldn't be flooding as much.
+          // But for now, let's support flooding to external peers.
+
+          this.routingTable.getAllPeers().forEach((peer) => {
+            if (peer.id !== excludePeerId && peer.id !== this.localPeerId) {
+              // If we possess a specific connection to them that is NOT WebRTC
+              if (!this.peerPool.getPeer(peer.id)) {
+                this.outboundTransportCallback!(peer.id, encodedMessage);
+              }
+            }
+          });
+        }
       },
     );
 
@@ -229,7 +304,7 @@ export class MeshNetwork {
         ttl: 1, // Only neighbors
         timestamp: Date.now(),
         senderId: this.identity.publicKey,
-        signature: new Uint8Array(65),
+        signature: new Uint8Array(64),
       },
       payload: new Uint8Array(0),
     };
@@ -263,7 +338,7 @@ export class MeshNetwork {
         ttl: 1,
         timestamp: Date.now(),
         senderId: this.identity.publicKey,
-        signature: new Uint8Array(65),
+        signature: new Uint8Array(64),
       },
       payload: payload,
     };
@@ -297,18 +372,7 @@ export class MeshNetwork {
         return;
       }
 
-      // Update bandwidth metric in routing table
-      const metrics = monitor.getMetrics();
-      if (metrics.bandwidth > 0) {
-        // We pass latency and success=true (assuming if we have bandwidth we are connected)
-        // But updateRouteMetrics expects latency. We use current metric.
-        this.routingTable.updateRouteMetrics(
-          peerId,
-          metrics.latency,
-          true,
-          metrics.bandwidth,
-        );
-      }
+      // Update bandwidth metric in routing table (removed - Kademlia doesn't use route metrics)
 
       // Check lastSeen as a fallback for silence detection
       const lastSeenAge = Date.now() - peer.lastSeen;
@@ -386,42 +450,15 @@ export class MeshNetwork {
     // Create and send offer
     const offer = await peer.createOffer();
 
-    // Check if we can use HTTP signaling (Public Room)
-    if (this.httpSignaling && this.peerPublicKeys.has(peerId)) {
-      console.log(`Sending offer to ${peerId} via HTTP Signaling`);
-      const recipientKey = this.peerPublicKeys.get(peerId);
-      if (recipientKey) {
-        await this.httpSignaling.sendSignal(
-          peerId,
-          "offer",
-          offer,
-          recipientKey,
-        );
-
-        // Also setup candidate forwarding if not already done
-        // Note: This duplicates logic in joinPublicRoom, but ensures manual connections work
-        peer.onSignal((signal: any) => {
-          if (signal.type === "candidate") {
-            this.httpSignaling?.sendSignal(
-              peerId,
-              "candidate",
-              signal.candidate,
-              recipientKey,
-            );
-          }
-        });
-      }
-    } else {
-      // Fallback to Mesh Signaling (only works if already connected to mesh)
-      console.log(`Sending offer to ${peerId} via Mesh Signaling`);
-      this.sendMessage(
-        peerId,
-        JSON.stringify({
-          type: "SIGNAL",
-          signal: { type: "offer", sdp: offer },
-        }),
-      ).catch((err) => console.error("Failed to send offer:", err));
-    }
+    // Fallback to Mesh Signaling (only works if already connected to mesh)
+    console.log(`Sending offer to ${peerId} via Mesh Signaling`);
+    this.sendMessage(
+      peerId,
+      JSON.stringify({
+        type: "SIGNAL",
+        signal: { type: "offer", sdp: offer },
+      }),
+    ).catch((err) => console.error("Failed to send offer:", err));
 
     // Set up state change handler
     peer.onStateChange((state: string) => {
@@ -483,7 +520,7 @@ export class MeshNetwork {
         ttl: this.defaultTTL,
         timestamp: Date.now(),
         senderId: this.identity.publicKey,
-        signature: new Uint8Array(65), // Placeholder
+        signature: new Uint8Array(64), // Placeholder
       },
       payload,
     };
@@ -504,10 +541,27 @@ export class MeshNetwork {
       const peer = this.peerPool.getPeer(nextHop);
       if (peer && peer.getState() === "connected") {
         peer.send(encodedMessage);
+      } else if (this.outboundTransportCallback) {
+        // Try external transport
+        this.outboundTransportCallback(nextHop, encodedMessage).catch((err) =>
+          console.error(
+            `Failed to send via external transport to ${nextHop}:`,
+            err,
+          ),
+        );
       }
     } else {
       // Broadcast to all peers (flood routing)
       this.peerPool.broadcast(encodedMessage);
+
+      // Also broadcast via external transport
+      if (this.outboundTransportCallback) {
+        this.routingTable.getAllPeers().forEach((peer) => {
+          if (peer.id !== this.localPeerId && !this.peerPool.getPeer(peer.id)) {
+            this.outboundTransportCallback!(peer.id, encodedMessage);
+          }
+        });
+      }
     }
   }
 
@@ -536,7 +590,7 @@ export class MeshNetwork {
         ttl: this.defaultTTL,
         timestamp: Date.now(),
         senderId: this.identity.publicKey,
-        signature: new Uint8Array(65),
+        signature: new Uint8Array(64),
       },
       payload,
     };
@@ -563,6 +617,46 @@ export class MeshNetwork {
    */
   offMessage(callback: (message: Message) => void): void {
     this.messageListeners.delete(callback);
+  }
+
+  /**
+   * Register a discovery provider
+   */
+  registerDiscoveryProvider(provider: DiscoveryProvider): void {
+    this.discovery.registerProvider(provider);
+  }
+
+  /**
+   * Handle discovered peer
+   */
+  private async handleDiscoveredPeer(peer: DiscoveryPeer): Promise<void> {
+    // If we are already connected, just update metadata
+    if (this.routingTable.getPeer(peer.id)) {
+      // Update last seen
+      this.routingTable.updatePeerLastSeen(peer.id);
+      return;
+    }
+
+    // Attempt to connect if we have capacity
+    if (this.routingTable.getAllPeers().length < this.maxPeers) {
+      console.log(
+        `Discovered new peer ${peer.id} via ${peer.source}. Attempting connection...`,
+      );
+
+      try {
+        if (peer.transportType === "ble") {
+          console.log(
+            `[MeshNetwork] BLE peer discovered. Native bridge required to connect to ${peer.id}`,
+          );
+          // In a real implementation: Bridge.connect(peer.id, peer.connectionDetails)
+        } else {
+          // Default to WebRTC / standard connection
+          await this.connectToPeer(peer.id);
+        }
+      } catch (e) {
+        console.error(`Failed to connect to discovered peer ${peer.id}:`, e);
+      }
+    }
   }
 
   /**
@@ -597,24 +691,6 @@ export class MeshNetwork {
    */
   onDiscoveryUpdate(callback: (peers: string[]) => void): void {
     this.onDiscoveryUpdateCallback = callback;
-  }
-
-  /**
-   * Register callback for public room messages
-   */
-  onPublicRoomMessage(callback: (message: any) => void): void {
-    this.onPublicRoomMessageCallback = callback;
-  }
-
-  /**
-   * Send message to public room
-   */
-  async sendPublicRoomMessage(content: string): Promise<void> {
-    if (this.httpSignaling) {
-      await this.httpSignaling.sendPublicMessage(content);
-    } else {
-      throw new Error("Not connected to a public room");
-    }
   }
 
   /**
@@ -887,6 +963,34 @@ export class MeshNetwork {
   }
 
   /**
+   * Register a callback for outbound messages via external transport (e.g., Native BLE)
+   */
+  registerOutboundTransport(
+    callback: (peerId: string, data: Uint8Array) => Promise<void>,
+  ): void {
+    this.outboundTransportCallback = callback;
+  }
+
+  /**
+   * Handle incoming raw packet from external transport (e.g., Native BLE)
+   */
+  async handleIncomingPacket(peerId: string, data: Uint8Array): Promise<void> {
+    // Treat as if received from peer pool
+    await this.messageRelay.processMessage(data, peerId);
+
+    // Update metrics or checking if we need to add to table?
+    // processMessage handles relay logic.
+    // We should ensure the peer exists in routing table?
+    // If it's a new peer sending us data, we might want to ensure they are "connected"
+    if (!this.routingTable.getPeer(peerId)) {
+      // We received data from an unknown peer via native transport.
+      // The DiscoveryManager or native bridge shoutd ideally register them first.
+      // But we can implicitly register or update last seen.
+      // For now, let's assume Discovery handled registration or we just let it flow.
+    }
+  }
+
+  /**
    * Accept a manual connection offer.
    * Returns the SDP Answer to be sent back to the initiator.
    */
@@ -948,315 +1052,27 @@ export class MeshNetwork {
     await peer.setRemoteAnswer(sdp);
   }
 
-  // --- Public Room / HTTP Signaling Support ---
-
-  private httpSignaling?: import("../transport/http-signaling.js").HttpSignalingClient;
-  private wsSignaling?: import("../transport/websocket-signaling.js").WebSocketSignalingClient;
-  private directory: Directory = new Directory();
-  private peerPublicKeys: Map<string, Uint8Array> = new Map();
+  // --- DHT Operations ---
 
   /**
-   * Join a Public Chat Room (Signaling Server).
-   * This enables WAN discovery and signaling.
+   * Store a value in the DHT
    */
-  async joinPublicRoom(url: string): Promise<void> {
-    const { HttpSignalingClient } =
-      await import("../transport/http-signaling.js");
-    this.httpSignaling = new HttpSignalingClient(
-      url,
-      this.localPeerId,
-      this.identity,
-    );
-
-    // Helper to convert hex string to Uint8Array
-    const fromHex = (hex: string): Uint8Array => {
-      if (!hex) return new Uint8Array(0);
-      const bytes = new Uint8Array(hex.length / 2);
-      for (let i = 0; i < hex.length; i += 2) {
-        bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
-      }
-      return bytes;
-    };
-
-    // Helper to convert Uint8Array to hex string
-    const toHex = (bytes: Uint8Array): string => {
-      return Array.from(bytes)
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join("");
-    };
-
-    // Handle new peers discovered in the room
-    this.httpSignaling.on("peerDiscovered", async (peer: any) => {
-      if (peer._id === this.localPeerId) return;
-
-      console.log("Discovered peer:", peer);
-
-      // Track discovered peer
-      if (!this.discoveredPeers.has(peer._id)) {
-        this.discoveredPeers.add(peer._id);
-        this.onDiscoveryUpdateCallback?.(Array.from(this.discoveredPeers));
-      }
-
-      // Store public key if available
-      const pkHex = peer.metadata?.publicKey || peer.publicKey;
-      if (pkHex) {
-        const pk = fromHex(pkHex);
-        if (pk.length === 32) {
-          this.peerPublicKeys.set(peer._id, pk);
-        } else {
-          console.warn(
-            `Invalid public key length for peer ${peer._id}: ${pk.length}`,
-          );
-        }
-      } else {
-        console.warn(`No public key found for peer ${peer._id}`);
-      }
-
-      // If not already connected, initiate connection
-
-      // If not already connected, initiate connection
-      const existingPeer = this.peerPool.getPeer(peer._id);
-      if (
-        !existingPeer ||
-        existingPeer.getState() === "disconnected" ||
-        existingPeer.getState() === "failed"
-      ) {
-        console.log(
-          `Discovered peer in room: ${peer._id}, initiating connection (State: ${existingPeer?.getState() || "new"})...`,
-        );
-
-        // Use a slight random delay to reduce collision probability when two peers discover each other simultaneously
-        const delay = Math.random() * 1000;
-        setTimeout(async () => {
-          try {
-            // Double check status after delay
-            const currentPeer = this.peerPool.getPeer(peer._id);
-            if (
-              currentPeer &&
-              (currentPeer.getState() === "connected" ||
-                currentPeer.getState() === "connecting")
-            ) {
-              return;
-            }
-
-            const p = this.peerPool.getOrCreatePeer(peer._id);
-
-            // Setup ICE candidate forwarding
-            // onSignal overwrites the previous callback, so no need to remove listeners explicitly
-            p.onSignal((signal: any) => {
-              if (signal.type === "candidate") {
-                const recipientKey = this.peerPublicKeys.get(peer._id);
-                if (recipientKey && recipientKey.length === 32) {
-                  this.httpSignaling?.sendSignal(
-                    peer._id,
-                    "candidate",
-                    signal.candidate,
-                    recipientKey,
-                  );
-                } else {
-                  // It's possible we don't have the key yet if we just discovered them
-                  // But we should have it from the discovery payload
-                  console.warn(
-                    `Cannot send candidate to ${peer._id}: missing or invalid public key`,
-                  );
-                }
-              }
-            });
-
-            p.createDataChannel({ label: "reliable", ordered: true });
-
-            const offer = await p.createOffer();
-            const recipientKey = this.peerPublicKeys.get(peer._id);
-
-            if (recipientKey && recipientKey.length === 32) {
-              await this.httpSignaling?.sendSignal(
-                peer._id,
-                "offer",
-                offer,
-                recipientKey,
-              );
-            } else {
-              console.error(
-                `Cannot send offer to ${peer._id}: missing or invalid public key`,
-              );
-            }
-          } catch (err) {
-            console.error(`Failed to create/send offer to ${peer._id}:`, err);
-          }
-        }, delay);
-      }
-    });
-
-    // Handle incoming signals
-    this.httpSignaling.on(
-      "signal",
-      async ({
-        from,
-        type,
-        signal,
-      }: {
-        from: string;
-        type: string;
-        signal: any;
-      }) => {
-        if (from === this.localPeerId) return;
-
-        // If signal contains sender's public key, store it
-        if (signal.senderPublicKey) {
-          this.peerPublicKeys.set(from, fromHex(signal.senderPublicKey));
-        }
-
-        const peer = this.peerPool.getOrCreatePeer(from);
-
-        // Setup ICE candidate forwarding (if not already set)
-        // Note: This might add multiple listeners if we are not careful.
-        // Ideally we check if listener is attached.
-        peer.onSignal((sig: any) => {
-          if (sig.type === "candidate") {
-            const recipientKey = this.peerPublicKeys.get(from);
-            if (recipientKey) {
-              this.httpSignaling?.sendSignal(
-                from,
-                "candidate",
-                sig.candidate,
-                recipientKey,
-              );
-            } else {
-              console.error(
-                `Cannot send candidate to ${from}: missing public key`,
-              );
-            }
-          }
-        });
-
-        try {
-          if (type === "offer") {
-            const answer = await peer.createAnswer(signal);
-            const recipientKey = this.peerPublicKeys.get(from);
-
-            if (recipientKey) {
-              await this.httpSignaling?.sendSignal(
-                from,
-                "answer",
-                answer,
-                recipientKey,
-              );
-            } else {
-              console.error(
-                `Cannot send answer to ${from}: missing public key`,
-              );
-            }
-          } else if (type === "answer") {
-            await peer.setRemoteAnswer(signal);
-          } else if (type === "candidate") {
-            await peer.addIceCandidate(signal);
-          }
-        } catch (err) {
-          console.error(`Error handling signal from ${from}:`, err);
-        }
-      },
-    );
-
-    // Handle public messages
-    this.httpSignaling.on("publicMessage", (msg: any) => {
-      console.log("Public Room Message:", msg);
-      this.onPublicRoomMessageCallback?.(msg);
-    });
-
-    await this.httpSignaling.join({
-      agent: "sovereign-web",
-      publicKey: toHex(this.identity.publicKey),
-    });
+  async dhtStore(key: string, value: Uint8Array): Promise<void> {
+    await this.dht.store(key, value);
   }
 
   /**
-   * Leave Public Room
+   * Find a value in the DHT
    */
-  leavePublicRoom(): void {
-    if (this.httpSignaling) {
-      this.httpSignaling.stop();
-      this.httpSignaling = undefined;
-      this.discoveredPeers.clear();
-      this.onDiscoveryUpdateCallback?.([]);
-    }
+  async dhtFindValue(key: string): Promise<Uint8Array | null> {
+    return this.dht.findValue(key);
   }
 
   /**
-   * Join a Relay Server (WebSocket).
-   * This enables persistent P2P signaling and directory sync.
+   * Find a node in the DHT
    */
-  async joinRelay(url: string): Promise<void> {
-    const { WebSocketSignalingClient } =
-      await import("../transport/websocket-signaling.js");
-    this.wsSignaling = new WebSocketSignalingClient(
-      url,
-      this.localPeerId,
-      this.directory,
-    );
-
-    this.wsSignaling.on("directoryUpdated", (entries: any[]) => {
-      entries.forEach((entry) => {
-        if (entry.id !== this.localPeerId) {
-          if (!this.peerPool.getPeer(entry.id)) {
-            console.log(`Discovered peer via relay: ${entry.id}`);
-            this.connectViaRelay(entry.id);
-          }
-        }
-      });
-    });
-
-    this.wsSignaling.on(
-      "signal",
-      async ({
-        from,
-        type,
-        signal,
-      }: {
-        from: string;
-        type: string;
-        signal: any;
-      }) => {
-        if (from === this.localPeerId) return;
-
-        const peer = this.peerPool.getOrCreatePeer(from);
-
-        // Setup ICE candidate forwarding via WebSocket
-        peer.onSignal((sig: any) => {
-          if (sig.type === "candidate") {
-            this.wsSignaling?.sendSignal(from, "candidate", sig.candidate);
-          }
-        });
-
-        try {
-          if (type === "offer") {
-            const answer = await peer.createAnswer(signal);
-            this.wsSignaling?.sendSignal(from, "answer", answer);
-          } else if (type === "answer") {
-            await peer.setRemoteAnswer(signal);
-          } else if (type === "candidate") {
-            await peer.addIceCandidate(signal);
-          }
-        } catch (err) {
-          console.error(`Error handling signal from ${from}:`, err);
-        }
-      },
-    );
-
-    this.wsSignaling.connect();
-  }
-
-  private async connectViaRelay(peerId: string) {
-    const p = this.peerPool.getOrCreatePeer(peerId);
-
-    // Setup ICE candidate forwarding
-    p.onSignal((signal: any) => {
-      if (signal.type === "candidate") {
-        this.wsSignaling?.sendSignal(peerId, "candidate", signal.candidate);
-      }
-    });
-
-    p.createDataChannel({ label: "reliable", ordered: true });
-    const offer = await p.createOffer();
-    this.wsSignaling?.sendSignal(peerId, "offer", offer);
+  async dhtFindNode(nodeId: string): Promise<Peer | undefined> {
+    const peers = await this.dht.findNode(nodeId);
+    return peers.find((p) => p.id === nodeId);
   }
 }

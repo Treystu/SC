@@ -1,11 +1,11 @@
 /**
  * Binary Message Format for Sovereign Communications
- * 
+ *
  * Wire Protocol Documentation:
  * ===========================
- * 
+ *
  * Endianness: All multi-byte integers use Big Endian (network byte order)
- * 
+ *
  * Header Structure (fixed 108 bytes):
  * Offset | Size | Field      | Description
  * -------|------|------------|------------------------------------------
@@ -16,16 +16,16 @@
  * 4      | 8    | Timestamp  | Unix timestamp in milliseconds (big-endian)
  * 12     | 32   | Sender ID  | Ed25519 public key of sender
  * 44     | 64   | Signature  | Compact Ed25519 signature of message
- * 
+ *
  * Body:
  * - Encrypted payload (variable length, max: MAX_PAYLOAD_SIZE)
- * 
+ *
  * Version Migration:
  * - v1 (0x01): Initial protocol version
  * - Future versions will maintain backward compatibility where possible
  */
 
-import { sha256 } from '@noble/hashes/sha2.js';
+import { sha256 } from "@noble/hashes/sha2.js";
 
 export enum MessageType {
   // Data messages
@@ -43,6 +43,15 @@ export enum MessageType {
   // Cryptographic
   KEY_EXCHANGE = 0x30,
   SESSION_KEY = 0x31,
+  // DHT / Kademlia
+  DHT_FIND_NODE = 0x40,
+  DHT_FOUND_NODES = 0x41,
+  DHT_FIND_VALUE = 0x42,
+  DHT_STORE = 0x43,
+  DHT_STORE_ACK = 0x44,
+  DHT_FOUND_VALUE = 0x45,
+  // Self-update
+  UPDATE_MANIFEST = 0x50,
 }
 
 // Protocol constants
@@ -74,10 +83,10 @@ export class MessageValidationError extends Error {
   constructor(
     message: string,
     public readonly field?: string,
-    public readonly value?: unknown
+    public readonly value?: unknown,
   ) {
     super(message);
-    this.name = 'MessageValidationError';
+    this.name = "MessageValidationError";
   }
 }
 
@@ -87,21 +96,26 @@ export class MessageValidationError extends Error {
  */
 export function validateHeader(header: MessageHeader): void {
   // Validate version
-  if (header.version < MIN_SUPPORTED_VERSION || header.version > MAX_SUPPORTED_VERSION) {
+  if (
+    header.version < MIN_SUPPORTED_VERSION ||
+    header.version > MAX_SUPPORTED_VERSION
+  ) {
     throw new MessageValidationError(
       `Unsupported protocol version: ${header.version}. Supported: ${MIN_SUPPORTED_VERSION}-${MAX_SUPPORTED_VERSION}`,
-      'version',
-      header.version
+      "version",
+      header.version,
     );
   }
 
   // Validate message type
-  const validTypes = Object.values(MessageType).filter(v => typeof v === 'number');
+  const validTypes = Object.values(MessageType).filter(
+    (v) => typeof v === "number",
+  );
   if (!validTypes.includes(header.type)) {
     throw new MessageValidationError(
-      `Invalid message type: 0x${header.type.toString(16).padStart(2, '0')}`,
-      'type',
-      header.type
+      `Invalid message type: 0x${header.type.toString(16).padStart(2, "0")}`,
+      "type",
+      header.type,
     );
   }
 
@@ -109,8 +123,8 @@ export function validateHeader(header: MessageHeader): void {
   if (header.ttl < 0 || header.ttl > MAX_TTL) {
     throw new MessageValidationError(
       `Invalid TTL: ${header.ttl}. Must be 0-${MAX_TTL}`,
-      'ttl',
-      header.ttl
+      "ttl",
+      header.ttl,
     );
   }
 
@@ -118,8 +132,8 @@ export function validateHeader(header: MessageHeader): void {
   if (!Number.isSafeInteger(header.timestamp) || header.timestamp < 0) {
     throw new MessageValidationError(
       `Invalid timestamp: ${header.timestamp}`,
-      'timestamp',
-      header.timestamp
+      "timestamp",
+      header.timestamp,
     );
   }
 
@@ -127,8 +141,8 @@ export function validateHeader(header: MessageHeader): void {
   if (header.senderId.length !== 32) {
     throw new MessageValidationError(
       `Invalid sender ID length: ${header.senderId.length}. Expected: 32`,
-      'senderId',
-      header.senderId.length
+      "senderId",
+      header.senderId.length,
     );
   }
 
@@ -137,8 +151,8 @@ export function validateHeader(header: MessageHeader): void {
   if (header.signature.length !== 64 && header.signature.length !== 65) {
     throw new MessageValidationError(
       `Invalid signature length: ${header.signature.length}. Expected: 64 or 65`,
-      'signature',
-      header.signature.length
+      "signature",
+      header.signature.length,
     );
   }
 }
@@ -154,8 +168,8 @@ export function validateMessage(message: Message): void {
   if (message.payload.length > MAX_PAYLOAD_SIZE) {
     throw new MessageValidationError(
       `Payload too large: ${message.payload.length} bytes. Max: ${MAX_PAYLOAD_SIZE}`,
-      'payload',
-      message.payload.length
+      "payload",
+      message.payload.length,
     );
   }
 }
@@ -207,8 +221,8 @@ export function decodeHeader(buffer: Uint8Array): MessageHeader {
   if (buffer.length < HEADER_SIZE) {
     throw new MessageValidationError(
       `Invalid header size: ${buffer.length} bytes. Expected: ${HEADER_SIZE} bytes`,
-      'buffer',
-      buffer.length
+      "buffer",
+      buffer.length,
     );
   }
 
@@ -222,7 +236,7 @@ export function decodeHeader(buffer: Uint8Array): MessageHeader {
   // Timestamp (8 bytes, big-endian)
   let timestamp = 0;
   for (let i = 0; i < 8; i++) {
-    timestamp = (timestamp * 256) + buffer[offset++];
+    timestamp = timestamp * 256 + buffer[offset++];
   }
 
   // Sender ID (32 bytes)
@@ -270,8 +284,8 @@ export function decodeMessage(buffer: Uint8Array): Message {
   if (buffer.length < HEADER_SIZE) {
     throw new MessageValidationError(
       `Buffer too small: ${buffer.length} bytes. Minimum: ${HEADER_SIZE} bytes`,
-      'buffer',
-      buffer.length
+      "buffer",
+      buffer.length,
     );
   }
 
@@ -296,8 +310,8 @@ export function messageHash(message: Message): string {
 
   // Convert to hex string
   return Array.from(hash)
-    .map((b: number) => b.toString(16).padStart(2, '0'))
-    .join('');
+    .map((b: number) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 /**
@@ -312,17 +326,24 @@ export function isVersionSupported(version: number): boolean {
  */
 export function getMessageTypeName(type: MessageType): string {
   const typeNames: Record<number, string> = {
-    [MessageType.TEXT]: 'TEXT',
-    [MessageType.FILE_METADATA]: 'FILE_METADATA',
-    [MessageType.FILE_CHUNK]: 'FILE_CHUNK',
-    [MessageType.VOICE]: 'VOICE',
-    [MessageType.CONTROL_ACK]: 'CONTROL_ACK',
-    [MessageType.CONTROL_PING]: 'CONTROL_PING',
-    [MessageType.CONTROL_PONG]: 'CONTROL_PONG',
-    [MessageType.PEER_DISCOVERY]: 'PEER_DISCOVERY',
-    [MessageType.PEER_INTRODUCTION]: 'PEER_INTRODUCTION',
-    [MessageType.KEY_EXCHANGE]: 'KEY_EXCHANGE',
-    [MessageType.SESSION_KEY]: 'SESSION_KEY',
+    [MessageType.TEXT]: "TEXT",
+    [MessageType.FILE_METADATA]: "FILE_METADATA",
+    [MessageType.FILE_CHUNK]: "FILE_CHUNK",
+    [MessageType.VOICE]: "VOICE",
+    [MessageType.CONTROL_ACK]: "CONTROL_ACK",
+    [MessageType.CONTROL_PING]: "CONTROL_PING",
+    [MessageType.CONTROL_PONG]: "CONTROL_PONG",
+    [MessageType.PEER_DISCOVERY]: "PEER_DISCOVERY",
+    [MessageType.PEER_INTRODUCTION]: "PEER_INTRODUCTION",
+    [MessageType.KEY_EXCHANGE]: "KEY_EXCHANGE",
+    [MessageType.SESSION_KEY]: "SESSION_KEY",
+    [MessageType.DHT_FIND_NODE]: "DHT_FIND_NODE",
+    [MessageType.DHT_FOUND_NODES]: "DHT_FOUND_NODES",
+    [MessageType.DHT_FIND_VALUE]: "DHT_FIND_VALUE",
+    [MessageType.DHT_STORE]: "DHT_STORE",
+    [MessageType.DHT_STORE_ACK]: "DHT_STORE_ACK",
+    [MessageType.DHT_FOUND_VALUE]: "DHT_FOUND_VALUE",
+    [MessageType.UPDATE_MANIFEST]: "UPDATE_MANIFEST",
   };
-  return typeNames[type] || `UNKNOWN(0x${type.toString(16).padStart(2, '0')})`;
+  return typeNames[type] || `UNKNOWN(0x${type.toString(16).padStart(2, "0")})`;
 }

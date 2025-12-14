@@ -1,16 +1,16 @@
 /**
  * Backup Manager
- * 
+ *
  * Handles creating encrypted backups of user data including:
  * - Identity keys
  * - Contacts
  * - Message history
  * - Settings
- * 
+ *
  * Backups are encrypted using the user's identity key.
  */
 
-import { StorageAdapter } from '../storage/memory.js';
+import { StorageAdapter } from "../storage/memory.js";
 
 export interface BackupMetadata {
   version: string;
@@ -33,7 +33,7 @@ export interface BackupOptions {
   encryptionKey?: Uint8Array;
 }
 
-const BACKUP_VERSION = '1.0.0';
+const BACKUP_VERSION = "1.0.0";
 
 /**
  * Manages backup creation for user data
@@ -48,7 +48,7 @@ export class BackupManager {
       includeMessages: true,
       includeContacts: true,
       includeSettings: true,
-      ...options
+      ...options,
     };
   }
 
@@ -141,22 +141,22 @@ export class BackupManager {
    */
   private shouldIncludeKey(key: string): boolean {
     // Always include identity keys
-    if (key.startsWith('identity_') || key.startsWith('key_')) {
+    if (key.startsWith("identity_") || key.startsWith("key_")) {
       return true;
     }
 
     // Messages
-    if (key.startsWith('message_') || key.startsWith('conversation_')) {
+    if (key.startsWith("message_") || key.startsWith("conversation_")) {
       return this.options.includeMessages ?? true;
     }
 
     // Contacts
-    if (key.startsWith('contact_') || key.startsWith('peer_')) {
+    if (key.startsWith("contact_") || key.startsWith("peer_")) {
       return this.options.includeContacts ?? true;
     }
 
     // Settings
-    if (key.startsWith('setting_') || key.startsWith('config_')) {
+    if (key.startsWith("setting_") || key.startsWith("config_")) {
       return this.options.includeSettings ?? true;
     }
 
@@ -170,19 +170,19 @@ export class BackupManager {
   private async hashData(data: string): Promise<string> {
     const encoder = new TextEncoder();
     const dataBuffer = encoder.encode(data);
-    
+
     // Use SubtleCrypto if available
-    if (typeof crypto !== 'undefined' && crypto.subtle) {
-      const hashBuffer = await crypto.subtle.digest('SHA-256', dataBuffer);
+    if (typeof crypto !== "undefined" && crypto.subtle) {
+      const hashBuffer = await crypto.subtle.digest("SHA-256", dataBuffer);
       const hashArray = Array.from(new Uint8Array(hashBuffer));
-      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
     }
-    
+
     // Fallback: simple hash for environments without crypto
     let hash = 0;
     for (let i = 0; i < data.length; i++) {
       const char = data.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
+      hash = (hash << 5) - hash + char;
       hash = hash & hash;
     }
     return Math.abs(hash).toString(16);
@@ -215,11 +215,11 @@ export class BackupManager {
   private xorEncrypt(data: string, key: Uint8Array): string {
     const encoded = new TextEncoder().encode(data);
     const result = new Uint8Array(encoded.length);
-    
+
     for (let i = 0; i < encoded.length; i++) {
       result[i] = encoded[i] ^ key[i % key.length];
     }
-    
+
     return btoa(String.fromCharCode(...result));
   }
 }
@@ -236,7 +236,7 @@ export class BackupScheduler {
   constructor(
     backupManager: BackupManager,
     intervalMs: number = 24 * 60 * 60 * 1000, // Default: daily
-    onBackup?: (backup: BackupData) => Promise<void>
+    onBackup?: (backup: BackupData) => Promise<void>,
   ) {
     this.backupManager = backupManager;
     this.intervalMs = intervalMs;

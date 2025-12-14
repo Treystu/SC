@@ -1,4 +1,5 @@
 // Utility functions for public key fingerprints and validation
+import { bytesToBase64, base64ToBytes, hexToBytes } from "./encoding.js";
 
 /**
  * Generate a human-readable fingerprint from a public key
@@ -75,9 +76,10 @@ export function isValidPublicKey(publicKey: string | Uint8Array): boolean {
       return true;
     }
     // Check if it's a valid base64 string
+    // We use a try-catch with our robust base64 decoder
     try {
-      const decoded = atob(publicKey);
-      return decoded.length === 32; // Ed25519 public key is 32 bytes
+      const bytes = base64ToBytes(publicKey);
+      return bytes.length === 32; // Ed25519 public key is 32 bytes
     } catch {
       return false;
     }
@@ -91,37 +93,14 @@ export function isValidPublicKey(publicKey: string | Uint8Array): boolean {
  * Convert public key to base64 for storage
  */
 export function publicKeyToBase64(publicKey: Uint8Array): string {
-  return btoa(String.fromCharCode(...publicKey));
+  return bytesToBase64(publicKey);
 }
 
 /**
  * Convert base64 to public key bytes
  */
 export function base64ToPublicKey(base64: string): Uint8Array {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
-}
-
-// Helper functions
-function hexToBytes(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < hex.length; i += 2) {
-    bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
-  }
-  return bytes;
-}
-
-function base64ToBytes(base64: string): Uint8Array {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
+  return base64ToBytes(base64);
 }
 
 /**

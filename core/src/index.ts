@@ -30,6 +30,8 @@ export {
   compareFingerprints,
 } from "./utils/fingerprint.js";
 
+export * as utils from "./utils/encoding.js"; // For Native Bridge compatibility
+
 // Mesh networking
 export * from "./mesh/routing.js";
 export * from "./mesh/relay.js";
@@ -285,7 +287,12 @@ export {
 } from "./performance-optimizations.js";
 
 // Cache Manager
-export { CacheManager, MediaCache, type CacheEntry, type CacheStats } from "./cache-manager.js";
+export {
+  CacheManager,
+  MediaCache,
+  type CacheEntry,
+  type CacheStats,
+} from "./cache-manager.js";
 
 // Storage
 export {

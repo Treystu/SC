@@ -1,79 +1,95 @@
-# V1 Rollout Master Plan & Status
+# V1 Rollout Master Plan: 1M+ User Sovereign Mesh
 
-**Last Updated:** 2025-12-03
-**Status:** Ready for QA
+**Status:** Updated Analysis for 1M+ Scale & Sovereignty
+**Date:** 2025-12-13
 
-This document serves as the single source of truth for the remaining tasks required for the V1 rollout of Sovereign Communications. It consolidates findings from `GAP_ANALYSIS.md`, `TODO_AUDIT.md`, and recent implementation work.
+## 🚨 Critical Strategy: The Path to 1 Million Users
 
-## ✅ Completed Critical Items
+To achieve a **1,000,000+ user rollout** with **complete P2P mesh sovereignty**, development must shift focus from basic connectivity to **Scalability (DHT)** and **Hardened Security**.
 
-The following high-priority items have been implemented and verified:
+The following analysis is based on the active GitHub Issues Phases 1-10.
 
-1.  **Android App Initialization** (`SCApplication.kt`)
-    - Mesh Network Service initialization
-    - Crypto components initialization
-    - Identity loading/generation
-2.  **Core Message Sending Integration**
-    - `ChatViewModel.kt`: Message sending via MeshNetworkService
-    - `NotificationReceiver.kt`: Reply action integration
-3.  **Security & Cryptography**
-    - **KeystoreManager**: Updated to support Asymmetric Keys (EC P-256) for signing.
-    - **PeerSecurityAlerts**: Fixed critical vulnerability by replacing insecure hash-based signing with real ECDSA signing using Android Keystore.
-    - **Database Backup**: Encryption/Decryption implemented.
-    - **Passphrase Storage**: Secure storage implemented.
-4.  **Identity Management**
-    - `MainActivity.kt`: Peer ID retrieval implemented.
+### 🛑 Top 5 Critical Blockers (Immediate Action Required)
 
-## 🚧 Remaining Critical Tasks (Must Fix for V1)
+These issues are the absolute bottlenecks for a sovereign, scalable network.
 
-### Web Platform
+1.  **#130: Peer Discovery & Bootstrapping Without Central Servers**
+    - **Why:** You cannot have sovereignty if you depend on a central bootnode. This is the definition of "Mesh Sovereignty".
+    - _Related:_ #65 (Bootstrap Landing)
 
-1.  **Service Worker Implementation** (`web/src/sw.js` / `web/src/service-worker.ts`)
-    - **Status**: ✅ Complete
-    - **Verification**: `web/public/service-worker.js` exists and implements caching, background sync, and push notifications. `web/src/main.tsx` registers it correctly. DB schema version 4 matches service worker expectations.
+2.  **#128: Fix core/ integration across all platforms**
+    - **Why:** Maintaining three separate network stacks (JS, Kotlin, Swift) is impossible at 1M scale. Protocol divergence will split the mesh.
+    - _Related:_ #112 (Android Core), #114 (iOS Core), #107 (Transport Abstraction)
 
-2.  **WebRTC Integration Testing**
-    - **Status**: ✅ Complete
-    - **Verification**: Unit tests implemented in `web/src/hooks/__tests__/useMeshNetwork.test.ts` and passing. Verified initialization, message sending, and room joining logic.
+3.  **#129: Encrypt All Local Storage (Web, Android, iOS)**
+    - **Why:** Sovereignty implies user ownership. Unencrypted data on-device is a liability.
+    - _Related:_ #111 (Web DB), #115 (iOS Keychain), #135 (Startup Encryption)
 
-### iOS Platform
+4.  **Phase 7: Scaling Without Hierarchy (DHT Implementation)**
+    - **Issues:** #170, #171, #172, #180 (Platform DHT)
+    - **Why:** Gossip protocols (flood fill) die at ~1k-10k nodes. Reaching 1M+ users **requires** a Distributed Hash Table (DHT) for O(log N) routing. This is the **Scalability** unlock.
 
-3.  **iOS Implementation**
-    - **Status**: Stub / Early Stage
-    - **Requirement**: `MeshNetworkManager.swift` and UI components need full implementation to match Android/Web parity.
-    - **Priority**: High (if iOS is part of V1 launch)
-
-### General / Infrastructure
-
-4.  **E2E Tests**
-    - **Status**: ✅ Complete
-    - **Verification**: `tests/e2e/messaging.e2e.test.ts` exists and covers messaging flows. Created `tests/e2e/file-transfer.e2e.test.ts` to cover file upload/send flows.
-
-5.  **CI/CD Pipeline**
-    - **Status**: ✅ Complete
-    - **Verification**: `.github/workflows/unified-ci.yml` is fully implemented, covering Linting, Building (Web, Android, iOS), Unit Tests, Integration Tests, and E2E Tests.
-
-## 🛠 Enhancements (Should Fix for V1.1)
-
-1.  **File/Voice Message Retry Logic**
-    - **Context**: `web/src/hooks/useMeshNetwork.ts`
-    - **Status**: Missing
-    - **Note**: Current retry logic only handles text messages.
-
-2.  **Permission Rationale Dialog**
-    - **Context**: Android `MainActivity.kt`
-    - **Status**: Implemented (Verified in code), but double-check UX.
-
-3.  **QR Code Sharing**
-    - **Context**: Android `QRCodeDisplayScreen.kt`
-    - **Status**: Pending implementation of share intent.
-
-## 📋 Action Plan
-
-1.  **Immediate Next Step**: Implement the Web Service Worker to ensure offline capabilities.
-2.  **Secondary Focus**: Audit and advance iOS implementation.
-3.  **Testing**: Set up E2E test framework.
+5.  **Phase 6: Privacy & Security (Zero-Trust)**
+    - **Issues:** #167, #168 (Privacy Routing), #169
+    - **Why:** In a 1M+ node mesh, "friends of friends" trust breaks down. You need anonymous/blind routing (e.g., Kademlia with privacy extensions) to protect metadata.
 
 ---
 
-_Generated by Antigravity Agent_
+## 🗺️ Phased Rollout Roadmap
+
+The following phases (derived from Issues #155-#180) outline the execution path.
+
+### Phase 1-3: Foundation & Resilience (Current Focus)
+
+_Goal: A working mesh that survives offline & spotty networks._
+
+- **Phase 2: Hop-Based Intelligent Routing** (#155 - #157)
+  - _Focus:_ Fluid relays, dynamic paths.
+- **Phase 3: Opportunistic Transport** (#158 - #160)
+  - _Focus:_ Multi-transport (BLE/Wifi/WebRTC), Bandwidth optimization.
+  - _Scale:_ Works for local clusters (campus/city blocks).
+
+### Phase 4-6: Sovereignty & Privacy (The "Sovereign" Layer)
+
+_Goal: The network becomes unkillable and private._
+
+- **Phase 4: Sneakernet / Offline** (#161 - #163)
+- **Phase 5: Device Reputation** (#164 - #166)
+  - _Critical:_ Prevents spam/bad actors in a public mesh.
+- **Phase 6: Privacy & Security** (#167 - #169)
+  - **PREREQUISITE FOR 1M USERS**: You cannot expose user IPs/IDs to 1M strangers.
+
+### Phase 7-10: Hyper-Scale (The "1M+" Layer)
+
+_Goal: Global scale without central servers._
+
+- **Phase 7: DHT & Scaling** (#170 - #172)
+  - _Tech:_ Kademlia or similar DHT.
+- **Phase 8: Monitoring** (#174 - #176)
+- **Phase 9: Validation** (#177 - #179)
+- **Phase 10: Platform-Specific DHT** (#180)
+
+---
+
+## 🛠 Active Workstream & assignments
+
+### Core / Crypto (Priority: High)
+
+- [ ] **#130** Bootstrapping (No Servers)
+- [ ] **#129/135** Default Encryption (#111 Web, #115 iOS)
+- [ ] **#126** Fix generateNonce/Key APIs
+
+### CI / Quality (Priority: High)
+
+- [ ] **#127/#117** Keep CI Green (Prerequisite for mass collaboration)
+- [ ] **#118/131** E2E Test Suites
+
+### Platforms
+
+- **Web**: #110 (WebRTC + Core)
+- **Android**: #112 (Core Integration), #113 (BLE/Wifi)
+- **iOS**: #114 (Core Integration), #115 (Keychain), #116 (Cert Pinning)
+
+---
+
+_Plan generated by Antigravity based on active GitHub Issues #60 - #180_

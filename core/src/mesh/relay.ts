@@ -2,8 +2,13 @@
  * Message Relay and Flood Routing Implementation
  */
 
-import { Message, MessageType, messageHash, decodeMessage } from '../protocol/message.js';
-import { RoutingTable } from './routing.js';
+import {
+  Message,
+  MessageType,
+  messageHash,
+  decodeMessage,
+} from "../protocol/message.js";
+import { RoutingTable } from "./routing.js";
 
 export interface RelayStats {
   messagesReceived: number;
@@ -106,13 +111,16 @@ export class MessageRelay {
 
   // Callbacks
   private onMessageForSelfCallback?: (message: Message) => void;
-  private onForwardMessageCallback?: (message: Message, excludePeerId: string) => void;
+  private onForwardMessageCallback?: (
+    message: Message,
+    excludePeerId: string,
+  ) => void;
 
   constructor(
     localPeerId: string,
     routingTable: RoutingTable,
     config: RelayConfig = {},
-    persistence?: PersistenceAdapter
+    persistence?: PersistenceAdapter,
   ) {
     this.localPeerId = localPeerId;
     this.routingTable = routingTable;
@@ -130,14 +138,17 @@ export class MessageRelay {
   /**
    * Process incoming message and decide whether to forward, deliver, or drop
    */
-  async processMessage(messageData: Uint8Array, fromPeerId: string): Promise<void> {
+  async processMessage(
+    messageData: Uint8Array,
+    fromPeerId: string,
+  ): Promise<void> {
     this.stats.messagesReceived++;
 
     let message: Message;
     try {
       message = decodeMessage(messageData);
     } catch (error) {
-      console.error('Failed to decode message:', error);
+      console.error("Failed to decode message:", error);
       return;
     }
 
@@ -237,7 +248,7 @@ export class MessageRelay {
     const timestamps = this.peerFloodCounter.get(peerId)!;
 
     // Remove timestamps older than 1 second
-    const recentTimestamps = timestamps.filter(t => now - t < 1000);
+    const recentTimestamps = timestamps.filter((t) => now - t < 1000);
 
     // Check rate limit
     if (recentTimestamps.length >= this.config.floodRateLimit!) {
@@ -289,8 +300,19 @@ export class MessageRelay {
       return true;
     }
 
+    // DHT Messages are point-to-point RPCs, so they are always "for self" (the next hop)
+    // The DHT logic itself handles further recursion if needed (e.g. iterative lookup)
+    if (
+      message.header.type >= MessageType.DHT_FIND_NODE &&
+      message.header.type <= MessageType.DHT_FOUND_VALUE
+    ) {
+      return true;
+    }
+
     // For directed messages, check if we're the recipient
     // This would require destination field in payload (to be implemented)
+    // For now, assume if we received it, we process it?
+    // No, that breaks forwarding.
     return false;
   }
 
@@ -309,14 +331,18 @@ export class MessageRelay {
   /**
    * Store message for offline peer (store-and-forward)
    */
-  async storeMessage(message: Message, destinationPeerId: string): Promise<void> {
+  async storeMessage(
+    message: Message,
+    destinationPeerId: string,
+  ): Promise<void> {
     const currentSize = await this.persistence.size();
     if (currentSize >= this.config.maxStoredMessages!) {
       // Remove oldest message
       // Note: This is less efficient with async persistence, might need optimization
       const allMessages = await this.persistence.getAllMessages();
-      const oldest = Array.from(allMessages.entries())
-        .sort((a, b) => a[1].lastAttempt - b[1].lastAttempt)[0];
+      const oldest = Array.from(allMessages.entries()).sort(
+        (a, b) => a[1].lastAttempt - b[1].lastAttempt,
+      )[0];
       if (oldest) {
         await this.persistence.removeMessage(oldest[0]);
       }
@@ -357,7 +383,8 @@ export class MessageRelay {
 
       // Check retry backoff
       const timeSinceLastAttempt = now - stored.lastAttempt;
-      const backoffTime = this.config.retryBackoff! * Math.pow(2, stored.attempts);
+      const backoffTime =
+        this.config.retryBackoff! * Math.pow(2, stored.attempts);
 
       if (timeSinceLastAttempt < backoffTime) {
         continue; // Not time to retry yet
@@ -372,7 +399,7 @@ export class MessageRelay {
         this.stats.relayFailures++;
       } else {
         // Try forwarding again
-        this.onForwardMessageCallback?.(stored.message, '');
+        this.onForwardMessageCallback?.(stored.message, "");
         // Update stored state
         await this.persistence.saveMessage(hash, stored);
       }
@@ -391,11 +418,13 @@ export class MessageRelay {
     const allMessages = await this.persistence.getAllMessages();
     return {
       total: allMessages.size,
-      byDestination: Array.from(allMessages.values())
-        .reduce((acc, msg) => {
+      byDestination: Array.from(allMessages.values()).reduce(
+        (acc, msg) => {
           acc[msg.destinationPeerId] = (acc[msg.destinationPeerId] || 0) + 1;
           return acc;
-        }, {} as Record<string, number>),
+        },
+        {} as Record<string, number>,
+      ),
     };
   }
 
@@ -409,7 +438,9 @@ export class MessageRelay {
   /**
    * Register callback for forwarding messages
    */
-  onForwardMessage(callback: (message: Message, excludePeerId: string) => void): void {
+  onForwardMessage(
+    callback: (message: Message, excludePeerId: string) => void,
+  ): void {
     this.onForwardMessageCallback = callback;
   }
 
@@ -454,7 +485,10 @@ export const MIN_FRAGMENT_SIZE = 512; // 512 bytes minimum
 /**
  * Calculate optimal fragment size based on MTU and network conditions
  */
-export function calculateFragmentSize(mtu: number = 1500, overhead: number = 100): number {
+export function calculateFragmentSize(
+  mtu: number = 1500,
+  overhead: number = 100,
+): number {
   const optimalSize = mtu - overhead;
   return Math.max(MIN_FRAGMENT_SIZE, Math.min(MAX_FRAGMENT_SIZE, optimalSize));
 }
@@ -465,7 +499,7 @@ export function calculateFragmentSize(mtu: number = 1500, overhead: number = 100
 export function fragmentMessage(
   message: Uint8Array,
   messageId: string,
-  fragmentSize: number = MAX_FRAGMENT_SIZE
+  fragmentSize: number = MAX_FRAGMENT_SIZE,
 ): MessageFragment[] {
   const fragments: MessageFragment[] = [];
   const totalFragments = Math.ceil(message.length / fragmentSize);
@@ -492,7 +526,7 @@ export function fragmentMessage(
  */
 export function calculateFragmentationOverhead(
   messageSize: number,
-  fragmentSize: number = MAX_FRAGMENT_SIZE
+  fragmentSize: number = MAX_FRAGMENT_SIZE,
 ): number {
   const totalFragments = Math.ceil(messageSize / fragmentSize);
   const headerOverhead = 50; // Approximate header size per fragment
@@ -638,8 +672,9 @@ export class MessageReassembler {
   private cleanupOldest(): void {
     if (this.fragmentTimestamps.size === 0) return;
 
-    const oldest = Array.from(this.fragmentTimestamps.entries())
-      .sort((a, b) => a[1] - b[1])[0];
+    const oldest = Array.from(this.fragmentTimestamps.entries()).sort(
+      (a, b) => a[1] - b[1],
+    )[0];
 
     if (oldest) {
       const [messageId] = oldest;
@@ -663,8 +698,10 @@ export class MessageReassembler {
   getStats() {
     return {
       incompleteMessages: this.fragments.size,
-      fragmentsWaiting: Array.from(this.fragments.values())
-        .reduce((sum, map) => sum + map.size, 0),
+      fragmentsWaiting: Array.from(this.fragments.values()).reduce(
+        (sum, map) => sum + map.size,
+        0,
+      ),
       bufferUsage: this.currentBufferSize,
       bufferLimit: this.MAX_REASSEMBLY_BUFFER,
     };
