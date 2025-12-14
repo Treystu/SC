@@ -2,6 +2,9 @@ import { test, expect } from '@playwright/test';
 import { CrossPlatformTestCoordinator, WebClient, AndroidClient } from './cross-platform-framework';
 
 test.describe('Identity Verification Tests', () => {
+  const runMobileE2E = process.env.RUN_MOBILE_E2E === 'true';
+  test.skip(!runMobileE2E, 'Mobile grid not configured in CI');
+
   let coordinator: CrossPlatformTestCoordinator;
   let webClient: WebClient;
   let androidClient: AndroidClient;

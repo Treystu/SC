@@ -12,24 +12,23 @@ buildscript {
     }
 
     dependencies {
-        classpath 'com.android.tools.build:gradle:8.7.3'
+        classpath 'com.android.tools.build:gradle:8.9.1'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
     }
 }
 
-// Force dependency resolution to compatible versions for compileSdk 35
+// Force dependency resolution to compatible versions for compileSdk 36
 allprojects {
     configurations.configureEach {
         resolutionStrategy {
-            // Force core-ktx to a version compatible with compileSdk 35
-            force 'androidx.core:core-ktx:1.15.0'
-            force 'androidx.core:core:1.15.0'
-            // Force lifecycle versions compatible with compileSdk 35
-            force 'androidx.lifecycle:lifecycle-runtime-compose:2.8.7'
-            force 'androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7'
-            force 'androidx.lifecycle:lifecycle-runtime-ktx:2.8.7'
-            // Force navigation to compatible versions
-            force 'androidx.navigation:navigation-compose:2.8.4'
+            // Align core and lifecycle with declared dependencies
+            force 'androidx.core:core-ktx:1.17.0'
+            force 'androidx.core:core:1.17.0'
+            force 'androidx.lifecycle:lifecycle-runtime-compose:2.10.0'
+            force 'androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0'
+            force 'androidx.lifecycle:lifecycle-runtime-ktx:2.10.0'
+            // Navigation aligned with compose BOM; prevents navigation-compose from resolving to SDK 34-only builds on compileSdk 36
+            force 'androidx.navigation:navigation-compose:2.9.6'
         }
     }
 }

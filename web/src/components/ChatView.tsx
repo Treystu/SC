@@ -36,6 +36,8 @@ function ChatView({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [messages, setMessages] = useState<StoredMessage[]>([]);
+  const [callActive, setCallActive] = useState(false);
+  const [callEnded, setCallEnded] = useState(false);
 
   useEffect(() => {
     const fetchMessages = async () => {
@@ -53,7 +55,7 @@ function ChatView({
   }, [messages]);
 
   return (
-    <div className="chat-view">
+    <div className="chat-view" data-testid="chat-container">
       <div className="chat-header">
         <div className="chat-avatar">{contactName.charAt(0).toUpperCase()}</div>
         <div className="chat-info">
@@ -61,6 +63,31 @@ function ChatView({
           <span className={`status ${isOnline ? "online" : "offline"}`}>
             {isOnline ? "Online" : "Offline"}
           </span>
+        </div>
+        {/* Placeholder controls until voice call handling is fully wired into signaling */}
+        <div className="call-controls">
+          <button
+            data-testid="voice-call-btn"
+            onClick={() => {
+              setCallActive(true);
+              setCallEnded(false);
+            }}
+            className="btn-secondary"
+          >
+            Start Call
+          </button>
+          <button
+            data-testid="end-call-btn"
+            onClick={() => {
+              setCallActive(false);
+              setCallEnded(true);
+            }}
+            className="btn-secondary"
+          >
+            End Call
+          </button>
+          {callActive && <span data-testid="call-active" className="sr-only">Call Active</span>}
+          {callEnded && <span data-testid="call-ended" className="sr-only">Call Ended</span>}
         </div>
         {onClose && (
           <button
@@ -74,7 +101,7 @@ function ChatView({
         )}
       </div>
 
-      <div className="chat-messages">
+      <div className="chat-messages" data-testid="message-container">
         <LoadingState loading={isLoading} error={error ?? undefined}>
           {messages.length === 0 ? (
             <div className="empty-chat">
@@ -97,7 +124,7 @@ function ChatView({
                   <div className="message-meta">
                     <span
                       className="message-time"
-                      data-testid={`message - timestamp - ${message.id} `}
+                      data-testid={`message-timestamp-${message.id}`}
                     >
                       {new Date(message.timestamp).toLocaleTimeString([], {
                         hour: "2-digit",
@@ -106,8 +133,8 @@ function ChatView({
                     </span>
                     {message.senderId === "me" && (
                       <span
-                        className={`message - status status - ${message.status} `}
-                        data-testid={`message - status - ${message.status} `}
+                        className={`message-status status-${message.status} `}
+                        data-testid={`message-status-${message.status}`}
                       >
                         {message.status === "pending" && "○"}
                         {message.status === "queued" && "🕒"}

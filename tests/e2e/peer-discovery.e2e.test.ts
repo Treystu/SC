@@ -196,16 +196,16 @@ test.describe('Identity Management', () => {
   test('should allow identity backup', async ({ page }) => {
     // Open settings
     const settingsButton = page.locator('[data-testid="settings-btn"], .settings-button, [aria-label="Settings"]');
-    if (await settingsButton.count() > 0) {
-      await settingsButton.click();
-      
-      // Look for backup option
-      const backupButton = page.locator('[data-testid="backup-identity-btn"], text=/Backup|Export/i');
-      if (await backupButton.count() > 0) {
-        await expect(backupButton).toBeVisible();
+      if (await settingsButton.count() > 0) {
+        await settingsButton.click();
+        
+        // Look for backup option
+        const backupButton = page.locator('[data-testid="create-backup-btn"], text=/Backup|Export/i');
+        if (await backupButton.count() > 0) {
+          await expect(backupButton).toBeVisible();
+        }
       }
-    }
-  });
+    });
 
   test('should show public key', async ({ page }) => {
     // Public key should be accessible
@@ -232,8 +232,8 @@ test.describe('Offline Support', () => {
     await context.setOffline(true);
     
     // App should still be functional
-    const app = page.locator('#root, #app, .app');
-    await expect(app).toBeVisible();
+    const app = page.locator('.app');
+    await expect(app.first()).toBeVisible();
     
     // Go back online
     await context.setOffline(false);
@@ -244,10 +244,13 @@ test.describe('Offline Support', () => {
     await context.setOffline(true);
     
     // Wait for offline indicator to appear
-    const offlineIndicator = page.locator('[data-testid="offline-indicator"], .offline-banner, text=/offline/i');
-    if (await offlineIndicator.count() > 0) {
-      await expect(offlineIndicator).toBeVisible({ timeout: 5000 });
-    }
+    const offlineIndicator = page
+      .locator('[data-testid="offline-indicator"]')
+      .or(page.locator('.offline-banner'))
+      .or(page.getByText(/offline/i));
+    const offlineCount = await offlineIndicator.count();
+    expect(offlineCount).toBeGreaterThan(0);
+    await expect(offlineIndicator.first()).toBeVisible({ timeout: 5000 });
     
     // Go back online
     await context.setOffline(false);

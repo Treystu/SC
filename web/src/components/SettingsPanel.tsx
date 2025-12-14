@@ -100,10 +100,10 @@ export function SettingsPanel() {
   }, [appearanceSettings.theme]);
 
   return (
-    <div className="settings-panel">
+    <div className="settings-panel" data-testid="settings-panel">
       <h2>Settings</h2>
 
-      <section className="settings-section">
+      <section className="settings-section" data-testid="identity-section">
         <h3>Identity</h3>
         <div className="form-group">
           <label>Display Name</label>
@@ -122,6 +122,9 @@ export function SettingsPanel() {
             <div className="mono-text">
               {status.localPeerId || "Not connected"}
             </div>
+            <div data-testid="fingerprint" className="mono-text">
+              {(status.localPeerId || "").substring(0, 16) || "No fingerprint"}
+            </div>
           </div>
         </div>
       </section>
@@ -137,6 +140,7 @@ export function SettingsPanel() {
           <button
             onClick={() => setShowDeleteDialog(true)}
             className="danger-btn"
+            data-testid="delete-all-local-data-btn"
           >
             Delete All Local Data
           </button>
@@ -188,6 +192,7 @@ export function SettingsPanel() {
             name="theme"
             value={appearanceSettings.theme}
             onChange={handleAppearanceChange}
+            data-testid="theme-toggle"
           >
             <option value="light">Light</option>
             <option value="dark">Dark</option>

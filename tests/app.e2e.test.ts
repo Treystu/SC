@@ -113,7 +113,7 @@ test.describe('Peer Discovery and Connection', () => {
       }, mockPeerData);
 
       // Verify peer added
-      await expect(page.locator('[data-testid="peer-Test Peer"]')).toBeVisible();
+      await expect(page.locator('[data-testid="contact-Test Peer"]')).toBeVisible();
     }
   });
 
@@ -131,9 +131,9 @@ test.describe('Peer Discovery and Connection', () => {
     await framework.createNewContact('Charlie', '3'.repeat(64));
 
     // Verify all peers are listed
-    await expect(page.locator('[data-testid="peer-Alice"]')).toBeVisible();
-    await expect(page.locator('[data-testid="peer-Bob"]')).toBeVisible();
-    await expect(page.locator('[data-testid="peer-Charlie"]')).toBeVisible();
+    await expect(page.locator('[data-testid="contact-Alice"]')).toBeVisible();
+    await expect(page.locator('[data-testid="contact-Bob"]')).toBeVisible();
+    await expect(page.locator('[data-testid="contact-Charlie"]')).toBeVisible();
 
     // Check peer count
     const peerCount = await framework.getPeerCount();
