@@ -77,11 +77,13 @@ export class FileTransferManager {
     fileName: string,
     mimeType: string
   ): Promise<FileMetadata> {
-    const fileData = file instanceof File ? await file.arrayBuffer() : file.buffer;
+    const fileData = file instanceof File
+      ? new Uint8Array(await file.arrayBuffer())
+      : new Uint8Array(file);
     const fileSize = fileData.byteLength;
     const chunkSize = FileTransferManager.DEFAULT_CHUNK_SIZE;
     const totalChunks = Math.ceil(fileSize / chunkSize);
-    const checksum = await sha256(new Uint8Array(fileData));
+    const checksum = await sha256(fileData);
     
     return {
       fileId: crypto.randomUUID(),
@@ -237,11 +239,13 @@ export class FileTransferManager {
     
     this.partialFiles.delete(fileId);
     this.transferQueue = this.transferQueue.filter(id => id !== fileId);
+    this.processQueue();
   }
   
   // Task 190: Transfer queue management
   queueTransfer(fileId: string): void {
-    if (this.activeTransfers.size >= FileTransferManager.MAX_CONCURRENT_TRANSFERS) {
+    const activeCount = this.getActiveTransferCount();
+    if (activeCount >= FileTransferManager.MAX_CONCURRENT_TRANSFERS) {
       this.transferQueue.push(fileId);
       const state = this.activeTransfers.get(fileId);
       if (state) {
@@ -257,8 +261,9 @@ export class FileTransferManager {
   
   // Task 190: Process transfer queue
   processQueue(): void {
+    let activeCount = this.getActiveTransferCount();
     while (
-      this.activeTransfers.size < FileTransferManager.MAX_CONCURRENT_TRANSFERS &&
+      activeCount < FileTransferManager.MAX_CONCURRENT_TRANSFERS &&
       this.transferQueue.length > 0
     ) {
       const fileId = this.transferQueue.shift();
@@ -266,6 +271,7 @@ export class FileTransferManager {
         const state = this.activeTransfers.get(fileId);
         if (state) {
           state.status = 'active';
+          activeCount++;
         }
       }
     }
@@ -286,6 +292,8 @@ export class FileTransferManager {
         this.partialFiles.delete(fileId);
       }
     }
+    
+    this.processQueue();
   }
   
   // Get transfer state
@@ -305,6 +313,16 @@ export class FileTransferManager {
       if (a[i] !== b[i]) return false;
     }
     return true;
+  }
+
+  private getActiveTransferCount(): number {
+    let count = 0;
+    for (const state of this.activeTransfers.values()) {
+      if (state.status === 'active') {
+        count++;
+      }
+    }
+    return count;
   }
 
   // Assemble file from chunks
@@ -359,6 +377,9 @@ export class FileTransferManager {
       state.progress = progress;
       state.bytesTransferred = bytesTransferred;
       state.status = progress >= 100 ? 'completed' : 'active';
+      if (state.status === 'completed') {
+        this.processQueue();
+      }
     }
   }
 
@@ -368,6 +389,7 @@ export class FileTransferManager {
     if (state) {
       state.status = 'completed';
       state.progress = 100;
+      this.processQueue();
     }
   }
 
@@ -383,7 +405,14 @@ export class FileTransferManager {
   resumeTransfer(fileId: string): void {
     const state = this.activeTransfers.get(fileId);
     if (state) {
-      state.status = 'active';
+      if (this.getActiveTransferCount() >= FileTransferManager.MAX_CONCURRENT_TRANSFERS) {
+        state.status = 'pending';
+        if (!this.transferQueue.includes(fileId)) {
+          this.transferQueue.push(fileId);
+        }
+      } else {
+        state.status = 'active';
+      }
     }
   }
 
