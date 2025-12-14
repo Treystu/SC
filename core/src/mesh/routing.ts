@@ -3,8 +3,14 @@
  */
 
 import { MessageType } from "../protocol/message.js";
-import type { KademliaRoutingTable, DHTContact } from "./dht/index.js";
-import { peerToDHTContact, isValidDHTPeer, peerIdToDHTKey } from "./dht/index.js";
+import type { KademliaRoutingTable } from "./dht/index.js";
+import {
+  peerToDHTContact,
+  isValidDHTPeer,
+  peerIdToDHTKey,
+  DHTContact,
+} from "./dht/index.js";
+import { xorDistance } from "./kademlia.js";
 
 export enum PeerState {
   CONNECTING = "connecting",
@@ -129,9 +135,11 @@ export class RoutingTable {
   private readonly MAX_ROUTES: number;
   private readonly ENABLE_BLOOM: boolean;
   private readonly mode: RoutingMode;
+  public readonly localNodeId: string;
   private dhtRoutingTable?: KademliaRoutingTable;
 
-  constructor(config: RoutingConfig = {}) {
+  constructor(localNodeId: string, config: RoutingConfig = {}) {
+    this.localNodeId = localNodeId;
     this.MAX_CACHE_SIZE = config.maxCacheSize || 10000;
     this.CACHE_TTL = config.cacheTTL || 60000; // 60 seconds
     this.ROUTE_TTL = config.routeTTL || 300000; // 5 minutes
@@ -141,7 +149,10 @@ export class RoutingTable {
     this.dhtRoutingTable = config.dhtRoutingTable;
 
     // Validate configuration
-    if ((this.mode === RoutingMode.DHT || this.mode === RoutingMode.HYBRID) && !this.dhtRoutingTable) {
+    if (
+      (this.mode === RoutingMode.DHT || this.mode === RoutingMode.HYBRID) &&
+      !this.dhtRoutingTable
+    ) {
       throw new Error(`DHT routing table required for ${this.mode} mode`);
     }
   }
@@ -186,7 +197,10 @@ export class RoutingTable {
     });
 
     // If DHT mode is enabled, also add to DHT routing table
-    if (this.dhtRoutingTable && (this.mode === RoutingMode.DHT || this.mode === RoutingMode.HYBRID)) {
+    if (
+      this.dhtRoutingTable &&
+      (this.mode === RoutingMode.DHT || this.mode === RoutingMode.HYBRID)
+    ) {
       if (isValidDHTPeer(peer)) {
         const dhtContact = peerToDHTContact(peer);
         // Add valid peer to DHT routing table in DHT or HYBRID mode
@@ -577,18 +591,18 @@ export class RoutingTable {
 
   /**
    * Find a peer using DHT lookup (DHT/HYBRID mode only)
-   * 
+   *
    * @param peerId - Peer ID to find
    * @returns Promise resolving to closest known peers
    */
   async findPeerViaDHT(peerId: string): Promise<DHTContact[]> {
     if (!this.dhtRoutingTable) {
-      throw new Error('DHT routing table not configured');
+      throw new Error("DHT routing table not configured");
     }
 
     // Convert peer ID to node ID for lookup
     const targetKey = peerIdToDHTKey(peerId);
-    
+
     const result = await this.dhtRoutingTable.findNode(targetKey);
     return result.closestNodes;
   }
@@ -598,6 +612,20 @@ export class RoutingTable {
    */
   isDHTEnabled(): boolean {
     return this.mode === RoutingMode.DHT || this.mode === RoutingMode.HYBRID;
+  }
+
+  /**
+   * Find closest peers to a target ID
+   */
+  findClosestPeers(targetId: string, count: number): Peer[] {
+    // Fallback: search local peers
+    return Array.from(this.peers.values())
+      .sort((a, b) => {
+        const distA = xorDistance(targetId, a.id);
+        const distB = xorDistance(targetId, b.id);
+        return distA < distB ? -1 : 1;
+      })
+      .slice(0, count);
   }
 }
 

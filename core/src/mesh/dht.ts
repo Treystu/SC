@@ -255,7 +255,7 @@ export class DHT {
         // For this simple impl, we just add to shortlist if not present
         if (
           !processResult.seen.has(nodeData.id) &&
-          nodeData.id !== this.routingTable["kademliaTable"].localNodeId
+          nodeData.id !== this.routingTable.localNodeId
         ) {
           // Create a temporary Peer object (incomplete, missing connection info)
           // In real app we would use connection info to connect/ping
@@ -420,7 +420,7 @@ export class DHT {
         for (const nodeData of result.nodes) {
           if (
             !processResult.seen.has(nodeData.id) &&
-            nodeData.id !== this.routingTable["kademliaTable"].localNodeId
+            nodeData.id !== this.routingTable.localNodeId
           ) {
             const peer: Peer = {
               id: nodeData.id,
