@@ -65,8 +65,9 @@ class ChatViewModel(
                         content = content,
                         timestamp = System.currentTimeMillis(),
                         senderId = SCApplication.instance.localPeerId ?: "me",
-                        isSent = true,
-                        status = "pending",
+                        recipientId = contactId,
+                        status = com.sovereign.communications.data.entity.MessageStatus.PENDING,
+                        type = com.sovereign.communications.data.entity.MessageType.TEXT,
                     )
 
                 // Save to database
@@ -126,5 +127,18 @@ class ChatViewModel(
                 e.printStackTrace()
             }
         }
+    }
+}
+
+class ChatViewModelFactory(
+    private val contactId: String,
+    private val messageDao: MessageDao,
+) : androidx.lifecycle.ViewModelProvider.Factory {
+    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(ChatViewModel::class.java)) {
+            @Suppress("UNCHECKED_CAST")
+            return ChatViewModel(messageDao, contactId) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
     }
 }

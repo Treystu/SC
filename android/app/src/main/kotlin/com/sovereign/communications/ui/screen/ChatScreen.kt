@@ -22,17 +22,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.sovereign.communications.SCApplication
+import com.sovereign.communications.data.entity.MessageStatus
+import com.sovereign.communications.ui.components.MessageBubble
 import com.sovereign.communications.util.InputSanitizer
 import java.text.SimpleDateFormat
 import java.util.*
-
-data class Message(
-    val id: String,
-    val content: String,
-    val timestamp: Long,
-    val isSent: Boolean,
-    val status: String, // "pending", "sent", "delivered", "read"
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -97,7 +92,8 @@ fun ChatScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(messages) { message ->
-                    MessageBubble(message = message)
+                    val isFromCurrentUser = message.senderId == (SCApplication.instance.localPeerId ?: "me")
+                    MessageBubble(message = message, isFromCurrentUser = isFromCurrentUser)
                 }
             }
 
@@ -114,80 +110,6 @@ fun ChatScreen(
                 },
                 viewModel = viewModel,
             )
-        }
-    }
-}
-
-@Composable
-fun MessageBubble(message: com.sovereign.communications.data.entity.MessageEntity) {
-    val alignment = if (message.isSent) Alignment.End else Alignment.Start
-    val bubbleColor =
-        if (message.isSent) {
-            MaterialTheme.colorScheme.primaryContainer
-        } else {
-            MaterialTheme.colorScheme.secondaryContainer
-        }
-    val textColor =
-        if (message.isSent) {
-            MaterialTheme.colorScheme.onPrimaryContainer
-        } else {
-            MaterialTheme.colorScheme.onSecondaryContainer
-        }
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = alignment,
-    ) {
-        Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = bubbleColor,
-            modifier = Modifier.widthIn(max = 280.dp),
-        ) {
-            Column(
-                modifier = Modifier.padding(12.dp),
-            ) {
-                Text(
-                    text = message.content,
-                    color = textColor,
-                    fontSize = 16.sp,
-                )
-
-                Row(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(top = 4.dp),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = formatTimestamp(message.timestamp),
-                        color = textColor.copy(alpha = 0.7f),
-                        fontSize = 12.sp,
-                    )
-
-                    if (message.isSent) {
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text =
-                                when (message.status) {
-                                    "pending" -> "⏱"
-
-                                    "sent" -> "✓"
-
-                                    "delivered" -> "✓✓"
-
-                                    "read" -> "✓✓"
-
-                                    // Could be blue
-                                    else -> ""
-                                },
-                            fontSize = 12.sp,
-                            color = if (message.status == "read") Color.Blue else textColor.copy(alpha = 0.7f),
-                        )
-                    }
-                }
-            }
         }
     }
 }

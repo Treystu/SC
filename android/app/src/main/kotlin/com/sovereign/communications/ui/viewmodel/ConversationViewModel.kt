@@ -18,18 +18,17 @@ import kotlinx.coroutines.launch
 class ConversationViewModel(
     private val conversationDao: ConversationDao,
     private val messageDao: MessageDao,
-    private val conversationId: String
+    private val conversationId: String,
 ) : ViewModel() {
-    
     // UI State using StateFlow
     private val _uiState = MutableStateFlow(ConversationUiState())
     val uiState: StateFlow<ConversationUiState> = _uiState.asStateFlow()
-    
+
     init {
         loadConversation()
         loadMessages()
     }
-    
+
     private fun loadConversation() {
         viewModelScope.launch {
             try {
@@ -40,46 +39,50 @@ class ConversationViewModel(
             }
         }
     }
-    
+
     private fun loadMessages() {
         viewModelScope.launch {
-            messageDao.getMessages(conversationId, 100)
+            messageDao
+                .getMessages(conversationId, 100)
                 .catch { e ->
                     _uiState.update { it.copy(error = e.message) }
-                }
-                .collect { messages ->
-                    _uiState.update { it.copy(
-                        messages = messages,
-                        isLoading = false
-                    ) }
+                }.collect { messages ->
+                    _uiState.update {
+                        it.copy(
+                            messages = messages,
+                            isLoading = false,
+                        )
+                    }
                 }
         }
     }
-    
+
     fun sendMessage(content: String) {
         viewModelScope.launch {
             try {
-                val message = MessageEntity(
-                    id = generateMessageId(),
-                    conversationId = conversationId,
-                    content = content,
-                    senderId = getCurrentUserId(),
-                    recipientId = getRecipientId(),
-                    timestamp = System.currentTimeMillis(),
-                    status = MessageStatus.PENDING,
-                    type = com.sovereign.communications.data.entity.MessageType.TEXT
-                )
-                
+                val message =
+                    MessageEntity(
+                        id = generateMessageId(),
+                        conversationId = conversationId,
+                        content = content,
+                        senderId = getCurrentUserId(),
+                        recipientId = getRecipientId(),
+                        timestamp = System.currentTimeMillis(),
+                        status = MessageStatus.PENDING,
+                        type = com.sovereign.communications.data.entity.MessageType.TEXT,
+                    )
+
                 messageDao.insert(message)
-                
+
                 // Send via mesh network
                 try {
                     val meshManager = SCApplication.instance.meshNetworkManager
-                    val success = meshManager.sendMessage(
-                        recipientId = message.recipientId,
-                        payload = message.content.toByteArray()
-                    )
-                    
+                    val success =
+                        meshManager.sendMessage(
+                            recipientId = message.recipientId,
+                            message = message.content,
+                        )
+
                     // Update message status based on send result
                     if (success) {
                         messageDao.updateStatus(message.id, MessageStatus.SENT)
@@ -91,17 +94,19 @@ class ConversationViewModel(
                     // If mesh network fails, mark as queued for retry
                     messageDao.updateStatus(message.id, MessageStatus.QUEUED)
                 }
-                
+
                 _uiState.update { it.copy(sendingMessage = false) }
             } catch (e: Exception) {
-                _uiState.update { it.copy(
-                    error = e.message,
-                    sendingMessage = false
-                ) }
+                _uiState.update {
+                    it.copy(
+                        error = e.message,
+                        sendingMessage = false,
+                    )
+                }
             }
         }
     }
-    
+
     fun markAsRead() {
         viewModelScope.launch {
             try {
@@ -116,21 +121,19 @@ class ConversationViewModel(
             }
         }
     }
-    
+
     fun clearError() {
         _uiState.update { it.copy(error = null) }
     }
-    
+
     // Helper methods
-    private fun generateMessageId(): String {
-        return "msg_${System.currentTimeMillis()}_${(Math.random() * 1000).toInt()}"
-    }
-    
+    private fun generateMessageId(): String = "msg_${System.currentTimeMillis()}_${(Math.random() * 1000).toInt()}"
+
     private fun getCurrentUserId(): String {
         // Get from identity manager (SCApplication)
         return SCApplication.instance.localPeerId ?: "unknown-user"
     }
-    
+
     private fun getRecipientId(): String {
         // Get from conversation
         return _uiState.value.conversation?.contactId ?: "unknown"
@@ -145,5 +148,5 @@ data class ConversationUiState(
     val messages: List<MessageEntity> = emptyList(),
     val isLoading: Boolean = true,
     val sendingMessage: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
 )

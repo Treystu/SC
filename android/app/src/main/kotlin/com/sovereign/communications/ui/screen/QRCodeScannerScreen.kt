@@ -5,7 +5,10 @@ import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -15,7 +18,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
+import com.google.accompanist.permissions.shouldShowRationale
 import com.google.zxing.BinaryBitmap
 import com.google.zxing.MultiFormatReader
 import com.google.zxing.PlanarYUVLuminanceSource
@@ -24,20 +29,20 @@ import java.nio.ByteBuffer
 
 // Task 80: Implement QR code scanner UI
 
-@OptIn(ExperimentalPermissionsApi::class)
+@OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun QRCodeScannerScreen(
     onQRCodeScanned: (String) -> Unit,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
 ) {
     val cameraPermissionState = rememberPermissionState(Manifest.permission.CAMERA)
-    
+
     LaunchedEffect(Unit) {
-        if (!cameraPermissionState.hasPermission) {
+        if (!cameraPermissionState.status.isGranted) {
             cameraPermissionState.launchPermissionRequest()
         }
     }
-    
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -45,36 +50,39 @@ fun QRCodeScannerScreen(
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
-                            imageVector = androidx.compose.material.icons.Icons.Default.ArrowBack,
-                            contentDescription = "Back"
+                            imageVector = Icons.Filled.ArrowBack,
+                            contentDescription = "Back",
                         )
                     }
-                }
+                },
             )
-        }
+        },
     ) { paddingValues ->
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
         ) {
             when {
-                cameraPermissionState.hasPermission -> {
+                cameraPermissionState.status.isGranted -> {
                     CameraPreview(
-                        onQRCodeScanned = onQRCodeScanned
+                        onQRCodeScanned = onQRCodeScanned,
                     )
                 }
-                cameraPermissionState.shouldShowRationale -> {
+
+                cameraPermissionState.status.shouldShowRationale -> {
                     Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp),
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .padding(16.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                        verticalArrangement = Arrangement.Center,
                     ) {
                         Text(
                             text = "Camera permission is required to scan QR codes",
-                            style = MaterialTheme.typography.bodyLarge
+                            style = MaterialTheme.typography.bodyLarge,
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(onClick = { cameraPermissionState.launchPermissionRequest() }) {
@@ -82,39 +90,43 @@ fun QRCodeScannerScreen(
                         }
                     }
                 }
+
                 else -> {
                     Text(
                         text = "Camera permission denied",
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp),
-                        style = MaterialTheme.typography.bodyLarge
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .padding(16.dp),
+                        style = MaterialTheme.typography.bodyLarge,
                     )
                 }
             }
-            
+
             // Scanning overlay
-            if (cameraPermissionState.hasPermission) {
+            if (cameraPermissionState.status.isGranted) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
-                    contentAlignment = Alignment.Center
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .padding(32.dp),
+                    contentAlignment = Alignment.Center,
                 ) {
                     Surface(
                         modifier = Modifier.size(250.dp),
                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                        shape = MaterialTheme.shapes.large
+                        shape = MaterialTheme.shapes.large,
                     ) {}
                 }
-                
+
                 Text(
                     text = "Align QR code within frame",
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 48.dp),
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 48.dp),
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
             }
         }
@@ -122,80 +134,85 @@ fun QRCodeScannerScreen(
 }
 
 @Composable
-fun CameraPreview(
-    onQRCodeScanned: (String) -> Unit
-) {
+fun CameraPreview(onQRCodeScanned: (String) -> Unit) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
     var hasScanned by remember { mutableStateOf(false) }
-    
+
     AndroidView(
         factory = { ctx ->
             val previewView = PreviewView(ctx)
             val executor = ContextCompat.getMainExecutor(ctx)
-            
+
             cameraProviderFuture.addListener({
                 val cameraProvider = cameraProviderFuture.get()
-                
-                val preview = Preview.Builder().build().also {
-                    it.setSurfaceProvider(previewView.surfaceProvider)
-                }
-                
-                val imageAnalysis = ImageAnalysis.Builder()
-                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                    .build()
-                    .also { analysis ->
-                        analysis.setAnalyzer(executor) { imageProxy ->
-                            if (!hasScanned) {
-                                processImageProxy(imageProxy) { qrCode ->
-                                    hasScanned = true
-                                    onQRCodeScanned(qrCode)
-                                }
-                            }
-                            imageProxy.close()
-                        }
+
+                val preview =
+                    Preview.Builder().build().also {
+                        it.setSurfaceProvider(previewView.surfaceProvider)
                     }
-                
+
+                val imageAnalysis =
+                    ImageAnalysis
+                        .Builder()
+                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                        .build()
+                        .also { analysis ->
+                            analysis.setAnalyzer(executor) { imageProxy ->
+                                if (!hasScanned) {
+                                    processImageProxy(imageProxy) { qrCode ->
+                                        hasScanned = true
+                                        onQRCodeScanned(qrCode)
+                                    }
+                                }
+                                imageProxy.close()
+                            }
+                        }
+
                 val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
-                
+
                 try {
                     cameraProvider.unbindAll()
                     cameraProvider.bindToLifecycle(
                         lifecycleOwner,
                         cameraSelector,
                         preview,
-                        imageAnalysis
+                        imageAnalysis,
                     )
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
             }, executor)
-            
+
             previewView
         },
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier.fillMaxSize(),
     )
 }
 
-private fun processImageProxy(imageProxy: ImageProxy, onQRCodeFound: (String) -> Unit) {
+private fun processImageProxy(
+    imageProxy: ImageProxy,
+    onQRCodeFound: (String) -> Unit,
+) {
     val buffer = imageProxy.planes[0].buffer
     val bytes = ByteArray(buffer.remaining())
     buffer.get(bytes)
-    
-    val source = PlanarYUVLuminanceSource(
-        bytes,
-        imageProxy.width,
-        imageProxy.height,
-        0,
-        0,
-        imageProxy.width,
-        imageProxy.height,
-        false
-    )
-    
+
+    val source =
+        PlanarYUVLuminanceSource(
+            bytes,
+            imageProxy.width,
+            imageProxy.height,
+            0,
+            0,
+            imageProxy.width,
+            imageProxy.height,
+            false,
+        )
+
     val binaryBitmap = BinaryBitmap(HybridBinarizer(source))
-    
+
     try {
         val result = MultiFormatReader().decode(binaryBitmap)
         onQRCodeFound(result.text)

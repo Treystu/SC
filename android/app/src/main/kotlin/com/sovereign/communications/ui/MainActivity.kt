@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import com.sovereign.communications.SCApplication
 import com.sovereign.communications.notifications.NotificationManager
 import com.sovereign.communications.permissions.PermissionManager
 import com.sovereign.communications.service.MeshNetworkService
@@ -22,6 +23,8 @@ import com.sovereign.communications.utils.BootstrapUtils
  */
 class MainActivity : ComponentActivity() {
     private var inviteCode by mutableStateOf<String?>(null)
+    private lateinit var permissionManager: PermissionManager
+    private lateinit var notificationManager: NotificationManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -65,13 +68,13 @@ class MainActivity : ComponentActivity() {
                 if (code != null) {
                     inviteCode = code
                 }
-                
+
                 // Check for "bootstrap" parameter (peer list from webapp)
                 val bootstrap = data.getQueryParameter("bootstrap")
                 if (bootstrap != null) {
                     handleBootstrapPeers(bootstrap)
                 }
-                
+
                 // Check for "inviter" parameter
                 val inviter = data.getQueryParameter("inviter")
                 if (inviter != null) {
@@ -84,12 +87,12 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-    
+
     private fun handleBootstrapPeers(encodedData: String) {
         try {
             // Decode using utility function
             val json = BootstrapUtils.decodeBase64Url(encodedData)
-            
+
             if (json != null) {
                 // Store bootstrap peers for auto-connect
                 getSharedPreferences("mesh_bootstrap", Context.MODE_PRIVATE)
@@ -97,7 +100,7 @@ class MainActivity : ComponentActivity() {
                     .putString("bootstrap_peers", json)
                     .putLong("bootstrap_timestamp", System.currentTimeMillis())
                     .apply()
-                
+
                 android.util.Log.d("MainActivity", "Stored bootstrap peers for auto-connect")
             } else {
                 android.util.Log.w("MainActivity", "Failed to decode bootstrap data")
@@ -165,7 +168,7 @@ class MainActivity : ComponentActivity() {
      * Show dialog explaining permission requirements
      */
     private fun showPermissionRationaleDialog() {
-        androidx.appcompat.app.AlertDialog
+        android.app.AlertDialog
             .Builder(this)
             .setTitle("Permissions Required")
             .setMessage(
@@ -181,7 +184,7 @@ class MainActivity : ComponentActivity() {
                 All permissions are essential for secure, offline mesh communication.
                 """.trimIndent(),
             ).setPositiveButton("Grant Permissions") { _, _ ->
-                permissionManager.requestAllPermissions(this)
+                permissionManager.requestRequiredPermissions { }
             }.setNegativeButton("Cancel") { dialog, _ ->
                 dialog.dismiss()
             }.setCancelable(false)

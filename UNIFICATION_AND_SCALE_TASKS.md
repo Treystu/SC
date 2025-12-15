@@ -118,5 +118,9 @@ Flood routing (gossiping every message to everyone) works for 500 users. It cras
 ## 📋 Recommended Immediate Sprint
 
 1.  **[Android]**: Rip out `MeshNetworkManager.kt` routing logic. Replace with a J2V8/LiquidCore bridge to `@sc/core`. (Completed)
-2.  **[iOS]**: Rip out `MeshNetworkManager.swift` JSON logic. Replace with JavaScriptCore bridge. (Completed)
-3.  **[Core]**: Implement `Kademlia` routing table structure (Task 2.1). (Completed)
+2.  **[iOS]**: - [ ] Audit `MeshNetworkManager.kt` for completion vs `MeshNetworkManager.swift`
+
+- [ ] Verify `MeshGATTServer.kt` implementation
+- [ ] Verify `MeshGATTClient.kt` implementation `Kademlia` routing table structure (Task 2.1). (Completed)
+
+1.  **[Core]**: Implement `Kademlia` routing table structure (Task 2.1). (Completed)

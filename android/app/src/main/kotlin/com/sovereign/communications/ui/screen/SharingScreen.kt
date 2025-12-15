@@ -17,11 +17,12 @@ import kotlinx.coroutines.launch
 /**
  * SharingScreen - Demonstrates all Android sharing methods
  * Provides UI for QR codes, NFC, Nearby Connections, and Share Sheet
- * 
+ *
  * @param peerId The current user's peer ID
  * @param publicKey The current user's public key
  * @param displayName The current user's display name
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SharingScreen(
     peerId: String,
@@ -29,35 +30,37 @@ fun SharingScreen(
     displayName: String?,
     onNavigateBack: () -> Unit,
     onNavigateToQRScanner: () -> Unit,
-    onNavigateToQRDisplay: (String) -> Unit
+    onNavigateToQRDisplay: (String) -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    
+
     // Initialize managers with actual user data
     val shareManager = remember { ShareManager(context) }
-    val nfcManager = remember { 
-        if (context is Activity) NFCShareManager(context) else null 
-    }
+    val nfcManager =
+        remember {
+            if (context is Activity) NFCShareManager(context) else null
+        }
     val nearbyManager = remember { NearbyShareManager(context) }
     val apkExtractor = remember { APKExtractor(context) }
-    val inviteManager = remember { 
-        InviteManager(context, peerId, publicKey, displayName)
-    }
-    
+    val inviteManager =
+        remember {
+            InviteManager(context, peerId, publicKey, displayName)
+        }
+
     var currentInvite by remember { mutableStateOf<Invite?>(null) }
     var showNearbyDialog by remember { mutableStateOf(false) }
     val discoveredDevices by nearbyManager.discoveredDevices.collectAsState()
     val connectionState by nearbyManager.connectionState.collectAsState()
-    
+
     // Cache APK URI to avoid repeated file operations
     var cachedAPKUri by remember { mutableStateOf<android.net.Uri?>(null) }
-    
+
     // Create an invite when screen opens
     LaunchedEffect(Unit) {
         currentInvite = inviteManager.createInvite()
     }
-    
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -66,23 +69,24 @@ fun SharingScreen(
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Default.ArrowBack, "Back")
                     }
-                }
+                },
             )
-        }
+        },
     ) { paddingValues ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
                 text = "Share via",
                 style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.padding(bottom = 8.dp)
+                modifier = Modifier.padding(bottom = 8.dp),
             )
-            
+
             // QR Code
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -91,67 +95,69 @@ fun SharingScreen(
                         val payload = inviteManager.createSharePayload(invite)
                         onNavigateToQRDisplay(payload.toJsonString())
                     }
-                }
+                },
             ) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
                         Icons.Default.QrCode,
                         contentDescription = null,
                         modifier = Modifier.size(40.dp),
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = MaterialTheme.colorScheme.primary,
                     )
                     Spacer(modifier = Modifier.width(16.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             "QR Code",
-                            style = MaterialTheme.typography.titleMedium
+                            style = MaterialTheme.typography.titleMedium,
                         )
                         Text(
                             "Display QR code for scanning",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
             }
-            
+
             // Scan QR Code
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                onClick = onNavigateToQRScanner
+                onClick = onNavigateToQRScanner,
             ) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
                         Icons.Default.QrCodeScanner,
                         contentDescription = null,
                         modifier = Modifier.size(40.dp),
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = MaterialTheme.colorScheme.primary,
                     )
                     Spacer(modifier = Modifier.width(16.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             "Scan QR Code",
-                            style = MaterialTheme.typography.titleMedium
+                            style = MaterialTheme.typography.titleMedium,
                         )
                         Text(
                             "Scan someone's QR code",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
             }
-            
+
             // NFC
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -160,73 +166,78 @@ fun SharingScreen(
                         nfcManager?.enableNFCSharing(invite)
                     }
                 },
-                enabled = nfcManager?.isNFCAvailable() == true
+                enabled = nfcManager?.isNFCAvailable() == true,
             ) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
                         Icons.Default.Nfc,
                         contentDescription = null,
                         modifier = Modifier.size(40.dp),
-                        tint = if (nfcManager?.isNFCAvailable() == true) 
-                            MaterialTheme.colorScheme.primary 
-                        else 
-                            MaterialTheme.colorScheme.onSurfaceVariant
+                        tint =
+                            if (nfcManager?.isNFCAvailable() == true) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
                     )
                     Spacer(modifier = Modifier.width(16.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             "NFC Tap to Share",
-                            style = MaterialTheme.typography.titleMedium
+                            style = MaterialTheme.typography.titleMedium,
                         )
                         Text(
-                            if (nfcManager?.isNFCAvailable() == true) 
+                            if (nfcManager?.isNFCAvailable() == true) {
                                 "Tap devices together to share"
-                            else 
-                                "NFC not available",
+                            } else {
+                                "NFC not available"
+                            },
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
             }
-            
+
             // Nearby Connections
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                onClick = { showNearbyDialog = true }
+                onClick = { showNearbyDialog = true },
             ) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
                         Icons.Default.Sensors,
                         contentDescription = null,
                         modifier = Modifier.size(40.dp),
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = MaterialTheme.colorScheme.primary,
                     )
                     Spacer(modifier = Modifier.width(16.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             "Nearby Sharing",
-                            style = MaterialTheme.typography.titleMedium
+                            style = MaterialTheme.typography.titleMedium,
                         )
                         Text(
                             "Share with nearby devices (no internet needed)",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
             }
-            
+
             // Share Sheet
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -234,35 +245,36 @@ fun SharingScreen(
                     currentInvite?.let { invite ->
                         shareManager.shareApp(invite, includeAPK = false)
                     }
-                }
+                },
             ) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
                         Icons.Default.Share,
                         contentDescription = null,
                         modifier = Modifier.size(40.dp),
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = MaterialTheme.colorScheme.primary,
                     )
                     Spacer(modifier = Modifier.width(16.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             "Share via Apps",
-                            style = MaterialTheme.typography.titleMedium
+                            style = MaterialTheme.typography.titleMedium,
                         )
                         Text(
                             "Share invite link via messaging apps",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
             }
-            
+
             // Share APK
             if (apkExtractor.isAPKExtractionAvailable()) {
                 Card(
@@ -275,63 +287,64 @@ fun SharingScreen(
                             }
                             shareManager.shareApp(invite, includeAPK = true)
                         }
-                    }
+                    },
                 ) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(
                             Icons.Default.Android,
                             contentDescription = null,
                             modifier = Modifier.size(40.dp),
-                            tint = MaterialTheme.colorScheme.primary
+                            tint = MaterialTheme.colorScheme.primary,
                         )
                         Spacer(modifier = Modifier.width(16.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 "Share APK",
-                                style = MaterialTheme.typography.titleMedium
+                                style = MaterialTheme.typography.titleMedium,
                             )
                             Text(
                                 "Share app installer (${apkExtractor.getAPKSizeFormatted()})",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
                 }
             }
-            
+
             // Current invite info
             currentInvite?.let { invite ->
                 Spacer(modifier = Modifier.height(8.dp))
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     color = MaterialTheme.colorScheme.surfaceVariant,
-                    shape = MaterialTheme.shapes.medium
+                    shape = MaterialTheme.shapes.medium,
                 ) {
                     Column(
-                        modifier = Modifier.padding(12.dp)
+                        modifier = Modifier.padding(12.dp),
                     ) {
                         Text(
                             "Active Invite",
                             style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
                             invite.code.take(16) + "...",
                             style = MaterialTheme.typography.bodySmall,
-                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
                         )
                     }
                 }
             }
         }
     }
-    
+
     // Nearby Connections Dialog
     if (showNearbyDialog) {
         NearbyConnectionsDialog(
@@ -343,11 +356,12 @@ fun SharingScreen(
             onDismiss = {
                 showNearbyDialog = false
                 nearbyManager.disconnectAll()
-            }
+            },
         )
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NearbyConnectionsDialog(
     nearbyManager: NearbyShareManager,
@@ -355,11 +369,11 @@ fun NearbyConnectionsDialog(
     discoveredDevices: List<NearbyShareManager.DiscoveredDevice>,
     connectionState: NearbyShareManager.ConnectionState,
     userName: String = "SC User",
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     var mode by remember { mutableStateOf<String>("advertise") }
-    
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Nearby Sharing") },
@@ -367,31 +381,34 @@ fun NearbyConnectionsDialog(
             Column {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
+                    horizontalArrangement = Arrangement.SpaceEvenly,
                 ) {
                     FilterChip(
                         selected = mode == "advertise",
                         onClick = { mode = "advertise" },
-                        label = { Text("Be Discoverable") }
+                        label = { Text("Be Discoverable") },
                     )
                     FilterChip(
                         selected = mode == "discover",
                         onClick = { mode = "discover" },
-                        label = { Text("Find Devices") }
+                        label = { Text("Find Devices") },
                     )
                 }
-                
+
                 Spacer(modifier = Modifier.height(16.dp))
-                
+
                 when (connectionState) {
                     is NearbyShareManager.ConnectionState.Advertising -> {
                         Text("Advertising... Other devices can now see you.")
                     }
+
                     is NearbyShareManager.ConnectionState.Discovering -> {
                         Text("Searching for nearby devices...")
                         if (discoveredDevices.isEmpty()) {
-                            Text("No devices found yet", 
-                                style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                "No devices found yet",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
                         } else {
                             discoveredDevices.forEach { device ->
                                 TextButton(
@@ -399,24 +416,27 @@ fun NearbyConnectionsDialog(
                                         nearbyManager.connectToDevice(
                                             device.endpointId,
                                             device.name,
-                                            userName
+                                            userName,
                                         )
-                                    }
+                                    },
                                 ) {
                                     Text(device.name)
                                 }
                             }
                         }
                     }
+
                     is NearbyShareManager.ConnectionState.Connected -> {
                         Text("Connected! Sharing invite...")
                     }
+
                     is NearbyShareManager.ConnectionState.Error -> {
                         Text(
                             "Error: ${connectionState.message}",
-                            color = MaterialTheme.colorScheme.error
+                            color = MaterialTheme.colorScheme.error,
                         )
                     }
+
                     else -> {
                         Text("Ready to share")
                     }
@@ -435,7 +455,7 @@ fun NearbyConnectionsDialog(
                             // Handle received invite
                         }
                     }
-                }
+                },
             ) {
                 Text("Start")
             }
@@ -444,6 +464,6 @@ fun NearbyConnectionsDialog(
             TextButton(onClick = onDismiss) {
                 Text("Close")
             }
-        }
+        },
     )
 }

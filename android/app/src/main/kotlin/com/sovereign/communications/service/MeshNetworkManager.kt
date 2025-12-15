@@ -152,8 +152,9 @@ class MeshNetworkManager(
     fun sendMessage(
         recipientId: String,
         message: String,
-    ) {
+    ): Boolean {
         jsBridge.sendMessage(recipientId, message)
+        return true
     }
 
     private fun isPeerConnected(peerId: String): Boolean =

@@ -16,7 +16,7 @@ data class Invite(
     val expiresAt: Long,
     val signature: ByteArray,
     val bootstrapPeers: List<String> = emptyList(),
-    val metadata: Map<String, String>? = null
+    val metadata: Map<String, String>? = null,
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -61,7 +61,7 @@ data class SharePayload(
     val inviterPeerId: String,
     val signature: ByteArray,
     val bootstrapPeers: List<String>,
-    val timestamp: Long
+    val timestamp: Long,
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -89,22 +89,22 @@ data class SharePayload(
         return result
     }
 
-    fun toJsonString(): String {
-        return try {
-            kotlinx.serialization.json.Json.encodeToString(this)
+    fun toJsonString(): String =
+        try {
+            kotlinx.serialization.json.Json
+                .encodeToString(serializer(), this)
         } catch (e: Exception) {
             android.util.Log.e("SharePayload", "Serialization failed", e)
             throw e
         }
-    }
 
     companion object {
-        fun fromJsonString(json: String): SharePayload? {
-            return try {
-                kotlinx.serialization.json.Json.decodeFromString<SharePayload>(json)
+        fun fromJsonString(json: String): SharePayload? =
+            try {
+                kotlinx.serialization.json.Json
+                    .decodeFromString<SharePayload>(json)
             } catch (e: Exception) {
                 null
             }
-        }
     }
 }

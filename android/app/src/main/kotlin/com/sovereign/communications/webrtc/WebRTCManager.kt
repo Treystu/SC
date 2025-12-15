@@ -1,7 +1,6 @@
 package com.sovereign.communications.webrtc
 
 import android.content.Context
-import io.getstream.webrtc.android.createPeerConnectionFactory
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.webrtc.*
@@ -35,7 +34,11 @@ class WebRTCManager(
                 .createInitializationOptions()
         PeerConnectionFactory.initialize(options)
 
-        peerConnectionFactory = createPeerConnectionFactory(context)
+        peerConnectionFactory =
+            PeerConnectionFactory
+                .builder()
+                .setOptions(PeerConnectionFactory.Options())
+                .createPeerConnectionFactory()
     }
 
     /**
