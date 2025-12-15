@@ -1,5 +1,38 @@
 // Utility functions for public key fingerprints and validation
 import { bytesToBase64, base64ToBytes, hexToBytes } from "./encoding.js";
+import { sha256 } from "@noble/hashes/sha2.js";
+
+/**
+ * Generate a human-readable fingerprint from a public key (Sync version)
+ * Uses SHA-256 hash and formats as hex string
+ */
+export function generateFingerprintSync(
+  publicKey: Uint8Array | string,
+): string {
+  let keyBytes: Uint8Array;
+
+  if (typeof publicKey === "string") {
+    // Convert hex string or base64 to Uint8Array
+    if (publicKey.match(/^[0-9a-fA-F]+$/)) {
+      // Hex string
+      keyBytes = hexToBytes(publicKey);
+    } else {
+      // Base64 string
+      keyBytes = base64ToBytes(publicKey);
+    }
+  } else {
+    keyBytes = publicKey;
+  }
+
+  // Hash the public key
+  const hashArray = sha256(keyBytes);
+
+  // Convert to hex and take first 16 characters for display
+  const hex = Array.from(hashArray)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  return hex.substring(0, 16).toUpperCase();
+}
 
 /**
  * Generate a human-readable fingerprint from a public key

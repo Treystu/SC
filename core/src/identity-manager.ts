@@ -72,7 +72,9 @@ export class IdentityManager {
       "SHA-256",
       publicKeyExport,
     );
-    const id = this.arrayBufferToHex(publicKeyHash).substring(0, 16);
+    const id = this.arrayBufferToHex(publicKeyHash)
+      .substring(0, 16)
+      .toUpperCase();
 
     this.identity = {
       id,

@@ -12,6 +12,7 @@ import {
   IdentityKeyPair,
   signMessage,
 } from "../crypto/primitives.js";
+import { generateFingerprintSync } from "../utils/fingerprint.js";
 import { ConnectionMonitor } from "../connection-quality.js";
 import { DHT } from "./dht.js";
 import {
@@ -22,6 +23,7 @@ import {
 
 export interface MeshNetworkConfig {
   identity?: IdentityKeyPair;
+  peerId?: string; // Explicit Peer ID (fingerprint)
   maxPeers?: number;
   defaultTTL?: number;
   persistence?: any; // Type 'PersistenceAdapter' is imported from relay.js but circular dependency might be an issue if not careful.
@@ -74,9 +76,10 @@ export class MeshNetwork {
   constructor(config: MeshNetworkConfig = {}) {
     // Initialize identity
     this.identity = config.identity || generateIdentity();
-    this.localPeerId = Array.from(this.identity.publicKey)
-      .map((b: number) => b.toString(16).padStart(2, "0"))
-      .join("");
+
+    // Unified Identity: Use provided ID (likely fingerprint from DB) or generate new fingerprint
+    this.localPeerId =
+      config.peerId || generateFingerprintSync(this.identity.publicKey);
 
     // Configuration
     this.defaultTTL = config.defaultTTL || 10;
