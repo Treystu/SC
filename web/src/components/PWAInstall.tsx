@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import "./PWAInstall.css";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;

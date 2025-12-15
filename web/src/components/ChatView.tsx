@@ -63,6 +63,32 @@ function ChatView({
         onClick={() => setShowProfile(true)}
         style={{ cursor: "pointer" }}
       >
+        {onClose && (
+          <button
+            className="close-chat-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
+            aria-label="Back"
+            title="Back to list"
+          >
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M19 12H5" />
+              <path d="M12 19l-7-7 7-7" />
+            </svg>
+          </button>
+        )}
+
         <div className="chat-avatar">{contactName.charAt(0).toUpperCase()}</div>
         <div className="chat-info">
           <h3>{contactName}</h3>
@@ -70,17 +96,23 @@ function ChatView({
             {isOnline ? "Online" : "Offline"}
           </span>
         </div>
+
         {/* Placeholder controls until voice call handling is fully wired into signaling */}
-        <div className="call-controls" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="call-controls"
+          onClick={(e) => e.stopPropagation()}
+          style={{ marginLeft: "auto", display: "flex", gap: "0.5rem" }}
+        >
           <button
             data-testid="voice-call-btn"
             onClick={() => {
               setCallActive(true);
               setCallEnded(false);
             }}
-            className="btn-secondary"
+            className="icon-btn"
+            title="Start Call"
           >
-            Start Call
+            📞
           </button>
           <button
             data-testid="end-call-btn"
@@ -88,9 +120,11 @@ function ChatView({
               setCallActive(false);
               setCallEnded(true);
             }}
-            className="btn-secondary"
+            className="icon-btn"
+            title="End Call"
+            style={{ color: "var(--accent-danger)" }}
           >
-            End Call
+            ✕
           </button>
           {callActive && (
             <span data-testid="call-active" className="sr-only">
@@ -103,19 +137,6 @@ function ChatView({
             </span>
           )}
         </div>
-        {onClose && (
-          <button
-            className="close-chat-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              onClose();
-            }}
-            aria-label="Close chat"
-            title="Close chat"
-          >
-            ×
-          </button>
-        )}
       </div>
 
       <div className="chat-messages" data-testid="message-container">

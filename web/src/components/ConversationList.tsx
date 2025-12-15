@@ -62,7 +62,10 @@ const ConversationItem = memo(
       <div className="conversation-info">
         <div className="conversation-header">
           <span className="conversation-name">{conv.name}</span>
-          <span className="conversation-status" data-testid={`peer-${conv.name}-status`}>
+          <span
+            className="conversation-status"
+            data-testid={`peer-${conv.name}-status`}
+          >
             {/*
               conv.online is derived from live peer presence; if unavailable,
               fall back to overall mesh connectionStatus to signal connectivity.
@@ -86,7 +89,10 @@ const ConversationItem = memo(
         <div className="unread-badge">{conv.unreadCount}</div>
       )}
       {conv.verified && (
-        <span className="verification-badge" data-testid={`peer-${conv.name}-verified`}>
+        <span
+          className="verification-badge"
+          data-testid={`peer-${conv.name}-verified`}
+        >
           ✓
         </span>
       )}
@@ -302,8 +308,16 @@ function ConversationList({
         <LoadingState loading={loading}>
           {conversations.length === 0 ? (
             <div className="empty-list">
+              <div className="empty-icon">👥</div>
               <p>No conversations yet</p>
-              <p className="hint">Add a contact to start messaging</p>
+              <p className="hint">Start connecting with your peers</p>
+              <button
+                className="btn-primary"
+                onClick={() => setShowAddDialog(true)}
+                style={{ marginTop: "1rem" }}
+              >
+                Add New Contact
+              </button>
             </div>
           ) : (
             conversations.map((conv) => (

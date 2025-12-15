@@ -2,6 +2,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  background: transparent;
 }
 
 .chat-header {
@@ -9,53 +10,75 @@
   align-items: center;
   gap: 1rem;
   padding: 1rem;
-  background-color: var(--bg-secondary);
+  background-color: rgba(5, 5, 5, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border-color);
+  z-index: 10;
 }
 
 .close-chat-btn {
+  margin-right: 0.5rem; /* Move to left for mobile back button feel if desired, but right is standard close */
   margin-left: auto;
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  font-size: 1.5rem;
-  cursor: pointer;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  line-height: 1;
-  transition: all 0.2s;
-}
-
-.close-chat-btn:hover {
-  background-color: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-
-.chat-avatar {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  background: linear-gradient(
-    135deg,
-    var(--accent-primary),
-    var(--accent-secondary)
-  );
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 600;
-  color: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: 1.5rem;
+  transition: all 0.2s;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+}
+
+.close-chat-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--accent-danger);
+  border-color: var(--accent-danger);
+  transform: rotate(90deg);
+}
+
+.chat-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--gradient-main);
+  box-shadow: 0 0 15px rgba(34, 211, 238, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: #000;
+  font-size: 1.1rem;
 }
 
 .chat-info h3 {
   font-size: 1rem;
   font-weight: 600;
-  margin-bottom: 0.25rem;
+  color: var(--text-primary);
+  margin-bottom: 0.1rem;
 }
 
 .chat-info .status {
-  font-size: 0.85rem;
-  color: var(--text-secondary);
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.chat-info .status.online {
+  color: var(--accent-success);
+}
+.chat-info .status.online::before {
+  content: "";
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-success);
+  box-shadow: 0 0 8px var(--accent-success);
 }
 
 .chat-messages {
@@ -64,7 +87,19 @@
   padding: 1rem;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 1rem;
+  background-image:
+    radial-gradient(
+      circle at 50% 50%,
+      rgba(34, 211, 238, 0.03) 0%,
+      transparent 50%
+    ),
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size:
+    100% 100%,
+    40px 40px,
+    40px 40px;
 }
 
 .empty-chat {
@@ -80,115 +115,99 @@
 .empty-chat .hint {
   font-size: 0.9rem;
   margin-top: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: var(--bg-surface);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-color);
 }
 
 .message {
   display: flex;
-  margin-bottom: 0.5rem;
+  max-width: 85%;
+  animation: slideUp 0.3s var(--ease-spring);
 }
 
 .message.sent {
-  justify-content: flex-end;
+  align-self: flex-end;
 }
 
 .message.received {
-  justify-content: flex-start;
+  align-self: flex-start;
 }
 
 .message-bubble {
-  max-width: 70%;
-  padding: 0.75rem 1rem;
-  border-radius: 12px;
+  padding: 0.8rem 1rem;
+  border-radius: var(--radius-md);
+  position: relative;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
   word-wrap: break-word;
 }
 
 .message.sent .message-bubble {
-  background: linear-gradient(
-    135deg,
-    var(--accent-primary),
-    var(--accent-secondary)
-  );
-  color: var(--bg-primary);
-  border-bottom-right-radius: 4px;
+  background: var(--gradient-main);
+  color: #000;
+  border-bottom-right-radius: 2px;
 }
 
 .message.received .message-bubble {
-  background-color: var(--bg-secondary);
-  border-bottom-left-radius: 4px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  border-bottom-left-radius: 2px;
 }
 
 .message-content {
   margin-bottom: 0.25rem;
   white-space: pre-wrap;
+  line-height: 1.5;
 }
 
 .message-meta {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.75rem;
-  opacity: 0.8;
+  font-size: 0.7rem;
+  opacity: 0.7;
 }
 
 .message.sent .message-meta {
   justify-content: flex-end;
+  color: rgba(0, 0, 0, 0.6);
 }
 
 .message-status {
-  font-size: 0.85rem;
+  font-size: 0.8rem;
+  font-weight: bold;
 }
 
-.status-pending {
-  opacity: 0.5;
-}
-
-.status-read {
-  color: var(--accent-primary);
-}
-
+/* Input Area */
 .chat-input-container {
   display: flex;
+  flex-direction: column; /* To accommodate error/typing indicators */
   gap: 0.5rem;
   padding: 1rem;
   background-color: var(--bg-secondary);
   border-top: 1px solid var(--border-color);
+  backdrop-filter: blur(10px);
 }
 
-.chat-input {
-  flex: 1;
-  padding: 0.75rem;
-  background-color: var(--bg-tertiary);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  resize: none;
-  font-size: 0.95rem;
-  max-height: 120px;
+.error-message {
+  color: var(--accent-danger);
+  font-size: 0.8rem;
+  padding: 0.5rem;
+  background: rgba(248, 113, 113, 0.1);
+  border-radius: var(--radius-sm);
 }
 
-.chat-input:focus {
-  outline: none;
-  border-color: var(--accent-primary);
-}
+@media (max-width: 768px) {
+  .chat-view {
+    height: 100vh; /* Full viewport height on mobile */
+  }
 
-.send-button {
-  padding: 0.75rem 1.5rem;
-  background: linear-gradient(
-    135deg,
-    var(--accent-primary),
-    var(--accent-secondary)
-  );
-  color: var(--bg-primary);
-  border-radius: 8px;
-  font-weight: 600;
-  transition: transform 0.2s;
-}
+  .chat-header {
+    padding: 0.75rem;
+  }
 
-.send-button:hover:not(:disabled) {
-  transform: translateY(-2px);
-}
-
-.send-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  /* On mobile, usually the close button is a back button on the left */
+  /* But for now, we keep it right, user can adapt */
 }

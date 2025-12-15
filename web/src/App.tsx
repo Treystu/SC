@@ -990,7 +990,9 @@ function App() {
         {/* Only show main app UI if not onboarding */}
         {!showOnboarding && (
           <>
-            <div className="main-layout">
+            <div
+              className={`main-layout ${selectedConversation ? "chat-active" : ""}`}
+            >
               <div className="sidebar">
                 <div className="sidebar-header">
                   <div className="user-profile">
@@ -1094,65 +1096,77 @@ function App() {
                 ) : (
                   <div className="empty-state">
                     <div className="empty-state-content">
-                      <h2>Welcome to Sovereign Communications</h2>
-                      <p>
-                        Select a conversation or add a new contact to get
-                        started
-                      </p>
-                      <button
-                        data-testid="generate-identity-btn"
-                        onClick={handleGenerateIdentity}
-                      >
-                        Generate Identity
-                      </button>
-                      {identityGenerated && (
-                        <div
-                          data-testid="public-key-display"
-                          className="mono-text"
-                        >
-                          {identityPublicKey || "public-key"}
+                      <div className="dashboard-header">
+                        <h2>Sovereign Communications</h2>
+                        <span className="version-badge">v1.0 Ready</span>
+                      </div>
+
+                      <div className="dashboard-card user-card">
+                        <h3>Your Identity</h3>
+                        <div className="identity-display">
+                          <div className="avatar-large">
+                            {status.localPeerId
+                              ? status.localPeerId.charAt(0).toUpperCase()
+                              : "?"}
+                          </div>
+                          <div className="identity-details">
+                            <p className="peer-id-label">Peer ID</p>
+                            <code
+                              className="peer-id-code"
+                              onClick={() => {
+                                navigator.clipboard.writeText(
+                                  status.localPeerId,
+                                );
+                                alert("Peer ID copied to clipboard!");
+                              }}
+                              title="Click to copy"
+                            >
+                              {status.localPeerId || "Generating..."}
+                            </code>
+                            <div className="status-indicator">
+                              <span
+                                className={`status-dot ${status.isConnected ? "online" : "offline"}`}
+                              ></span>
+                              {status.isConnected
+                                ? `Online (${status.peerCount} peers)`
+                                : "Connecting..."}
+                            </div>
+                          </div>
                         </div>
-                      )}
-                      <div className="features" role="list">
-                        <div className="feature" role="listitem">
-                          <h3>🔒 End-to-End Encrypted</h3>
-                          <p>
-                            All messages are encrypted with Ed25519 and
-                            ChaCha20-Poly1305
-                          </p>
-                        </div>
-                        <div className="feature" role="listitem">
-                          <h3>🌐 Mesh Networking</h3>
-                          <p>
-                            Direct peer-to-peer communication with no central
-                            servers
-                          </p>
-                        </div>
-                        <div className="feature" role="listitem">
-                          <h3>🔗 Multi-Platform</h3>
-                          <p>
-                            Works on Web, Android, and iOS with seamless
-                            connectivity
-                          </p>
+                        <div className="dashboard-actions">
+                          <button
+                            className="btn-primary"
+                            onClick={() => setShowSettings(true)}
+                          >
+                            Share Profile
+                          </button>
                         </div>
                       </div>
-                      {status.localPeerId && (
-                        <div
-                          className="peer-info"
-                          role="status"
-                          aria-live="polite"
-                        >
+
+                      <div className="dashboard-grid">
+                        <div className="dashboard-card action-card">
+                          <div className="card-icon">👥</div>
+                          <h3>Connect</h3>
                           <p>
-                            <strong>Your Peer ID:</strong>{" "}
-                            <span aria-label={`Peer ID ${status.localPeerId}`}>
-                              {status.localPeerId.substring(0, 16)}...
-                            </span>
-                          </p>
-                          <p>
-                            <strong>Connected Peers:</strong> {status.peerCount}
+                            Use the <strong>+</strong> button in the sidebar to
+                            add friends.
                           </p>
                         </div>
-                      )}
+                        <div
+                          className="dashboard-card action-card"
+                          onClick={() =>
+                            window.open(
+                              "https://github.com/Treystu/SC",
+                              "_blank",
+                            )
+                          }
+                          style={{ cursor: "pointer" }}
+                        >
+                          <div className="card-icon">⭐</div>
+                          <h3>Star on GitHub</h3>
+                          <p>Support the project and get updates.</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
