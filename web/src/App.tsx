@@ -95,10 +95,7 @@ function App() {
   const [toast, setToast] = useState<{ message: string; type: string } | null>(
     null,
   );
-  const [identityGenerated, setIdentityGenerated] = useState(false);
-  const [identityPublicKey, setIdentityPublicKey] = useState<string | null>(
-    null,
-  );
+
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const {
     contacts,
@@ -418,9 +415,8 @@ function App() {
         // Use first 16 characters as fingerprint for display
         const FINGERPRINT_LENGTH = 16;
 
-        // Save contact to database
-        const db = getDatabase();
-        await db.saveContact({
+        // Save contact using hook to update state immediately
+        await addContact({
           id: result.contact.peerId,
           publicKey: publicKeyBase64,
           displayName:
@@ -435,14 +431,41 @@ function App() {
           endpoints: [],
         });
 
-        // Connect to the inviter
-        await connectToPeer(result.contact.peerId);
+        // Save initial conversation state if not exists
+        const db = getDatabase();
+        await db.saveConversation({
+          id: result.contact.peerId,
+          contactId: result.contact.peerId,
+          lastMessageTimestamp: Date.now(),
+          unreadCount: 0,
+          createdAt: Date.now(),
+        });
+        refreshConversations();
+
+        // 1. Valid invite -> Open UI immediately (Optimistic UI)
         setSelectedConversation(result.contact.peerId);
 
+        // 2. Announce success
         announce.message(
-          `Joined from invite! Connected to ${result.contact.name || pendingInviteData.inviterName || "your friend"}`,
+          `Joined from invite! Added ${result.contact.name || pendingInviteData.inviterName || "new contact"}.`,
           "assertive",
         );
+
+        // 3. Attempt connection in background (don't block UI if they are offline)
+        try {
+          await connectToPeer(result.contact.peerId);
+          console.log("Connected to inviter:", result.contact.peerId);
+        } catch (connErr) {
+          console.warn(
+            "Could not connect immediately to inviter (likely offline):",
+            connErr,
+          );
+          setToast({
+            message:
+              "Contact added. They may be offline, but you can still message them.",
+            type: "info",
+          });
+        }
       }
     } catch (error) {
       console.error("Failed to process pending invite:", error);
@@ -858,27 +881,6 @@ function App() {
       await handleAddContact(peerId, `Peer ${peerId.slice(0, 6)}`);
     }
     setSelectedConversation(peerId);
-  };
-
-  const handleGenerateIdentity = () => {
-    if (identity?.publicKey) {
-      setIdentityGenerated(true);
-      setIdentityPublicKey(btoa(String.fromCharCode(...identity.publicKey)));
-      return;
-    }
-
-    if (status.localPeerId) {
-      setIdentityGenerated(true);
-      setIdentityPublicKey(status.localPeerId);
-      return;
-    }
-
-    setIdentityGenerated(true);
-    setIdentityPublicKey("Identity not yet available");
-    announce.message(
-      "Identity is still initializing. Please try again.",
-      "assertive",
-    );
   };
 
   return (
