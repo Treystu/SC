@@ -38,7 +38,7 @@ export const getMeshNetwork = async (): Promise<MeshNetwork> => {
         privateKey: storedIdentity.privateKey,
         displayName: storedIdentity.displayName,
       };
-      peerId = storedIdentity.id;
+      peerId = storedIdentity.id.replace(/\s/g, "");
     } else {
       console.log("No persisted identity found, generating new one...");
       const { generateIdentity, generateFingerprint } =

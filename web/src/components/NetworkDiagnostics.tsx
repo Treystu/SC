@@ -548,17 +548,18 @@ export const NetworkDiagnostics: React.FC = () => {
                 style={{ color: "#e0e0e0", flex: 1, wordBreak: "break-word" }}
               >
                 {log.message}
-                {log.data && (
-                  <details style={{ marginTop: "4px" }}>
+                {log.data && Object.keys(log.data).length > 0 && (
+                  <details style={{ marginTop: "5px" }}>
                     <summary style={{ cursor: "pointer", color: "#888" }}>
                       Details
                     </summary>
                     <pre
                       style={{
-                        margin: "5px 0 0 0",
-                        color: "#999",
-                        fontSize: "11px",
+                        margin: "5px 0 0",
+                        padding: "5px",
+                        backgroundColor: "#111",
                         overflowX: "auto",
+                        fontSize: "11px",
                       }}
                     >
                       {JSON.stringify(log.data, null, 2)}

@@ -25,7 +25,7 @@ export class RoomClient {
 
   constructor(url: string, peerId: string) {
     this.url = url;
-    this.peerId = peerId;
+    this.peerId = peerId.replace(/\s/g, "");
   }
 
   private async request(action: string, payload: any = {}) {
