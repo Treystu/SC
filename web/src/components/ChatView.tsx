@@ -5,6 +5,7 @@ import { MessageInput } from "./MessageInput";
 import { LoadingState } from "./LoadingState";
 import { validateFileList } from "@sc/core";
 import { getDatabase, StoredMessage } from "../storage/database";
+import { ContactProfileDialog } from "./ContactProfileDialog";
 
 const sanitizeHTML = (html: string) => {
   return DOMPurify.sanitize(html);
@@ -38,6 +39,7 @@ function ChatView({
   const [messages, setMessages] = useState<StoredMessage[]>([]);
   const [callActive, setCallActive] = useState(false);
   const [callEnded, setCallEnded] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
 
   useEffect(() => {
     const fetchMessages = async () => {
@@ -56,7 +58,11 @@ function ChatView({
 
   return (
     <div className="chat-view" data-testid="chat-container">
-      <div className="chat-header">
+      <div
+        className="chat-header"
+        onClick={() => setShowProfile(true)}
+        style={{ cursor: "pointer" }}
+      >
         <div className="chat-avatar">{contactName.charAt(0).toUpperCase()}</div>
         <div className="chat-info">
           <h3>{contactName}</h3>
@@ -65,7 +71,7 @@ function ChatView({
           </span>
         </div>
         {/* Placeholder controls until voice call handling is fully wired into signaling */}
-        <div className="call-controls">
+        <div className="call-controls" onClick={(e) => e.stopPropagation()}>
           <button
             data-testid="voice-call-btn"
             onClick={() => {
@@ -86,13 +92,24 @@ function ChatView({
           >
             End Call
           </button>
-          {callActive && <span data-testid="call-active" className="sr-only">Call Active</span>}
-          {callEnded && <span data-testid="call-ended" className="sr-only">Call Ended</span>}
+          {callActive && (
+            <span data-testid="call-active" className="sr-only">
+              Call Active
+            </span>
+          )}
+          {callEnded && (
+            <span data-testid="call-ended" className="sr-only">
+              Call Ended
+            </span>
+          )}
         </div>
         {onClose && (
           <button
             className="close-chat-btn"
-            onClick={onClose}
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
             aria-label="Close chat"
             title="Close chat"
           >
@@ -173,6 +190,13 @@ function ChatView({
           data-testid="message-input-component"
         />
       </div>
+
+      {showProfile && (
+        <ContactProfileDialog
+          contactId={conversationId}
+          onClose={() => setShowProfile(false)}
+        />
+      )}
     </div>
   );
 }
