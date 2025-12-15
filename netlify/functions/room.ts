@@ -86,8 +86,8 @@ export const handler: Handler = async (event, context) => {
           { upsert: true },
         );
 
-        // Get active peers (last 10 mins - increased from 5 to help bootstrapping)
-        const activeWindow = 10;
+        // Get active peers (last 2 mins - increased from 5 to help bootstrapping)
+        const activeWindow = 2;
         const timeAgo = new Date(Date.now() - activeWindow * 60 * 1000);
 
         const activePeers = await peersCollection
@@ -176,8 +176,8 @@ export const handler: Handler = async (event, context) => {
           .limit(since ? 1000 : 50)
           .toArray();
 
-        // Get active peers (last 10 mins) to keep client updated
-        const activeWindow = 10;
+        // Get active peers (last 2 mins) to keep client updated
+        const activeWindow = 2;
         const timeAgo = new Date(Date.now() - activeWindow * 60 * 1000);
         const activePeers = await peersCollection
           .find({ lastSeen: { $gt: timeAgo }, _id: { $ne: peerId } })

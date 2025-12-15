@@ -22,7 +22,6 @@ export interface RoomMessage {
 export class RoomClient {
   private url: string;
   private peerId: string;
-  private polledSince?: number;
 
   constructor(url: string, peerId: string) {
     this.url = url;
@@ -74,14 +73,17 @@ export class RoomClient {
     messages: RoomMessage[];
     peers: RoomDisplayPeer[];
   }> {
+    // Safe Polling: Always ask for the last 60 seconds of messages.
+    // This allows for significant clock skew and network delay without missing messages.
+    // Client-side deduplication handles the overlap.
+    const safeSince = Date.now() - 60000;
+
     const data = await this.request("poll", {
-      since: this.polledSince,
+      since: safeSince,
     });
 
-    // Update timestamp for next poll (using server time would be better, but local is ok for basic diff)
-    // Actually, checking the max timestamp in messages/signals is safer, but "since" usually implies "msgs after this time"
-    // Let's just track call time.
-    this.polledSince = Date.now();
+    // No need to track strict polledSince anymore
+    // this.polledSince = Date.now();
 
     return {
       signals: data.signals || [],

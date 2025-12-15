@@ -68,19 +68,20 @@ export function RoomView({
   const uniqueConnected = connectedPeers.filter((p) => p !== localPeerId);
 
   const isAndroid = /Android/i.test(navigator.userAgent);
-  const apkDownloadUrl = "https://github.com/Treystu/SC/releases/latest/download/app-release.apk";
+  const apkDownloadUrl =
+    "https://github.com/Treystu/SC/releases/latest/download/app-release.apk";
   const DEEP_LINK_DELAY_MS = 1000; // Delay before opening deep link
 
   const handleDownloadMobileApp = () => {
     const bootstrapUrl = generateMobileBootstrapUrl(undefined, undefined, true);
-    
+
     if (isAndroid) {
       // Direct APK download with bootstrap context
       window.location.href = apkDownloadUrl;
       // Also open the deep link to set context if app is already installed
       setTimeout(() => {
         // Convert HTTPS URL to custom scheme for deep link (sc://join?...)
-        const deepLink = bootstrapUrl.replace(/^https:\/\/[^/]+\//, 'sc://');
+        const deepLink = bootstrapUrl.replace(/^https:\/\/[^/]+\//, "sc://");
         window.location.href = deepLink;
       }, DEEP_LINK_DELAY_MS);
     } else {
@@ -105,7 +106,7 @@ export function RoomView({
                 className="download-app-btn"
                 onClick={handleDownloadMobileApp}
                 title="Download mobile app with current peers"
-                style={{ marginRight: '8px' }}
+                style={{ marginRight: "8px" }}
               >
                 📲 Get Mobile App
               </button>
@@ -123,7 +124,7 @@ export function RoomView({
                 className="download-app-btn"
                 onClick={handleDownloadMobileApp}
                 title="Download mobile app with current peers"
-                style={{ marginRight: '8px' }}
+                style={{ marginRight: "8px" }}
               >
                 📲 Get Mobile App
               </button>
@@ -205,13 +206,13 @@ export function RoomView({
               {roomMessages.map((msg, idx) => (
                 <div
                   key={idx}
-                  className={`chat-message ${msg.peerId === localPeerId ? "own" : ""}`}
+                  className={`chat-message ${msg.from === localPeerId ? "own" : ""}`}
                 >
                   <div className="message-header">
                     <span className="message-sender">
-                      {msg.peerId === localPeerId
+                      {msg.from === localPeerId
                         ? "You"
-                        : msg.peerId?.substring(0, 8)}
+                        : msg.from?.substring(0, 8)}
                     </span>
                     <span className="message-time">
                       {new Date(
