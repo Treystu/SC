@@ -1,0 +1,109 @@
+.message-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+}
+
+.reaction-badge {
+  background: var(--bg-secondary, #f0f2f5);
+  border: 1px solid var(--border-color, #e4e6eb);
+  border-radius: 12px;
+  padding: 2px 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.reaction-badge:hover {
+  background: var(--bg-hover, #e4e6eb);
+  transform: scale(1.05);
+}
+
+.reaction-badge .count {
+  font-size: 0.75rem;
+  color: var(--text-secondary, #65676b);
+}
+
+.reaction-picker-container {
+  position: relative;
+}
+
+.add-reaction-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--text-secondary, #65676b);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.add-reaction-btn:hover {
+  background: var(--bg-secondary, #f0f2f5);
+  color: var(--primary-color, #0084ff);
+}
+
+.emoji-picker-popup {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  background: white;
+  border: 1px solid var(--border-color, #ddd);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 8px;
+  z-index: 100;
+  width: 240px;
+}
+
+.emoji-categories {
+  display: flex;
+  border-bottom: 1px solid var(--border-color, #eee);
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  overflow-x: auto;
+}
+
+.category-btn {
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  color: var(--text-secondary, #65676b);
+  flex-shrink: 0;
+}
+
+.category-btn.active {
+  color: var(--primary-color, #0084ff);
+  font-weight: bold;
+  border-bottom: 2px solid var(--primary-color, #0084ff);
+}
+
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+}
+
+.emoji-btn {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  padding: 4px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.emoji-btn:hover {
+  background: var(--bg-secondary, #f0f2f5);
+  transform: scale(1.2);
+}

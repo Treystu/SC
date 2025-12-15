@@ -37,29 +37,39 @@ export function AddContactDialog({
     console.log("Scanned data:", data);
     setIsScanning(false);
 
-    // Check for Deep Link URL first
-    try {
-      if (data.includes("join?code=")) {
-        // Simple extraction for now, robust URL parsing better
-        const match = data.match(/code=([^&]+)/);
-        if (match && match[1]) {
-          setPeerId(match[1]);
-          // Could also extract inviter name name=...
-          return;
-        }
-      }
+    let scannedId = "";
+    let scannedName = "";
 
-      const pairingData = decodePairingData(data);
-      if (pairingData && pairingData.peerId) {
-        setPeerId(pairingData.peerId);
-        if (pairingData.name) setName(pairingData.name);
-      } else {
-        // Fallback to raw string
-        setPeerId(data);
+    // Check for Deep Link URL
+    if (data.includes("join?code=")) {
+      const match = data.match(/code=([^&]+)/);
+      if (match && match[1]) {
+        scannedId = match[1];
       }
-    } catch (e) {
-      // If JSON parse fails, assume raw ID
-      setPeerId(data);
+    } else {
+      // Try parsing pairing data
+      try {
+        const pairingData = decodePairingData(data);
+        if (pairingData && pairingData.peerId) {
+          scannedId = pairingData.peerId;
+          if (pairingData.name) scannedName = pairingData.name;
+        } else {
+          // Fallback to raw string
+          scannedId = data;
+        }
+      } catch (e) {
+        scannedId = data;
+      }
+    }
+
+    if (scannedId) {
+      // Auto-submit if we found an ID
+      const finalName =
+        scannedName || name.trim() || `Peer ${scannedId.substring(0, 6)}`;
+      onAdd(scannedId, finalName);
+      onClose();
+    } else {
+      alert("Could not detect a valid Peer ID in QR code.");
     }
   };
 

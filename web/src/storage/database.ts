@@ -7,7 +7,7 @@ import {
 /**
  * IndexedDB Persistence for Web Application
  * Stores messages, contacts, conversations, groups, and V1 persistence data
- * 
+ *
  * SECURITY: Implements encryption for sensitive data (addresses V1.0 Audit Gap #2)
  */
 
@@ -21,6 +21,7 @@ export interface StoredMessage {
   type: "text" | "file" | "voice";
   status: "pending" | "sent" | "delivered" | "read" | "queued" | "failed";
   metadata?: any;
+  reactions?: Array<{ emoji: string; userIds: string[] }>;
 }
 
 export interface StoredContact {
@@ -133,12 +134,12 @@ export class DatabaseManager {
   /**
    * Initialize encryption for the database
    * Should be called during app initialization with user's passphrase
-   * 
+   *
    * @example
    * // During app startup, after user authentication
    * const passphrase = await deriveFromUserPassword(userPassword);
    * await dbManager.initializeEncryption(passphrase);
-   * 
+   *
    * @param passphrase - User's passphrase for encryption (derived from password or device key)
    */
   async initializeEncryption(passphrase: string): Promise<void> {
@@ -314,7 +315,9 @@ export class DatabaseManager {
     );
 
     // Sort and paginate
-    const sortedMessages = allMessages.sort((a, b) => a.timestamp - b.timestamp);
+    const sortedMessages = allMessages.sort(
+      (a, b) => a.timestamp - b.timestamp,
+    );
     const paginatedMessages = sortedMessages.slice(
       Math.max(0, sortedMessages.length - limit - offset),
       sortedMessages.length - offset,
@@ -714,7 +717,7 @@ export class DatabaseManager {
    */
   async getAllIdentities(): Promise<Identity[]> {
     const identities = await this.performGetAll<Identity>("identities");
-    
+
     // Decrypt all identities
     return await Promise.all(
       identities.map((identity) =>

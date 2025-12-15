@@ -14,6 +14,7 @@ import { NetworkDiagnostics } from "./components/NetworkDiagnostics";
 import { RoomView } from "./components/RoomView";
 import { GroupChat } from "./components/GroupChat";
 import { PWAInstall, UpdateNotification } from "./components/PWAInstall";
+import { HelpModal } from "./components/HelpModal";
 import { useMeshNetwork } from "./hooks/useMeshNetwork";
 import { useInvite } from "./hooks/useInvite";
 import { useConversations } from "./hooks/useConversations";
@@ -88,6 +89,7 @@ function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showShareApp, setShowShareApp] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [pendingInviteData, setPendingInviteData] = useState<{
     code: string;
     inviterName: string | null;
@@ -1015,6 +1017,20 @@ function App() {
                         📶
                       </button>
                       <button
+                        onClick={() => setShowHelp(true)}
+                        className="help-btn"
+                        aria-label="Help"
+                        title="Help & FAQ"
+                        style={{
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          fontSize: "1.2rem",
+                        }}
+                      >
+                        ❓
+                      </button>
+                      <button
                         className="settings-btn"
                         onClick={() => setShowSettings(true)}
                         aria-label="Settings"
@@ -1211,6 +1227,8 @@ function App() {
           </>
         )}
       </div>
+
+      {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
     </ErrorBoundary>
   );
 }

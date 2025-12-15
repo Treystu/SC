@@ -6,6 +6,7 @@ import { LoadingState } from "./LoadingState";
 import { validateFileList } from "@sc/core";
 import { getDatabase, StoredMessage } from "../storage/database";
 import { ContactProfileDialog } from "./ContactProfileDialog";
+import { MessageReactions } from "./MessageReactions";
 
 const sanitizeHTML = (html: string) => {
   return DOMPurify.sanitize(html);
@@ -159,6 +160,17 @@ function ChatView({
                       __html: sanitizeHTML(message.content),
                     }}
                   ></div>
+
+                  {/* Reactions */}
+                  <MessageReactions
+                    messageId={message.id}
+                    reactions={message.reactions || []}
+                    onAddReaction={(emoji) => {
+                      // TODO: Implement persistent reaction storage
+                      console.log(`Reacted to ${message.id} with ${emoji}`);
+                    }}
+                  />
+
                   <div className="message-meta">
                     <span
                       className="message-time"

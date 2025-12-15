@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { getDatabase, StoredGroup } from "../storage/database";
 import { ProfileManager } from "../managers/ProfileManager";
 import { useContacts } from "../hooks/useContacts";
+import { CreateGroupDialog } from "./CreateGroupDialog";
 
 interface GroupChatProps {
   onSelectGroup?: (groupId: string) => void;
@@ -11,9 +12,7 @@ export function GroupChat({ onSelectGroup }: GroupChatProps) {
   const [groups, setGroups] = useState<StoredGroup[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newGroupName, setNewGroupName] = useState("");
   const { contacts } = useContacts();
-  const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
 
   useEffect(() => {
     loadGroups();
@@ -31,19 +30,17 @@ export function GroupChat({ onSelectGroup }: GroupChatProps) {
     }
   };
 
-  const handleCreateGroup = async () => {
-    if (!newGroupName.trim()) return;
-
+  const handleCreateGroup = async (name: string, members: string[]) => {
     try {
       const db = getDatabase();
       const profileManager = new ProfileManager();
       const profile = await profileManager.getProfile();
       const newGroup: StoredGroup = {
         id: crypto.randomUUID(),
-        name: newGroupName.trim(),
+        name: name.trim(),
         members: [
           { id: profile.fingerprint, name: "You", isAdmin: true },
-          ...selectedMembers.map((id) => {
+          ...members.map((id) => {
             const contact = contacts.find((c) => c.id === id);
             return {
               id,
@@ -59,21 +56,12 @@ export function GroupChat({ onSelectGroup }: GroupChatProps) {
 
       await db.saveGroup(newGroup);
       setGroups((prev) => [newGroup, ...prev]);
-      setNewGroupName("");
-      setSelectedMembers([]);
       setShowCreateModal(false);
     } catch (error) {
       console.error("Failed to create group:", error);
       alert("Failed to create group");
+      throw error;
     }
-  };
-
-  const toggleMember = (contactId: string) => {
-    setSelectedMembers((prev) =>
-      prev.includes(contactId)
-        ? prev.filter((id) => id !== contactId)
-        : [...prev, contactId],
-    );
   };
 
   if (isLoading) {
@@ -125,61 +113,11 @@ export function GroupChat({ onSelectGroup }: GroupChatProps) {
         )}
       </div>
 
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold mb-4">Create New Group</h3>
-            <input
-              type="text"
-              value={newGroupName}
-              onChange={(e) => setNewGroupName(e.target.value)}
-              placeholder="Group Name"
-              className="w-full p-2 border rounded-lg mb-4 focus:ring-2 focus:ring-blue-500 outline-none"
-              autoFocus
-            />
-
-            <div className="mb-4">
-              <h4 className="font-medium mb-2">Select Members</h4>
-              <div className="space-y-2 max-h-40 overflow-y-auto border rounded p-2">
-                {contacts.length === 0 ? (
-                  <p className="text-sm text-gray-500">No contacts available</p>
-                ) : (
-                  contacts.map((contact) => (
-                    <label
-                      key={contact.id}
-                      className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedMembers.includes(contact.id)}
-                        onChange={() => toggleMember(contact.id)}
-                        className="rounded text-blue-600"
-                      />
-                      <span>{contact.displayName}</span>
-                    </label>
-                  ))
-                )}
-              </div>
-            </div>
-
-            <div className="flex justify-end space-x-3">
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateGroup}
-                disabled={!newGroupName.trim()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Create
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <CreateGroupDialog
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onCreate={handleCreateGroup}
+      />
     </div>
   );
 }

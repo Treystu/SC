@@ -1,0 +1,44 @@
+.help-modal {
+  max-width: 600px;
+  width: 90%;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.help-section {
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.help-section:last-child {
+  border-bottom: none;
+}
+
+.help-section h3 {
+  color: var(--primary-color);
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.help-section p {
+  line-height: 1.6;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+.help-section ul {
+  padding-left: 1.5rem;
+  color: var(--text-secondary);
+}
+
+.help-section li {
+  margin-bottom: 0.5rem;
+}
+
+strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
