@@ -9,11 +9,12 @@ import {
   createSignalingOffer,
   handleSignalingAnswer,
 } from "../utils/manualSignaling";
-import { WebPersistenceAdapter } from "../utils/WebPersistenceAdapter";
+import { getMeshNetwork } from "../services/mesh-network-service";
 import { validateFileList } from "../../../core/src/file-validation";
 import { rateLimiter } from "../../../core/src/rate-limiter";
 import { performanceMonitor } from "../../../core/src/performance-monitor";
 import { offlineQueue } from "../../../core/src/offline-queue";
+import { BootstrapDiscoveryProvider } from "@sc/core";
 
 export interface MeshStatus {
   isConnected: boolean;
@@ -77,77 +78,9 @@ export function useMeshNetwork() {
 
     const initMeshNetwork = async () => {
       try {
-        // Initialize database
+        const network = await getMeshNetwork();
         const db = getDatabase();
-        await db.init();
-
-        // Load persisted identity (if exists) or generate new one
-        let identityKeyPair: any;
-        try {
-          const storedIdentity = await db.getPrimaryIdentity();
-          const displayName = localStorage.getItem("sc-display-name");
-
-          if (storedIdentity) {
-            console.log(
-              "Loaded persisted identity:",
-              storedIdentity.fingerprint,
-            );
-
-            // Update display name if missing/different in DB but present in localStorage
-            if (displayName && storedIdentity.displayName !== displayName) {
-              await db.saveIdentity({
-                ...storedIdentity,
-                displayName: displayName,
-              });
-              storedIdentity.displayName = displayName;
-            }
-
-            identityKeyPair = {
-              publicKey: storedIdentity.publicKey,
-              privateKey: storedIdentity.privateKey,
-              displayName: storedIdentity.displayName,
-            };
-          } else {
-            console.log("No persisted identity found, generating new one...");
-            const { generateIdentity, generateFingerprint } =
-              await import("@sc/core");
-            const newIdentity = generateIdentity();
-            const fingerprint = await generateFingerprint(
-              newIdentity.publicKey,
-            );
-
-            // Save to database
-            await db.saveIdentity({
-              id: fingerprint.substring(0, 16), // Use first 16 chars of fingerprint as ID
-              publicKey: newIdentity.publicKey,
-              privateKey: newIdentity.privateKey,
-              fingerprint: fingerprint,
-              createdAt: Date.now(),
-              isPrimary: true,
-              label: "Primary Identity",
-              displayName: displayName || undefined,
-            });
-
-            identityKeyPair = {
-              ...newIdentity,
-              displayName: displayName || undefined,
-            };
-            console.log("Generated and saved new identity:", fingerprint);
-          }
-        } catch (error) {
-          console.error("Failed to load/generate identity:", error);
-          // Fallback to temporary identity if DB fails
-          const { generateIdentity } = await import("@sc/core");
-          identityKeyPair = generateIdentity();
-        }
-
-        const network = new MeshNetwork({
-          defaultTTL: 10,
-          maxPeers: 50,
-          persistence: new WebPersistenceAdapter(),
-          identity: identityKeyPair,
-        });
-
+        
         // Start heartbeat
         network.startHeartbeat();
 
@@ -347,6 +280,16 @@ export function useMeshNetwork() {
           } catch (error) {
             console.error("Failed to update peer last seen:", error);
           }
+        });
+
+        network.discovery.onPeerDiscovered((peer) => {
+            console.log("Discovered peer:", peer);
+            setDiscoveredPeers((prev) => [...prev, peer.id]);
+        });
+
+        network.discovery.onPeerDiscovered((peer) => {
+            console.log("Discovered peer:", peer);
+            setDiscoveredPeers((prev) => [...prev, peer.id]);
         });
 
         const updatePeerStatus = () => {
@@ -750,49 +693,11 @@ export function useMeshNetwork() {
       setJoinError(null);
       setRoomMessages([]); // Clear messages on join
       try {
-        // Setup listeners before joining
-        meshNetworkRef.current.onDiscoveryUpdate((peers) => {
-          setDiscoveredPeers(peers);
-          // Phase 1: Auto-connect is now handled within network.ts joinPublicRoom
-          // We just update the UI state here
-        });
-
-        const seenMessageIds = new Set<string>();
-
-        meshNetworkRef.current.onPublicRoomMessage((msg) => {
-          // Normalize message (HttpSignaling uses 'from', we use 'peerId')
-          const normalizedMsg = {
-            ...msg,
-            peerId: msg.peerId || msg.from,
-          };
-
-          // Deduplicate messages based on ID or content+timestamp signature
-          const msgId =
-            normalizedMsg.id ||
-            normalizedMsg._id ||
-            `${normalizedMsg.peerId}-${normalizedMsg.timestamp}-${normalizedMsg.content}`;
-
-          if (!seenMessageIds.has(msgId)) {
-            seenMessageIds.add(msgId);
-            setRoomMessages((prev: any[]) => {
-              // Double check against current state to be sure
-              if (
-                prev.some(
-                  (m: any) =>
-                    m.id === msgId ||
-                    m._id === msgId ||
-                    (m.peerId === normalizedMsg.peerId &&
-                      m.timestamp === normalizedMsg.timestamp &&
-                      m.content === normalizedMsg.content),
-                )
-              )
-                return prev;
-              return [...prev, normalizedMsg];
-            });
-          }
-        });
-
-        await meshNetworkRef.current.joinPublicRoom(url);
+        // In a real application, you would fetch bootstrap peers from a server
+        const bootstrapPeers: Peer[] = [];
+        const bootstrapProvider = new BootstrapDiscoveryProvider(bootstrapPeers);
+        meshNetworkRef.current.discovery.registerProvider(bootstrapProvider);
+        await meshNetworkRef.current.discovery.start();
         setIsJoinedToRoom(true);
       } catch (error) {
         console.error("Failed to join room:", error);
@@ -806,7 +711,7 @@ export function useMeshNetwork() {
 
   const leaveRoom = useCallback(() => {
     if (meshNetworkRef.current) {
-      meshNetworkRef.current.leavePublicRoom();
+      meshNetworkRef.current.discovery.stop();
       setDiscoveredPeers([]);
       setRoomMessages([]);
       setIsJoinedToRoom(false);
@@ -816,18 +721,8 @@ export function useMeshNetwork() {
   const sendRoomMessage = useCallback(async (content: string) => {
     if (!meshNetworkRef.current)
       throw new Error("Mesh network not initialized");
-    await meshNetworkRef.current.sendPublicRoomMessage(content);
-  }, []);
-
-  const joinRelay = useCallback(async (url: string): Promise<void> => {
-    if (!meshNetworkRef.current)
-      throw new Error("Mesh network not initialized");
-    try {
-      await meshNetworkRef.current.joinRelay(url);
-    } catch (error) {
-      console.error("Failed to join relay:", error);
-      throw error;
-    }
+    // Public room messages are now just broadcast messages
+    await meshNetworkRef.current.broadcastMessage(content);
   }, []);
 
   const addStreamToPeer = useCallback(
@@ -882,7 +777,6 @@ export function useMeshNetwork() {
       leaveRoom,
       isJoinedToRoom,
       sendRoomMessage,
-      joinRelay,
       addStreamToPeer,
       onPeerTrack,
       discoveredPeers,
@@ -906,7 +800,6 @@ export function useMeshNetwork() {
       leaveRoom,
       isJoinedToRoom,
       sendRoomMessage,
-      joinRelay,
       addStreamToPeer,
       onPeerTrack,
       discoveredPeers,

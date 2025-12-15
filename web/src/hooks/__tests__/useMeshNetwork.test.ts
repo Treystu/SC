@@ -6,6 +6,11 @@ import { getDatabase } from "../../storage/database";
 // Mock dependencies
 jest.mock("@sc/core", () => ({
   MeshNetwork: jest.fn(),
+  BootstrapDiscoveryProvider: jest.fn().mockImplementation(() => ({
+    start: jest.fn(),
+    stop: jest.fn(),
+    onPeerFound: jest.fn(),
+  })),
   MessageType: {
     TEXT: "text",
     FILE_METADATA: "file_metadata",
@@ -81,6 +86,12 @@ describe("useMeshNetwork", () => {
       onPeerDisconnected: jest.fn(),
       onDiscoveryUpdate: jest.fn(),
       onPublicRoomMessage: jest.fn(),
+      discovery: {
+        onPeerDiscovered: jest.fn(),
+        registerProvider: jest.fn(),
+        start: jest.fn(),
+        stop: jest.fn(),
+      },
       getLocalPeerId: jest.fn().mockReturnValue("local-peer-id"),
       getConnectedPeers: jest.fn().mockReturnValue([]),
       sendMessage: jest.fn().mockResolvedValue(undefined),
@@ -143,9 +154,8 @@ describe("useMeshNetwork", () => {
       await result.current.joinRoom("https://example.com/room");
     });
 
-    expect(mockMeshInstance.joinPublicRoom).toHaveBeenCalledWith(
-      "https://example.com/room",
-    );
+    expect(mockMeshInstance.discovery.registerProvider).toHaveBeenCalled();
+    expect(mockMeshInstance.discovery.start).toHaveBeenCalled();
     expect(result.current.isJoinedToRoom).toBe(true);
   });
 });

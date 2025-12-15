@@ -8,7 +8,7 @@ describe('Advanced Peer Health Monitoring', () => {
   const privateKey = new Uint8Array(32);
 
   beforeEach(() => {
-    routingTable = new RoutingTable();
+    routingTable = new RoutingTable(localPeerId);
     healthMonitor = new PeerHealthMonitor(
       localPeerId,
       privateKey,

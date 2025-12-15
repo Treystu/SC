@@ -4,7 +4,7 @@ describe('Advanced Routing Table Features', () => {
   let routingTable: RoutingTable;
 
   beforeEach(() => {
-    routingTable = new RoutingTable({
+    routingTable = new RoutingTable('local-peer', {
       maxCacheSize: 100,
       cacheTTL: 1000,
       routeTTL: 5000,

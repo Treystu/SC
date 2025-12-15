@@ -12,7 +12,7 @@ describe('MessageRelay', () => {
   const localPeerId = 'local-peer-123';
 
   beforeEach(() => {
-    routingTable = new RoutingTable();
+    routingTable = new RoutingTable(localPeerId);
     relay = new MessageRelay(localPeerId, routingTable);
   });
 

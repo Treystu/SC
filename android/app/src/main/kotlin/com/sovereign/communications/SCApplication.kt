@@ -5,8 +5,8 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
 import com.sovereign.communications.data.SCDatabase
-import com.sovereign.communications.security.KeystoreManager
 import com.sovereign.communications.security.EncryptedData
+import com.sovereign.communications.security.KeystoreManager
 import com.sovereign.communications.service.MeshNetworkManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -18,48 +18,55 @@ import kotlinx.coroutines.launch
  * Task 57: Set up Android project (Kotlin)
  */
 class SCApplication : Application() {
-    
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    
+
     // Lazy initialization of database
     val database: SCDatabase by lazy {
         SCDatabase.getDatabase(this)
     }
-    
+
     // Mesh network manager instance
     lateinit var meshNetworkManager: MeshNetworkManager
         private set
-    
+
     // Identity storage
     private lateinit var identityPrefs: SharedPreferences
-    
+
     // Local peer ID (loaded from identity)
     var localPeerId: String? = null
         private set
-    
+
+    // Raw bytes of the peer ID (simulating public key)
+    val localPeerIdBytes: ByteArray?
+        get() =
+            localPeerId
+                ?.chunked(2)
+                ?.map { it.toInt(16).toByte() }
+                ?.toByteArray()
+
     override fun onCreate() {
         super.onCreate()
         instance = this
-        
+
         // Initialize application-level components
         initializeServices()
     }
-    
+
     private fun initializeServices() {
         Log.d(TAG, "Initializing application services")
-        
+
         // Initialize crypto components
         initializeCrypto()
-        
+
         // Load identity from secure storage
         loadIdentity()
-        
+
         // Initialize mesh network service
         initializeMeshNetwork()
-        
+
         Log.d(TAG, "Application services initialized successfully")
     }
-    
+
     /**
      * Initialize cryptographic components and ensure keys are set up.
      */
@@ -74,13 +81,13 @@ class SCApplication : Application() {
             } else {
                 Log.d(TAG, "Database passphrase already exists")
             }
-            
+
             // Generate or retrieve identity signing key
             if (!KeystoreManager.keyExists("identity_key")) {
                 Log.d(TAG, "Generating identity key")
                 KeystoreManager.generateOrGetKey("identity_key", requireBiometric = false)
             }
-            
+
             Log.d(TAG, "Crypto components initialized")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize crypto components", e)
@@ -88,18 +95,18 @@ class SCApplication : Application() {
             // This allows the app to run in degraded mode
         }
     }
-    
+
     /**
      * Load user identity from secure storage.
      * If no identity exists, generate a new one.
      */
     private fun loadIdentity() {
         identityPrefs = getSharedPreferences("identity", Context.MODE_PRIVATE)
-        
+
         try {
             // Try to load existing peer ID
             localPeerId = identityPrefs.getString("peer_id", null)
-            
+
             if (localPeerId == null) {
                 // Generate new identity
                 Log.d(TAG, "No existing identity found, generating new one")
@@ -107,7 +114,7 @@ class SCApplication : Application() {
             } else {
                 Log.d(TAG, "Loaded existing identity: $localPeerId")
             }
-            
+
             // Load encrypted passphrase if it exists
             val encryptedPassphraseB64 = identityPrefs.getString("encrypted_passphrase", null)
             if (encryptedPassphraseB64 != null) {
@@ -126,21 +133,30 @@ class SCApplication : Application() {
             generateNewIdentity()
         }
     }
-    
+
     /**
      * Generate a new identity and save it to secure storage.
      */
     private fun generateNewIdentity() {
         try {
-            // Generate a unique peer ID (in production, this would be derived from public key)
-            localPeerId = java.util.UUID.randomUUID().toString()
-            
+            // Generate a 32-byte unique peer ID (hex string 64 chars)
+            val random = java.security.SecureRandom()
+            val bytes = ByteArray(32)
+            random.nextBytes(bytes)
+
+            val sb = StringBuilder()
+            for (b in bytes) {
+                sb.append(String.format("%02x", b))
+            }
+            localPeerId = sb.toString()
+
             // Save to SharedPreferences
-            identityPrefs.edit()
+            identityPrefs
+                .edit()
                 .putString("peer_id", localPeerId)
                 .putLong("created_at", System.currentTimeMillis())
                 .apply()
-            
+
             Log.d(TAG, "Generated new identity: $localPeerId")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to generate new identity", e)
@@ -148,14 +164,15 @@ class SCApplication : Application() {
             localPeerId = "temp_${System.currentTimeMillis()}"
         }
     }
-    
+
     /**
      * Store encrypted passphrase in SharedPreferences.
      */
     private fun storeEncryptedPassphrase(passphrase: ByteArray) {
         try {
             val encrypted = KeystoreManager.encrypt("database_passphrase", passphrase)
-            identityPrefs.edit()
+            identityPrefs
+                .edit()
                 .putString("encrypted_passphrase", encrypted.toBase64())
                 .apply()
             Log.d(TAG, "Stored encrypted passphrase")
@@ -163,14 +180,14 @@ class SCApplication : Application() {
             Log.e(TAG, "Failed to store encrypted passphrase", e)
         }
     }
-    
+
     /**
      * Initialize the mesh network manager.
      */
     private fun initializeMeshNetwork() {
         try {
             meshNetworkManager = MeshNetworkManager(this, database)
-            
+
             // Start mesh network in background
             applicationScope.launch(Dispatchers.IO) {
                 try {
@@ -184,7 +201,7 @@ class SCApplication : Application() {
             Log.e(TAG, "Failed to initialize mesh network manager", e)
         }
     }
-    
+
     override fun onTerminate() {
         super.onTerminate()
         // Stop mesh network
@@ -196,10 +213,10 @@ class SCApplication : Application() {
             Log.e(TAG, "Error stopping mesh network", e)
         }
     }
-    
+
     companion object {
         private const val TAG = "SCApplication"
-        
+
         lateinit var instance: SCApplication
             private set
     }

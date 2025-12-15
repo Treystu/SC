@@ -5,7 +5,7 @@ describe('Routing Table', () => {
   let routingTable: RoutingTable;
 
   beforeEach(() => {
-    routingTable = new RoutingTable();
+    routingTable = new RoutingTable('local-peer');
   });
 
   describe('Peer Management', () => {

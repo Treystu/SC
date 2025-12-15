@@ -8,7 +8,7 @@ describe('Advanced Message Relay Features', () => {
   const localPeerId = 'local-peer';
 
   beforeEach(() => {
-    routingTable = new RoutingTable();
+    routingTable = new RoutingTable(localPeerId);
     relay = new MessageRelay(localPeerId, routingTable, {
       maxStoredMessages: 10,
       storeTimeout: 5000,

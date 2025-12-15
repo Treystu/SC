@@ -55,17 +55,11 @@ class MeshNetworkManager(
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val rateLimiter = RateLimiter(60, 1000) // 60 messages per minute, 1000 per hour
 
-    // Unified ID Generation: 32-byte random ID (simulating Ed25519 public key) -> Hex String
-    private val localPeerId: String by lazy {
-        val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-        prefs.getString("local_peer_id", null) ?: run {
-            val randomBytes = ByteArray(32)
-            SecureRandom().nextBytes(randomBytes)
-            val hexId = bytesToHex(randomBytes)
-            prefs.edit().putString("local_peer_id", hexId).apply()
-            hexId
-        }
-    }
+    // Unified ID: Get from Application (Identity Layer)
+    private val localPeerId: String
+        get() =
+            com.sovereign.communications.SCApplication.instance.localPeerId
+                ?: throw IllegalStateException("Local Peer ID not initialized")
 
     private val jsBridge = JSBridge(context)
 
@@ -90,9 +84,6 @@ class MeshNetworkManager(
         // Helper for hex conversion
         fun bytesToHex(bytes: ByteArray): String = bytes.joinToString("") { "%02x".format(it) }
     }
-
-    // Instance helper to use the companion method? Or just duplicate for simplicity in lazy block.
-    // I duplicated the logic inside the localPeerId lazy block but used helper in LocalDiscovery.
 
     /**
      * Starts the mesh network.

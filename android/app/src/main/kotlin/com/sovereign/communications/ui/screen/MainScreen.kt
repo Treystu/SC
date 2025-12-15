@@ -20,6 +20,8 @@ fun MainScreen(
     onInviteHandled: () -> Unit = {},
 ) {
     var selectedTab by remember { mutableStateOf(0) }
+    var currentScreen by remember { mutableStateOf<String?>(null) } // null = Main Tabs, "sharing" = Sharing Screen, "qr_display" = QR Display
+    var qrPayload by remember { mutableStateOf("") }
 
     // Handle deep link invite
     if (initialInviteCode != null) {
@@ -44,6 +46,36 @@ fun MainScreen(
                 }
             },
         )
+    }
+
+    // Handle overlay screens (Sharing, QR, etc)
+    if (currentScreen != null) {
+        when (currentScreen) {
+            "sharing" -> {
+                val app = com.sovereign.communications.SCApplication.instance
+                SharingScreen(
+                    peerId = app.localPeerId ?: "Unknown",
+                    publicKey = app.localPeerIdBytes ?: ByteArray(32),
+                    displayName = "Me", // TODO: Get from prefs
+                    onNavigateBack = { currentScreen = null },
+                    onNavigateToQRScanner = {
+                        // TODO: meaningful navigation to QR Scanner
+                    },
+                    onNavigateToQRDisplay = { payload ->
+                        qrPayload = payload
+                        currentScreen = "qr_display"
+                    },
+                )
+            }
+
+            "qr_display" -> {
+                QRCodeDisplayScreen(
+                    peerInfo = qrPayload,
+                    onNavigateBack = { currentScreen = "sharing" },
+                )
+            }
+        }
+        return
     }
 
     Scaffold(
@@ -80,9 +112,19 @@ fun MainScreen(
     ) { paddingValues ->
         Box(modifier = Modifier.padding(paddingValues)) {
             when (selectedTab) {
-                0 -> ConversationListScreen()
-                1 -> ContactListScreen()
-                2 -> SettingsScreen()
+                0 -> {
+                    ConversationListScreen()
+                }
+
+                1 -> {
+                    ContactListScreen(
+                        onAddContact = { currentScreen = "sharing" },
+                    )
+                }
+
+                2 -> {
+                    SettingsScreen()
+                }
             }
         }
     }

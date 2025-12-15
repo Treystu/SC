@@ -57,7 +57,7 @@ fun SettingsScreen(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Your Peer ID: 8e41ac40ac0f64b5...",
+                    text = "Your Peer ID: ${settingsViewModel.localPeerId}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                 )

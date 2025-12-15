@@ -133,6 +133,8 @@ export {
 
 // Discovery
 export * from "./discovery/peer.js";
+export * from "./mesh/discovery.js";
+export * from "./mesh/bootstrap-discovery.js";
 
 export {
   MDNSBroadcaster,
