@@ -66,7 +66,7 @@ const generateBrowserFingerprint = async (): Promise<string> => {
     screen.width.toString() + "x" + screen.height.toString(),
     new Date().getTimezoneOffset().toString(),
   ].join("|");
-  
+
   // Hash the fingerprint using Web Crypto API
   const encoder = new TextEncoder();
   const data = encoder.encode(navigator_props);
@@ -96,7 +96,9 @@ function App() {
     null,
   );
   const [identityGenerated, setIdentityGenerated] = useState(false);
-  const [identityPublicKey, setIdentityPublicKey] = useState<string | null>(null);
+  const [identityPublicKey, setIdentityPublicKey] = useState<string | null>(
+    null,
+  );
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const {
     contacts,
@@ -124,7 +126,6 @@ function App() {
     joinRoom,
     leaveRoom,
     sendRoomMessage,
-    joinRelay,
     discoveredPeers,
     roomMessages,
     isJoinedToRoom,
@@ -195,14 +196,19 @@ function App() {
   }, [identity, status.localPeerId]);
   useEffect(() => {
     const handleToast = (event: Event) => {
-      const detail = (event as CustomEvent<{ message: string; type: string }>).detail;
+      const detail = (event as CustomEvent<{ message: string; type: string }>)
+        .detail;
       if (detail?.message) {
         setToast(detail);
         setTimeout(() => setToast(null), 3000);
       }
     };
     window.addEventListener("show-notification", handleToast as EventListener);
-    return () => window.removeEventListener("show-notification", handleToast as EventListener);
+    return () =>
+      window.removeEventListener(
+        "show-notification",
+        handleToast as EventListener,
+      );
   }, []);
   const autoJoinedRef = useRef(false);
 
@@ -334,10 +340,19 @@ function App() {
     if (isJoinedToRoom && (discoveredPeers.length > 0 || peers.length > 0)) {
       // Debounce to avoid excessive localStorage writes
       const timeoutId = setTimeout(() => {
-        const connectedPeerIds = peers.map(p => p.id);
-        saveBootstrapPeers(discoveredPeers, connectedPeerIds, activeRoom || undefined);
-        console.log('Saved bootstrap peers for mobile handoff:', 
-          discoveredPeers.length, 'discovered,', connectedPeerIds.length, 'connected');
+        const connectedPeerIds = peers.map((p) => p.id);
+        saveBootstrapPeers(
+          discoveredPeers,
+          connectedPeerIds,
+          activeRoom || undefined,
+        );
+        console.log(
+          "Saved bootstrap peers for mobile handoff:",
+          discoveredPeers.length,
+          "discovered,",
+          connectedPeerIds.length,
+          "connected",
+        );
       }, 1000); // Wait 1 second after last change
 
       return () => clearTimeout(timeoutId);
@@ -630,19 +645,12 @@ function App() {
         // Send to all members
         for (const recipientId of recipients) {
           try {
-            // We use the raw sendMessage from meshNetwork which takes string
-            // But wait, useMeshNetwork.sendMessage takes (recipientId, content, attachments)
-            // and it wraps content in JSON.
-            // We need to modify useMeshNetwork to accept metadata or handle this.
-
-            // For V1, let's just send the content. The recipients won't know it's a group message
-            // unless we change the protocol.
-            // CRITICAL: We need to update useMeshNetwork to support metadata/groupId.
-
-            // Let's assume we updated useMeshNetwork to support an optional 'metadata' arg
-            // or we just send it.
-
-            await sendMessage(recipientId, sanitizedContent, attachments);
+            await sendMessage(
+              recipientId,
+              sanitizedContent,
+              attachments,
+              group.id,
+            );
           } catch (error) {
             console.error(
               `Failed to send to group member ${recipientId}:`,
@@ -829,6 +837,8 @@ function App() {
       lastMessage: `${discoveredPeers.length} peers discovered`,
       timestamp: Date.now(),
       unreadCount: 0,
+      verified: true,
+      online: true,
     });
   }
 
@@ -853,9 +863,7 @@ function App() {
   const handleGenerateIdentity = () => {
     if (identity?.publicKey) {
       setIdentityGenerated(true);
-      setIdentityPublicKey(
-        btoa(String.fromCharCode(...identity.publicKey)),
-      );
+      setIdentityPublicKey(btoa(String.fromCharCode(...identity.publicKey)));
       return;
     }
 
@@ -1043,7 +1051,7 @@ function App() {
                     localPeerId={status.localPeerId}
                     generateConnectionOffer={generateConnectionOffer}
                     onJoinRoom={handleJoinRoom}
-                    onJoinRelay={joinRelay}
+                    onJoinRelay={joinRoom}
                     onInitiateConnection={handleManualConnectionInitiated}
                     connectionStatus={status.isConnected}
                   />
@@ -1052,7 +1060,11 @@ function App() {
                 )}
               </div>
 
-              <div className="content-area main-content" id="main-content" data-testid="main-content">
+              <div
+                className="content-area main-content"
+                id="main-content"
+                data-testid="main-content"
+              >
                 {selectedConversation ? (
                   selectedConversation === "public-room" ? (
                     <RoomView
@@ -1094,7 +1106,10 @@ function App() {
                         Generate Identity
                       </button>
                       {identityGenerated && (
-                        <div data-testid="public-key-display" className="mono-text">
+                        <div
+                          data-testid="public-key-display"
+                          className="mono-text"
+                        >
                           {identityPublicKey || "public-key"}
                         </div>
                       )}

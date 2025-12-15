@@ -15,6 +15,7 @@ import { rateLimiter } from "../../../core/src/rate-limiter";
 import { performanceMonitor } from "../../../core/src/performance-monitor";
 import { offlineQueue } from "../../../core/src/offline-queue";
 import { BootstrapDiscoveryProvider } from "@sc/core";
+import { RoomClient, RoomDisplayPeer } from "../utils/RoomClient"; // Import RoomClient
 
 export interface MeshStatus {
   isConnected: boolean;
@@ -54,6 +55,8 @@ export function useMeshNetwork() {
   const meshNetworkRef = useRef<MeshNetwork | null>(null);
   const connectionMonitorRef = useRef<ConnectionMonitor | null>(null);
   const seenMessageIdsRef = useRef<Set<string>>(new Set());
+  const roomClientRef = useRef<RoomClient | null>(null); // Store RoomClient instance
+  const roomPollTimerRef = useRef<NodeJS.Timeout | null>(null); // Store poll timer
 
   // Initialize mesh network with persistence
   useEffect(() => {
@@ -80,7 +83,7 @@ export function useMeshNetwork() {
       try {
         const network = await getMeshNetwork();
         const db = getDatabase();
-        
+
         // Start heartbeat
         network.startHeartbeat();
 
@@ -283,13 +286,11 @@ export function useMeshNetwork() {
         });
 
         network.discovery.onPeerDiscovered((peer) => {
-            console.log("Discovered peer:", peer);
-            setDiscoveredPeers((prev) => [...prev, peer.id]);
-        });
-
-        network.discovery.onPeerDiscovered((peer) => {
-            console.log("Discovered peer:", peer);
-            setDiscoveredPeers((prev) => [...prev, peer.id]);
+          console.log("Discovered peer:", peer);
+          setDiscoveredPeers((prev) => {
+            if (prev.includes(peer.id)) return prev;
+            return [...prev, peer.id];
+          });
         });
 
         const updatePeerStatus = () => {
@@ -367,6 +368,9 @@ export function useMeshNetwork() {
       if (meshNetworkRef.current) {
         meshNetworkRef.current.shutdown();
         meshNetworkRef.current = null;
+      }
+      if (roomPollTimerRef.current) {
+        clearInterval(roomPollTimerRef.current);
       }
     };
   }, []);
@@ -570,7 +574,28 @@ export function useMeshNetwork() {
     }
 
     try {
-      await meshNetworkRef.current.connectToPeer(peerId);
+      // 1. Try manual connection first (WebRTC / direct)
+      try {
+        await meshNetworkRef.current.connectToPeer(peerId);
+      } catch (e) {
+        console.warn(
+          "Direct connection failed, checking if we have a Room Signal...",
+          e,
+        );
+        // If direct connection fails, we might need to signal via Room
+        if (roomClientRef.current) {
+          const offer = await createSignalingOffer(meshNetworkRef.current);
+          await roomClientRef.current.signal(peerId, "offer", {
+            sdp: offer,
+            type: "offer",
+          });
+          console.log("Sent offer via Room to", peerId);
+          // We can't await connection here easily unless we poll for answer.
+          // The polling loop handles the answer.
+        } else {
+          throw e;
+        }
+      }
       endMeasure({ success: true });
     } catch (error) {
       endMeasure({ success: false, error: (error as Error).message });
@@ -686,19 +711,119 @@ export function useMeshNetwork() {
   const [roomMessages, setRoomMessages] = useState<any[]>([]);
   const [isJoinedToRoom, setIsJoinedToRoom] = useState(false);
 
+  // New Join Room with RoomClient
   const joinRoom = useCallback(
     async (url: string): Promise<void> => {
       if (!meshNetworkRef.current)
         throw new Error("Mesh network not initialized");
+
+      const localPeerId = meshNetworkRef.current.getLocalPeerId();
       setJoinError(null);
       setRoomMessages([]); // Clear messages on join
+      setIsJoinedToRoom(true);
+
       try {
-        // In a real application, you would fetch bootstrap peers from a server
-        const bootstrapPeers: Peer[] = [];
-        const bootstrapProvider = new BootstrapDiscoveryProvider(bootstrapPeers);
-        meshNetworkRef.current.discovery.registerProvider(bootstrapProvider);
-        await meshNetworkRef.current.discovery.start();
-        setIsJoinedToRoom(true);
+        // Instantiate Room Client
+        const roomClient = new RoomClient(url, localPeerId);
+        roomClientRef.current = roomClient;
+
+        // Fetch/Init Metadata (Public Key)
+        const db = getDatabase();
+        const identity = await db.getPrimaryIdentity();
+        const metadata = {
+          publicKey: identity
+            ? Array.from(identity.publicKey)
+                .map((b) => (b as number).toString(16).padStart(2, "0"))
+                .join("")
+            : undefined,
+          userAgent: navigator.userAgent,
+        };
+
+        // Initial Join
+        const peers = await roomClient.join(metadata);
+        console.log("Joined room, active peers:", peers.length);
+
+        // Update discovered peers immediately
+        setDiscoveredPeers((prev) => {
+          const newPeers = peers
+            .map((p) => p._id)
+            .filter((id) => !prev.includes(id) && id !== localPeerId);
+          return [...prev, ...newPeers];
+        });
+
+        // Start Polling Loop
+        if (roomPollTimerRef.current) clearInterval(roomPollTimerRef.current);
+        roomPollTimerRef.current = setInterval(async () => {
+          if (!roomClientRef.current) return;
+          try {
+            const { signals, messages, peers } =
+              await roomClientRef.current.poll();
+
+            // 1. Update Peers
+            if (peers && peers.length > 0) {
+              setDiscoveredPeers((prev) => {
+                // Simple dedupe - just add new ones
+                const newPeers = peers
+                  .map((p) => p._id)
+                  .filter((id) => !prev.includes(id) && id !== localPeerId);
+                if (newPeers.length === 0) return prev;
+                return [...prev, ...newPeers];
+              });
+            }
+
+            // 2. Process Messages
+            if (messages && messages.length > 0) {
+              setRoomMessages((prev) => {
+                // Dedup
+                const newMsgs = messages.filter(
+                  (m) => !prev.some((existing) => existing.id === m.id),
+                );
+                if (newMsgs.length === 0) return prev;
+                return [...prev, ...newMsgs];
+              });
+            }
+
+            // 3. Process Signals (Offers/Answers)
+            if (signals && signals.length > 0) {
+              for (const sig of signals) {
+                try {
+                  const signalData =
+                    typeof sig.signal === "string"
+                      ? JSON.parse(sig.signal)
+                      : sig.signal;
+
+                  // Handling Offers
+                  if (sig.type === "offer" || signalData.type === "offer") {
+                    console.log("Received offer signal from", sig.from);
+                    const answer = await handleSignalingAnswer(
+                      meshNetworkRef.current!,
+                      signalData.sdp || signalData,
+                    );
+                    // Send Answer back
+                    await roomClientRef.current.signal(sig.from, "answer", {
+                      type: "answer",
+                      sdp: answer,
+                    });
+                  }
+                  // Handling Answers
+                  else if (
+                    sig.type === "answer" ||
+                    signalData.type === "answer"
+                  ) {
+                    console.log("Received answer signal from", sig.from);
+                    await meshNetworkRef.current!.finalizeManualConnection(
+                      signalData.sdp || signalData,
+                    );
+                  }
+                } catch (e) {
+                  console.error("Error processing signal:", e);
+                }
+              }
+            }
+          } catch (e) {
+            console.warn("Poll failed:", e);
+          }
+        }, 3000); // Poll every 3 seconds
       } catch (error) {
         console.error("Failed to join room:", error);
         setJoinError(error instanceof Error ? error.message : String(error));
@@ -710,19 +835,32 @@ export function useMeshNetwork() {
   );
 
   const leaveRoom = useCallback(() => {
+    if (roomPollTimerRef.current) {
+      clearInterval(roomPollTimerRef.current);
+      roomPollTimerRef.current = null;
+    }
+    roomClientRef.current = null;
+
+    // Also stop discovery if needed
     if (meshNetworkRef.current) {
       meshNetworkRef.current.discovery.stop();
-      setDiscoveredPeers([]);
-      setRoomMessages([]);
-      setIsJoinedToRoom(false);
     }
+
+    setDiscoveredPeers([]);
+    setRoomMessages([]);
+    setIsJoinedToRoom(false);
   }, []);
 
   const sendRoomMessage = useCallback(async (content: string) => {
-    if (!meshNetworkRef.current)
-      throw new Error("Mesh network not initialized");
-    // Public room messages are now just broadcast messages
-    await meshNetworkRef.current.broadcastMessage(content);
+    if (!roomClientRef.current) {
+      // Fallback to broadcast if not in HTTP room (e.g. ad-hoc mesh)
+      if (meshNetworkRef.current) {
+        await meshNetworkRef.current.broadcastMessage(content);
+        return;
+      }
+      throw new Error("Not joined to room");
+    }
+    await roomClientRef.current.message(content);
   }, []);
 
   const addStreamToPeer = useCallback(
@@ -752,6 +890,9 @@ export function useMeshNetwork() {
   // Auto-join public room on initialization
   useEffect(() => {
     if (status.isConnected && !isJoinedToRoom) {
+      // Use the actual Netlify function URL
+      // If we are in dev main, it might be localhost:8888/.netlify...
+      // but essentially relative path works.
       const ROOM_URL = "/.netlify/functions/room";
       joinRoom(ROOM_URL).catch((err) => {
         console.error("Failed to auto-join public room on init:", err);
@@ -804,6 +945,7 @@ export function useMeshNetwork() {
       onPeerTrack,
       discoveredPeers,
       roomMessages,
+      meshNetworkRef.current, // Add ref to deps to update when initialized
     ],
   );
 }

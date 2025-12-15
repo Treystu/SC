@@ -392,6 +392,8 @@ let dbInstance: IDb | any = null;
 export async function connectToDatabase(): Promise<IDb | any> {
   if (dbInstance) return dbInstance;
 
+  console.log("DB: Initializing connection...");
+
   // 1. Try Netlify Blobs (Preferred Serverless Native)
   // Check if running on Netlify or have credentials
   if (
@@ -399,42 +401,49 @@ export async function connectToDatabase(): Promise<IDb | any> {
     (process.env.NETLIFY_SITE_ID && process.env.NETLIFY_AUTH_TOKEN)
   ) {
     try {
-      console.log("Connecting to Netlify Blobs...");
+      console.log("DB: Connecting to Netlify Blobs...");
       // Verify connection by creating a store reference (lazy)
       const store = getStore({
         name: "test_connection",
         consistency: "strong",
       });
+      console.log("DB: Netlify Blobs store initialized");
+
       // Optional: await store.get('ping'); // Check connectivity?
       dbInstance = new BlobDbAdapter();
       return dbInstance;
     } catch (e) {
-      console.error("Failed to initialize Netlify Blobs:", e);
+      console.error("DB: Failed to initialize Netlify Blobs:", e);
     }
+  } else {
+    console.log("DB: No Netlify Blobs credentials found.");
   }
 
   // 2. Try MongoDB
   if (process.env.MONGODB_URI) {
     try {
+      console.log("DB: Connecting to MongoDB...");
       // @ts-expect-error - mongodb is optional
       const { MongoClient } = await import("mongodb");
       const client = new MongoClient(process.env.MONGODB_URI);
       await client.connect();
       dbInstance = client.db(process.env.MONGODB_DB_NAME || "sc-messenger");
-      console.log("Connected to MongoDB");
+      console.log("DB: Connected to MongoDB");
       return dbInstance;
     } catch (error) {
       console.error(
-        "Failed to connect to MongoDB, falling back to in-memory:",
+        "DB: Failed to connect to MongoDB, falling back to in-memory:",
         error,
       );
     }
+  } else {
+    console.log("DB: No MONGODB_URI found.");
   }
 
   // 3. Fallback to in-memory (Broken state for mesh, but works for local dev/testing)
   if (!dbInstance) {
     console.warn(
-      "WARNING: Using in-memory database. Peers will NOT see each other across function instances.",
+      "DB WARNING: Using in-memory database. Peers will NOT see each other across function instances.",
     );
     dbInstance = new MockDbAdapter();
   }

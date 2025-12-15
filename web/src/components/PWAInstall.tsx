@@ -62,9 +62,9 @@ export const PWAInstall: React.FC = () => {
   if (isInstalled || !showPrompt) return null;
 
   const isAndroid = /Android/i.test(navigator.userAgent);
-  
-  // Get latest APK download URL from GitHub releases
-  const apkDownloadUrl = "https://github.com/Treystu/SC/releases/latest/download/app-release.apk";
+
+  // Update to use local relative path
+  const apkDownloadUrl = "/app-release.apk";
 
   return (
     <div
@@ -87,19 +87,27 @@ export const PWAInstall: React.FC = () => {
           )}
         </ul>
         <div className="prompt-actions">
-          <button onClick={handleInstallClick} className="btn-primary">
-            Install Web App
-          </button>
           {isAndroid && (
             <a
               href={apkDownloadUrl}
               download="sovereign-communications.apk"
               className="btn-primary"
-              style={{ marginLeft: "10px", textDecoration: "none", display: "inline-block" }}
+              style={{
+                width: "100%",
+                marginBottom: "10px",
+                textDecoration: "none",
+                textAlign: "center",
+                backgroundColor: "#2e7d32", // Green to distinguish
+              }}
             >
               📲 Download Android APK
             </a>
           )}
+
+          <button onClick={handleInstallClick} className="btn-primary">
+            Install Web App
+          </button>
+
           <button onClick={handleDismiss} className="btn-secondary">
             Not Now
           </button>
