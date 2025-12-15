@@ -61,7 +61,9 @@ class MeshNetworkManager(
             com.sovereign.communications.SCApplication.instance.localPeerId
                 ?: throw IllegalStateException("Local Peer ID not initialized")
 
-    private val jsBridge = JSBridge(context)
+    private val coreBridge =
+        com.sovereign.communications.core.CoreBridge
+            .getInstance(context)
 
     private val localDiscovery =
         LocalDiscoveryManager(
@@ -72,7 +74,9 @@ class MeshNetworkManager(
                 Log.d(TAG, "Local peer connected: $peerId")
             },
             onMessageReceived = { peerId, data ->
-                jsBridge.handleIncomingPacket(data, peerId)
+                scope.launch {
+                    coreBridge.handleIncomingPacket(peerId, data)
+                }
             },
         )
 
@@ -97,19 +101,23 @@ class MeshNetworkManager(
         // Start Local Discovery
         localDiscovery.start()
 
+        // Initialize CoreBridge
+        scope.launch {
+            coreBridge.initialize().getOrThrow()
+            coreBridge.initMeshNetwork(localPeerId).getOrThrow()
+
+            // Setup CoreBridge hooks
+            coreBridge.outboundTransportCallback = { peerId, data ->
+                sendDirectly(peerId, data)
+            }
+        }
+
         // Start WebRTC Manager
         webRTCManager.initialize()
         webRTCManager.onMessageReceived = { peerId, data ->
-            jsBridge.handleIncomingPacket(data, peerId)
-        }
-
-        // Setup JS Bridge hooks
-        jsBridge.outboundCallback = { peerId, data ->
-            sendDirectly(peerId, data)
-        }
-
-        jsBridge.applicationMessageCallback = { jsonString ->
-            processApplicationMessage(jsonString)
+            scope.launch {
+                coreBridge.handleIncomingPacket(peerId, data)
+            }
         }
 
         // Start device discovery
@@ -276,7 +284,9 @@ class MeshNetworkManager(
         recipientId: String,
         message: String,
     ): Boolean {
-        jsBridge.sendMessage(recipientId, message)
+        scope.launch {
+            coreBridge.sendTextMessage(recipientId, message)
+        }
         return true
     }
 

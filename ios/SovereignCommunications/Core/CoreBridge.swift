@@ -30,6 +30,10 @@ class CoreBridge {
     private let logger = Logger(subsystem: "com.sovereign.communications", category: "CoreBridge")
     private var isInitialized = false
     
+    // Callbacks
+    var outboundTransportCallback: ((String, Data) -> Void)?
+
+    
     // Cached identity
     private(set) var localIdentity: CoreIdentity?
     
@@ -68,6 +72,22 @@ class CoreBridge {
             return bytes
         }
         jsContext.setObject(secureRandomBytes, forKeyedSubscript: "_nativeSecureRandomBytes" as NSString)
+        
+        // Register outbound transport callback
+        let outboundTransport: @convention(block) (String, [Any]?) -> Void = { [weak self] peerId, dataArray in
+            guard let self = self, let dataArray = dataArray else { return }
+            
+            // Convert JS number array to Data
+            var bytes = [UInt8]()
+            for item in dataArray {
+                if let num = item as? NSNumber {
+                    bytes.append(UInt8(num.uint8Value))
+                }
+            }
+            
+            self.outboundTransportCallback?(peerId, Data(bytes))
+        }
+        jsContext.setObject(outboundTransport, forKeyedSubscript: "_nativeOutboundTransport" as NSString)
     }
     
     // MARK: - Initialization
@@ -115,6 +135,81 @@ class CoreBridge {
         isInitialized = true
         logger.info("CoreBridge initialized successfully")
     }
+    
+    // MARK: - Mesh Network Logic (Unified Core)
+    
+    /// Initialize the MeshNetwork in JS logic
+    func initMeshNetwork(peerId: String) async throws {
+        try await ensureInitialized()
+        
+        // Check if MeshNetwork exists in bundle
+        let checkScript = "typeof SCCore.MeshNetwork !== 'undefined'"
+        guard jsContext.evaluateScript(checkScript)?.toBool() == true else {
+             throw CoreBridgeError.initializationFailed("MeshNetwork not exported in bundle")
+        }
+        
+        let script = """
+            (function() {
+                if (globalThis.meshNetwork) {
+                    return "Already initialized";
+                }
+
+                // Initialize MeshNetwork with explicit peerId
+                globalThis.meshNetwork = new SCCore.MeshNetwork({
+                    peerId: '\(peerId)'
+                });
+
+                // Register outbound transport
+                globalThis.meshNetwork.registerOutboundTransport((peerId, data) => {
+                     // Convert Uint8Array to Array for Native bridge
+                     _nativeOutboundTransport(peerId, Array.from(data));
+                     return Promise.resolve();
+                });
+                
+                return "success";
+            })()
+        """
+        
+        let result = jsContext.evaluateScript(script)?.toString()
+        if result == "success" || result == "Already initialized" {
+             logger.info("MeshNetwork initialized in JS")
+        } else {
+             throw CoreBridgeError.initializationFailed("MeshNetwork init failed: \(result ?? "unknown")")
+        }
+    }
+    
+    /// Handle incoming packet from Native Transport -> JS MeshNetwork
+    func handleIncomingPacket(peerId: String, data: Data) async throws {
+        try await ensureInitialized()
+        let dataHex = data.map { String(format: "%02x", $0) }.joined()
+        
+        let script = """
+            (function() {
+                if (globalThis.meshNetwork) {
+                    var dataBytes = new Uint8Array('\(dataHex)'.match(/.{2}/g).map(b => parseInt(b, 16)));
+                    globalThis.meshNetwork.handleIncomingPacket('\(peerId)', dataBytes);
+                }
+            })()
+        """
+        jsContext.evaluateScript(script)
+    }
+    
+    /// Send text message via JS MeshNetwork
+    func sendTextMessage(recipientId: String, text: String) async throws {
+        try await ensureInitialized()
+        // Simple escaping
+        let safeText = text.replacingOccurrences(of: "'", with: "\\'").replacingOccurrences(of: "\n", with: "\\n")
+        
+        let script = """
+            (function() {
+                if (globalThis.meshNetwork) {
+                    globalThis.meshNetwork.sendTextMessage('\(recipientId)', '\(safeText)');
+                }
+            })()
+        """
+        jsContext.evaluateScript(script)
+    }
+
     
     // MARK: - Identity Management
     

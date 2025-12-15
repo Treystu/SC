@@ -1,6 +1,6 @@
 /**
  * Mobile-safe exports for core library
- * 
+ *
  * This module exports only the essential cryptography, protocol, and mesh
  * functionality that can run in embedded JavaScript engines (JavaScriptCore,
  * QuickJS, etc.) without browser-specific or Node.js-specific dependencies.
@@ -39,6 +39,9 @@ export {
   type PeerCapabilities,
   type PeerMetadata,
 } from "./mesh/routing.js";
+
+// Mesh Network Manager (The Brain)
+export { MeshNetwork, type MeshNetworkConfig } from "./mesh/network.js";
 
 // Envelope encryption
 export {
