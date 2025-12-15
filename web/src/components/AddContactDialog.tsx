@@ -44,7 +44,7 @@ export function AddContactDialog({
     if (data.includes("join?code=")) {
       const match = data.match(/code=([^&]+)/);
       if (match && match[1]) {
-        scannedId = match[1];
+        scannedId = decodeURIComponent(match[1]);
       }
     } else {
       // Try parsing pairing data

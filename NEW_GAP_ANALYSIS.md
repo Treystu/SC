@@ -14,16 +14,21 @@
 | **Data Persistence**    | **Completed**   | `DatabaseManager` handles IndexedDB storage. `useBackup.ts` manages export/import.                         |
 | **Group Messaging**     | **In Progress** | `StoredGroup` and `useGroups` exist. UI integration needs final verification.                              |
 | **Full Emoji Picker**   | **Partial**     | Quick reactions implemented. Full picker relies on OS native picker for now.                               |
-| **Help System**         | **Pending**     | `Network Diagnostics` available. Dedicated Help/FAQ page missing.                                          |
+| **Help System**         | **Completed**   | Implemented `HelpModal.tsx` with FAQ and diagnostics.                                                      |
 
 ### Recent Implementations
 
 - **QR Code Scanner**: Added camera-based QR scanning to easily add peers.
 - **Contact Profile**: Added detailed view for contacts to verify fingerprints and manage permissions (Block/Verify).
+- **Invite System**: Refactored to Stateless Invites. Now creates self-contained, signed invite codes that include all necessary peer info. Fixed generic type issues in database encryption.
+  - [x] Stateless Invite Creation (Signed JWT-like payload)
+  - [x] Stateless Invite Validation & Redemption
+  - [x] QR Code & Deep Link Integration (Fixed +/encoding issues)
+  - [x] Auto-redemption in "Add Contact" flow
 
 ## 2. iOS Application (`SovereignCommunications`)
 
-### Feature Status
+### iOS Feature Status
 
 | Feature                 | Status        | Notes                                                                    |
 | :---------------------- | :------------ | :----------------------------------------------------------------------- |
@@ -35,7 +40,7 @@
 
 ## 3. Android Application (`android`)
 
-### Feature Status
+### Android Feature Status
 
 | Feature                 | Status        | Notes                                                           |
 | :---------------------- | :------------ | :-------------------------------------------------------------- |

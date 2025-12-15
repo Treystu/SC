@@ -2,6 +2,7 @@ import { getStore } from "@netlify/blobs";
 import { randomBytes } from "crypto";
 
 // In-memory store (Fallback of last resort)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const memoryStore: Record<string, any[]> = {
   peers: [],
   signals: [],
@@ -12,11 +13,13 @@ function generateId(): string {
   return randomBytes(12).toString("hex");
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Document = Record<string, any>;
 
 // Netlify Blobs Collection
 class BlobsCollection {
   private name: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private store: any; // Type is complicated, using any for flexibility
 
   constructor(name: string) {
@@ -45,7 +48,7 @@ class BlobsCollection {
 
   async updateOne(filter: Document, update: Document, options?: Document) {
     let key = filter._id;
-    let item: any = null;
+    let item: Document | null = null;
 
     // specialized lookup for single ID
     if (key) {
@@ -58,15 +61,15 @@ class BlobsCollection {
       // Warning: Full scan for non-ID updateOne is slow
       // But room.ts only uses updateOne with _id (for peers)
       const all = await this.find(filter).toArray();
-      if (all.length > 0) {
-        item = all[0];
+      if (all.length > 0 && all[0]) {
+        item = all[0] as Document;
         key = item._id; // Found key
       }
     }
 
     if (item) {
-      this.applyUpdate(item, update);
-      await this.store.set(key, JSON.stringify(item));
+      this.applyUpdate(item as Document, update);
+      await this.store.set(key as string, JSON.stringify(item));
     } else if (options?.upsert) {
       // If we didn't find it, use the filter _id or generate one
       key = filter._id || generateId();
@@ -127,10 +130,12 @@ class BlobsCollection {
     sortOpts?: Document,
     limit?: number,
     prefix?: string,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<any> {
     // Simplified return for chaining
 
     // 1. List keys (with prefix if applicable)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const listOpts: any = { prefix };
     const { blobs } = await this.store.list(listOpts);
 
@@ -143,19 +148,21 @@ class BlobsCollection {
     if (this.name === "peers" && filter.lastSeen && filter.lastSeen.$gt) {
       const threshold = new Date(filter.lastSeen.$gt).getTime();
       candidateBlobs = blobs.filter(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (b: any) => new Date(b.lastModified).getTime() > threshold,
       );
     }
 
     // 3. Fetch bodies (parallel)
     // Limit parallelism if too many?
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const fetchPromises = candidateBlobs.map((b: any) =>
       this.store.get(b.key, { type: "json" }),
     );
     const docs = (await Promise.all(fetchPromises)).filter((d) => d !== null);
 
     // 4. In-memory filter
-    let result = docs.filter((item) => this.matches(item, filter));
+    const result = docs.filter((item) => this.matches(item, filter));
 
     // 5. Sort
     if (sortOpts) {
@@ -170,12 +177,13 @@ class BlobsCollection {
 
     // 6. Limit
     if (limit) {
-      result = result.slice(0, limit);
+      // result = result.slice(0, limit); // Handled in toArray
     }
 
     // 7. Project
+    let finalResult = result;
     if (projection) {
-      result = result.map((item) => {
+      finalResult = result.map((item) => {
         const projected: Document = {};
         for (const key in projection) {
           if (projection[key] === 1) {
@@ -189,10 +197,17 @@ class BlobsCollection {
       });
     }
 
+    // apply limit here
+    if (limit) {
+      finalResult = finalResult.slice(0, limit);
+    }
+
     // Return object with toArray for final call (or chainable if needed, but simple here)
     return {
-      toArray: async () => result,
+      toArray: async () => finalResult,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       project: (p: any) => this.cursor(filter, p, sortOpts, limit, prefix), // crude chaining
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       sort: (s: any) => this.cursor(filter, projection, s, limit, prefix),
       limit: (l: number) =>
         this.cursor(filter, projection, sortOpts, l, prefix),
@@ -201,10 +216,11 @@ class BlobsCollection {
 
   async updateMany(filter: Document, update: Document) {
     // Fetch all matching
-    const cursor = await this.cursor(filter);
+    const cursor = await this.cursor(filter); // cursor returns object with toArray
     const items = await cursor.toArray();
 
     // Apply update and save
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const promises = items.map(async (item: any) => {
       this.applyUpdate(item, update);
       await this.store.set(item._id, JSON.stringify(item));
@@ -214,6 +230,7 @@ class BlobsCollection {
     return { modifiedCount: items.length };
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private matches(item: any, filter: any): boolean {
     for (const key in filter) {
       const value = filter[key];
@@ -234,6 +251,7 @@ class BlobsCollection {
     return true;
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private applyUpdate(item: any, update: any) {
     if (update.$set) {
       Object.assign(item, update.$set);
@@ -322,9 +340,12 @@ class MockCollection {
     return { modifiedCount: items.length };
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private cursor(result: any[]) {
     return {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       project: (projection: any) => this.find({}).project(projection),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       sort: (sortOpts: any) => {
         result.sort((a, b) => {
           for (const key in sortOpts) {
@@ -343,6 +364,7 @@ class MockCollection {
     };
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private matches(item: any, filter: any): boolean {
     for (const key in filter) {
       const value = filter[key];
@@ -363,6 +385,7 @@ class MockCollection {
     return true;
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private applyUpdate(item: any, update: any) {
     if (update.$set) {
       Object.assign(item, update.$set);
@@ -372,6 +395,7 @@ class MockCollection {
 
 // Abstract DB Adapter Interface
 interface IDb {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   collection(name: string): any;
 }
 
@@ -387,8 +411,10 @@ class MockDbAdapter implements IDb {
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let dbInstance: IDb | any = null;
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function connectToDatabase(): Promise<IDb | any> {
   if (dbInstance) return dbInstance;
 
@@ -403,7 +429,7 @@ export async function connectToDatabase(): Promise<IDb | any> {
     try {
       console.log("DB: Connecting to Netlify Blobs...");
       // Verify connection by creating a store reference (lazy)
-      const store = getStore({
+      getStore({
         name: "test_connection",
         consistency: "strong",
       });

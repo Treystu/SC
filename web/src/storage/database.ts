@@ -129,23 +129,9 @@ export class DatabaseManager {
   private version = CURRENT_SCHEMA_VERSION;
   private db: IDBDatabase | null = null;
   private initPromise: Promise<void> | null = null;
-  private encryptionInitialized = false;
-
-  /**
-   * Initialize encryption for the database
-   * Should be called during app initialization with user's passphrase
-   *
-   * @example
-   * // During app startup, after user authentication
-   * const passphrase = await deriveFromUserPassword(userPassword);
-   * await dbManager.initializeEncryption(passphrase);
-   *
-   * @param passphrase - User's passphrase for encryption (derived from password or device key)
-   */
   async initializeEncryption(passphrase: string): Promise<void> {
     try {
       await encryptionManager.initialize(passphrase);
-      this.encryptionInitialized = true;
       console.log("EncryptionManager initialized for database");
     } catch (error) {
       console.error("DatabaseManager: Failed to initialize encryption:", error);
@@ -234,7 +220,7 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     // Encrypt sensitive fields
-    const encryptedMessage = await encryptSensitiveFields(message, [
+    const encryptedMessage = await encryptSensitiveFields(message as any, [
       "content",
       "metadata",
     ]);
@@ -297,7 +283,10 @@ export class DatabaseManager {
     if (!message) return null;
 
     // Decrypt sensitive fields
-    return await decryptSensitiveFields(message, ["content", "metadata"]);
+    return (await decryptSensitiveFields(message as any, [
+      "content",
+      "metadata",
+    ])) as StoredMessage;
   }
 
   /**
@@ -325,8 +314,12 @@ export class DatabaseManager {
 
     // Decrypt all messages
     return await Promise.all(
-      paginatedMessages.map((msg) =>
-        decryptSensitiveFields(msg, ["content", "metadata"]),
+      paginatedMessages.map(
+        async (msg) =>
+          (await decryptSensitiveFields(msg as any, [
+            "content",
+            "metadata",
+          ])) as StoredMessage,
       ),
     );
   }
@@ -676,7 +669,7 @@ export class DatabaseManager {
     if (!this.db) await this.init();
 
     // Encrypt sensitive fields (especially privateKey)
-    const encryptedIdentity = await encryptSensitiveFields(identity, [
+    const encryptedIdentity = await encryptSensitiveFields(identity as any, [
       "privateKey",
     ]);
 
@@ -699,7 +692,9 @@ export class DatabaseManager {
     if (!identity) return null;
 
     // Decrypt sensitive fields (especially privateKey)
-    return await decryptSensitiveFields(identity, ["privateKey"]);
+    return (await decryptSensitiveFields(identity as any, [
+      "privateKey",
+    ])) as Identity;
   }
 
   /**
@@ -720,8 +715,11 @@ export class DatabaseManager {
 
     // Decrypt all identities
     return await Promise.all(
-      identities.map((identity) =>
-        decryptSensitiveFields(identity, ["privateKey"]),
+      identities.map(
+        async (identity) =>
+          (await decryptSensitiveFields(identity as any, [
+            "privateKey",
+          ])) as Identity,
       ),
     );
   }

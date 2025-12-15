@@ -530,15 +530,52 @@ function App() {
     publicKeyHex?: string,
   ) => {
     let finalPublicKeyHex = publicKeyHex;
+    let finalPeerId = peerId;
+    let finalName = name;
+
+    // Check if peerId is a Stateless Invite Code (contains dot and likely long)
+    if (
+      finalPeerId.includes(".") &&
+      !finalPublicKeyHex &&
+      identity?.publicKey &&
+      identity?.privateKey
+    ) {
+      try {
+        const { InviteManager } = await import("@sc/core");
+        const inviteManager = new InviteManager(
+          status.localPeerId,
+          identity.publicKey,
+          identity.privateKey,
+          userProfile?.displayName,
+        );
+
+        const result = await inviteManager.redeemInvite(
+          finalPeerId,
+          status.localPeerId,
+        );
+        if (result.success) {
+          console.log("Automatically redeemed invite code in Add Contact");
+          finalPeerId = result.contact.peerId;
+          finalName = result.contact.name || finalName;
+          // Convert Uint8Array to hex string
+          finalPublicKeyHex = Array.from(result.contact.publicKey)
+            .map((b) => (b as number).toString(16).padStart(2, "0"))
+            .join("");
+        }
+      } catch (e) {
+        console.warn("Failed to redeem potential invite code:", e);
+        // Continue as normal, maybe it was just a weird ID
+      }
+    }
 
     // If no public key provided, try to use peerId if it looks like a key, or generate a dummy one for testing
     if (!finalPublicKeyHex) {
-      if (isValidPublicKey(peerId)) {
-        finalPublicKeyHex = peerId;
+      if (isValidPublicKey(finalPeerId)) {
+        finalPublicKeyHex = finalPeerId;
       } else {
         // Generate a random public key for testing/demo purposes if one isn't provided
         // This allows adding "test-buddy" or other simple names
-        console.warn("Generating dummy public key for contact:", name);
+        console.warn("Generating dummy public key for contact:", finalName);
         const keyPair = await window.crypto.subtle.generateKey(
           {
             name: "Ed25519",
@@ -567,9 +604,9 @@ function App() {
     const fingerprint = await generateFingerprint(publicKeyBytes);
 
     await addContact({
-      id: peerId,
+      id: finalPeerId,
       publicKey: publicKeyBase64, // ACTUAL PUBLIC KEY
-      displayName: name,
+      displayName: finalName,
       lastSeen: Date.now(),
       createdAt: Date.now(),
       fingerprint: fingerprint, // ACTUAL FINGERPRINT
@@ -581,14 +618,14 @@ function App() {
     // Create a conversation for the new contact
     const db = getDatabase();
     await db.saveConversation({
-      id: peerId,
-      contactId: peerId,
+      id: finalPeerId,
+      contactId: finalPeerId,
       lastMessageTimestamp: Date.now(),
       unreadCount: 0,
       createdAt: Date.now(),
     });
 
-    setSelectedConversation(peerId);
+    setSelectedConversation(finalPeerId);
   };
 
   const handleImportContact = async (code: string, name: string) => {
