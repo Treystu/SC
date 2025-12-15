@@ -35,6 +35,12 @@ export const handler: Handler = async (event, _context) => {
     };
 
     // Direct console log for Netlify capture
+    console.log(
+      `${logEntry.timestamp} [${logEntry.level}] ${logEntry.peerId}: ${logEntry.message}`,
+    );
+    if (logEntry.details && Object.keys(logEntry.details).length > 0) {
+      console.log("Details:", JSON.stringify(logEntry.details));
+    }
     console.log(JSON.stringify(logEntry));
 
     return {

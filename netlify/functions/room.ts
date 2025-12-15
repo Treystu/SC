@@ -50,7 +50,12 @@ export const handler: Handler = async (event, context) => {
       };
     }
 
-    const { action, peerId, payload } = body;
+    const { action, payload } = body;
+    let { peerId } = body;
+
+    if (peerId) {
+      peerId = peerId.replace(/\s/g, "");
+    }
     console.log(`[${requestId}] Action: ${action}, PeerId: ${peerId}`);
 
     // Basic Validation
@@ -108,12 +113,24 @@ export const handler: Handler = async (event, context) => {
 
       case "signal": {
         // Store signal for another peer
-        const { to, type, signal } = payload;
+        let { to, type, signal } = payload;
         if (!to || !type || !signal) throw new Error("Invalid signal payload");
 
+        // Sanitize recipient ID to match the sanitized peerId validation
+        to = to.replace(/\s/g, "");
+
         console.log(
-          `[${requestId}] Processing signal from ${peerId} to ${to} (${type})`,
+          `[${requestId}] Processing signal from ${peerId} to ${to} (${type}) - Length: ${JSON.stringify(signal).length} chars`,
         );
+        if (type === "offer" || type === "answer") {
+          console.log(
+            `[${requestId}] SDP Type: ${type}, SDP content present: ${!!signal.sdp}`,
+          );
+        } else if (type === "candidate") {
+          console.log(
+            `[${requestId}] ICE Candidate: ${signal.candidate ? "present" : "missing"}`,
+          );
+        }
 
         await signalsCollection.insertOne({
           from: peerId,
