@@ -106,8 +106,12 @@ This implementation enables users to seamlessly transition from the Netlify web 
 // Auto-saves bootstrap peers when in public room
 useEffect(() => {
   if (isJoinedToRoom && (discoveredPeers.length > 0 || peers.length > 0)) {
-    const connectedPeerIds = peers.map(p => p.id);
-    saveBootstrapPeers(discoveredPeers, connectedPeerIds, activeRoom || undefined);
+    const connectedPeerIds = peers.map((p) => p.id);
+    saveBootstrapPeers(
+      discoveredPeers,
+      connectedPeerIds,
+      activeRoom || undefined,
+    );
   }
 }, [isJoinedToRoom, discoveredPeers, peers, activeRoom]);
 ```
@@ -121,18 +125,18 @@ export function encodeBootstrapData(data: BootstrapData): string {
   // Compress to minimal format
   const compact = {
     v: data.version,
-    p: data.peers.slice(0, 20).map(p => ({
-      i: p.peerId,        // Peer ID
-      c: p.isConnected ? 1 : 0  // Connected flag
+    p: data.peers.slice(0, 20).map((p) => ({
+      i: p.peerId, // Peer ID
+      c: p.isConnected ? 1 : 0, // Connected flag
     })),
-    r: data.roomUrl,      // Room URL
-    t: data.timestamp     // Timestamp
+    r: data.roomUrl, // Room URL
+    t: data.timestamp, // Timestamp
   };
-  
+
   // Base64url encode for URL safety
   const json = JSON.stringify(compact);
   const base64 = btoa(json);
-  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
 ```
 
@@ -178,9 +182,9 @@ private fun handleBootstrapPeers(encodedData: String) {
     var base64 = encodedData.replace('-', '+').replace('_', '/')
     val padding = (4 - (base64.length % 4)) % 4
     base64 += "=".repeat(padding)
-    
+
     val json = String(android.util.Base64.decode(base64, android.util.Base64.DEFAULT))
-    
+
     // Store for auto-connect
     getSharedPreferences("mesh_bootstrap", Context.MODE_PRIVATE)
         .edit()
@@ -198,17 +202,17 @@ private fun handleBootstrapPeers(encodedData: String) {
 fun initializeWithBootstrap() {
     val prefs = context.getSharedPreferences("mesh_bootstrap", Context.MODE_PRIVATE)
     val bootstrapJson = prefs.getString("bootstrap_peers", null)
-    
+
     if (bootstrapJson != null) {
         val data = JSONObject(bootstrapJson)
         val peers = data.getJSONArray("p")
-        
+
         // Auto-connect to each peer
         for (i in 0 until peers.length()) {
             val peer = peers.getJSONObject(i)
             val peerId = peer.getString("i")
             val wasConnected = peer.getInt("c") == 1
-            
+
             // Prioritize previously connected peers
             if (wasConnected) {
                 connectToPeer(peerId)
@@ -217,13 +221,13 @@ fun initializeWithBootstrap() {
                 queuePeerConnection(peerId)
             }
         }
-        
+
         // Join room if provided
         val roomUrl = data.optString("r")
         if (roomUrl.isNotEmpty()) {
             joinRoom(roomUrl)
         }
-        
+
         // Clear bootstrap data after use
         prefs.edit().remove("bootstrap_peers").apply()
     }
@@ -247,6 +251,7 @@ fun initializeWithBootstrap() {
 ```
 
 **Behavior**:
+
 - Android: Downloads APK + opens deep link with bootstrap
 - iOS: Navigates to join page with bootstrap
 - Includes current peer list in deep link
@@ -256,14 +261,18 @@ fun initializeWithBootstrap() {
 **Location**: `web/public/join.html`
 
 ```html
-<button id="apk-download-btn" class="btn-secondary" 
-        onclick="downloadAPK()" 
-        style="display: none;">
+<button
+  id="apk-download-btn"
+  class="btn-secondary"
+  onclick="downloadAPK()"
+  style="display: none;"
+>
   📥 Download Android APK
 </button>
 ```
 
 **Behavior**:
+
 - Shows only for Android users
 - Direct download from GitHub Releases
 - Bootstrap peers included in deep link on app open
@@ -273,15 +282,17 @@ fun initializeWithBootstrap() {
 **Location**: `web/src/components/PWAInstall.tsx`
 
 ```tsx
-{isAndroid && (
-  <a
-    href="https://github.com/Treystu/SC/releases/latest/download/app-release.apk"
-    download="sovereign-communications.apk"
-    className="btn-primary"
-  >
-    📲 Download Android APK
-  </a>
-)}
+{
+  isAndroid && (
+    <a
+      href="https://github.com/Treystu/SC/releases/latest/download/app-release.apk"
+      download="sovereign-communications.apk"
+      className="btn-primary"
+    >
+      📲 Download Android APK
+    </a>
+  );
+}
 ```
 
 ## APK Build & Distribution
@@ -291,10 +302,12 @@ fun initializeWithBootstrap() {
 **Location**: `.github/workflows/build-android-apk.yml`
 
 **Triggers**:
+
 - Git tags matching `v*` (e.g., `v1.0.0`)
 - Manual workflow dispatch
 
 **Process**:
+
 1. Checkout repository
 2. Set up JDK 17
 3. Build release APK with Gradle
@@ -303,6 +316,7 @@ fun initializeWithBootstrap() {
 6. Make available at: `https://github.com/Treystu/SC/releases/latest/download/app-release.apk`
 
 **Required Secrets**:
+
 - `ANDROID_SIGNING_KEY`: Base64-encoded keystore file
 - `ANDROID_KEY_ALIAS`: Key alias name
 - `ANDROID_KEYSTORE_PASSWORD`: Keystore password
@@ -313,6 +327,7 @@ See `docs/ANDROID_APK_SIGNING.md` for setup instructions.
 ## Testing Checklist
 
 ### Web App
+
 - [ ] Join public room and verify peer discovery
 - [ ] Check localStorage for `sc-bootstrap-peers`
 - [ ] Verify peer data is saved automatically
@@ -320,6 +335,7 @@ See `docs/ANDROID_APK_SIGNING.md` for setup instructions.
 - [ ] Verify deep link includes bootstrap parameter
 
 ### Android App
+
 - [ ] Install APK from GitHub Releases
 - [ ] Launch via deep link: `sc://join?code=...&bootstrap=...`
 - [ ] Verify bootstrap data is parsed and stored
@@ -328,6 +344,7 @@ See `docs/ANDROID_APK_SIGNING.md` for setup instructions.
 - [ ] Verify room auto-join if provided
 
 ### End-to-End
+
 - [ ] Complete flow: webapp → room → discover peers → download → install → auto-connect
 - [ ] Verify same conversations appear on mobile
 - [ ] Test with 20+ peers (compression limit)
@@ -360,21 +377,25 @@ See `docs/ANDROID_APK_SIGNING.md` for setup instructions.
 ## Troubleshooting
 
 ### Bootstrap data not saving
+
 - Check browser localStorage support
 - Verify public room is joined
 - Ensure peers are discovered
 
 ### Deep link not working
+
 - Verify app is installed
 - Check AndroidManifest.xml for intent-filter
 - Test with both `sc://` and `https://` schemes
 
 ### Auto-connect fails
+
 - Check bootstrap data format in SharedPreferences
 - Verify peer IDs are valid
 - Ensure mesh network service is running
 
 ### APK download fails
+
 - Verify GitHub release exists
 - Check APK signing in workflow
 - Test download URL directly
@@ -391,10 +412,24 @@ See `docs/ANDROID_APK_SIGNING.md` for setup instructions.
 
 1. **Peer Prioritization**: Connect to closest peers first based on RSSI
 2. **Incremental Loading**: Load peers in batches to reduce startup time
-3. **Background Sync**: Sync peer list in background via service worker
-4. **Cross-Platform**: Full iOS implementation with similar flow
-5. **Compression**: Use more efficient encoding for larger peer lists
-6. **Encryption**: Optionally encrypt bootstrap data for privacy
+3. Cross-Platform: Full iOS implementation is complete (v1)
+4. Compression: Use more efficient encoding for larger peer lists
+5. Encryption: Optionally encrypt bootstrap data for privacy
+
+## ID System Unification
+
+To ensure robust and widely compatible peer identification, the system uses a unified ID strategy:
+
+1.  **Transport/Native ID**: A 32-byte Hex String (64 characters).
+    - **Mobile**: Randomly generated on first launch and persisted. Used for WebRTC signaling and Transport-layer identification.
+    - **Web**: Derived from the Identity Public Key (Hex).
+    - **Purpose**: Allows the "dumb" native transport layer (MeshNetworkManager) to establish connections and join rooms without needing access to the encrypted Identity keys managed by the JS Core.
+
+2.  **Identity ID**: A 32-byte Hex String (derived from Ed25519 Public Key).
+    - **All Platforms**: Generated and managed by the `@sc/core` (JS Core).
+    - **Purpose**: Used for cryptographic signing, verification, and end-to-end routing of messages.
+
+The Bootstrapping process operates at the **Transport Layer**, connecting the Native IDs. Once connected, the **Identity Layer** (JS Core) performs introductions and establishes the secure mesh overlay.
 
 ## Related Documentation
 

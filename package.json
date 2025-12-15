@@ -70,6 +70,7 @@
     "webdriverio": "^8.46.0"
   },
   "dependencies": {
+    "@netlify/blobs": "^10.4.3",
     "@netlify/functions": "^5.1.0",
     "@sentry/browser": "^7.91.0",
     "@sentry/react": "^7.91.0",

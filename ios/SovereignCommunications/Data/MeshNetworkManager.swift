@@ -1,5 +1,5 @@
 //
-//  MeshNetworkManager.swif
+//  MeshNetworkManager.swift
 //  SovereignCommunications
 //
 //  Created by Your Name on 2023-10-27.
@@ -19,15 +19,15 @@ struct Message: Codable {
 }
 
 struct NetworkStats {
-    var connectedPeers: In
-    var messagesSent: In
-    var messagesReceived: In
+    var connectedPeers: Int
+    var messagesSent: Int
+    var messagesReceived: Int
     var bandwidth: (upload: Double, download: Double)
     var latency: (average: Double, min: Double, max: Double)
     var packetLoss: Double
     var uptime: TimeInterval
-    var bleConnections: In
-    var webrtcConnections: In
+    var bleConnections: Int
+    var webrtcConnections: Int
     var error: String?
 }
 
@@ -39,17 +39,22 @@ struct NetworkStats {
  * - Uses IOSPersistenceAdapter for message queue persistence
  * - Consistent with Web and Android implementations
  * - Binary-safe message handling
+ * - Unified Peer ID (32-byte Hex String)
  */
 class MeshNetworkManager: NSObject, ObservableObject {
 
     static let shared = MeshNetworkManager()
 
-    private let context: NSManagedObjectContex
+    private let context: NSManagedObjectContext
     private let startTime: Date
     private let logger = Logger(subsystem: "com.sovereign.communications", category: "MeshNetworkManager")
 
     // Unified persistence adapter (matches Web/Android)
     private let persistenceAdapter: IOSPersistenceAdapter
+    
+    // Room Client for Global Bootstrapping
+    private let roomClient = RoomClient()
+    private var signalingTask: Task<Void, Never>?
 
     @Published var connectedPeers: [String] = [] // List of connected Peer IDs
 
@@ -62,9 +67,21 @@ class MeshNetworkManager: NSObject, ObservableObject {
     private var latency: (average: Double, min: Double, max: Double) = (0, 0, 0)
     private var bandwidth: (upload: Double, download: Double) = (0, 0)
     private var packetLoss: Double = 0
+    
+    // Unified ID Generation: 32-byte random ID -> Hex String
+    private(set) lazy var localPeerId: String = {
+        if let savedId = UserDefaults.standard.string(forKey: "local_peer_id") {
+            return savedId
+        }
+        var bytes = [UInt8](repeating: 0, count: 32)
+        let status = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        let hexId = bytes.map { String(format: "%02x", $0) }.joined()
+        UserDefaults.standard.set(hexId, forKey: "local_peer_id")
+        return hexId
+    }()
 
     private override init() {
-        self.context = CoreDataStack.shared.viewContex
+        self.context = CoreDataStack.shared.viewContext
         self.startTime = Date()
         self.persistenceAdapter = IOSPersistenceAdapter(context: context)
         super.init()
@@ -93,10 +110,16 @@ class MeshNetworkManager: NSObject, ObservableObject {
      * Starts the network.
      */
     func start() {
-        logger.info("Starting MeshNetworkManager and JS Bridge")
+        logger.info("Starting MeshNetworkManager and JS Bridge with ID: \(self.localPeerId)")
         BluetoothMeshManager.shared.start()
         LocalNetworkManager.shared.start()
         _ = WebRTCManager.shared
+        
+        // Start Signaling Loop
+        startSignalingLoop()
+        
+        // Connect to Bootstrap Peers
+        connectToBootstrapPeers()
     }
 
     /**
@@ -104,8 +127,100 @@ class MeshNetworkManager: NSObject, ObservableObject {
      */
     func stop() {
         logger.info("Stopping MeshNetworkManager")
+        signalingTask?.cancel()
         BluetoothMeshManager.shared.stop()
         LocalNetworkManager.shared.stop()
+    }
+    
+    // MARK: - Bootstrapping & Signaling
+    
+    private func startSignalingLoop() {
+        signalingTask = Task {
+            do {
+                _ = try await roomClient.join(peerId: localPeerId)
+                
+                while !Task.isCancelled {
+                    do {
+                        let (signals, peers) = try await roomClient.poll(peerId: localPeerId)
+                        
+                        // Handle Signals
+                        for signal in signals {
+                            await handleSignal(signal)
+                        }
+                        
+                        // Handle discovered peers (opportunistic connection)
+                        for peer in peers {
+                            if peer.id != localPeerId && !connectedPeers.contains(peer.id) {
+                                // For bootstrap, we try to connect to active room members
+                                if WebRTCManager.shared.getConnectionState(for: peer.id) != .connected {
+                                    initiateWebRTCConnection(to: peer.id)
+                                }
+                            }
+                        }
+                    } catch {
+                        logger.error("Signaling poll failed: \(error.localizedDescription)")
+                    }
+                    
+                    try await Task.sleep(nanoseconds: 5 * 1_000_000_000) // 5 seconds
+                }
+            } catch {
+                logger.error("Failed to join room: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    private func handleSignal(_ signal: RoomClient.Signal) async {
+        logger.info("Received signal from \(signal.from): \(signal.type)")
+        do {
+            switch signal.type {
+            case "offer":
+                // WebRTCManager handleRemoteOffer needs to assume completion handler or async
+                WebRTCManager.shared.handleRemoteOffer(peerId: signal.from, sdp: signal.payload) { answerSdp in
+                    Task {
+                        try? await self.roomClient.sendSignal(fromPeerId: self.localPeerId, toPeerId: signal.from, type: "answer", signalData: answerSdp)
+                    }
+                }
+            case "answer":
+                WebRTCManager.shared.handleRemoteAnswer(peerId: signal.from, sdp: signal.payload)
+            case "candidate":
+                // Parse candidate
+                if let data = signal.payload.data(using: .utf8),
+                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let sdpMid = json["sdpMid"] as? String,
+                   let sdpMLineIndex = json["sdpMLineIndex"] as? Int32,
+                   let candidateStr = json["candidate"] as? String {
+                    let candidate = RTCIceCandidate(sdp: candidateStr, sdpMLineIndex: sdpMLineIndex, sdpMid: sdpMid)
+                    WebRTCManager.shared.addIceCandidate(candidate, for: signal.from)
+                }
+            default:
+                break
+            }
+        }
+    }
+    
+    private func initiateWebRTCConnection(to peerId: String) {
+        logger.info("Initiating WebRTC connection to \(peerId)")
+        WebRTCManager.shared.createPeerConnection(for: peerId) { offerSdp in
+            Task {
+                try? await self.roomClient.sendSignal(fromPeerId: self.localPeerId, toPeerId: peerId, type: "offer", signalData: offerSdp)
+            }
+        }
+    }
+    
+    private func connectToBootstrapPeers() {
+        guard let jsonStr = UserDefaults.standard.string(forKey: "bootstrap_peers"),
+              let data = jsonStr.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let peers = json["p"] as? [[String: Any]] else {
+            return
+        }
+        
+        logger.info("Found \(peers.count) bootstrap peers")
+        for p in peers {
+            if let peerId = p["i"] as? String, peerId != localPeerId {
+                initiateWebRTCConnection(to: peerId)
+            }
+        }
     }
 
     // MARK: - Core Routing
@@ -248,6 +363,22 @@ extension MeshNetworkManager: WebRTCManagerDelegate {
 
     func webRTCManager(_ manager: WebRTCManager, didGenerateIceCandidate candidate: RTCIceCandidate, for peerId: String) {
         // Handled by signaling layer
+        let sdpMid = candidate.sdpMid ?? ""
+        let sdpMLineIndex = candidate.sdpMLineIndex
+        let candidateStr = candidate.sdp
+        
+        let payload: [String: Any] = [
+            "sdpMid": sdpMid,
+            "sdpMLineIndex": sdpMLineIndex,
+            "candidate": candidateStr
+        ]
+        
+        if let data = try? JSONSerialization.data(withJSONObject: payload),
+           let jsonStr = String(data: data, encoding: .utf8) {
+            Task {
+                try? await self.roomClient.sendSignal(fromPeerId: self.localPeerId, toPeerId: peerId, type: "candidate", signalData: jsonStr)
+            }
+        }
     }
 }
 
@@ -319,7 +450,7 @@ class LocalNetworkManager {
 
     func send(data: Data, to peerId: String) {
         guard let connection = connections[peerId] else {
-            logger.warning("No local connection to \(peerId)")
+//            logger.warning("No local connection to \(peerId)")
             return
         }
 
@@ -438,10 +569,10 @@ class LocalNetworkManager {
             guard let self = self else { return }
             // Identify sender if unknown
             if self.connectionMap[uuid] == nil {
-                // Extract Header (first 108 bytes, SenderID at offset 11, length 32)
-                if data.count >= 43 {
-                    // Offset 11 is start of SenderID (32 bytes)
-                    let senderIdBytes = data.subdata(in: 11..<43)
+                // Extract Header. SenderID is at offset 12 (0-3: version/type/ttl/res, 4-11: timestamp, 12-43: senderID)
+                if data.count >= 44 {
+                    // Offset 12 is start of SenderID (32 bytes)
+                    let senderIdBytes = data.subdata(in: 12..<44)
                     let peerId = senderIdBytes.map { String(format: "%02x", $0) }.joined()
 
                     // Register

@@ -12,6 +12,7 @@ import com.sovereign.communications.ble.BLEMultiHopRelay
 import com.sovereign.communications.ble.BLEStoreAndForward
 import com.sovereign.communications.data.SCDatabase
 import com.sovereign.communications.data.adapter.AndroidPersistenceAdapter
+import com.sovereign.communications.data.network.RoomClient
 import com.sovereign.communications.util.RateLimiter
 import com.sovereign.communications.webrtc.WebRTCManager
 import kotlinx.coroutines.CoroutineScope
@@ -22,6 +23,7 @@ import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.net.ServerSocket
 import java.net.Socket
+import java.security.SecureRandom
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -31,6 +33,7 @@ import java.util.concurrent.ConcurrentHashMap
  * - Uses AndroidPersistenceAdapter for message queue persistence
  * - Consistent with Web and iOS implementations
  * - Binary-safe message handling
+ * - Unified Peer ID (32-byte Hex String)
  */
 class MeshNetworkManager(
     private val context: Context,
@@ -41,6 +44,7 @@ class MeshNetworkManager(
     private val deviceDiscovery = BLEDeviceDiscovery(context)
     private val multiHopRelay = BLEMultiHopRelay()
     private val webRTCManager = WebRTCManager(context)
+    private val roomClient = RoomClient()
 
     // Unified persistence adapter (matches Web/iOS)
     private val persistenceAdapter = AndroidPersistenceAdapter(context, database)
@@ -50,6 +54,18 @@ class MeshNetworkManager(
     private val connectedLocalPeers = ConcurrentHashMap<String, Boolean>() // peerId -> Connected
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val rateLimiter = RateLimiter(60, 1000) // 60 messages per minute, 1000 per hour
+
+    // Unified ID Generation: 32-byte random ID (simulating Ed25519 public key) -> Hex String
+    private val localPeerId: String by lazy {
+        val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        prefs.getString("local_peer_id", null) ?: run {
+            val randomBytes = ByteArray(32)
+            SecureRandom().nextBytes(randomBytes)
+            val hexId = bytesToHex(randomBytes)
+            prefs.edit().putString("local_peer_id", hexId).apply()
+            hexId
+        }
+    }
 
     private val jsBridge = JSBridge(context)
 
@@ -66,15 +82,23 @@ class MeshNetworkManager(
             },
         )
 
+    private var signalingJob: kotlinx.coroutines.Job? = null
+
     companion object {
         private const val TAG = "MeshNetworkManager"
+
+        // Helper for hex conversion
+        fun bytesToHex(bytes: ByteArray): String = bytes.joinToString("") { "%02x".format(it) }
     }
+
+    // Instance helper to use the companion method? Or just duplicate for simplicity in lazy block.
+    // I duplicated the logic inside the localPeerId lazy block but used helper in LocalDiscovery.
 
     /**
      * Starts the mesh network.
      */
     fun start() {
-        Log.d(TAG, "Starting MeshNetworkManager")
+        Log.d(TAG, "Starting MeshNetworkManager with ID: $localPeerId")
 
         // Start GATT Server for incoming connections
         gattServer.start()
@@ -102,6 +126,12 @@ class MeshNetworkManager(
             onPeerConnected(device.address, device)
         }
 
+        // Start Signaling Loop (Global Bootstrap)
+        startSignalingLoop()
+
+        // Connect to Bootstrap Peers
+        connectToBootstrapPeers()
+
         Log.d(TAG, "MeshNetworkManager started")
     }
 
@@ -111,6 +141,7 @@ class MeshNetworkManager(
     fun stop() {
         Log.d(TAG, "Stopping MeshNetworkManager")
 
+        signalingJob?.cancel()
         gattServer.stop()
         localDiscovery.stop()
         connectedLocalPeers.clear()
@@ -122,6 +153,107 @@ class MeshNetworkManager(
         connectedDevices.clear()
 
         Log.d(TAG, "MeshNetworkManager stopped")
+    }
+
+    private fun startSignalingLoop() {
+        signalingJob =
+            scope.launch {
+                // Initial join
+                roomClient.join(localPeerId)
+
+                while (kotlinx.coroutines.isActive) {
+                    try {
+                        val (signals, peers) = roomClient.poll(localPeerId)
+
+                        // Handle Signals
+                        signals.forEach { signal ->
+                            handleSignal(signal)
+                        }
+
+                        // Handle discovered peers (opportunistic connection)
+                        peers.forEach { peer ->
+                            if (peer.id != localPeerId && !isPeerConnected(peer.id)) {
+                                // Limit automatic outbound connections to avoid flooding
+                                // For bootstrap, we try to connect to everyone in the room that we don't have a connection to
+                                if (!webRTCManager.connectionStates.value.containsKey(peer.id)) {
+                                    initiateWebRTCConnection(peer.id)
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Signaling poll failed", e)
+                    }
+
+                    // Poll interval (adaptable, e.g. 5s)
+                    kotlinx.coroutines.delay(5000)
+                }
+            }
+    }
+
+    private fun handleSignal(signal: com.sovereign.communications.data.network.RoomClient.Signal) {
+        scope.launch {
+            Log.d(TAG, "Received signal from ${signal.from}: ${signal.type}")
+            when (signal.type) {
+                "offer" -> {
+                    webRTCManager.handleRemoteOffer(signal.from, signal.payload) { answerSdp ->
+                        scope.launch {
+                            roomClient.sendSignal(localPeerId, signal.from, "answer", answerSdp)
+                        }
+                    }
+                }
+
+                "answer" -> {
+                    webRTCManager.handleRemoteAnswer(signal.from, signal.payload)
+                }
+
+                "candidate" -> {
+                    try {
+                        val json = org.json.JSONObject(signal.payload)
+                        val candidate =
+                            org.webrtc.IceCandidate(
+                                json.getString("sdpMid"),
+                                json.getInt("sdpMLineIndex"),
+                                json.getString("candidate"),
+                            )
+                        webRTCManager.addIceCandidate(signal.from, candidate)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to parse candidate", e)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun initiateWebRTCConnection(peerId: String) {
+        Log.d(TAG, "Initiating WebRTC connection to $peerId")
+        webRTCManager.createPeerConnection(peerId) { offerSdp ->
+            // Send Offer via Signaling
+            scope.launch {
+                roomClient.sendSignal(localPeerId, peerId, "offer", offerSdp)
+            }
+        }
+    }
+
+    private fun connectToBootstrapPeers() {
+        val prefs = context.getSharedPreferences("mesh_bootstrap", Context.MODE_PRIVATE)
+        val jsonStr = prefs.getString("bootstrap_peers", null) ?: return
+
+        try {
+            val json = org.json.JSONObject(jsonStr)
+            val peers = json.optJSONArray("p") ?: return
+
+            Log.d(TAG, "Found ${peers.length()} bootstrap peers")
+            for (i in 0 until peers.length()) {
+                val p = peers.getJSONObject(i)
+                val peerId = p.getString("i")
+
+                if (peerId != localPeerId) {
+                    initiateWebRTCConnection(peerId)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to parse bootstrap peers", e)
+        }
     }
 
     /**
@@ -175,7 +307,6 @@ class MeshNetworkManager(
         // Try Local Network
         if (connectedLocalPeers.containsKey(peerId)) {
             localDiscovery.send(peerId, payload)
-            // Async send, assume success
             return true
         }
 
@@ -198,15 +329,7 @@ class MeshNetworkManager(
     private fun processApplicationMessage(jsonString: String) {
         // Parse message content from JS Core
         try {
-            // In a real impl, parse JSON from JS Core
-            // For now assume simple structure
-            // val jsonObj = JSONObject(jsonString)
-            // val content = jsonObj.getString("payload")
-            // val sender = jsonObj.getString("senderId") // embedded in header?
-
-            // Since JSBridge is mocking checks, we can't fully implement this without the JSON library behaving
             Log.d(TAG, "Received application message from Core: $jsonString")
-
             // Store to DB (simplified)
             // ... DB logic ...
         } catch (e: Exception) {
@@ -227,9 +350,6 @@ class MeshNetworkManager(
             connectedClients[peerId] = client
             connectedDevices[peerId] = device
             Log.d(TAG, "Peer connected: $peerId")
-
-            // Inform JS Bridge?
-            // In a full impl, we might want to tell JS Core "New neighbor found"
         }
     }
 
@@ -238,6 +358,8 @@ class MeshNetworkManager(
         connectedDevices.remove(peerId)
         Log.d(TAG, "Peer disconnected: $peerId")
     }
+
+    private fun bytesToHex(bytes: ByteArray): String = bytes.joinToString("") { "%02x".format(it) }
 }
 
 class LocalDiscoveryManager(
@@ -320,10 +442,11 @@ class LocalDiscoveryManager(
                     val buffer = ByteArray(length)
                     input.readFully(buffer)
 
+                    // Unified ID Extraction: Offset 12, Length 32 (Ed25519 Public Key)
                     if (peerId == null) {
-                        // First packet - extract Header to identify Peer
-                        if (buffer.size >= 43) {
-                            val peerIdBytes = buffer.copyOfRange(11, 43)
+                        // Ensure buffer is large enough for version(1)+type(1)+ttl(1)+reserved(1)+timestamp(8)+senderId(32) = 44 bytes
+                        if (buffer.size >= 44) {
+                            val peerIdBytes = buffer.copyOfRange(12, 44) // Offset 12, length 32
                             peerId = bytesToHex(peerIdBytes)
                             connections[peerId] = socket
                             onPeerConnected(peerId)
