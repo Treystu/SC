@@ -219,6 +219,15 @@ function ConversationList({
               </button>
               <button
                 onClick={() => {
+                  setShowAddDialog(true);
+                  setShowMenu(false);
+                }}
+                data-testid="add-by-id-btn"
+              >
+                Add by ID
+              </button>
+              <button
+                onClick={() => {
                   setShowSignalingImport(true);
                   setShowMenu(false);
                 }}

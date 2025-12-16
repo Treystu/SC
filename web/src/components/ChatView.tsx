@@ -1,4 +1,4 @@
-import { useRef, useEffect, memo, useState } from "react";
+import { useRef, useEffect, memo, useState, useMemo } from "react";
 import DOMPurify from "dompurify";
 import "./ChatView.css";
 import { MessageInput } from "./MessageInput";
@@ -21,6 +21,8 @@ interface ChatViewProps {
     from: string;
     content: string;
     timestamp: number;
+    conversationId?: string;
+    status?: string;
   }>;
   onSendMessage?: (content: string, attachments?: File[]) => void;
   isLoading?: boolean;
@@ -33,11 +35,12 @@ function ChatView({
   isOnline = false,
   onSendMessage,
   isLoading = false,
+  messages: liveMessages = [], // Live messages from useMeshNetwork
   onClose,
 }: ChatViewProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
-  const [messages, setMessages] = useState<StoredMessage[]>([]);
+  const [historyMessages, setHistoryMessages] = useState<any[]>([]); // Using any to simplify type matching for now
   const [callActive, setCallActive] = useState(false);
   const [callEnded, setCallEnded] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -46,16 +49,45 @@ function ChatView({
     const fetchMessages = async () => {
       const db = getDatabase();
       const fetchedMessages = await db.getMessages(conversationId);
-      setMessages(fetchedMessages);
+      setHistoryMessages(fetchedMessages);
     };
 
     fetchMessages();
   }, [conversationId]);
 
+  // Merge history and live messages
+  const displayedMessages = useMemo(() => {
+    const msgMap = new Map();
+
+    // Add history first
+    historyMessages.forEach((m) => {
+      msgMap.set(m.id, m);
+    });
+
+    // Add/Update with live messages (optimistic updates map "from" to "senderId")
+    liveMessages.forEach((m) => {
+      if (
+        m.conversationId === conversationId ||
+        m.from === conversationId ||
+        (m.from === "me" && !m.conversationId)
+      ) {
+        msgMap.set(m.id, {
+          ...m,
+          senderId: m.from === "me" ? "me" : m.from, // map 'from' to 'senderId'
+          status: m.status || "delivered",
+        });
+      }
+    });
+
+    return Array.from(msgMap.values()).sort(
+      (a, b) => a.timestamp - b.timestamp,
+    );
+  }, [historyMessages, liveMessages, conversationId]);
+
   useEffect(() => {
     // Scroll to bottom when messages change
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [displayedMessages]);
 
   return (
     <div className="chat-view" data-testid="chat-container">
@@ -142,13 +174,13 @@ function ChatView({
 
       <div className="chat-messages" data-testid="message-container">
         <LoadingState loading={isLoading} error={error ?? undefined}>
-          {messages.length === 0 ? (
+          {displayedMessages.length === 0 ? (
             <div className="empty-chat">
               <p>No messages yet</p>
               <p className="hint">Send a message to start the conversation</p>
             </div>
           ) : (
-            messages.map((message) => (
+            displayedMessages.map((message) => (
               <div
                 key={message.id}
                 className={`message ${message.senderId === "me" ? "sent" : "received"} `}
