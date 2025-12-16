@@ -319,3 +319,6 @@ export {
 
 // Version
 export const VERSION = "0.1.0";
+
+// API
+export * from "./api/room-client.js";

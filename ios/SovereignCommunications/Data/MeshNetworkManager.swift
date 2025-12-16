@@ -16,6 +16,7 @@ struct Message: Codable {
     let id: UUID
     let timestamp: Date
     let payload: String
+    let senderId: String
 }
 
 struct NetworkStats {
@@ -255,6 +256,8 @@ class MeshNetworkManager: NSObject, ObservableObject {
         // provided we gave it a configured PersistenceAdapter.
     }
 
+
+
     /**
      * Handle decrypted application message from JS Core
      */
@@ -269,8 +272,8 @@ class MeshNetworkManager: NSObject, ObservableObject {
         context.perform {
             let entity = MessageEntity(context: self.context)
             entity.id = message.id.uuidString
-            entity.conversationId = "sub-sender-id" // TODO: Extract real sender from message wrapper
-            entity.senderId = "unknown" // JS Core message usually wraps senderId
+            entity.conversationId = message.senderId // Conversation ID is usually the peer ID for 1:1
+            entity.senderId = message.senderId
             entity.content = message.payload
             entity.timestamp = message.timestamp
             entity.status = "delivered"

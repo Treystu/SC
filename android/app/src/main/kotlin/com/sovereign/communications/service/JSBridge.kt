@@ -2,21 +2,23 @@ package com.sovereign.communications.service
 
 import android.content.Context
 import android.util.Log
-// import com.eclipsesource.v8.V8 // Uncomment when J2V8 is added
+import com.eclipsesource.v8.V8
+import com.eclipsesource.v8.V8Object
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import org.json.JSONObject
 
 /**
  * Bridge to @sc/core Javascript runtime.
- * Hosting the V8 engine (via J2V8 or LiquidCore).
+ * Hosting the V8 engine (via J2V8).
  */
 class JSBridge(
     private val context: Context,
 ) {
     private val TAG = "JSBridge"
     private val scope = CoroutineScope(Dispatchers.Main)
+
+    private var v8: V8? = null
 
     // Callback for outbound messages: (peerId, data) -> Unit
     var outboundCallback: ((String, ByteArray) -> Unit)? = null
@@ -30,29 +32,54 @@ class JSBridge(
 
     private fun setupContext() {
         Log.d(TAG, "Initializing JS Context...")
-        // TODO: Initialize V8 runtime
-        // val v8 = V8.createV8Runtime()
+        try {
+            v8 = V8.createV8Runtime()
 
-        // Load sc-core.js from assets
-        // val jsContent = context.assets.open("sc-core.js").bufferedReader().use { it.readText() }
-        // v8.executeVoidScript(jsContent)
+            // Register NativeBridge callbacks
+            val nativeBridge = V8Object(v8)
+            v8?.add("NativeBridge", nativeBridge)
 
-        // Initialize MeshNetwork
-        // val initScript = """
-        //     const network = new SCCore.MeshNetwork();
-        //     network.registerOutboundTransport((peerId, data) => {
-        //         // Bridge back to Java
-        //         const base64 = SCCore.utils.bytesToBase64(data);
-        //         NativeBridge.onOutboundMessage(peerId, base64);
-        //     });
-        //     network.onMessage((msg) => {
-        //         NativeBridge.onApplicationMessage(JSON.stringify(msg));
-        //     });
-        //     globalThis.meshNetwork = network;
-        // """
-        // v8.executeVoidScript(initScript)
+            nativeBridge.registerJavaMethod({ _, parameters ->
+                val peerId = parameters.getString(0)
+                val dataBase64 = parameters.getString(1)
+                onOutboundMessage(peerId, dataBase64)
+            }, "onOutboundMessage")
 
-        Log.i(TAG, "JS Context setup complete (Placeholder)")
+            nativeBridge.registerJavaMethod({ _, parameters ->
+                val messageJson = parameters.getString(0)
+                onApplicationMessage(messageJson)
+            }, "onApplicationMessage")
+
+            // Clean up V8Object handle
+            nativeBridge.close()
+
+            // Load sc-core.js from assets
+            val jsContent =
+                context.assets
+                    .open("sc-core.bundle.js")
+                    .bufferedReader()
+                    .use { it.readText() }
+            v8?.executeVoidScript(jsContent)
+
+            // Initialize MeshNetwork
+            val initScript = """
+                const network = new SCCore.MeshNetwork();
+                network.registerOutboundTransport((peerId, data) => {
+                    // Bridge back to Java
+                    const base64 = SCCore.utils.bytesToBase64(data);
+                    NativeBridge.onOutboundMessage(peerId, base64);
+                });
+                network.onMessage((msg) => {
+                    NativeBridge.onApplicationMessage(JSON.stringify(msg));
+                });
+                globalThis.meshNetwork = network;
+            """
+            v8?.executeVoidScript(initScript)
+
+            Log.i(TAG, "JS Context setup complete")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to initialize V8", e)
+        }
     }
 
     /**
@@ -62,9 +89,15 @@ class JSBridge(
         data: ByteArray,
         from: String,
     ) {
-        // val base64 = android.util.Base64.encodeToString(data, android.util.Base64.NO_WRAP)
-        // v8.executeVoidScript("meshNetwork.handleIncomingPacket('$from', SCCore.utils.base64ToBytes('$base64'));")
-        Log.d(TAG, "Passing incoming packet from $from to JS Core (${data.size} bytes)")
+        try {
+            val base64 = android.util.Base64.encodeToString(data, android.util.Base64.NO_WRAP)
+            // Use safe script execution
+            val script = "if (globalThis.meshNetwork) { meshNetwork.handleIncomingPacket('$from', SCCore.utils.base64ToBytes('$base64')); }"
+            v8?.executeVoidScript(script)
+            Log.v(TAG, "Passed incoming packet from $from to JS Core (${data.size} bytes)")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error handling incoming packet", e)
+        }
     }
 
     /**
@@ -74,11 +107,15 @@ class JSBridge(
         recipientId: String,
         content: String,
     ) {
-        // v8.executeVoidScript("meshNetwork.sendTextMessage('$recipientId', '$content');")
-        Log.d(TAG, "Sending message to $recipientId via JS Core: $content")
-
-        // FAILSAFE: Simulate loopback for now since JS isn't running
-        // In real impl, JS would call outboundCallback or applicationMessageCallback (if loopback)
+        try {
+            // Escape content for JS string
+            val safeContent = content.replace("'", "\\'").replace("\n", "\\n")
+            val script = "if (globalThis.meshNetwork) { meshNetwork.sendTextMessage('$recipientId', '$safeContent'); }"
+            v8?.executeVoidScript(script)
+            Log.d(TAG, "Sent message to $recipientId via JS Core")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending message", e)
+        }
     }
 
     // Java Interface methods called by JS
@@ -95,6 +132,14 @@ class JSBridge(
     fun onApplicationMessage(messageJson: String) {
         scope.launch {
             applicationMessageCallback?.invoke(messageJson)
+        }
+    }
+
+    fun close() {
+        try {
+            v8?.close()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error closing V8", e)
         }
     }
 }

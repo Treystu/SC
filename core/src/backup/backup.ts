@@ -196,11 +196,12 @@ export class BackupManager {
       return backup;
     }
 
-    // Use XChaCha20-Poly1305 if available, otherwise mark as unencrypted
-    // For now, we'll use a simple XOR cipher as a placeholder
-    // In production, this should use proper encryption
+    // Use AES-GCM encryption
     const dataString = JSON.stringify(backup.data);
-    const encrypted = this.xorEncrypt(dataString, this.options.encryptionKey);
+    const encrypted = await this.aesEncrypt(
+      dataString,
+      this.options.encryptionKey,
+    );
 
     return {
       metadata: backup.metadata,
@@ -210,16 +211,41 @@ export class BackupManager {
   }
 
   /**
-   * Simple XOR encryption (placeholder - use proper crypto in production)
+   * AES-GCM Encryption
    */
-  private xorEncrypt(data: string, key: Uint8Array): string {
-    const encoded = new TextEncoder().encode(data);
-    const result = new Uint8Array(encoded.length);
-
-    for (let i = 0; i < encoded.length; i++) {
-      result[i] = encoded[i] ^ key[i % key.length];
+  private async aesEncrypt(data: string, key: Uint8Array): Promise<string> {
+    if (typeof crypto === "undefined" || !crypto.subtle) {
+      throw new Error("Crypto API not available");
     }
 
+    // Hash key to ensure 32 bytes (256-bit AES)
+    const keyHash = await crypto.subtle.digest("SHA-256", key);
+    const cryptoKey = await crypto.subtle.importKey(
+      "raw",
+      keyHash,
+      { name: "AES-GCM" },
+      false,
+      ["encrypt"],
+    );
+
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const encodedData = new TextEncoder().encode(data);
+
+    const encryptedContent = await crypto.subtle.encrypt(
+      {
+        name: "AES-GCM",
+        iv: iv,
+      },
+      cryptoKey,
+      encodedData,
+    );
+
+    // Combine IV + Encrypted Data
+    const result = new Uint8Array(iv.length + encryptedContent.byteLength);
+    result.set(iv);
+    result.set(new Uint8Array(encryptedContent), iv.length);
+
+    // Convert to Base64
     return btoa(String.fromCharCode(...result));
   }
 }

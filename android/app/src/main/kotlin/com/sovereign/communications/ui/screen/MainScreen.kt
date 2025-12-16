@@ -56,10 +56,18 @@ fun MainScreen(
                 SharingScreen(
                     peerId = app.localPeerId ?: "Unknown",
                     publicKey = app.localPeerIdBytes ?: ByteArray(32),
-                    displayName = "Me", // TODO: Get from prefs
+                    displayName =
+                        androidx.preference.PreferenceManager
+                            .getDefaultSharedPreferences(app.applicationContext)
+                            .getString("display_name", "Me") ?: "Me",
                     onNavigateBack = { currentScreen = null },
                     onNavigateToQRScanner = {
-                        // TODO: meaningful navigation to QR Scanner
+                        android.widget.Toast
+                            .makeText(
+                                app.applicationContext,
+                                "QR Scanner not implemented yet",
+                                android.widget.Toast.LENGTH_SHORT,
+                            ).show()
                     },
                     onNavigateToQRDisplay = { payload ->
                         qrPayload = payload

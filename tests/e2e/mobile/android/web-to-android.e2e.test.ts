@@ -3,10 +3,14 @@
  * Tests messaging workflows between web and Android clients
  */
 
-import { test, expect } from '@playwright/test';
-import { CrossPlatformTestCoordinator, WebClient, AndroidClient } from '../../../cross-platform-framework';
+import { test, expect } from "@playwright/test";
+import {
+  CrossPlatformTestCoordinator,
+  WebClient,
+  AndroidClient,
+} from "../../../cross-platform-framework";
 
-test.describe.skip('Web to Android Cross-Platform Tests', () => {
+test.describe("Web to Android Cross-Platform Tests", () => {
   let coordinator: CrossPlatformTestCoordinator;
   let webClient: WebClient;
   let androidClient: AndroidClient;
@@ -15,23 +19,24 @@ test.describe.skip('Web to Android Cross-Platform Tests', () => {
     coordinator = new CrossPlatformTestCoordinator();
 
     // Create web client
-    webClient = await coordinator.createClient(
-      { platform: 'web', name: 'web-client' },
+    webClient = (await coordinator.createClient(
+      { platform: "web", name: "web-client" },
       page,
-      browser
-    ) as WebClient;
+      browser,
+    )) as WebClient;
 
     // Create Android client
-    androidClient = await coordinator.createClient(
-      { platform: 'android', name: 'android-client' }
-    ) as AndroidClient;
+    androidClient = (await coordinator.createClient({
+      platform: "android",
+      name: "android-client",
+    })) as AndroidClient;
   });
 
   test.afterEach(async () => {
     await coordinator.cleanup();
   });
 
-  test('should send message from web to Android', async () => {
+  test("should send message from web to Android", async () => {
     // Exchange contact information
     await coordinator.connectClients(webClient, androidClient);
 
@@ -39,36 +44,36 @@ test.describe.skip('Web to Android Cross-Platform Tests', () => {
     await coordinator.waitForMeshNetwork(1, 30000);
 
     // Send message from web to Android
-    const testMessage = 'Hello from Web to Android!';
+    const testMessage = "Hello from Web to Android!";
     const received = await coordinator.sendAndVerifyMessage(
       webClient,
       androidClient,
       testMessage,
-      20000
+      20000,
     );
 
     expect(received).toBe(true);
-    await coordinator.takeScreenshotAll('web-to-android-message');
+    await coordinator.takeScreenshotAll("web-to-android-message");
   });
 
-  test('should send message from Android to web', async () => {
+  test("should send message from Android to web", async () => {
     await coordinator.connectClients(webClient, androidClient);
     await coordinator.waitForMeshNetwork(1, 30000);
 
     // Send message from Android to web
-    const testMessage = 'Hello from Android to Web!';
+    const testMessage = "Hello from Android to Web!";
     const received = await coordinator.sendAndVerifyMessage(
       androidClient,
       webClient,
       testMessage,
-      20000
+      20000,
     );
 
     expect(received).toBe(true);
-    await coordinator.takeScreenshotAll('android-to-web-message');
+    await coordinator.takeScreenshotAll("android-to-web-message");
   });
 
-  test('should handle bidirectional messaging', async () => {
+  test("should handle bidirectional messaging", async () => {
     await coordinator.connectClients(webClient, androidClient);
     await coordinator.waitForMeshNetwork(1, 30000);
 
@@ -76,8 +81,8 @@ test.describe.skip('Web to Android Cross-Platform Tests', () => {
     let received = await coordinator.sendAndVerifyMessage(
       webClient,
       androidClient,
-      'Web says hello',
-      15000
+      "Web says hello",
+      15000,
     );
     expect(received).toBe(true);
 
@@ -85,22 +90,22 @@ test.describe.skip('Web to Android Cross-Platform Tests', () => {
     received = await coordinator.sendAndVerifyMessage(
       androidClient,
       webClient,
-      'Android replies',
-      15000
+      "Android replies",
+      15000,
     );
     expect(received).toBe(true);
 
-    await coordinator.takeScreenshotAll('web-android-bidirectional');
+    await coordinator.takeScreenshotAll("web-android-bidirectional");
   });
 
-  test('should maintain message history across platforms', async () => {
+  test("should maintain message history across platforms", async () => {
     await coordinator.connectClients(webClient, androidClient);
     await coordinator.waitForMeshNetwork(1, 30000);
 
     const messages = [
-      'First cross-platform message',
-      'Second cross-platform message',
-      'Third cross-platform message',
+      "First cross-platform message",
+      "Second cross-platform message",
+      "Third cross-platform message",
     ];
 
     for (const message of messages) {
@@ -108,15 +113,15 @@ test.describe.skip('Web to Android Cross-Platform Tests', () => {
         webClient,
         androidClient,
         message,
-        15000
+        15000,
       );
       expect(received).toBe(true);
     }
 
-    await coordinator.takeScreenshotAll('web-android-history');
+    await coordinator.takeScreenshotAll("web-android-history");
   });
 
-  test('should handle network interruptions', async () => {
+  test("should handle network interruptions", async () => {
     await coordinator.connectClients(webClient, androidClient);
     await coordinator.waitForMeshNetwork(1, 30000);
 
@@ -124,22 +129,22 @@ test.describe.skip('Web to Android Cross-Platform Tests', () => {
     let received = await coordinator.sendAndVerifyMessage(
       webClient,
       androidClient,
-      'Before interruption',
-      15000
+      "Before interruption",
+      15000,
     );
     expect(received).toBe(true);
 
     // Simulate network interruption on Android
     await androidClient.goOffline();
-    await webClient.sendMessage('android-client', 'During interruption');
+    await webClient.sendMessage("android-client", "During interruption");
 
     // Restore network
     await androidClient.goOnline();
 
     // Message should eventually arrive
-    received = await androidClient.waitForMessage('During interruption', 40000);
+    received = await androidClient.waitForMessage("During interruption", 40000);
     expect(received).toBe(true);
 
-    await coordinator.takeScreenshotAll('web-android-network-recovery');
+    await coordinator.takeScreenshotAll("web-android-network-recovery");
   });
 });

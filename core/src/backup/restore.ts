@@ -1,6 +1,6 @@
 /**
  * Restore Manager
- * 
+ *
  * Handles restoring user data from backups including:
  * - Decryption of encrypted backups
  * - Validation of backup integrity
@@ -8,12 +8,12 @@
  * - Conflict resolution
  */
 
-import { StorageAdapter } from '../storage/memory.js';
-import { BackupData, BackupMetadata } from './backup.js';
+import { StorageAdapter } from "../storage/memory.js";
+import { BackupData, BackupMetadata } from "./backup.js";
 
 export interface RestoreOptions {
   overwriteExisting?: boolean;
-  mergeStrategy?: 'overwrite' | 'skip' | 'newer';
+  mergeStrategy?: "overwrite" | "skip" | "newer";
   decryptionKey?: Uint8Array;
   validateIntegrity?: boolean;
 }
@@ -30,7 +30,7 @@ export interface ConflictResolution {
   key: string;
   existingValue: string;
   backupValue: string;
-  resolution: 'keep_existing' | 'use_backup' | 'merge';
+  resolution: "keep_existing" | "use_backup" | "merge";
 }
 
 /**
@@ -44,9 +44,9 @@ export class RestoreManager {
     this.storage = storage;
     this.options = {
       overwriteExisting: true,
-      mergeStrategy: 'overwrite',
+      mergeStrategy: "overwrite",
       validateIntegrity: true,
-      ...options
+      ...options,
     };
   }
 
@@ -66,7 +66,7 @@ export class RestoreManager {
           success: false,
           itemsRestored: 0,
           itemsSkipped: 0,
-          errors: ['Backup integrity validation failed'],
+          errors: ["Backup integrity validation failed"],
           metadata: backup.metadata,
         };
       }
@@ -80,7 +80,7 @@ export class RestoreManager {
           success: false,
           itemsRestored: 0,
           itemsSkipped: 0,
-          errors: ['Backup is encrypted but no decryption key provided'],
+          errors: ["Backup is encrypted but no decryption key provided"],
           metadata: backup.metadata,
         };
       }
@@ -101,7 +101,7 @@ export class RestoreManager {
     for (const [key, value] of Object.entries(data)) {
       try {
         const shouldRestore = await this.shouldRestoreItem(key, value);
-        
+
         if (shouldRestore) {
           await this.storage.set(key, value);
           itemsRestored++;
@@ -136,9 +136,9 @@ export class RestoreManager {
         itemsSkipped: 0,
         errors: [`Invalid backup format: ${error}`],
         metadata: {
-          version: 'unknown',
+          version: "unknown",
           createdAt: 0,
-          dataHash: '',
+          dataHash: "",
         },
       };
     }
@@ -171,7 +171,7 @@ export class RestoreManager {
 
     for (const [key, value] of Object.entries(data)) {
       const existingValue = await this.storage.get(key);
-      
+
       if (existingValue === undefined) {
         willRestore.push(key);
       } else if (existingValue === value) {
@@ -181,9 +181,11 @@ export class RestoreManager {
           key,
           existingValue,
           backupValue: value,
-          resolution: this.options.overwriteExisting ? 'use_backup' : 'keep_existing',
+          resolution: this.options.overwriteExisting
+            ? "use_backup"
+            : "keep_existing",
         });
-        
+
         if (this.options.overwriteExisting) {
           willRestore.push(key);
         } else {
@@ -204,7 +206,7 @@ export class RestoreManager {
     }
 
     // Check version compatibility
-    const [major] = backup.metadata.version.split('.');
+    const [major] = backup.metadata.version.split(".");
     if (parseInt(major) > 1) {
       // Future version - may not be compatible
       return false;
@@ -223,7 +225,10 @@ export class RestoreManager {
   /**
    * Determine if an item should be restored based on options
    */
-  private async shouldRestoreItem(key: string, value: string): Promise<boolean> {
+  private async shouldRestoreItem(
+    key: string,
+    value: string,
+  ): Promise<boolean> {
     const existingValue = await this.storage.get(key);
 
     // No existing value - always restore
@@ -238,11 +243,11 @@ export class RestoreManager {
 
     // Apply merge strategy
     switch (this.options.mergeStrategy) {
-      case 'overwrite':
+      case "overwrite":
         return true;
-      case 'skip':
+      case "skip":
         return false;
-      case 'newer':
+      case "newer":
         // For 'newer', we'd need timestamps - default to overwrite
         return this.options.overwriteExisting ?? true;
       default:
@@ -255,29 +260,54 @@ export class RestoreManager {
    */
   private async decryptData(
     encryptedData: Record<string, string>,
-    key: Uint8Array
+    key: Uint8Array,
   ): Promise<Record<string, string>> {
     const encrypted = encryptedData.encrypted;
     if (!encrypted) {
-      throw new Error('No encrypted data found');
+      throw new Error("No encrypted data found");
     }
 
-    const decrypted = this.xorDecrypt(encrypted, key);
+    const decrypted = await this.aesDecrypt(encrypted, key);
     return JSON.parse(decrypted);
   }
 
   /**
-   * Simple XOR decryption (placeholder - use proper crypto in production)
+   * AES-GCM Decryption
    */
-  private xorDecrypt(data: string, key: Uint8Array): string {
-    const decoded = Uint8Array.from(atob(data), c => c.charCodeAt(0));
-    const result = new Uint8Array(decoded.length);
-    
-    for (let i = 0; i < decoded.length; i++) {
-      result[i] = decoded[i] ^ key[i % key.length];
+  private async aesDecrypt(data: string, key: Uint8Array): Promise<string> {
+    if (typeof crypto === "undefined" || !crypto.subtle) {
+      throw new Error("Crypto API not available");
     }
-    
-    return new TextDecoder().decode(result);
+
+    const decoded = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+
+    // Extract IV (first 12 bytes)
+    if (decoded.length < 12) {
+      throw new Error("Invalid encrypted data (too short)");
+    }
+    const iv = decoded.slice(0, 12);
+    const encryptedContent = decoded.slice(12);
+
+    // Hash key to ensure 32 bytes (256-bit AES)
+    const keyHash = await crypto.subtle.digest("SHA-256", key);
+    const cryptoKey = await crypto.subtle.importKey(
+      "raw",
+      keyHash,
+      { name: "AES-GCM" },
+      false,
+      ["decrypt"],
+    );
+
+    const decryptedBuffer = await crypto.subtle.decrypt(
+      {
+        name: "AES-GCM",
+        iv: iv,
+      },
+      cryptoKey,
+      encryptedContent,
+    );
+
+    return new TextDecoder().decode(decryptedBuffer);
   }
 
   /**
@@ -286,18 +316,18 @@ export class RestoreManager {
   private async hashData(data: string): Promise<string> {
     const encoder = new TextEncoder();
     const dataBuffer = encoder.encode(data);
-    
-    if (typeof crypto !== 'undefined' && crypto.subtle) {
-      const hashBuffer = await crypto.subtle.digest('SHA-256', dataBuffer);
+
+    if (typeof crypto !== "undefined" && crypto.subtle) {
+      const hashBuffer = await crypto.subtle.digest("SHA-256", dataBuffer);
       const hashArray = Array.from(new Uint8Array(hashBuffer));
-      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
     }
-    
+
     // Fallback: simple hash
     let hash = 0;
     for (let i = 0; i < data.length; i++) {
       const char = data.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
+      hash = (hash << 5) - hash + char;
       hash = hash & hash;
     }
     return Math.abs(hash).toString(16);
@@ -312,8 +342,10 @@ export class BackupMigrator {
    * Migrate backup data from an older version to the current version
    */
   static migrate(backup: BackupData, targetVersion: string): BackupData {
-    const [sourceMajor, sourceMinor] = backup.metadata.version.split('.').map(Number);
-    const [targetMajor, targetMinor] = targetVersion.split('.').map(Number);
+    const [sourceMajor, sourceMinor] = backup.metadata.version
+      .split(".")
+      .map(Number);
+    const [targetMajor, targetMinor] = targetVersion.split(".").map(Number);
 
     // No migration needed if same version
     if (sourceMajor === targetMajor && sourceMinor === targetMinor) {
@@ -341,24 +373,26 @@ export class BackupMigrator {
   /**
    * Migrate v0.x data format to v1.x
    */
-  private static migrateV0ToV1(data: Record<string, string>): Record<string, string> {
+  private static migrateV0ToV1(
+    data: Record<string, string>,
+  ): Record<string, string> {
     const migrated: Record<string, string> = {};
-    
+
     for (const [key, value] of Object.entries(data)) {
       // Rename old keys to new format
       let newKey = key;
-      
+
       // Example migrations
-      if (key.startsWith('msg_')) {
-        newKey = key.replace('msg_', 'message_');
+      if (key.startsWith("msg_")) {
+        newKey = key.replace("msg_", "message_");
       }
-      if (key.startsWith('cfg_')) {
-        newKey = key.replace('cfg_', 'config_');
+      if (key.startsWith("cfg_")) {
+        newKey = key.replace("cfg_", "config_");
       }
-      
+
       migrated[newKey] = value;
     }
-    
+
     return migrated;
   }
 }

@@ -1,13 +1,13 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @AppStorage("localPeerId") private var localPeerId = ""
-    @AppStorage("displayName") private var displayName = "Anonymous"
+    @AppStorage("identity_display_name") private var displayName = "Anonymous"
     @AppStorage("enableiCloudSync") private var enableiCloudSync = false
     @AppStorage("enableNotifications") private var enableNotifications = true
     @AppStorage("enableDarkMode") private var enableDarkMode = false
     @AppStorage("autoBackup") private var autoBackup = false
     
+    @State private var localPeerId: String = IdentityManager.shared.getPublicKeyId() ?? ""
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
     @State private var showingKeyBackup = false
     @State private var showingQRCode = false
@@ -21,6 +21,9 @@ struct SettingsView: View {
                         Spacer()
                         TextField("Your name", text: $displayName)
                             .multilineTextAlignment(.trailing)
+                            .onChange(of: displayName) { newValue in
+                                IdentityManager.shared.updateDisplayName(newValue)
+                            }
                     }
                     
                     VStack(alignment: .leading, spacing: 4) {
@@ -99,9 +102,7 @@ struct SettingsView: View {
                 
                 Section(header: Text("Data Management")) {
                     Button("Export Data") {
-                        // Export data logic (e.g., share sheet with JSON)
-                        // For now, just print to console as a placeholder for the UI action
-                        print("Exporting data...")
+                        exportData()
                     }
                     
                     Button("Clear Cache") {
@@ -118,14 +119,14 @@ struct SettingsView: View {
                         Text("Version")
                         Spacer()
                         Text("1.0.0")
-                            .foregroundColor(.secondary)
+                        .foregroundColor(.secondary)
                     }
                     
                     HStack {
                         Text("Build")
                         Spacer()
                         Text("1")
-                            .foregroundColor(.secondary)
+                        .foregroundColor(.secondary)
                     }
                     
                     Link("Protocol Documentation", destination: URL(string: "https://github.com/Treystu/SC")!)
@@ -136,17 +137,34 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             .onAppear {
                 checkNotificationStatus()
+                if let identity = IdentityManager.shared.getIdentity() {
+                    localPeerId = identity.publicKey.base64EncodedString()
+                }
             }
             .sheet(isPresented: $showingKeyBackup) {
                 KeyBackupView()
             }
             .sheet(isPresented: $showingQRCode) {
-                QRCodeDisplayView(peerInfo: PeerInfo(id: localPeerId, publicKey: "placeholder_public_key", endpoints: ["placeholder_endpoint"]))
+                if let identity = IdentityManager.shared.getIdentity() {
+                    QRCodeDisplayView(peerInfo: PeerInfo(id: identity.publicKey.base64EncodedString(), publicKey: identity.publicKey.base64EncodedString(), endpoints: ["ble", "mdns"]))
+                } else {
+                    Text("No Identity Found")
+                }
             }
         }
     }
     
     // MARK: - Helper Methods
+    
+    private func exportData() {
+        // Use BackupRestoreManager with a default passphrase for now or prompt
+        // For simplicity in this view, we'll log it, but in production we'd prompt for passphrase
+        let backupManager = BackupRestoreManager()
+        if let url = backupManager.backupData(passphrase: "default-export-pass") {
+            print("Data exported to: \(url)")
+            // Share sheet logic would go here
+        }
+    }
     
     private var notificationStatusText: String {
         switch notificationStatus {
@@ -272,15 +290,13 @@ struct KeyBackupView: View {
     }
     
     private func generateBackupCode() {
-        // Generate a backup code from the identity keys
-        // This is a simplified version - in production, use proper key derivation
-        if let privateKey = try? KeychainManager.shared.retrieveIdentityPrivateKey(),
-           let publicKey = try? KeychainManager.shared.retrieveIdentityPublicKey() {
-            let combined = (privateKey ?? Data()) + (publicKey ?? Data())
-            backupCode = combined.base64EncodedString()
+        if let identity = IdentityManager.shared.getIdentity() {
+            // In a real app, you might want to export the private key wrapped or encrypted
+            // For now, we export the raw private key base64 for backup (user warning required)
+            backupCode = identity.privateKey.base64EncodedString()
             showingCode = true
         } else {
-            backupCode = "ERROR: No keys found"
+            backupCode = "ERROR: No identity found"
             showingCode = true
         }
     }

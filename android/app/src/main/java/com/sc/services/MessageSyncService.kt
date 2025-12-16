@@ -5,6 +5,10 @@ import android.content.Intent
 import android.os.Binder
 import android.os.IBinder
 import android.util.Log
+import com.sovereign.communications.SCApplication
+import com.sovereign.communications.data.entity.MessageEntity
+import com.sovereign.communications.data.entity.MessageStatus
+import com.sovereign.communications.data.entity.MessageType
 import kotlinx.coroutines.*
 import java.util.*
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -14,45 +18,44 @@ import java.util.concurrent.ConcurrentLinkedQueue
  * Handles background message synchronization and processing
  */
 class MessageSyncService : Service() {
-    
     private val TAG = "MessageSyncService"
     private val binder = LocalBinder()
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    
+
     private val outgoingQueue = ConcurrentLinkedQueue<PendingMessage>()
     private val incomingQueue = ConcurrentLinkedQueue<ReceivedMessage>()
-    
+
     private var isSyncing = false
     private var lastSyncTime = 0L
     private val SYNC_INTERVAL_MS = 30000L
-    
+
     data class PendingMessage(
         val id: String,
         val recipientId: String,
         val encryptedPayload: ByteArray,
         val timestamp: Long,
-        val retryCount: Int = 0
+        val retryCount: Int = 0,
     )
-    
+
     data class ReceivedMessage(
         val id: String,
         val senderId: String,
         val encryptedPayload: ByteArray,
-        val timestamp: Long
+        val timestamp: Long,
     )
-    
+
     inner class LocalBinder : Binder() {
         fun getService(): MessageSyncService = this@MessageSyncService
     }
-    
+
     override fun onBind(intent: Intent): IBinder = binder
-    
+
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "Message Sync Service created")
         startSyncLoop()
     }
-    
+
     private fun startSyncLoop() {
         serviceScope.launch {
             while (isActive) {
@@ -66,13 +69,13 @@ class MessageSyncService : Service() {
             }
         }
     }
-    
+
     private suspend fun performSync() {
         if (isSyncing) return
-        
+
         isSyncing = true
         Log.d(TAG, "Starting sync cycle")
-        
+
         try {
             processOutgoingMessages()
             processIncomingMessages()
@@ -82,21 +85,21 @@ class MessageSyncService : Service() {
             isSyncing = false
         }
     }
-    
+
     private suspend fun processOutgoingMessages() {
         val messagesToProcess = mutableListOf<PendingMessage>()
         while (outgoingQueue.isNotEmpty()) {
             outgoingQueue.poll()?.let { messagesToProcess.add(it) }
         }
-        
+
         if (messagesToProcess.isEmpty()) return
-        
+
         Log.d(TAG, "Processing ${messagesToProcess.size} outgoing messages")
-        
+
         messagesToProcess.forEach { message ->
             try {
                 val sent = sendMessageToPeer(message)
-                
+
                 if (!sent && message.retryCount < 3) {
                     outgoingQueue.offer(message.copy(retryCount = message.retryCount + 1))
                     Log.d(TAG, "Re-queued message ${message.id} (retry ${message.retryCount + 1})")
@@ -110,17 +113,17 @@ class MessageSyncService : Service() {
             }
         }
     }
-    
+
     private suspend fun processIncomingMessages() {
         val messagesToProcess = mutableListOf<ReceivedMessage>()
         while (incomingQueue.isNotEmpty()) {
             incomingQueue.poll()?.let { messagesToProcess.add(it) }
         }
-        
+
         if (messagesToProcess.isEmpty()) return
-        
+
         Log.d(TAG, "Processing ${messagesToProcess.size} incoming messages")
-        
+
         messagesToProcess.forEach { message ->
             try {
                 val decrypted = decryptMessage(message)
@@ -135,70 +138,102 @@ class MessageSyncService : Service() {
             }
         }
     }
-    
-    private suspend fun sendMessageToPeer(message: PendingMessage): Boolean {
-        return withContext(Dispatchers.IO) {
+
+    private suspend fun sendMessageToPeer(message: PendingMessage): Boolean =
+        withContext(Dispatchers.IO) {
             try {
-                delay(100)
-                true
+                val app = applicationContext as SCApplication
+                app.meshNetworkManager.sendDirectly(message.recipientId, message.encryptedPayload)
             } catch (e: Exception) {
+                Log.e(TAG, "Failed send to ${message.recipientId}", e)
                 false
             }
         }
-    }
-    
-    private suspend fun decryptMessage(message: ReceivedMessage): String? {
-        return withContext(Dispatchers.Default) {
+
+    private suspend fun decryptMessage(message: ReceivedMessage): String? =
+        withContext(Dispatchers.Default) {
             try {
-                "Decrypted: ${message.id}"
+                val app = applicationContext as SCApplication
+                // Assuming IdentityManager has decrypt method returning ByteArray
+                val decryptedBytes = app.identityManager.decrypt(message.encryptedPayload)
+                String(decryptedBytes, Charsets.UTF_8)
             } catch (e: Exception) {
+                Log.e(TAG, "Decryption failed for ${message.id}", e)
                 null
             }
         }
-    }
-    
-    private suspend fun storeMessage(message: ReceivedMessage, decryptedContent: String) {
+
+    private suspend fun storeMessage(
+        message: ReceivedMessage,
+        decryptedContent: String,
+    ) {
         withContext(Dispatchers.IO) {
-            Log.d(TAG, "Storing message ${message.id} in database")
+            try {
+                Log.d(TAG, "Storing message ${message.id} in database")
+                val app = applicationContext as SCApplication
+                val entity =
+                    MessageEntity(
+                        id = message.id,
+                        conversationId = message.senderId,
+                        content = decryptedContent,
+                        senderId = message.senderId,
+                        recipientId = app.localPeerId ?: "unknown",
+                        timestamp = message.timestamp,
+                        status = MessageStatus.DELIVERED,
+                        type = MessageType.TEXT,
+                        timestampReceived = System.currentTimeMillis(),
+                    )
+                app.database.messageDao().insert(entity)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to store message ${message.id}", e)
+            }
         }
     }
-    
-    fun queueOutgoingMessage(recipientId: String, encryptedPayload: ByteArray): String {
+
+    fun queueOutgoingMessage(
+        recipientId: String,
+        encryptedPayload: ByteArray,
+    ): String {
         val messageId = UUID.randomUUID().toString()
-        val message = PendingMessage(
-            id = messageId,
-            recipientId = recipientId,
-            encryptedPayload = encryptedPayload,
-            timestamp = System.currentTimeMillis()
-        )
-        
+        val message =
+            PendingMessage(
+                id = messageId,
+                recipientId = recipientId,
+                encryptedPayload = encryptedPayload,
+                timestamp = System.currentTimeMillis(),
+            )
+
         outgoingQueue.offer(message)
         Log.d(TAG, "Queued outgoing message $messageId")
-        
+
         if (!isSyncing) {
             serviceScope.launch { performSync() }
         }
-        
+
         return messageId
     }
-    
-    fun queueIncomingMessage(senderId: String, encryptedPayload: ByteArray) {
+
+    fun queueIncomingMessage(
+        senderId: String,
+        encryptedPayload: ByteArray,
+    ) {
         val messageId = UUID.randomUUID().toString()
-        val message = ReceivedMessage(
-            id = messageId,
-            senderId = senderId,
-            encryptedPayload = encryptedPayload,
-            timestamp = System.currentTimeMillis()
-        )
-        
+        val message =
+            ReceivedMessage(
+                id = messageId,
+                senderId = senderId,
+                encryptedPayload = encryptedPayload,
+                timestamp = System.currentTimeMillis(),
+            )
+
         incomingQueue.offer(message)
         Log.d(TAG, "Queued incoming message $messageId")
-        
+
         if (!isSyncing) {
             serviceScope.launch { performSync() }
         }
     }
-    
+
     override fun onDestroy() {
         super.onDestroy()
         serviceScope.cancel()

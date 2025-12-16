@@ -23,10 +23,23 @@ class ChatViewModel: ObservableObject {
     }
     
     @objc private func contextDidChange(notification: NSNotification) {
-        // Refresh messages if changes affect this conversation
-        // For simplicity, we just reload all messages for now
-        // In production, optimize to only update if relevant entities changed
-        loadMessages()
+        // Optimization: Only reload if the changes involve MessageEntity objects for this conversation
+        guard let userInfo = notification.userInfo else { return }
+        
+        let inserted = userInfo[NSInsertedObjectsKey] as? Set<NSManagedObject> ?? []
+        let updated = userInfo[NSUpdatedObjectsKey] as? Set<NSManagedObject> ?? []
+        let deleted = userInfo[NSDeletedObjectsKey] as? Set<NSManagedObject> ?? []
+        
+        let allChanges = inserted.union(updated).union(deleted)
+        
+        let relevantChanges = allChanges.compactMap { $0 as? MessageEntity }
+            .filter { $0.conversationId == self.conversationId }
+            
+        if !relevantChanges.isEmpty {
+            DispatchQueue.main.async {
+                self.loadMessages()
+            }
+        }
     }
     
     func loadMessages() {

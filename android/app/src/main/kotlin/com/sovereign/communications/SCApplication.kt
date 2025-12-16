@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
 import com.sovereign.communications.data.SCDatabase
+import com.sovereign.communications.identity.IdentityManager
 import com.sovereign.communications.security.EncryptedData
 import com.sovereign.communications.security.KeystoreManager
 import com.sovereign.communications.service.MeshNetworkManager
@@ -29,20 +30,20 @@ class SCApplication : Application() {
     lateinit var meshNetworkManager: MeshNetworkManager
         private set
 
-    // Identity storage
-    private lateinit var identityPrefs: SharedPreferences
+    // Identity Manager
+    lateinit var identityManager: IdentityManager
+        private set
+
+    // Legacy prefs for database passphrase
+    private lateinit var appPrefs: SharedPreferences
 
     // Local peer ID (loaded from identity)
     var localPeerId: String? = null
         private set
 
-    // Raw bytes of the peer ID (simulating public key)
+    // Raw bytes of the peer ID
     val localPeerIdBytes: ByteArray?
-        get() =
-            localPeerId
-                ?.chunked(2)
-                ?.map { it.toInt(16).toByte() }
-                ?.toByteArray()
+        get() = identityManager.getIdentity()?.publicKey
 
     override fun onCreate() {
         super.onCreate()
@@ -72,6 +73,9 @@ class SCApplication : Application() {
      */
     private fun initializeCrypto() {
         try {
+            // Initialize IdentityManager
+            identityManager = IdentityManager(this)
+
             // Generate or retrieve the database encryption key
             if (!KeystoreManager.keyExists("database_passphrase")) {
                 Log.d(TAG, "Generating new database passphrase")
@@ -91,8 +95,6 @@ class SCApplication : Application() {
             Log.d(TAG, "Crypto components initialized")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize crypto components", e)
-            // Continue with app startup even if crypto init fails
-            // This allows the app to run in degraded mode
         }
     }
 
@@ -101,35 +103,41 @@ class SCApplication : Application() {
      * If no identity exists, generate a new one.
      */
     private fun loadIdentity() {
-        identityPrefs = getSharedPreferences("identity", Context.MODE_PRIVATE)
+        appPrefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
 
         try {
-            // Try to load existing peer ID
-            localPeerId = identityPrefs.getString("peer_id", null)
-
-            if (localPeerId == null) {
-                // Generate new identity
+            // Check IdentityManager
+            if (identityManager.hasIdentity()) {
+                val identity = identityManager.getIdentity()
+                if (identity != null) {
+                    localPeerId = formatPublicKeyToHex(identity.publicKey)
+                    Log.d(TAG, "Loaded existing identity: $localPeerId")
+                } else {
+                    Log.e(TAG, "Identity exists but failed to load")
+                    generateNewIdentity()
+                }
+            } else {
                 Log.d(TAG, "No existing identity found, generating new one")
                 generateNewIdentity()
-            } else {
-                Log.d(TAG, "Loaded existing identity: $localPeerId")
             }
 
-            // Load encrypted passphrase if it exists
-            val encryptedPassphraseB64 = identityPrefs.getString("encrypted_passphrase", null)
+            // Load encrypted passphrase if it exists (legacy/migrated)
+            val legacyPrefs = getSharedPreferences("identity", Context.MODE_PRIVATE)
+            val encryptedPassphraseB64 =
+                legacyPrefs.getString("encrypted_passphrase", null)
+                    ?: appPrefs.getString("encrypted_passphrase", null)
+
             if (encryptedPassphraseB64 != null) {
                 try {
                     val encryptedData = EncryptedData.fromBase64(encryptedPassphraseB64)
                     val passphrase = KeystoreManager.decrypt("database_passphrase", encryptedData)
                     Log.d(TAG, "Successfully decrypted database passphrase")
-                    // Passphrase can be used for database encryption if needed
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to decrypt passphrase", e)
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load identity", e)
-            // Generate new identity as fallback
             generateNewIdentity()
         }
     }
@@ -139,31 +147,15 @@ class SCApplication : Application() {
      */
     private fun generateNewIdentity() {
         try {
-            // Generate a 32-byte unique peer ID (hex string 64 chars)
-            val random = java.security.SecureRandom()
-            val bytes = ByteArray(32)
-            random.nextBytes(bytes)
-
-            val sb = StringBuilder()
-            for (b in bytes) {
-                sb.append(String.format("%02x", b))
-            }
-            localPeerId = sb.toString()
-
-            // Save to SharedPreferences
-            identityPrefs
-                .edit()
-                .putString("peer_id", localPeerId)
-                .putLong("created_at", System.currentTimeMillis())
-                .apply()
-
+            val identity = identityManager.generateNewIdentity()
+            localPeerId = formatPublicKeyToHex(identity.publicKey)
             Log.d(TAG, "Generated new identity: $localPeerId")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to generate new identity", e)
-            // Use a temporary ID as last resort
-            localPeerId = "temp_${System.currentTimeMillis()}"
         }
     }
+
+    private fun formatPublicKeyToHex(bytes: ByteArray): String = bytes.joinToString("") { "%02x".format(it) }
 
     /**
      * Store encrypted passphrase in SharedPreferences.
@@ -171,7 +163,7 @@ class SCApplication : Application() {
     private fun storeEncryptedPassphrase(passphrase: ByteArray) {
         try {
             val encrypted = KeystoreManager.encrypt("database_passphrase", passphrase)
-            identityPrefs
+            appPrefs
                 .edit()
                 .putString("encrypted_passphrase", encrypted.toBase64())
                 .apply()

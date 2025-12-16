@@ -8,6 +8,7 @@ import android.util.Log
 import com.sovereign.communications.ble.BLEDeviceDiscovery
 import com.sovereign.communications.ble.BLEGATTClient
 import com.sovereign.communications.ble.BLEGATTServer
+import com.sovereign.communications.ble.BLEMessageRouting
 import com.sovereign.communications.ble.BLEMultiHopRelay
 import com.sovereign.communications.ble.BLEStoreAndForward
 import com.sovereign.communications.data.SCDatabase
@@ -48,6 +49,8 @@ class MeshNetworkManager(
 
     // Unified persistence adapter (matches Web/iOS)
     private val persistenceAdapter = AndroidPersistenceAdapter(context, database)
+
+    private val messageRouting = BLEMessageRouting()
 
     private val connectedClients = ConcurrentHashMap<String, BLEGATTClient>() // peerId -> Client
     private val connectedDevices = ConcurrentHashMap<String, BluetoothDevice>() // peerId -> Device
@@ -94,6 +97,31 @@ class MeshNetworkManager(
      */
     fun start() {
         Log.d(TAG, "Starting MeshNetworkManager with ID: $localPeerId")
+
+        // Setup Routing Callbacks
+        messageRouting.onBroadcast = { packet ->
+            connectedClients.values.forEach { client ->
+                try {
+                    client.sendData(packet)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Broadcast failed", e)
+                }
+            }
+        }
+
+        messageRouting.onSendDirect = { nextHop, packet ->
+            val client = connectedClients[nextHop]
+            if (client != null) {
+                try {
+                    client.sendData(packet)
+                    true
+                } catch (e: Exception) {
+                    false
+                }
+            } else {
+                false
+            }
+        }
 
         // Start GATT Server for incoming connections
         gattServer.start()
@@ -295,7 +323,7 @@ class MeshNetworkManager(
             webRTCManager.connectionStates.value[peerId] == org.webrtc.PeerConnection.PeerConnectionState.CONNECTED ||
             connectedLocalPeers.containsKey(peerId)
 
-    private fun sendDirectly(
+    fun sendDirectly(
         peerId: String,
         payload: ByteArray,
     ): Boolean {
@@ -311,30 +339,64 @@ class MeshNetworkManager(
             return true
         }
 
-        // Fallback to BLE
+        // Try Direct BLE
         val client = connectedClients[peerId]
-        return if (client != null) {
+        if (client != null) {
             try {
                 client.sendData(payload)
-                true
+                messageRouting.updateRouteMetrics(peerId, true)
+                return true
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to send data to $peerId", e)
-                false
+                messageRouting.updateRouteMetrics(peerId, false)
+                return false
             }
-        } else {
-            Log.w(TAG, "No transport available for $peerId")
-            false
         }
+
+        // Try Multi-Hop Route
+        val route = messageRouting.getRoute(peerId)
+        if (route != null) {
+            Log.d(TAG, "Routing message to $peerId via ${route.nextHop}")
+            // Recursive call to send to next hop
+            // Note: We send the original payload. The intermediate node must handle routing.
+            // If the protocol requires wrapping, it should be done here.
+            // Assuming sc-core handles message addressing in the payload.
+            return sendDirectly(route.nextHop, payload)
+        }
+
+        Log.w(TAG, "No transport or route available for $peerId")
+        return false
     }
 
     private fun processApplicationMessage(jsonString: String) {
         // Parse message content from JS Core
-        try {
-            Log.d(TAG, "Received application message from Core: $jsonString")
-            // Store to DB (simplified)
-            // ... DB logic ...
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to process app message", e)
+        scope.launch(Dispatchers.IO) {
+            try {
+                Log.d(TAG, "Received application message from Core: $jsonString")
+                val json = org.json.JSONObject(jsonString)
+                val id = json.getString("id")
+                val senderId = json.getString("senderId")
+                val content = json.getString("content")
+                val timestamp = json.getLong("timestamp")
+
+                val entity =
+                    com.sovereign.communications.data.entity.MessageEntity(
+                        id = id,
+                        conversationId = senderId, // 1:1 map to sender
+                        content = content,
+                        senderId = senderId,
+                        recipientId = localPeerId,
+                        timestamp = timestamp,
+                        status = com.sovereign.communications.data.entity.MessageStatus.DELIVERED,
+                        type = com.sovereign.communications.data.entity.MessageType.TEXT,
+                        timestampReceived = System.currentTimeMillis(),
+                    )
+
+                database.messageDao().insert(entity)
+                Log.d(TAG, "Message saved: $id")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to process app message", e)
+            }
         }
     }
 

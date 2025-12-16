@@ -34,6 +34,7 @@ fun SharingScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val app = context.applicationContext as com.sovereign.communications.SCApplication
 
     // Initialize managers with actual user data
     val shareManager = remember { ShareManager(context) }
@@ -45,7 +46,7 @@ fun SharingScreen(
     val apkExtractor = remember { APKExtractor(context) }
     val inviteManager =
         remember {
-            InviteManager(context, peerId, publicKey, displayName)
+            InviteManager(context, peerId, publicKey, app.identityManager, displayName)
         }
 
     var currentInvite by remember { mutableStateOf<Invite?>(null) }

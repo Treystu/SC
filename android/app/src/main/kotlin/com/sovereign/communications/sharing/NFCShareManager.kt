@@ -5,6 +5,7 @@ import android.nfc.NdefMessage
 import android.nfc.NdefRecord
 import android.nfc.NfcAdapter
 import android.nfc.NfcEvent
+import android.util.Base64
 import android.widget.Toast
 import com.sovereign.communications.sharing.models.Invite
 import com.sovereign.communications.sharing.models.SharePayload
@@ -116,6 +117,7 @@ class NFCShareManager(
                     if (invite.bootstrapPeers.isNotEmpty()) {
                         put("bootstrap", invite.bootstrapPeers.first())
                     }
+                    put("signature", Base64.encodeToString(invite.signature, Base64.NO_WRAP))
                     put("timestamp", payload.timestamp)
                 }.toString()
 
@@ -166,7 +168,12 @@ class NFCShareManager(
                             inviterName = json.optString("name"),
                             createdAt = json.optLong("timestamp", System.currentTimeMillis()),
                             expiresAt = json.optLong("timestamp", System.currentTimeMillis()) + (7 * 24 * 60 * 60 * 1000),
-                            signature = ByteArray(64), // Placeholder
+                            signature =
+                                try {
+                                    Base64.decode(json.getString("signature"), Base64.NO_WRAP)
+                                } catch (e: Exception) {
+                                    ByteArray(64) // Fallback if missing/invalid
+                                },
                             bootstrapPeers = listOfNotNull(json.optString("bootstrap").takeIf { it.isNotEmpty() }),
                         )
                     }
