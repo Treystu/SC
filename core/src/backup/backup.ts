@@ -219,7 +219,10 @@ export class BackupManager {
     }
 
     // Hash key to ensure 32 bytes (256-bit AES)
-    const keyHash = await crypto.subtle.digest("SHA-256", key);
+    const keyHash = await crypto.subtle.digest(
+      "SHA-256",
+      key as unknown as BufferSource,
+    );
     const cryptoKey = await crypto.subtle.importKey(
       "raw",
       keyHash,
