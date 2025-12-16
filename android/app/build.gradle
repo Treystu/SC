@@ -99,7 +99,7 @@ dependencies {
     // Permissions
     implementation 'com.google.accompanist:accompanist-permissions:0.37.3'
     implementation 'com.google.android.gms:play-services-nearby:19.0.0'
-    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3"
+    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0"
     implementation 'com.google.code.gson:gson:2.10.1'
 
     // CameraX
