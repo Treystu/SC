@@ -141,7 +141,7 @@ export class RoutingTable {
   constructor(localNodeId: string, config: RoutingConfig = {}) {
     this.localNodeId = localNodeId;
     this.MAX_CACHE_SIZE = config.maxCacheSize || 10000;
-    this.CACHE_TTL = config.cacheTTL || 60000; // 60 seconds
+    this.CACHE_TTL = config.cacheTTL || 600000; // 10 minutes (increased to exceed Relay storeTimeout)
     this.ROUTE_TTL = config.routeTTL || 300000; // 5 minutes
     this.MAX_ROUTES = config.maxRoutes || 10000;
     this.ENABLE_BLOOM = config.enableBloomFilter !== false;

@@ -14,8 +14,7 @@ import { validateFileList } from "../../../core/src/file-validation";
 import { rateLimiter } from "../../../core/src/rate-limiter";
 import { performanceMonitor } from "../../../core/src/performance-monitor";
 import { offlineQueue } from "../../../core/src/offline-queue";
-import { BootstrapDiscoveryProvider } from "@sc/core";
-import { RoomClient, RoomDisplayPeer } from "../utils/RoomClient"; // Import RoomClient
+import { RoomClient } from "../utils/RoomClient"; // Import RoomClient
 
 export interface MeshStatus {
   isConnected: boolean;
@@ -143,9 +142,31 @@ export function useMeshNetwork() {
 
             // Check if we've already processed this message ID
             if (seenMessageIdsRef.current.has(messageId)) {
-              console.log("Duplicate message ignored:", messageId);
+              console.log(
+                "Duplicate message ignored (in-memory ref):",
+                messageId,
+              );
               return;
             }
+
+            // Check if message already exists in DB to avoid unnecessary processing and duplicates
+            try {
+              const existingMsg = await db.getMessage(messageId);
+              if (existingMsg) {
+                console.log(
+                  "Message already exists in DB, ignoring:",
+                  messageId,
+                );
+                // We add it to the seen ref so we don't query DB again for this ID in this session
+                seenMessageIdsRef.current.add(messageId);
+                return;
+              }
+            } catch (dbError) {
+              console.warn("Error checking DB for message existence:", dbError);
+              // Continue processing if DB check fails, to ensure we don't drop messages on DB error?
+              // Or abort? Safest is to continue but risk duplicate.
+            }
+
             seenMessageIdsRef.current.add(messageId);
 
             const receivedMessage: ReceivedMessage = {
@@ -168,16 +189,6 @@ export function useMeshNetwork() {
 
             // Persist message to IndexedDB
             try {
-              // Check if message already exists in DB to avoid unnecessary writes
-              const existingMsg = await db.getMessage(receivedMessage.id);
-              if (existingMsg) {
-                console.log(
-                  "Message already exists in DB:",
-                  receivedMessage.id,
-                );
-                return;
-              }
-
               await db.saveMessage({
                 id: receivedMessage.id,
                 conversationId: receivedMessage.conversationId!, // Use resolved conversation ID
