@@ -374,10 +374,11 @@ function App() {
       await connectToPeer(peerId);
       announce.message("Connected to peer", "polite");
       // Automatically open conversation with the peer
-      setSelectedConversation(peerId);
-      // If we are in the public room view, we might want to close it or keep it open?
-      // The user said "create a message window between those users", which implies switching to the chat view.
-      setActiveRoom(null); // Close the room view to show the chat
+      // Fix: Add connection as a contact to ensure it shows in the list and tracks online status
+      await handleAddContact(peerId, `Peer ${peerId.substring(0, 8)}`);
+
+      // Close the room view to show the chat
+      setActiveRoom(null);
     } catch (error) {
       console.error("Failed to connect to peer:", error);
       alert(
@@ -625,6 +626,7 @@ function App() {
       createdAt: Date.now(),
     });
 
+    refreshConversations();
     setSelectedConversation(finalPeerId);
   };
 
@@ -654,6 +656,17 @@ function App() {
         endpoints: [{ type: "webrtc" }],
       });
 
+      // Ensure conversation is created
+      const db = getDatabase();
+      await db.saveConversation({
+        id: remotePeerId,
+        contactId: remotePeerId,
+        lastMessageTimestamp: Date.now(),
+        unreadCount: 0,
+        createdAt: Date.now(),
+      });
+
+      refreshConversations();
       setSelectedConversation(remotePeerId);
       announce.message(`Connected to ${name}`, "polite");
     } catch (error) {
