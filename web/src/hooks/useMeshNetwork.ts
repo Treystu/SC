@@ -5,10 +5,6 @@ import {
   ConnectionQuality,
 } from "../../../core/src/connection-quality";
 import { getDatabase } from "../storage/database";
-import {
-  createSignalingOffer,
-  handleSignalingAnswer,
-} from "../utils/manualSignaling";
 import { getMeshNetwork } from "../services/mesh-network-service";
 import { validateFileList } from "../../../core/src/file-validation";
 import { rateLimiter } from "../../../core/src/rate-limiter";
@@ -134,6 +130,12 @@ export function useMeshNetwork() {
               .map((b) => (b as number).toString(16).padStart(2, "0"))
               .join("")
               .substring(0, 8); // Simplified ID for now
+
+            // Filter out echo messages (messages sent by us that might be relayed back)
+            if (senderId === network.getLocalPeerId()) {
+              console.log("Ignored echo message from self");
+              return;
+            }
 
             // Create a unique ID for the message if one doesn't exist in the payload
             // Use a combination of timestamp, sender, and content hash/signature if possible
@@ -321,6 +323,32 @@ export function useMeshNetwork() {
           console.log("Peer connected:", peerId);
           updatePeerStatus();
 
+          // Trigger retry of queued messages immediately
+          retryQueuedMessages();
+
+          // Create conversation if it doesn't exist (e.g. from direct connection)
+          try {
+            const conversation = await db.getConversation(peerId);
+            if (!conversation) {
+              // Check if we have contact info (from QR or Room discovery)
+              // Only create conversation if we know who they are, or if we want to allow "Unknown" chats
+              // For now, let's create it so the window appears as requested.
+              const threadId = peerId;
+              console.log(
+                `Creating new conversation for connected peer: ${peerId}`,
+              );
+              await db.saveConversation({
+                id: threadId,
+                contactId: peerId,
+                lastMessageTimestamp: Date.now(),
+                unreadCount: 0,
+                createdAt: Date.now(),
+              });
+            }
+          } catch (err) {
+            console.error("Error ensuring conversation exists:", err);
+          }
+
           // Persist peer connection
           try {
             await db.savePeer({
@@ -364,7 +392,8 @@ export function useMeshNetwork() {
         });
 
         network.discovery.onPeerDiscovered((peer) => {
-          console.log("Discovered peer:", peer);
+          console.log("Discovered peer via Mesh Discovery:", peer);
+          // Only add to discoveredPeers, connection is handled by user or auto-connect logic
           setDiscoveredPeers((prev) => {
             if (prev.includes(peer.id)) return prev;
             return [...prev, peer.id];
@@ -637,6 +666,28 @@ export function useMeshNetwork() {
           type: "text",
           status: messageStatus,
         });
+
+        // Update Conversation
+        const convId = groupId || recipientId;
+        const conversation = await db.getConversation(convId);
+        if (conversation) {
+          await db.saveConversation({
+            ...conversation,
+            lastMessageTimestamp: localMessage.timestamp,
+            lastMessageId: localMessage.id,
+            // unreadCount: conversation.unreadCount // Don't change unread for sent msg
+          });
+        } else {
+          // Should exist, but just in case
+          await db.saveConversation({
+            id: convId,
+            contactId: convId, // Assuming 1:1 for fallback
+            lastMessageTimestamp: localMessage.timestamp,
+            lastMessageId: localMessage.id,
+            unreadCount: 0,
+            createdAt: Date.now(),
+          });
+        }
       } catch (error) {
         console.error("Failed to persist sent message:", error);
       }
@@ -652,27 +703,20 @@ export function useMeshNetwork() {
     }
 
     try {
-      // 1. Try manual connection first (WebRTC / direct)
-      try {
+      // Prioritize Room Signaling if available (Bootstrapping usually happens here)
+      if (roomClientRef.current) {
+        console.log(`Initiating connection to ${peerId} via Room Signaling...`);
+        // Generate proper SDP Offer
+        const offerJson =
+          await meshNetworkRef.current.createManualConnection(peerId);
+        const offerData = JSON.parse(offerJson);
+
+        await roomClientRef.current.signal(peerId, "offer", offerData);
+        console.log("Sent SDP offer via Room to", peerId);
+      } else {
+        // Fallback to mesh-only connection attempt (e.g. mDNS/Local)
+        console.log(`Initiating connection to ${peerId} via Mesh/Local...`);
         await meshNetworkRef.current.connectToPeer(peerId);
-      } catch (e) {
-        console.warn(
-          "Direct connection failed, checking if we have a Room Signal...",
-          e,
-        );
-        // If direct connection fails, we might need to signal via Room
-        if (roomClientRef.current) {
-          const offer = await createSignalingOffer(meshNetworkRef.current);
-          await roomClientRef.current.signal(peerId, "offer", {
-            sdp: offer,
-            type: "offer",
-          });
-          console.log("Sent offer via Room to", peerId);
-          // We can't await connection here easily unless we poll for answer.
-          // The polling loop handles the answer.
-        } else {
-          throw e;
-        }
       }
       endMeasure({ success: true });
     } catch (error) {
@@ -691,30 +735,31 @@ export function useMeshNetwork() {
   }, []);
 
   const generateConnectionOffer = useCallback(async (): Promise<string> => {
+    // Keep using simple ID for QR to keep it small.
+    // The scanner will use this ID to trigger connectToPeer -> Room Signal.
+    // This relies on both parties being on the Room (Netlify).
     const endMeasure = performanceMonitor.startMeasure(
       "generateConnectionOffer",
     );
     if (!meshNetworkRef.current) {
       throw new Error("Mesh network not initialized");
     }
-    // V1: Include public key in offer
     const db = getDatabase();
     const identity = await db.getPrimaryIdentity();
-    if (!identity) {
-      // Fallback for when identity isn't created yet
-      console.warn(
-        "No primary identity found for connection offer, generating temporary one.",
-      );
-      const offer = createSignalingOffer(meshNetworkRef.current);
-      endMeasure({ success: true });
-      return offer;
-    }
-    const offer = createSignalingOffer(
-      meshNetworkRef.current,
-      identity.publicKey,
-    );
+
+    // We stick to the minimal payload for QR codes, but add Name for UX
+    const offerPayload = {
+      peerId: meshNetworkRef.current.getLocalPeerId(),
+      publicKey: identity
+        ? Array.from(identity.publicKey)
+            .map((b) => b.toString(16).padStart(2, "0"))
+            .join("")
+        : undefined,
+      displayName: identity?.displayName,
+    };
+
     endMeasure({ success: true });
-    return offer;
+    return JSON.stringify(offerPayload, null, 2);
   }, []);
 
   const acceptConnectionOffer = useCallback(
@@ -726,26 +771,44 @@ export function useMeshNetwork() {
         throw new Error("Mesh network not initialized");
       }
       try {
-        const remotePeerId = await handleSignalingAnswer(
-          meshNetworkRef.current,
-          offer,
-        );
-        // Manually update peer status after connection
-        const connectedPeers = meshNetworkRef.current.getConnectedPeers();
-        setPeers(connectedPeers);
-        setStatus((prev: MeshStatus) => ({
-          ...prev,
-          peerCount: connectedPeers.length,
-          isConnected: connectedPeers.length > 0,
-        }));
+        const offerData = JSON.parse(offer);
+        if (!offerData.peerId) throw new Error("Invalid offer: missing peerId");
+
+        // Save contact info if present
+        if (offerData.displayName) {
+          const db = getDatabase();
+          try {
+            const existing = await db.getContact(offerData.peerId);
+            if (!existing) {
+              await db.saveContact({
+                id: offerData.peerId,
+                publicKey: offerData.publicKey || "",
+                displayName: offerData.displayName,
+                lastSeen: Date.now(),
+                createdAt: Date.now(),
+                fingerprint: "",
+                verified: false,
+                blocked: false,
+                endpoints: [],
+              });
+              console.log(`Saved contact from QR: ${offerData.displayName}`);
+            }
+          } catch (e) {
+            console.error("Error saving QR contact:", e);
+          }
+        }
+
+        // Use our robust connectToPeer logic
+        await connectToPeer(offerData.peerId);
+
         endMeasure({ success: true });
-        return remotePeerId;
+        return offerData.peerId;
       } catch (error) {
         endMeasure({ success: false, error: (error as Error).message });
         throw error;
       }
     },
-    [],
+    [connectToPeer],
   );
 
   const createManualOffer = useCallback(
@@ -888,6 +951,26 @@ export function useMeshNetwork() {
       try {
         await db.saveMessage(newMessage);
 
+        // Update Conversation
+        const convId = groupId || recipientId;
+        const conversation = await db.getConversation(convId);
+        if (conversation) {
+          await db.saveConversation({
+            ...conversation,
+            lastMessageTimestamp: newMessage.timestamp,
+            lastMessageId: newMessage.id,
+          });
+        } else {
+          await db.saveConversation({
+            id: convId,
+            contactId: convId,
+            lastMessageTimestamp: newMessage.timestamp,
+            lastMessageId: newMessage.id,
+            unreadCount: 0,
+            createdAt: Date.now(),
+          });
+        }
+
         // Update local state
         setMessages((prev) => [
           ...prev,
@@ -926,7 +1009,7 @@ export function useMeshNetwork() {
         const roomClient = new RoomClient(url, localPeerId);
         roomClientRef.current = roomClient;
 
-        // Fetch/Init Metadata (Public Key)
+        // Fetch/Init Metadata
         const db = getDatabase();
         const identity = await db.getPrimaryIdentity();
         const metadata = {
@@ -935,6 +1018,7 @@ export function useMeshNetwork() {
                 .map((b) => (b as number).toString(16).padStart(2, "0"))
                 .join("")
             : undefined,
+          displayName: identity?.displayName || "Unknown User",
           userAgent: navigator.userAgent,
         };
 
@@ -958,8 +1042,36 @@ export function useMeshNetwork() {
             const { signals, messages, peers } =
               await roomClientRef.current.poll();
 
-            // 1. Update Peers
+            // 1. Update Peers & Save Contacts
             if (peers && peers.length > 0) {
+              const db = getDatabase();
+              for (const p of peers) {
+                if (p.metadata && p._id !== localPeerId) {
+                  try {
+                    // Check if we already have this contact
+                    const existing = await db.getContact(p._id);
+                    if (!existing && p.metadata.displayName) {
+                      console.log(
+                        `Discovered new peer ${p.metadata.displayName} (${p._id})`,
+                      );
+                      await db.saveContact({
+                        id: p._id,
+                        publicKey: p.metadata.publicKey || "",
+                        displayName: p.metadata.displayName,
+                        lastSeen: Date.now(),
+                        createdAt: Date.now(),
+                        fingerprint: "", // To be filled on verification
+                        verified: false,
+                        blocked: false,
+                        endpoints: [{ type: "room" }],
+                      });
+                    }
+                  } catch (err) {
+                    console.error("Error saving discovered peer contact:", err);
+                  }
+                }
+              }
+
               setDiscoveredPeers((prev) => {
                 // Simple dedupe - just add new ones
                 const newPeers = peers
@@ -994,14 +1106,23 @@ export function useMeshNetwork() {
                   // Handling Offers
                   if (sig.type === "offer" || signalData.type === "offer") {
                     console.log("Received offer signal from", sig.from);
-                    const answer = await handleSignalingAnswer(
-                      meshNetworkRef.current!,
-                      signalData.sdp || signalData,
-                    );
+
+                    // Generate proper Answer using Core Logic
+                    // acceptManualConnection expects stringified { peerId, sdp }
+                    const answerJson =
+                      await meshNetworkRef.current!.acceptManualConnection(
+                        JSON.stringify({
+                          peerId: sig.from,
+                          sdp: signalData.sdp || signalData, // Handle nested sdp or flat
+                        }),
+                      );
+
+                    const answerData = JSON.parse(answerJson);
+
                     // Send Answer back
-                    await roomClientRef.current.signal(sig.from, "answer", {
+                    await roomClientRef.current!.signal(sig.from, "answer", {
                       type: "answer",
-                      sdp: answer,
+                      sdp: answerData.sdp,
                     });
                   }
                   // Handling Answers
@@ -1010,8 +1131,14 @@ export function useMeshNetwork() {
                     signalData.type === "answer"
                   ) {
                     console.log("Received answer signal from", sig.from);
+
+                    // Finalize connection using Core Logic
+                    // finalizeManualConnection expects stringified { peerId, sdp }
                     await meshNetworkRef.current!.finalizeManualConnection(
-                      signalData.sdp || signalData,
+                      JSON.stringify({
+                        peerId: sig.from,
+                        sdp: signalData.sdp || signalData,
+                      }),
                     );
                   }
                 } catch (e) {
@@ -1090,14 +1217,34 @@ export function useMeshNetwork() {
   useEffect(() => {
     if (status.isConnected && !isJoinedToRoom) {
       // Use the actual Netlify function URL
-      // If we are in dev main, it might be localhost:8888/.netlify...
-      // but essentially relative path works.
       const ROOM_URL = "/.netlify/functions/room";
       joinRoom(ROOM_URL).catch((err) => {
         console.error("Failed to auto-join public room on init:", err);
       });
     }
   }, [status.isConnected, isJoinedToRoom, joinRoom]);
+
+  // Auto-connect to discovered peers that we have conversations with
+  useEffect(() => {
+    const connectToKnownPeers = async () => {
+      if (!meshNetworkRef.current) return;
+      const db = getDatabase();
+      const conversations = await db.getConversations();
+      const knownPeerIds = conversations.map((c) => c.contactId);
+
+      for (const peerId of discoveredPeers) {
+        // If we have a conversation with them, but aren't connected in Mesh
+        if (
+          knownPeerIds.includes(peerId) &&
+          !meshNetworkRef.current.isConnectedToPeer(peerId)
+        ) {
+          console.log(`Auto-connecting to known peer from Room: ${peerId}`);
+          connectToPeer(peerId).catch(console.warn);
+        }
+      }
+    };
+    connectToKnownPeers();
+  }, [discoveredPeers, connectToPeer]);
 
   // DHT Bootstrap Effect
   const [hasBootstrapped, setHasBootstrapped] = useState(false);
@@ -1119,8 +1266,6 @@ export function useMeshNetwork() {
           })
           .catch((err: unknown) => {
             console.error("DHT Bootstrap failed:", err);
-            // Don't set hasBootstrapped to true so it retries?
-            // Or set it to avoid loops? Let's retry on next peer count change if needed, so don't set true.
           });
       }, 2000);
       return () => clearTimeout(timer);

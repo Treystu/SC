@@ -4,7 +4,7 @@ import "./ChatView.css";
 import { MessageInput } from "./MessageInput";
 import { LoadingState } from "./LoadingState";
 import { validateFileList } from "@sc/core";
-import { getDatabase, StoredMessage } from "../storage/database";
+import { getDatabase } from "../storage/database";
 import { ContactProfileDialog } from "./ContactProfileDialog";
 import { MessageReactions } from "./MessageReactions";
 import { VoicePlayer } from "./VoicePlayer";
@@ -76,10 +76,14 @@ function ChatView({
         m.from === conversationId ||
         (m.from === "me" && !m.conversationId)
       ) {
+        const existing = msgMap.get(m.id);
+        // If existing is from history (usually persisted), and live is optimistic, prefer live status updates
+        // But fundamentally, ID collision means same message.
         msgMap.set(m.id, {
           ...m,
+          // If we found it in history, we might want to preserve some props, but live update usually has valid status
           senderId: m.from === "me" ? "me" : m.from, // map 'from' to 'senderId'
-          status: m.status || "delivered",
+          status: m.status || existing?.status || "delivered",
         });
       }
     });

@@ -736,31 +736,9 @@ function App() {
           }
         }
 
-        // Save to local DB as a group message
-        try {
-          const db = getDatabase();
-          if (sanitizedContent) {
-            await db.saveMessage({
-              id: `msg-${Date.now()}`,
-              conversationId: group.id, // Save under GROUP ID
-              content: sanitizedContent,
-              timestamp: Date.now(),
-              senderId: status.localPeerId,
-              recipientId: group.id, // Recipient is the group
-              type: "text",
-              status: "sent",
-            });
-          }
-
-          // Update group timestamp
-          await db.saveGroup({
-            ...group,
-            lastMessageTimestamp: Date.now(),
-          });
-          refreshGroups();
-        } catch (dbError) {
-          console.error("Failed to save group message:", dbError);
-        }
+        // Refresh conversations to show updated timestamp (once async DB operations in hook complete)
+        // We might want a small delay or rely on the hook's state update if mapped
+        setTimeout(refreshGroups, 100);
       } else {
         // Handle 1:1 Message
         try {
@@ -769,60 +747,11 @@ function App() {
             sanitizedContent,
             attachments,
           );
+          // Refresh conversations to show updated timestamp
+          setTimeout(refreshConversations, 100);
         } catch (error) {
           console.error("Error sending message via hook:", error);
-        }
-
-        // Save message to IndexedDB
-        try {
-          const db = getDatabase();
-          // Save text message if present
-          if (sanitizedContent) {
-            await db.saveMessage({
-              id: `msg-${Date.now()}`,
-              conversationId: selectedConversation,
-              content: sanitizedContent,
-              timestamp: Date.now(),
-              senderId: status.localPeerId,
-              recipientId: selectedConversation,
-              type: "text",
-              status: "sent",
-            });
-          }
-
-          // Save file messages if present
-          if (attachments && attachments.length > 0) {
-            for (const file of attachments) {
-              await db.saveMessage({
-                id: `msg-file-${Date.now()}-${Math.random()}`,
-                conversationId: selectedConversation,
-                content: `Sent file: ${file.name}`,
-                timestamp: Date.now(),
-                senderId: status.localPeerId,
-                recipientId: selectedConversation,
-                type: "file",
-                status: "sent",
-                metadata: {
-                  fileName: file.name,
-                  fileSize: file.size,
-                  fileType: file.type,
-                },
-              });
-            }
-          }
-
-          // Update conversation timestamp
-          const conversation = await db.getConversation(selectedConversation);
-          if (conversation) {
-            await db.saveConversation({
-              ...conversation,
-              lastMessageTimestamp: Date.now(),
-              // Don't increment unread count for own messages
-            });
-            refreshConversations();
-          }
-        } catch (dbError) {
-          console.error("Failed to save message:", dbError);
+          alert(`Failed to send message: ${error}`);
         }
       }
     } else {
