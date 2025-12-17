@@ -1074,6 +1074,28 @@ export function useMeshNetwork() {
                         endpoints: [{ type: "room" }],
                       });
                     }
+
+                    // BOOTSTRAP: Auto-connect to peers found in the room
+                    // This seeds the mesh network from the room's participant list
+                    if (meshNetworkRef.current) {
+                      const connected =
+                        meshNetworkRef.current.getConnectedPeers();
+                      if (!connected.some((cp) => cp.id === p._id)) {
+                        console.log(
+                          `[Room Bootstrap] Auto-connecting to discovered room peer: ${p._id}`,
+                        );
+                        // We do not await here to avoid blocking the poll loop
+                        meshNetworkRef.current
+                          .connectToPeer(p._id)
+                          .catch((err) => {
+                            // Ignore connection errors during bootstrap, they happen
+                            console.debug(
+                              `[Room Bootstrap] Failed to connect to ${p._id}:`,
+                              err,
+                            );
+                          });
+                      }
+                    }
                   } catch (err) {
                     console.error("Error saving discovered peer contact:", err);
                   }

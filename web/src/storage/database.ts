@@ -211,6 +211,29 @@ export class DatabaseManager {
     return this.initPromise;
   }
 
+  /**
+   * Clear all data from the database
+   * Used when resetting identity or clearing state
+   */
+  async clearAllData(): Promise<void> {
+    if (!this.db) await this.init();
+
+    const storeNames = Array.from(this.db!.objectStoreNames);
+    const transaction = this.db!.transaction(storeNames, "readwrite");
+
+    const promises = storeNames.map((storeName) => {
+      return new Promise<void>((resolve, reject) => {
+        const store = transaction.objectStore(storeName);
+        const request = store.clear();
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    });
+
+    await Promise.all(promises);
+    console.log("DatabaseManager: All data cleared successfully");
+  }
+
   // ===== MESSAGE OPERATIONS =====
 
   /**

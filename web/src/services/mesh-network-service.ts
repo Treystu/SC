@@ -51,6 +51,18 @@ export const getMeshNetwork = async (): Promise<MeshNetwork> => {
           peerId = storedIdentity.id.replace(/\s/g, "");
         } else {
           console.log("No persisted identity found, generating new one...");
+
+          // CRITICAL: Ensure we start fresh. Clear any potentially corrupted or old data.
+          // This prevents "Old Chats" from showing up if identity was lost/wiped but messages remained.
+          try {
+            await db.clearAllData();
+          } catch (e) {
+            console.warn(
+              "Failed to clear old data during identity generation:",
+              e,
+            );
+          }
+
           const { generateIdentity, generateFingerprint } =
             await import("@sc/core");
           const newIdentity = generateIdentity();

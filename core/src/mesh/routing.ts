@@ -8,7 +8,6 @@ import {
   peerToDHTContact,
   isValidDHTPeer,
   peerIdToDHTKey,
-  DHTContact,
 } from "./dht/index.js";
 import { xorDistance } from "./kademlia.js";
 
@@ -587,24 +586,6 @@ export class RoutingTable {
    */
   getDHTRoutingTable(): KademliaRoutingTable | undefined {
     return this.dhtRoutingTable;
-  }
-
-  /**
-   * Find a peer using DHT lookup (DHT/HYBRID mode only)
-   *
-   * @param peerId - Peer ID to find
-   * @returns Promise resolving to closest known peers
-   */
-  async findPeerViaDHT(peerId: string): Promise<DHTContact[]> {
-    if (!this.dhtRoutingTable) {
-      throw new Error("DHT routing table not configured");
-    }
-
-    // Convert peer ID to node ID for lookup
-    const targetKey = peerIdToDHTKey(peerId);
-
-    const result = await this.dhtRoutingTable.findNode(targetKey);
-    return result.closestNodes;
   }
 
   /**

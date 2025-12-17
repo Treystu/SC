@@ -639,12 +639,51 @@ export class MeshNetwork {
         );
       }
     } else {
+      // Attempt DHT lookup if no candidates found
+      let candidates = this.routingTable.getRankedPeersForTarget(recipientId);
+
+      // Filter for connected peers first to see if we have valid choices
+      const connectedCandidates = candidates.filter(
+        (p) => p.state === "connected" && p.id !== this.localPeerId,
+      );
+
+      if (connectedCandidates.length === 0 && this.dht) {
+        console.log(
+          `[MeshNetwork] No known path to ${recipientId}, attempting DHT lookup...`,
+        );
+        try {
+          const foundPeers = await this.dht.findNode(recipientId);
+
+          // Check if target was found and connect
+          const targetPeer = foundPeers.find((p) => p.id === recipientId);
+          if (targetPeer) {
+            console.log(
+              `[MeshNetwork] Found target ${recipientId} via DHT, connecting...`,
+            );
+            try {
+              // Only connect if not already connected (though filter above suggests we aren't)
+              await this.connectToPeer(recipientId);
+              // Refresh candidates after connection
+              candidates =
+                this.routingTable.getRankedPeersForTarget(recipientId);
+            } catch (e) {
+              console.warn(
+                `[MeshNetwork] Failed to connect to found target ${recipientId}`,
+                e,
+              );
+            }
+          }
+        } catch (e) {
+          console.warn(`[MeshNetwork] DHT lookup failed for ${recipientId}`, e);
+        }
+      }
+
       console.log(
         `[MeshNetwork] No direct route to ${recipientId}, initiating Smart Flood...`,
       );
 
       // Smart Routing for Source (same as forwarding)
-      const candidates = this.routingTable.getRankedPeersForTarget(recipientId);
+      // Re-filter candidates in case they changed
       const validCandidates = candidates.filter(
         (p) => p.state === "connected" && p.id !== this.localPeerId,
       );
