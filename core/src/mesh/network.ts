@@ -507,7 +507,11 @@ export class MeshNetwork {
   /**
    * Send a text message
    */
-  async sendMessage(recipientId: string, content: string): Promise<void> {
+  async sendMessage(
+    recipientId: string,
+    content: string,
+    type: MessageType = MessageType.TEXT,
+  ): Promise<void> {
     const payload = new TextEncoder().encode(
       JSON.stringify({
         text: content,
@@ -519,7 +523,7 @@ export class MeshNetwork {
     const message: Message = {
       header: {
         version: 0x01,
-        type: MessageType.TEXT,
+        type: type,
         ttl: this.defaultTTL,
         timestamp: Date.now(),
         senderId: this.identity.publicKey,
@@ -790,6 +794,40 @@ export class MeshNetwork {
   }
 
   /**
+   * Bootstrap the network by finding closest peers to self in DHT
+   */
+  async bootstrap(): Promise<void> {
+    console.log("Bootstrapping DHT...");
+    const peers = await this.dht.findNode(this.localPeerId);
+    console.log(`DHT Bootstrap complete. Found ${peers.length} peers.`);
+
+    // Attempt connections to discovered peers
+    for (const peer of peers) {
+      if (peer.id !== this.localPeerId && !this.peerPool.getPeer(peer.id)) {
+        // We know about them, but aren't connected.
+        // If we have connection info (metadata implies we might, currently we don't store it fully in DHT response)
+        // In full impl, FIND_NODE return values include IP/signal info.
+        // For now, if we found them via DHT, it means someone else knows them.
+        // We rely on the fact that `dht.ts` added them to routing table.
+        // We may trigger connection attempts here if we have a way to signal them.
+
+        // If we found them, we might want to try connecting if we are below maxPeers
+        if (this.peerPool.getConnectedPeers().length < this.maxPeers) {
+          // connection logic would go here if we had signaling info
+          // For this version, just populating the routing table (done in DHT) is the first step.
+        }
+      }
+    }
+  }
+
+  /**
+   * Get the DHT instance
+   */
+  getDHT(): DHT {
+    return this.dht;
+  }
+
+  /**
    * Send text message
    */
   async sendTextMessage(recipientId: string, text: string): Promise<void> {
@@ -802,11 +840,12 @@ export class MeshNetwork {
   async sendBinaryMessage(
     recipientId: string,
     data: Uint8Array,
+    type: MessageType = MessageType.FILE_CHUNK,
   ): Promise<void> {
     const message: Message = {
       header: {
         version: 0x01,
-        type: MessageType.FILE_CHUNK,
+        type: type,
         ttl: this.defaultTTL,
         timestamp: Date.now(),
         senderId: this.identity.publicKey,

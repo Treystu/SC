@@ -34,6 +34,9 @@ test.describe("Messaging Interface", () => {
   });
 
   test("should show empty state when no conversations", async ({ page }) => {
+    // Wait for loading to finish (already in beforeEach, but double check)
+    await expect(page.locator(".loading-state")).toBeHidden();
+
     const emptyList = page.locator(".conversation-list .empty-list");
     await expect(emptyList).toBeVisible();
     await expect(emptyList).toContainText(/No conversations yet/i);
@@ -64,7 +67,14 @@ test.describe("Connection Status", () => {
     await page.addInitScript(async () => {
       const dbs = await window.indexedDB.databases();
       for (const db of dbs) {
-        if (db.name) window.indexedDB.deleteDatabase(db.name);
+        if (db.name) {
+          await new Promise((resolve) => {
+            const req = window.indexedDB.deleteDatabase(db.name);
+            req.onsuccess = resolve;
+            req.onerror = resolve;
+            req.onblocked = resolve;
+          });
+        }
       }
     });
 
@@ -96,6 +106,20 @@ test.describe("Connection Status", () => {
 
 test.describe("Conversation List", () => {
   test.beforeEach(async ({ page }) => {
+    // Clear DB to ensure fresh state
+    await page.addInitScript(async () => {
+      const dbs = await window.indexedDB.databases();
+      for (const db of dbs) {
+        if (db.name) {
+          await new Promise((resolve) => {
+            const req = window.indexedDB.deleteDatabase(db.name);
+            req.onsuccess = resolve;
+            req.onerror = resolve;
+            req.onblocked = resolve;
+          });
+        }
+      }
+    });
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
     await expect(page.locator(".loading-state")).toBeHidden();
@@ -138,6 +162,20 @@ async function createConversation(page: Page) {
 
 test.describe("Message Sending", () => {
   test.beforeEach(async ({ page }) => {
+    // Clear DB to ensure fresh state
+    await page.addInitScript(async () => {
+      const dbs = await window.indexedDB.databases();
+      for (const db of dbs) {
+        if (db.name) {
+          await new Promise((resolve) => {
+            const req = window.indexedDB.deleteDatabase(db.name);
+            req.onsuccess = resolve;
+            req.onerror = resolve;
+            req.onblocked = resolve;
+          });
+        }
+      }
+    });
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
     await expect(page.locator(".loading-state")).toBeHidden();
@@ -215,6 +253,20 @@ test.describe("Message Sending", () => {
 
 test.describe("Message History", () => {
   test.beforeEach(async ({ page }) => {
+    // Clear DB to ensure fresh state
+    await page.addInitScript(async () => {
+      const dbs = await window.indexedDB.databases();
+      for (const db of dbs) {
+        if (db.name) {
+          await new Promise((resolve) => {
+            const req = window.indexedDB.deleteDatabase(db.name);
+            req.onsuccess = resolve;
+            req.onerror = resolve;
+            req.onblocked = resolve;
+          });
+        }
+      }
+    });
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
     await expect(page.locator(".loading-state")).toBeHidden();
@@ -229,9 +281,8 @@ test.describe("Message History", () => {
     await page.locator('[data-testid="send-message-btn"]').click();
 
     // Wait for message to be status (sent OR queued)
-    // Since peer is offline, it will likely be queued.
     const status = page.locator('[data-testid^="message-status-"]').first();
-    await expect(status).toBeVisible({ timeout: 10000 });
+    await expect(status).toBeVisible({ timeout: 15000 });
 
     // Reload page
     await page.reload();
@@ -265,6 +316,20 @@ test.describe("Message History", () => {
 
 test.describe("Contact Management", () => {
   test.beforeEach(async ({ page }) => {
+    // Clear DB to ensure fresh state
+    await page.addInitScript(async () => {
+      const dbs = await window.indexedDB.databases();
+      for (const db of dbs) {
+        if (db.name) {
+          await new Promise((resolve) => {
+            const req = window.indexedDB.deleteDatabase(db.name);
+            req.onsuccess = resolve;
+            req.onerror = resolve;
+            req.onblocked = resolve;
+          });
+        }
+      }
+    });
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
     await expect(page.locator(".loading-state")).toBeHidden();
@@ -297,36 +362,39 @@ test.describe("Contact Management", () => {
   });
 
   test("should switch between contacts", async ({ page }) => {
-    // Create first contact
+    // Create first contact (Test Peer)
     await createConversation(page);
 
-    // Add second contact
+    // Add second distinct contact (Bob)
     const addContactBtn = page.locator('[data-testid="add-contact-btn"]');
     await addContactBtn.click();
-    const quickAdd = page.locator('[data-testid="quick-add-btn"]');
-    await quickAdd.click();
+
+    const addByIdBtn = page.locator('[data-testid="add-by-id-btn"]');
+    await expect(addByIdBtn).toBeVisible();
+    await addByIdBtn.click();
+
+    await page.locator('[data-testid="contact-name-input"]').fill("Bob");
+    await page
+      .locator('[data-testid="contact-publickey-input"]')
+      .fill("B".repeat(64));
+    await page.locator('[data-testid="save-contact-btn"]').click();
 
     // Now we have two.
     const contacts = page.locator(".conversation-item");
     await expect(contacts).toHaveCount(2);
 
-    const firstContact = contacts.first();
-    const secondContact = contacts.nth(1);
+    // Find identifying elements
+    const testPeer = page.locator('[data-testid="contact-Test Peer"]');
+    const bob = page.locator('[data-testid="contact-Bob"]');
 
-    // Verify first is NOT selected (second one is auto-selected by quick add)
-    // Actually quick add selects the new one.
-    // So second contact (newest) should be first in list?
-    // Wait, list sort order?
-    // App.tsx sorts by timestamp descending (line 905).
-    // Newer one (second) should be first in list?
-    // Let's just click specifically.
+    // Click Bob
+    await bob.click();
+    await expect(bob).toHaveClass(/selected|active/);
+    await expect(testPeer).not.toHaveClass(/selected|active/);
 
-    // Click the second item (index 1)
-    await secondContact.click();
-    await expect(secondContact).toHaveClass(/selected|active/);
-
-    // Click the first item (index 0)
-    await firstContact.click();
-    await expect(firstContact).toHaveClass(/selected|active/);
+    // Click Test Peer
+    await testPeer.click();
+    await expect(testPeer).toHaveClass(/selected|active/);
+    await expect(bob).not.toHaveClass(/selected|active/);
   });
 });

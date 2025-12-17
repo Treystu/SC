@@ -34,6 +34,8 @@ export interface ReceivedMessage {
   timestamp: number;
   type: MessageType;
   status?: "pending" | "sent" | "delivered" | "read" | "queued" | "failed";
+  reactions?: Array<{ userId: string; emoji: string }>;
+  metadata?: any;
 }
 
 /**
@@ -168,6 +170,71 @@ export function useMeshNetwork() {
             }
 
             seenMessageIdsRef.current.add(messageId);
+
+            // Handle message types
+            if (message.header.type === MessageType.MESSAGE_REACTION) {
+              const reactionData = data as {
+                targetMessageId: string;
+                emoji: string;
+                action?: "add" | "remove";
+                groupId?: string; // For group contexts
+              };
+
+              // Update DB
+              try {
+                const targetMsg = await db.getMessage(
+                  reactionData.targetMessageId,
+                );
+                if (targetMsg) {
+                  const reactions = targetMsg.reactions || [];
+                  const newReaction = {
+                    userId: senderId,
+                    emoji: reactionData.emoji,
+                  };
+
+                  // Check for duplicates
+                  const exists = reactions.some(
+                    (r) =>
+                      r.userId === senderId && r.emoji === reactionData.emoji,
+                  );
+
+                  if (!exists) {
+                    targetMsg.reactions = [...reactions, newReaction];
+                    await db.saveMessage(targetMsg);
+                    console.log(
+                      `Added reaction ${reactionData.emoji} to ${reactionData.targetMessageId}`,
+                    );
+
+                    // Update local state if message is currently in view
+                    setMessages((prev) =>
+                      prev.map((m) => {
+                        if (m.id === reactionData.targetMessageId) {
+                          const currentReactions = m.reactions || [];
+                          // Avoid duplicates in state
+                          if (
+                            currentReactions.some(
+                              (r) =>
+                                r.userId === senderId &&
+                                r.emoji === reactionData.emoji,
+                            )
+                          ) {
+                            return m;
+                          }
+                          return {
+                            ...m,
+                            reactions: [...currentReactions, newReaction],
+                          };
+                        }
+                        return m;
+                      }),
+                    );
+                  }
+                }
+              } catch (e) {
+                console.error("Failed to apply reaction:", e);
+              }
+              return; // Done processing reaction
+            }
 
             const receivedMessage: ReceivedMessage = {
               id: messageId,
@@ -717,6 +784,127 @@ export function useMeshNetwork() {
     [],
   );
 
+  const sendReaction = useCallback(
+    async (
+      targetMessageId: string,
+      emoji: string,
+      recipientId: string,
+      groupId?: string,
+    ) => {
+      if (!meshNetworkRef.current)
+        throw new Error("Mesh network not initialized");
+
+      const payload = JSON.stringify({
+        targetMessageId,
+        emoji,
+        groupId,
+        timestamp: Date.now(),
+      });
+
+      // Send to recipient (or group fan-out handled by caller/network)
+      // Note: MessageType.MESSAGE_REACTION is 0x05
+      await meshNetworkRef.current.sendMessage(
+        recipientId,
+        payload,
+        0x05 as MessageType,
+      );
+
+      // Local update
+      const db = getDatabase();
+      const targetMsg = await db.getMessage(targetMessageId);
+      if (targetMsg) {
+        const reactions = targetMsg.reactions || [];
+        const newReaction = {
+          userId: meshNetworkRef.current.getLocalPeerId(),
+          emoji,
+        };
+        // dedupe
+        if (
+          !reactions.some(
+            (r) => r.userId === newReaction.userId && r.emoji === emoji,
+          )
+        ) {
+          targetMsg.reactions = [...reactions, newReaction];
+          await db.saveMessage(targetMsg);
+
+          // Update state
+          setMessages((prev) =>
+            prev.map((m) => {
+              if (m.id === targetMessageId) {
+                const currentReactions = m.reactions || [];
+                return {
+                  ...m,
+                  reactions: [...currentReactions, newReaction],
+                };
+              }
+              return m;
+            }),
+          );
+        }
+      }
+    },
+    [],
+  );
+
+  const sendVoice = useCallback(
+    async (
+      recipientId: string,
+      audioBlob: Blob,
+      duration?: number,
+      groupId?: string,
+    ) => {
+      if (!meshNetworkRef.current)
+        throw new Error("Mesh network not initialized");
+
+      const buffer = await audioBlob.arrayBuffer();
+      const data = new Uint8Array(buffer);
+
+      // Send via mesh
+      // Note: MessageType.VOICE is 0x04
+      await meshNetworkRef.current.sendBinaryMessage(
+        recipientId,
+        data,
+        0x04 as MessageType,
+      );
+
+      // Local update (store as file-like message or distinct voice type)
+      const db = getDatabase();
+      const messageId = `msg-voice-${Date.now()}`;
+      const newMessage: any = {
+        id: messageId,
+        conversationId: groupId || recipientId,
+        senderId: meshNetworkRef.current.getLocalPeerId(), // Correct field name for StoredMessage
+        recipientId: recipientId, // Correct field name for StoredMessage
+        content: "[Voice Message]", // Fallback text
+        timestamp: Date.now(),
+        type: "voice", // StoredMessage uses string union "voice"
+        status: "sent",
+        metadata: {
+          duration,
+          blob: audioBlob, // Note: We might need to persist this blob carefully
+        },
+      };
+
+      try {
+        await db.saveMessage(newMessage);
+
+        // Update local state
+        setMessages((prev) => [
+          ...prev,
+          {
+            ...newMessage,
+            from: newMessage.senderId, // ReceivedMessage uses 'from'
+            to: newMessage.recipientId,
+            type: 0x04 as MessageType, // ReceivedMessage uses MessageType enum
+          },
+        ]);
+      } catch (err) {
+        console.error("Failed to save local voice message:", err);
+      }
+    },
+    [],
+  );
+
   const [joinError, setJoinError] = useState<string | null>(null);
   const [discoveredPeers, setDiscoveredPeers] = useState<string[]>([]);
   const [roomMessages, setRoomMessages] = useState<any[]>([]);
@@ -911,6 +1099,34 @@ export function useMeshNetwork() {
     }
   }, [status.isConnected, isJoinedToRoom, joinRoom]);
 
+  // DHT Bootstrap Effect
+  const [hasBootstrapped, setHasBootstrapped] = useState(false);
+
+  useEffect(() => {
+    if (status.peerCount > 0 && !hasBootstrapped && meshNetworkRef.current) {
+      // Small delay to ensure connection stability before heavy DHT activity
+      const timer = setTimeout(() => {
+        console.log(
+          "Peers connected (count: " +
+            status.peerCount +
+            "), starting DHT bootstrap...",
+        );
+        meshNetworkRef.current
+          ?.bootstrap()
+          .then(() => {
+            console.log("DHT Bootstrap finished successfully.");
+            setHasBootstrapped(true);
+          })
+          .catch((err: unknown) => {
+            console.error("DHT Bootstrap failed:", err);
+            // Don't set hasBootstrapped to true so it retries?
+            // Or set it to avoid loops? Let's retry on next peer count change if needed, so don't set true.
+          });
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [status.peerCount, hasBootstrapped]);
+
   // Memoized return value to prevent unnecessary re-renders
   return useMemo(
     () => ({
@@ -934,6 +1150,8 @@ export function useMeshNetwork() {
       discoveredPeers,
       roomMessages,
       identity: meshNetworkRef.current?.getIdentity(), // Expose identity
+      sendReaction,
+      sendVoice,
     }),
     [
       status,
@@ -956,6 +1174,8 @@ export function useMeshNetwork() {
       onPeerTrack,
       discoveredPeers,
       roomMessages,
+      sendReaction,
+      sendVoice,
       meshNetworkRef.current, // Add ref to deps to update when initialized
     ],
   );

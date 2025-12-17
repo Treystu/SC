@@ -128,6 +128,8 @@ function App() {
     discoveredPeers,
     roomMessages,
     isJoinedToRoom,
+    sendReaction,
+    sendVoice,
   } = useMeshNetwork();
 
   // Setup logger
@@ -828,6 +830,72 @@ function App() {
     }
   };
 
+  const handleReaction = async (messageId: string, emoji: string) => {
+    if (!selectedConversation) return;
+
+    // Check if it's a group
+    const group = groups.find((g) => g.id === selectedConversation);
+
+    if (group) {
+      // Fan-out to all members except self
+      const recipients = group.members
+        .filter((m) => m.id !== status.localPeerId)
+        .map((m) => m.id);
+
+      for (const recipientId of recipients) {
+        try {
+          await sendReaction(messageId, emoji, recipientId, group.id);
+        } catch (error) {
+          console.error(
+            `Failed to send reaction to group member ${recipientId}:`,
+            error,
+          );
+        }
+      }
+    } else {
+      // 1:1
+      try {
+        await sendReaction(messageId, emoji, selectedConversation);
+      } catch (error) {
+        console.error("Failed to send reaction:", error);
+        alert(`Failed to send reaction: ${error}`);
+      }
+    }
+  };
+
+  const handleSendVoice = async (audioBlob: Blob) => {
+    if (!selectedConversation) return;
+
+    // Check if it's a group
+    const group = groups.find((g) => g.id === selectedConversation);
+
+    if (group) {
+      // Fan-out to all members except self
+      const recipients = group.members
+        .filter((m) => m.id !== status.localPeerId)
+        .map((m) => m.id);
+
+      for (const recipientId of recipients) {
+        try {
+          await sendVoice(recipientId, audioBlob, undefined, group.id);
+        } catch (error) {
+          console.error(
+            `Failed to send voice to group member ${recipientId}:`,
+            error,
+          );
+        }
+      }
+    } else {
+      // 1:1
+      try {
+        await sendVoice(selectedConversation, audioBlob);
+      } catch (error) {
+        console.error("Failed to send voice:", error);
+        alert(`Failed to send voice: ${error}`);
+      }
+    }
+  };
+
   const handleShareApp = async () => {
     // Ensure keys are initialized
     if (identity?.publicKey && identity?.privateKey) {
@@ -1157,6 +1225,8 @@ function App() {
                       )} // Groups are always "online" effectively, or check if any member is online
                       messages={messages}
                       onSendMessage={handleSendMessage}
+                      onSendVoice={handleSendVoice}
+                      onReaction={handleReaction}
                       isLoading={contactsLoading}
                       onClose={() => setSelectedConversation(null)}
                     />

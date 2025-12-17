@@ -21,7 +21,7 @@ export interface StoredMessage {
   type: "text" | "file" | "voice";
   status: "pending" | "sent" | "delivered" | "read" | "queued" | "failed";
   metadata?: any;
-  reactions?: Array<{ emoji: string; userIds: string[] }>;
+  reactions?: Array<{ userId: string; emoji: string }>;
 }
 
 export interface StoredContact {

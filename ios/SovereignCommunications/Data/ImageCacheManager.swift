@@ -21,6 +21,15 @@ class ImageCacheManager {
     private let diskCacheURL: URL
     private let fileManager = FileManager.default
     
+    public lazy var session: URLSession = {
+        let configuration = URLSessionConfiguration.default
+        return URLSession(
+            configuration: configuration,
+            delegate: CertificatePinningManager.shared,
+            delegateQueue: nil
+        )
+    }()
+    
     // Cache limits
     private let maxMemoryCacheSize = 50 * 1024 * 1024 // 50 MB
     private let maxDiskCacheSize = 200 * 1024 * 1024 // 200 MB
@@ -323,7 +332,7 @@ struct CachedAsyncImage<Content: View>: View {
                 self.image = cachedImage
             } else {
                 // Download image
-                URLSession.shared.dataTask(with: url) { data, _, _ in
+                ImageCacheManager.shared.session.dataTask(with: url) { data, _, _ in
                     if let data = data, let downloadedImage = UIImage(data: data) {
                         DispatchQueue.main.async {
                             self.image = downloadedImage

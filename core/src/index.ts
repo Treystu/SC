@@ -47,6 +47,7 @@ export {
 
 // DHT (Kademlia)
 export * from "./mesh/dht/index.js";
+export { DHT, type DHTConfig, type NodeLookupResult } from "./mesh/dht.js";
 
 // Transport Abstraction Layer
 export {
@@ -287,6 +288,12 @@ export {
   type PooledConnection,
   type PerformanceMetrics,
 } from "./performance-optimizations.js";
+
+export {
+  PerformanceMonitor,
+  performanceMonitor,
+  type PerformanceMetric,
+} from "./performance-monitor.js";
 
 // Cache Manager
 export {

@@ -10,6 +10,15 @@ import Foundation
 class RoomClient {
     private let baseUrl = "https://sc.netlify.app/.netlify/functions/room"
     
+    private lazy var session: URLSession = {
+        let configuration = URLSessionConfiguration.default
+        return URLSession(
+            configuration: configuration,
+            delegate: CertificatePinningManager.shared,
+            delegateQueue: nil
+        )
+    }()
+    
     struct PeerInfo {
         let id: String
         let metadata: [String: Any]?
@@ -49,7 +58,7 @@ class RoomClient {
         
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
         
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let (data, _) = try await self.session.data(for: request)
         
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let peersArray = json["peers"] as? [[String: Any]] else {
@@ -77,7 +86,7 @@ class RoomClient {
         
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
         
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let (data, _) = try await self.session.data(for: request)
         
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw RoomError.invalidResponse
@@ -119,7 +128,7 @@ class RoomClient {
         
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
         
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let (data, _) = try await self.session.data(for: request)
         
         if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             return json["success"] as? Bool ?? false

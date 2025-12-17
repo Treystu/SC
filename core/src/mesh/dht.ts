@@ -289,6 +289,14 @@ export class DHT {
           });
           processResult.seen.add(nodeData.id);
           changed = true;
+
+          // CRITICAL FIX: Add discovered peer to routing table
+          // In Kademlia, we validly discover nodes here.
+          // We need to ensure we don't overwrite existing "connected" state with "disconnected"
+          const existing = this.routingTable.getPeer(peer.id);
+          if (!existing) {
+            this.routingTable.addPeer(peer);
+          }
         }
       }
       return changed;

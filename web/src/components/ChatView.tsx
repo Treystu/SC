@@ -7,6 +7,7 @@ import { validateFileList } from "@sc/core";
 import { getDatabase, StoredMessage } from "../storage/database";
 import { ContactProfileDialog } from "./ContactProfileDialog";
 import { MessageReactions } from "./MessageReactions";
+import { VoicePlayer } from "./VoicePlayer";
 
 const sanitizeHTML = (html: string) => {
   return DOMPurify.sanitize(html);
@@ -25,6 +26,8 @@ interface ChatViewProps {
     status?: string;
   }>;
   onSendMessage?: (content: string, attachments?: File[]) => void;
+  onSendVoice?: (audioBlob: Blob) => void;
+  onReaction?: (messageId: string, emoji: string) => void;
   isLoading?: boolean;
   onClose?: () => void;
 }
@@ -34,6 +37,8 @@ function ChatView({
   contactName = "Unknown Contact",
   isOnline = false,
   onSendMessage,
+  onSendVoice,
+  onReaction,
   isLoading = false,
   messages: liveMessages = [], // Live messages from useMeshNetwork
   onClose,
@@ -186,20 +191,33 @@ function ChatView({
                 className={`message ${message.senderId === "me" ? "sent" : "received"} `}
               >
                 <div className="message-bubble">
-                  <div
-                    className="message-content"
-                    dangerouslySetInnerHTML={{
-                      __html: sanitizeHTML(message.content),
-                    }}
-                  ></div>
+                  <div className="message-content-wrapper">
+                    {message.type === 0x04 ? (
+                      <VoicePlayer
+                        audioUrl={
+                          message.metadata?.blob
+                            ? URL.createObjectURL(message.metadata.blob)
+                            : ""
+                        }
+                        duration={message.metadata?.duration || 0}
+                      />
+                    ) : (
+                      <div
+                        className="message-content"
+                        dangerouslySetInnerHTML={{
+                          __html: sanitizeHTML(message.content),
+                        }}
+                      ></div>
+                    )}
+                  </div>
 
-                  {/* Reactions */}
                   <MessageReactions
                     messageId={message.id}
                     reactions={message.reactions || []}
                     onAddReaction={(emoji) => {
-                      // TODO: Implement persistent reaction storage
-                      console.log(`Reacted to ${message.id} with ${emoji}`);
+                      if (onReaction) {
+                        onReaction(message.id, emoji);
+                      }
                     }}
                   />
 
@@ -251,8 +269,10 @@ function ChatView({
               onSendMessage(content, attachments);
             }
           }}
+          onSendVoice={onSendVoice}
           onTyping={() => {}}
-          data-testid="message-input-component"
+          disabled={isLoading || !conversationId}
+          placeholder={`Message ${contactName}...`}
         />
       </div>
 

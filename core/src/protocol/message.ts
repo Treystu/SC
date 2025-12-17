@@ -33,6 +33,7 @@ export enum MessageType {
   FILE_METADATA = 0x02,
   FILE_CHUNK = 0x03,
   VOICE = 0x04,
+  MESSAGE_REACTION = 0x05,
   // Control messages
   CONTROL_ACK = 0x10,
   CONTROL_PING = 0x11,
@@ -330,6 +331,7 @@ export function getMessageTypeName(type: MessageType): string {
     [MessageType.FILE_METADATA]: "FILE_METADATA",
     [MessageType.FILE_CHUNK]: "FILE_CHUNK",
     [MessageType.VOICE]: "VOICE",
+    [MessageType.MESSAGE_REACTION]: "MESSAGE_REACTION",
     [MessageType.CONTROL_ACK]: "CONTROL_ACK",
     [MessageType.CONTROL_PING]: "CONTROL_PING",
     [MessageType.CONTROL_PONG]: "CONTROL_PONG",

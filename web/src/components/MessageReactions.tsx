@@ -1,14 +1,19 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import "./MessageReactions.css"; // Assume minimal CSS exists or will be added
 
-interface Reaction {
+interface ReactionItem {
+  userId: string;
+  emoji: string;
+}
+
+interface GroupedReaction {
   emoji: string;
   userIds: string[];
 }
 
 interface MessageReactionsProps {
   messageId: string;
-  reactions: Reaction[];
+  reactions: ReactionItem[];
   onAddReaction: (emoji: string) => void;
 }
 
@@ -28,9 +33,24 @@ export function MessageReactions({
   const [activeCategory, setActiveCategory] =
     useState<keyof typeof EMOJI_CATEGORIES>("Popular");
 
+  // Group reactions by emoji
+  const groupedReactions = useMemo(() => {
+    const groups: Map<string, string[]> = new Map();
+    reactions.forEach((r) => {
+      if (!groups.has(r.emoji)) {
+        groups.set(r.emoji, []);
+      }
+      groups.get(r.emoji)!.push(r.userId);
+    });
+    return Array.from(groups.entries()).map(([emoji, userIds]) => ({
+      emoji,
+      userIds,
+    }));
+  }, [reactions]);
+
   return (
     <div className="message-reactions">
-      {reactions.map((reaction, idx) => (
+      {groupedReactions.map((reaction, idx) => (
         <button
           key={idx}
           className="reaction-badge"
