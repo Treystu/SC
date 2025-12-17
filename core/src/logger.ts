@@ -44,8 +44,8 @@ export class Logger {
     if (typeof indexedDB === "undefined") return;
 
     const request = indexedDB.open(this.dbName, 1);
-    request.onupgradeneeded = (event: unknown) => {
-      const db = event.target.result;
+    request.onupgradeneeded = (event: Event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
       if (!db.objectStoreNames.contains(this.storeName)) {
         db.createObjectStore(this.storeName, { keyPath: "timestamp" });
       }
@@ -57,8 +57,8 @@ export class Logger {
 
     try {
       const request = indexedDB.open(this.dbName, 1);
-      request.onsuccess = (event: unknown) => {
-        const db = event.target.result;
+      request.onsuccess = (event: Event) => {
+        const db = (event.target as IDBOpenDBRequest).result;
         const tx = db.transaction(this.storeName, "readwrite");
         const store = tx.objectStore(this.storeName);
         store.add(entry);
@@ -85,8 +85,8 @@ export class Logger {
     this.persistLog(entry);
     this.notifyListeners(entry);
 
-    // Remote logging
-    if (this.remoteUrl) {
+    // Remote logging - Filter for scale (WARN and ERROR only)
+    if (this.remoteUrl && level >= LogLevel.WARN) {
       fetch(this.remoteUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

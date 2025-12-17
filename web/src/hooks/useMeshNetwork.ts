@@ -53,7 +53,7 @@ export function useMeshNetwork() {
   const connectionMonitorRef = useRef<ConnectionMonitor | null>(null);
   const seenMessageIdsRef = useRef<Set<string>>(new Set());
   const roomClientRef = useRef<RoomClient | null>(null); // Store RoomClient instance
-  const roomPollTimerRef = useRef<NodeJS.Timeout | null>(null); // Store poll timer
+  const roomPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); // Store poll timer
 
   // Initialize mesh network with persistence
   useEffect(() => {
@@ -1034,11 +1034,19 @@ export function useMeshNetwork() {
           return [...prev, ...newPeers];
         });
 
-        // Start Polling Loop
-        if (roomPollTimerRef.current) clearInterval(roomPollTimerRef.current);
-        roomPollTimerRef.current = setInterval(async () => {
+        // Start Adaptive Polling Loop
+        if (roomPollTimerRef.current) clearTimeout(roomPollTimerRef.current);
+
+        const pollLoop = async () => {
           if (!roomClientRef.current) return;
+
           try {
+            // Adaptive interval: Poll frequently if isolated, rarely if well-connected
+            const peerCount = meshNetworkRef.current?.getPeerCount() || 0;
+            // 3s if < 3 peers, 15s if < 10, 60s otherwise (maintenance mode)
+            const nextDelay =
+              peerCount < 3 ? 3000 : peerCount < 10 ? 15000 : 60000;
+
             const { signals, messages, peers } =
               await roomClientRef.current.poll();
 
@@ -1146,10 +1154,18 @@ export function useMeshNetwork() {
                 }
               }
             }
+
+            // Schedule next poll
+            roomPollTimerRef.current = setTimeout(pollLoop, nextDelay);
           } catch (e) {
-            console.warn("Poll failed:", e);
+            console.warn("Poll failed, retrying in 10s:", e);
+            // On error, back off a bit
+            roomPollTimerRef.current = setTimeout(pollLoop, 10000);
           }
-        }, 3000); // Poll every 3 seconds
+        };
+
+        // Kick off loop
+        pollLoop();
       } catch (error) {
         console.error("Failed to join room:", error);
         setJoinError(error instanceof Error ? error.message : String(error));

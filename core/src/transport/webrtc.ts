@@ -48,7 +48,7 @@ export class WebRTCPeer {
   private initializePeerConnection(iceServers?: RTCIceServer[]): void {
     const configuration: RTCConfiguration = {
       iceServers: iceServers || [
-        // Public STUN servers for NAT traversal
+        // Public STUN servers for NAT traversal (Stateless, essential for decentralized connectivity)
         { urls: "stun:stun.l.google.com:19302" },
         { urls: "stun:stun1.l.google.com:19302" },
         { urls: "stun:stun2.l.google.com:19302" },
@@ -237,7 +237,8 @@ export class WebRTCPeer {
       throw new Error(`Data channel ${channelLabel} not ready`);
     }
 
-    // TypeScript type assertion for WebRTC send
+    // Cast to any to avoid TS error: Argument of type 'Uint8Array' is not assignable to parameter of type 'ArrayBuffer'.
+    // The underlying implementation supports Uint8Array.
     channel.send(data as any);
   }
 

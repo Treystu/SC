@@ -22,7 +22,8 @@ const getRelayUrl = () => {
 
 const getLogUrl = () => {
   if (mode === "netlify") {
-    return window.location.origin + "/.netlify/functions/log";
+    // No remote logging for client app to ensure decentralization
+    return "";
   }
   // For other modes, we might not have a remote logger, or it could be a specific endpoint
   return "";
