@@ -15,7 +15,7 @@ export interface LogEntry {
   level: LogLevel;
   component: string;
   message: string;
-  data?: any;
+  data?: unknown;
 }
 
 export class Logger {
@@ -44,7 +44,7 @@ export class Logger {
     if (typeof indexedDB === "undefined") return;
 
     const request = indexedDB.open(this.dbName, 1);
-    request.onupgradeneeded = (event: any) => {
+    request.onupgradeneeded = (event: unknown) => {
       const db = event.target.result;
       if (!db.objectStoreNames.contains(this.storeName)) {
         db.createObjectStore(this.storeName, { keyPath: "timestamp" });
@@ -57,7 +57,7 @@ export class Logger {
 
     try {
       const request = indexedDB.open(this.dbName, 1);
-      request.onsuccess = (event: any) => {
+      request.onsuccess = (event: unknown) => {
         const db = event.target.result;
         const tx = db.transaction(this.storeName, "readwrite");
         const store = tx.objectStore(this.storeName);
@@ -68,7 +68,7 @@ export class Logger {
     }
   }
 
-  log(level: LogLevel, component: string, message: string, data?: any) {
+  log(level: LogLevel, component: string, message: string, data?: unknown) {
     const entry: LogEntry = {
       timestamp: Date.now(),
       level,
@@ -90,13 +90,26 @@ export class Logger {
       fetch(this.remoteUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          level: LogLevel[level],
-          message: `[${component}] ${message}`,
-          details: data,
-          timestamp: new Date(entry.timestamp).toISOString(),
-          peerId: this.peerId,
-        }),
+        body: JSON.stringify(
+          {
+            level: LogLevel[level],
+            message: `[${component}] ${message}`,
+            details: data,
+            timestamp: new Date(entry.timestamp).toISOString(),
+            peerId: this.peerId,
+          },
+          (key, value) => {
+            if (value instanceof Error) {
+              return {
+                ...value,
+                name: value.name,
+                message: value.message,
+                stack: value.stack,
+              };
+            }
+            return value;
+          },
+        ),
       }).catch((_err) => {
         // Prevent infinite loops if logging fails
         // console.error('Failed to send remote log', err);
@@ -121,19 +134,19 @@ export class Logger {
     }
   }
 
-  debug(component: string, message: string, data?: any) {
+  debug(component: string, message: string, data?: unknown) {
     this.log(LogLevel.DEBUG, component, message, data);
   }
 
-  info(component: string, message: string, data?: any) {
+  info(component: string, message: string, data?: unknown) {
     this.log(LogLevel.INFO, component, message, data);
   }
 
-  warn(component: string, message: string, data?: any) {
+  warn(component: string, message: string, data?: unknown) {
     this.log(LogLevel.WARN, component, message, data);
   }
 
-  error(component: string, message: string, data?: any) {
+  error(component: string, message: string, data?: unknown) {
     this.log(LogLevel.ERROR, component, message, data);
   }
 
@@ -146,8 +159,8 @@ export class Logger {
 
     return new Promise((resolve) => {
       const request = indexedDB.open(this.dbName, 1);
-      request.onsuccess = (event: any) => {
-        const db = event.target.result;
+      request.onsuccess = (event: Event) => {
+        const db = (event.target as IDBOpenDBRequest).result;
         const tx = db.transaction(this.storeName, "readonly");
         const store = tx.objectStore(this.storeName);
         const getAll = store.getAll();

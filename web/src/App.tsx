@@ -149,8 +149,11 @@ function App() {
     };
 
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      const reason = event.reason;
       logger.error("Global", "Unhandled Rejection", {
-        reason: event.reason,
+        reason: reason,
+        message: reason instanceof Error ? reason.message : String(reason),
+        stack: reason instanceof Error ? reason.stack : undefined,
       });
     };
 
@@ -412,10 +415,7 @@ function App() {
       if (result.success) {
         // Convert publicKey Uint8Array to base64 string for storage
         // Use Array.from to avoid stack overflow with large arrays
-        const publicKeyArray = Array.from(result.contact.publicKey);
-        const publicKeyBase64 = btoa(
-          String.fromCharCode.apply(null, publicKeyArray as any),
-        );
+        const publicKeyBase64 = publicKeyToBase64(result.contact.publicKey);
 
         // Use first 16 characters as fingerprint for display
         const FINGERPRINT_LENGTH = 16;
@@ -582,8 +582,7 @@ function App() {
         const keyPair = await window.crypto.subtle.generateKey(
           {
             name: "Ed25519",
-            namedCurve: "Ed25519",
-          } as any,
+          },
           true,
           ["sign", "verify"],
         );

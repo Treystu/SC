@@ -2,18 +2,18 @@ export interface PerformanceMetric {
   name: string;
   duration: number;
   timestamp: number;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export class PerformanceMonitor {
   private metrics: PerformanceMetric[] = [];
   private readonly maxMetrics = 1000;
 
-  startMeasure(name: string): (metadata?: Record<string, any>) => void {
+  startMeasure(name: string): (metadata?: Record<string, unknown>) => void {
     const now =
       typeof performance !== "undefined" ? performance.now() : Date.now();
 
-    return (metadata?: Record<string, any>) => {
+    return (metadata?: Record<string, unknown>) => {
       const current =
         typeof performance !== "undefined" ? performance.now() : Date.now();
       const duration = current - now;
