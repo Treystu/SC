@@ -615,15 +615,153 @@ export class RoutingTable {
   }
 
   /**
-   * Find closest peers to a target ID
+   * Get peers ranked by likelihood of reaching the target
+   * Scoring strategy: "Score for NOW" (Real-time Value > History)
+   * 1. Direct connection (Immediate Delivery)
+   * 2. Kademlia Proximity (Topological Potential)
+   * 3. Connection Quality (Current Health)
+   * 4. Route Table Next Hop (Routing Memory - only if healthy)
    */
-  findClosestPeers(targetId: string, count: number): Peer[] {
-    // Fallback: search local peers
-    return Array.from(this.peers.values())
+  getRankedPeersForTarget(targetId: string): Peer[] {
+    const peers = Array.from(this.peers.values());
+    const bestRoute = this.routes.get(targetId);
+
+    // Cache scores to sorting
+    const peerScores = new Map<string, number>();
+
+    for (const peer of peers) {
+      if (peer.state === PeerState.DISCONNECTED) {
+        peerScores.set(peer.id, -1);
+        continue;
+      }
+
+      let score = 0;
+
+      // 1. Connection Health "NOW" (0-100)
+      // If quality is poor, the node's value is low regardless of history.
+      score += peer.connectionQuality || 50;
+
+      // Penalize degraded state heavily ONLY if current quality is also lacking.
+      // "If the node is good now, let's use it" - User
+      // If a node is DEGRADED (historical failures) but currently has 100% Quality (Heartbeats/Latency good),
+      // we should NOT penalize it. We give it a fresh start.
+      // Penalty scales with quality defect: (100 - Quality) * 4
+      // Qual 100 -> Penalty 0. Qual 50 -> Penalty 200.
+      if (peer.state === PeerState.DEGRADED) {
+        const qualityDefect = 100 - (peer.connectionQuality || 50);
+        score -= Math.max(0, qualityDefect * 4);
+      }
+
+      // 2. Direct Connection (Perfect)
+      if (peer.id === targetId) {
+        score += 2000;
+      }
+
+      // 3. Topology / Kademlia Potential (Future Potential)
+      // Closer peers in XOR space are statistically more likely to find the target.
+      // We calculate bitwise affinity.
+
+      // 4. Known Route (Routing Memory)
+      // Only useful if the peer is currently healthy.
+      if (bestRoute && bestRoute.nextHop === peer.id) {
+        // Current Quality is the multiplier, not historical reliability.
+        const routeQualityMult = (peer.connectionQuality || 50) / 100;
+        score += 300 * routeQualityMult;
+      }
+
+      // 5. Bandwidth / Uplink Capacity (The "Datacenter vs Tunnel" Factor)
+      // High capacity nodes should be preferred for routing.
+
+      // Use metrics if available (proven throughput)
+      if (bestRoute && bestRoute.metrics.bandwidth) {
+        // Cap at 100 points for ~10 MB/s to avoid skewing too much
+        score += Math.min(100, bestRoute.metrics.bandwidth / 100000);
+      }
+
+      // Use advertised capability if available
+      if (peer.metadata.capabilities.maxBandwidth) {
+        score += Math.min(
+          50,
+          peer.metadata.capabilities.maxBandwidth / 1000000,
+        ); // 1 point per MBps?
+      }
+
+      // Heuristic based on Transport
+      // Local/Wired/WiFi > WebRTC (Internet) > Bluetooth
+      if (peer.transportType === "local") {
+        score += 50; // Likely high speed LAN
+      } else if (peer.transportType === "bluetooth") {
+        score -= 50; // Low bandwidth, keep for proximity/fallback
+      }
+
+      peerScores.set(peer.id, score);
+    }
+
+    return peers.sort((a, b) => {
+      const scoreA = peerScores.get(a.id) || 0;
+      const scoreB = peerScores.get(b.id) || 0;
+
+      // Primary: Heuristic Score (Health + Direct + Route + Bandwidth)
+      // "Score for NOW" means reacting to the immediate high-bandwidth potential.
+      if (Math.abs(scoreA - scoreB) > 10) {
+        return scoreB - scoreA;
+      }
+
+      // Secondary: Kademlia Distance (Tie-breaker for "Potential")
+      const distA = xorDistance(targetId, a.id);
+      const distB = xorDistance(targetId, b.id);
+
+      return distA < distB ? -1 : distA > distB ? 1 : 0;
+    });
+  }
+
+  /**
+   * Find closest peers to a target ID using XOR distance
+   * Used by DHT for iterative lookups
+   */
+  findClosestPeers(targetId: string, count: number = 20): Peer[] {
+    // If DHT is enabled, use the bucket structure for O(log N) lookup
+    if (this.dhtRoutingTable) {
+      try {
+        const targetKey = peerIdToDHTKey(targetId);
+        const contacts = this.dhtRoutingTable.getClosestContacts(
+          targetKey,
+          count,
+        );
+
+        // Convert DHT contacts back to Peers
+        // We prefer the live Peer object if we have it, otherwise reconstruct minimal Peer
+        return contacts.map((contact) => {
+          const existingPeer = this.peers.get(contact.peerId);
+          if (existingPeer) return existingPeer;
+
+          // Reconstruct minimal peer from contact info
+          let transport = (contact.endpoints?.[0]?.type as any) || "webrtc";
+          if (transport === "manual") transport = "webrtc";
+
+          return createPeer(
+            contact.peerId,
+            new Uint8Array(0), // PublicKey not always in contact
+            transport,
+          );
+        });
+      } catch (e) {
+        console.warn("DHT lookup failed, falling back to linear scan", e);
+      }
+    }
+
+    // Fallback: Linear scan of all connected peers (O(N))
+    // Acceptable for small meshes (< 1000 nodes)
+    const peers = Array.from(this.peers.values());
+
+    // Filter valid peers
+    const validPeers = peers.filter((p) => !this.isPeerBlacklisted(p.id));
+
+    return validPeers
       .sort((a, b) => {
         const distA = xorDistance(targetId, a.id);
         const distB = xorDistance(targetId, b.id);
-        return distA < distB ? -1 : 1;
+        return distA < distB ? -1 : distA > distB ? 1 : 0;
       })
       .slice(0, count);
   }

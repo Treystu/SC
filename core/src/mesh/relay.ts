@@ -179,13 +179,22 @@ export class MessageRelay {
       return; // Drop if flooding too fast
     }
 
-    // Step 5: Check if message is for us
-    if (this.isMessageForSelf(message)) {
-      this.stats.messagesForSelf++;
-      this.onMessageForSelfCallback?.(message);
+    // Step 5: Determine message relevance and forwarding policy
+    const isBroadcast = this.isBroadcastMessage(message.header.type);
+    const isTarget = this.isMessageForSelf(message);
 
-      // Don't forward messages addressed to us
-      return;
+    // Deliver to self if we are target or it's a broadcast
+    if (isTarget || isBroadcast) {
+      if (isTarget) this.stats.messagesForSelf++;
+      this.onMessageForSelfCallback?.(message);
+    }
+
+    // Determine if we should stop forwarding (Unicast to us)
+    // If it's Unicast to us, we stop.
+    // If it's Broadcast, we continue forwarding.
+    // If it's Unicast to someone else, we continue forwarding.
+    if (isTarget && !isBroadcast) {
+      return; // Stop forwarding Unicast addressed to us
     }
 
     // Step 6: Decrement TTL for forwarding
@@ -197,7 +206,7 @@ export class MessageRelay {
       payload: message.payload,
     };
 
-    // Step 7: Forward to all peers except sender (flood routing)
+    // Step 7: Forward to all peers except sender (Smart/Flood routing)
     if (forwardMessage.header.ttl > 0) {
       if (this.shouldForwardMessage(forwardMessage)) {
         this.stats.messagesForwarded++;
@@ -309,10 +318,19 @@ export class MessageRelay {
       return true;
     }
 
-    // For directed messages, check if we're the recipient
-    // This would require destination field in payload (to be implemented)
-    // For now, assume if we received it, we process it?
-    // No, that breaks forwarding.
+    // Payload Inspection for Recipient ID (since Header doesn't have it yet)
+    try {
+      // Decode payload to JSON
+      const payloadStr = new TextDecoder().decode(message.payload);
+      const data = JSON.parse(payloadStr);
+
+      if (data.recipient && data.recipient === this.localPeerId) {
+        return true;
+      }
+    } catch (e) {
+      // Ignore parsing errors, assume not for us if we can't read it
+    }
+
     return false;
   }
 

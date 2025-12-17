@@ -1,6 +1,6 @@
 /**
  * Kademlia DHT Implementation
- * 
+ *
  * Core distributed hash table with XOR-based routing,
  * k-bucket organization, and iterative lookup algorithms.
  */
@@ -25,9 +25,9 @@ import type {
   StoreResponse,
   PingRequest,
   PongResponse,
-} from './types.js';
-import { DEFAULT_KADEMLIA_CONFIG } from './types.js';
-import { KBucketManager } from './bucket.js';
+} from "./types.js";
+import { DEFAULT_KADEMLIA_CONFIG } from "./types.js";
+import { KBucketManager } from "./bucket.js";
 import {
   getBucketIndex,
   sortByDistance,
@@ -39,7 +39,7 @@ import {
   NODE_ID_BITS,
   xorDistance,
   isCloser,
-} from './node-id.js';
+} from "./node-id.js";
 
 /**
  * Pending RPC request tracking
@@ -53,55 +53,61 @@ interface PendingRequest {
 
 /**
  * Kademlia DHT Routing Table
- * 
+ *
  * Provides XOR-based routing, value storage, and lookup operations.
  */
 export class KademliaRoutingTable {
   /** Local node ID */
   readonly localNodeId: NodeId;
-  
+
   /** K-bucket manager */
   private bucketManager: KBucketManager;
-  
+
   /** Local value storage */
   private valueStore: Map<string, DHTValue> = new Map();
-  
+
   /** Pending RPC requests */
   private pendingRequests: Map<string, PendingRequest> = new Map();
-  
+
   /** Message ID counter */
   private messageIdCounter = 0;
-  
+
   /** Configuration */
   private config: KademliaConfig;
-  
+
   /** Statistics */
   private stats = {
     totalLookups: 0,
     successfulLookups: 0,
     totalLookupTime: 0,
   };
-  
+
   /** Callback for sending RPC messages */
-  private sendRpc?: (contact: DHTContact, message: DHTRPCMessage) => Promise<void>;
-  
+  private sendRpc?: (
+    contact: DHTContact,
+    message: DHTRPCMessage,
+  ) => Promise<void>;
+
   /** Refresh interval handle */
   private refreshIntervalHandle?: ReturnType<typeof setInterval>;
-  
+
   /** Republish interval handle */
   private republishIntervalHandle?: ReturnType<typeof setInterval>;
-  
+
   /** Number of currently active findNode lookups */
   private activeLookups = 0;
 
-  constructor(localNodeId: NodeId, config?: Partial<Omit<KademliaConfig, 'localNodeId'>>) {
+  constructor(
+    localNodeId: NodeId,
+    config?: Partial<Omit<KademliaConfig, "localNodeId">>,
+  ) {
     this.localNodeId = copyNodeId(localNodeId);
     this.config = {
       ...DEFAULT_KADEMLIA_CONFIG,
       ...config,
       localNodeId: this.localNodeId,
     };
-    
+
     this.bucketManager = new KBucketManager(localNodeId, {
       k: this.config.k,
       pingTimeout: this.config.pingTimeout,
@@ -112,7 +118,9 @@ export class KademliaRoutingTable {
   /**
    * Set the RPC send callback
    */
-  setRpcSender(sender: (contact: DHTContact, message: DHTRPCMessage) => Promise<void>): void {
+  setRpcSender(
+    sender: (contact: DHTContact, message: DHTRPCMessage) => Promise<void>,
+  ): void {
     this.sendRpc = sender;
   }
 
@@ -123,13 +131,13 @@ export class KademliaRoutingTable {
     // Start bucket refresh
     this.refreshIntervalHandle = setInterval(
       () => this.refreshBuckets(),
-      this.config.refreshInterval
+      this.config.refreshInterval,
     );
-    
+
     // Start value republishing
     this.republishIntervalHandle = setInterval(
       () => this.republishValues(),
-      this.config.republishInterval
+      this.config.republishInterval,
     );
   }
 
@@ -145,11 +153,11 @@ export class KademliaRoutingTable {
       clearInterval(this.republishIntervalHandle);
       this.republishIntervalHandle = undefined;
     }
-    
+
     // Clear pending requests
     for (const [, pending] of this.pendingRequests) {
       clearTimeout(pending.timeout);
-      pending.reject(new Error('DHT shutting down'));
+      pending.reject(new Error("DHT shutting down"));
     }
     this.pendingRequests.clear();
   }
@@ -203,6 +211,21 @@ export class KademliaRoutingTable {
   }
 
   /**
+   * Check if a bucket is empty
+   */
+  isBucketEmpty(bucketIndex: number): boolean {
+    const bucket = this.bucketManager.getBucket(bucketIndex);
+    return !bucket || bucket.size === 0;
+  }
+
+  /**
+   * Get all contacts in the routing table
+   */
+  getAllContacts(): DHTContact[] {
+    return this.bucketManager.getAllContacts();
+  }
+
+  /**
    * Get the k closest contacts to a target
    */
   getClosestContacts(targetId: NodeId, count?: number): DHTContact[] {
@@ -217,7 +240,7 @@ export class KademliaRoutingTable {
    */
   async findNode(targetId: NodeId): Promise<NodeLookupResult> {
     if (this.activeLookups >= this.config.maxConcurrentLookups) {
-      throw new Error('Max concurrent lookups exceeded');
+      throw new Error("Max concurrent lookups exceeded");
     }
     this.activeLookups++;
     const startTime = Date.now();
@@ -234,7 +257,7 @@ export class KademliaRoutingTable {
       while (hasMoreToQuery) {
         // Find alpha unqueried nodes closest to target
         const toQuery = closestNodes
-          .filter(node => !queried.has(nodeIdToHex(node.nodeId)))
+          .filter((node) => !queried.has(nodeIdToHex(node.nodeId)))
           .slice(0, this.config.alpha);
 
         if (toQuery.length === 0) {
@@ -248,20 +271,24 @@ export class KademliaRoutingTable {
             queried.add(nodeIdToHex(node.nodeId));
             queriesMade++;
             return this.sendFindNode(node, targetId);
-          })
+          }),
         );
 
         // Process responses
         let improved = false;
         for (const response of responses) {
-          if (response.status === 'fulfilled' && response.value) {
+          if (response.status === "fulfilled" && response.value) {
             const newNodes = response.value;
             for (const newNode of newNodes) {
               // Add to routing table
               this.addContact(newNode);
-              
+
               // Check if this improves our closest set
-              if (!closestNodes.some(n => nodeIdsEqual(n.nodeId, newNode.nodeId))) {
+              if (
+                !closestNodes.some((n) =>
+                  nodeIdsEqual(n.nodeId, newNode.nodeId),
+                )
+              ) {
                 closestNodes.push(newNode);
                 improved = true;
               }
@@ -270,7 +297,10 @@ export class KademliaRoutingTable {
         }
 
         // Re-sort and trim
-        closestNodes = sortByDistance(closestNodes, targetId).slice(0, this.config.k);
+        closestNodes = sortByDistance(closestNodes, targetId).slice(
+          0,
+          this.config.k,
+        );
 
         // Stop if we're not making progress
         if (!improved) {
@@ -279,8 +309,8 @@ export class KademliaRoutingTable {
       }
 
       const duration = Date.now() - startTime;
-      const found = closestNodes.some(n => nodeIdsEqual(n.nodeId, targetId));
-      
+      const found = closestNodes.some((n) => nodeIdsEqual(n.nodeId, targetId));
+
       if (found) {
         this.stats.successfulLookups++;
       }
@@ -327,7 +357,7 @@ export class KademliaRoutingTable {
     // Iterative lookup
     while (hasMoreToQuery) {
       const toQuery = closestNodes
-        .filter(node => !queried.has(nodeIdToHex(node.nodeId)))
+        .filter((node) => !queried.has(nodeIdToHex(node.nodeId)))
         .slice(0, this.config.alpha);
 
       if (toQuery.length === 0) {
@@ -340,19 +370,19 @@ export class KademliaRoutingTable {
           queried.add(nodeIdToHex(node.nodeId));
           queriedNodes.push(node);
           return this.sendFindValue(node, key);
-        })
+        }),
       );
 
       let improved = false;
       for (const response of responses) {
-        if (response.status === 'fulfilled') {
+        if (response.status === "fulfilled") {
           const result = response.value;
           if (result.value) {
             // Found the value!
             this.stats.successfulLookups++;
             const duration = Date.now() - startTime;
             this.stats.totalLookupTime += duration;
-            
+
             return {
               value: result.value,
               queriedNodes,
@@ -364,7 +394,11 @@ export class KademliaRoutingTable {
             // Got closer nodes
             for (const newNode of result.nodes) {
               this.addContact(newNode);
-              if (!closestNodes.some(n => nodeIdsEqual(n.nodeId, newNode.nodeId))) {
+              if (
+                !closestNodes.some((n) =>
+                  nodeIdsEqual(n.nodeId, newNode.nodeId),
+                )
+              ) {
                 closestNodes.push(newNode);
                 improved = true;
               }
@@ -396,7 +430,7 @@ export class KademliaRoutingTable {
   async store(key: DHTKey, value: DHTValue): Promise<number> {
     // Find k closest nodes to the key
     const result = await this.findNode(key);
-    
+
     // Store at each of the closest nodes
     let stored = 0;
     const storePromises = result.closestNodes.map(async (node) => {
@@ -414,7 +448,7 @@ export class KademliaRoutingTable {
     // Since findNode excludes the local node, we need to check our distance separately
     const localDistance = xorDistance(this.localNodeId, key);
     let shouldStoreLocally = false;
-    
+
     if (result.closestNodes.length < this.config.k) {
       // Not enough nodes, we should store locally
       shouldStoreLocally = true;
@@ -424,7 +458,7 @@ export class KademliaRoutingTable {
       const furthestDistance = xorDistance(furthestNode.nodeId, key);
       shouldStoreLocally = isCloser(localDistance, furthestDistance);
     }
-    
+
     if (shouldStoreLocally) {
       const keyHex = nodeIdToHex(key);
       this.valueStore.set(keyHex, value);
@@ -454,8 +488,11 @@ export class KademliaRoutingTable {
    * Handle incoming FIND_NODE request
    */
   handleFindNode(request: FindNodeRequest): FindNodeResponse {
-    const closestNodes = this.getClosestContacts(request.targetId, this.config.k);
-    
+    const closestNodes = this.getClosestContacts(
+      request.targetId,
+      this.config.k,
+    );
+
     // Update sender's contact info
     this.addContact({
       nodeId: request.senderId,
@@ -465,7 +502,7 @@ export class KademliaRoutingTable {
     });
 
     return {
-      type: 'FIND_NODE_RESPONSE' as DHTMessageType.FIND_NODE_RESPONSE,
+      type: "FIND_NODE_RESPONSE" as DHTMessageType.FIND_NODE_RESPONSE,
       senderId: this.localNodeId,
       messageId: request.messageId,
       timestamp: Date.now(),
@@ -476,7 +513,9 @@ export class KademliaRoutingTable {
   /**
    * Handle incoming FIND_VALUE request
    */
-  handleFindValue(request: FindValueRequest): FindValueResponse | FindValueNodesResponse {
+  handleFindValue(
+    request: FindValueRequest,
+  ): FindValueResponse | FindValueNodesResponse {
     // Update sender's contact info
     this.addContact({
       nodeId: request.senderId,
@@ -490,7 +529,7 @@ export class KademliaRoutingTable {
 
     if (value) {
       return {
-        type: 'FIND_VALUE_RESPONSE' as DHTMessageType.FIND_VALUE_RESPONSE,
+        type: "FIND_VALUE_RESPONSE" as DHTMessageType.FIND_VALUE_RESPONSE,
         senderId: this.localNodeId,
         messageId: request.messageId,
         timestamp: Date.now(),
@@ -501,7 +540,7 @@ export class KademliaRoutingTable {
     // Value not found, return closest nodes
     const closestNodes = this.getClosestContacts(request.key, this.config.k);
     return {
-      type: 'FIND_VALUE_NODES' as DHTMessageType.FIND_VALUE_NODES,
+      type: "FIND_VALUE_NODES" as DHTMessageType.FIND_VALUE_NODES,
       senderId: this.localNodeId,
       messageId: request.messageId,
       timestamp: Date.now(),
@@ -524,7 +563,7 @@ export class KademliaRoutingTable {
     this.storeLocal(request.key, request.value);
 
     return {
-      type: 'STORE_RESPONSE' as DHTMessageType.STORE_RESPONSE,
+      type: "STORE_RESPONSE" as DHTMessageType.STORE_RESPONSE,
       senderId: this.localNodeId,
       messageId: request.messageId,
       timestamp: Date.now(),
@@ -545,7 +584,7 @@ export class KademliaRoutingTable {
     });
 
     return {
-      type: 'PONG' as DHTMessageType.PONG,
+      type: "PONG" as DHTMessageType.PONG,
       senderId: this.localNodeId,
       messageId: request.messageId,
       timestamp: Date.now(),
@@ -560,7 +599,7 @@ export class KademliaRoutingTable {
 
     const messageId = this.generateMessageId();
     const request: PingRequest = {
-      type: 'PING' as DHTMessageType.PING,
+      type: "PING" as DHTMessageType.PING,
       senderId: this.localNodeId,
       messageId,
       timestamp: Date.now(),
@@ -568,9 +607,9 @@ export class KademliaRoutingTable {
 
     try {
       const response = await this.sendRpcWithTimeout(contact, request);
-      if (response.type === ('PONG' as DHTMessageType.PONG)) {
+      if (response.type === ("PONG" as DHTMessageType.PONG)) {
         const bucket = this.bucketManager.getBucket(
-          getBucketIndex(this.localNodeId, contact.nodeId)
+          getBucketIndex(this.localNodeId, contact.nodeId),
         );
         bucket?.resetFailures(contact.nodeId);
         bucket?.updateLastSeen(contact.nodeId);
@@ -578,7 +617,7 @@ export class KademliaRoutingTable {
       }
     } catch {
       const bucket = this.bucketManager.getBucket(
-        getBucketIndex(this.localNodeId, contact.nodeId)
+        getBucketIndex(this.localNodeId, contact.nodeId),
       );
       bucket?.recordFailure(contact.nodeId);
     }
@@ -589,12 +628,15 @@ export class KademliaRoutingTable {
   /**
    * Send FIND_NODE request
    */
-  private async sendFindNode(contact: DHTContact, targetId: NodeId): Promise<DHTContact[]> {
+  private async sendFindNode(
+    contact: DHTContact,
+    targetId: NodeId,
+  ): Promise<DHTContact[]> {
     if (!this.sendRpc) return [];
 
     const messageId = this.generateMessageId();
     const request: FindNodeRequest = {
-      type: 'FIND_NODE' as DHTMessageType.FIND_NODE,
+      type: "FIND_NODE" as DHTMessageType.FIND_NODE,
       senderId: this.localNodeId,
       messageId,
       timestamp: Date.now(),
@@ -603,12 +645,15 @@ export class KademliaRoutingTable {
 
     try {
       const response = await this.sendRpcWithTimeout(contact, request);
-      if (response.type === ('FIND_NODE_RESPONSE' as DHTMessageType.FIND_NODE_RESPONSE)) {
+      if (
+        response.type ===
+        ("FIND_NODE_RESPONSE" as DHTMessageType.FIND_NODE_RESPONSE)
+      ) {
         return (response as FindNodeResponse).nodes;
       }
     } catch {
       const bucket = this.bucketManager.getBucket(
-        getBucketIndex(this.localNodeId, contact.nodeId)
+        getBucketIndex(this.localNodeId, contact.nodeId),
       );
       bucket?.recordFailure(contact.nodeId);
     }
@@ -621,13 +666,13 @@ export class KademliaRoutingTable {
    */
   private async sendFindValue(
     contact: DHTContact,
-    key: DHTKey
+    key: DHTKey,
   ): Promise<{ value?: DHTValue; nodes?: DHTContact[] }> {
     if (!this.sendRpc) return {};
 
     const messageId = this.generateMessageId();
     const request: FindValueRequest = {
-      type: 'FIND_VALUE' as DHTMessageType.FIND_VALUE,
+      type: "FIND_VALUE" as DHTMessageType.FIND_VALUE,
       senderId: this.localNodeId,
       messageId,
       timestamp: Date.now(),
@@ -636,14 +681,20 @@ export class KademliaRoutingTable {
 
     try {
       const response = await this.sendRpcWithTimeout(contact, request);
-      if (response.type === ('FIND_VALUE_RESPONSE' as DHTMessageType.FIND_VALUE_RESPONSE)) {
+      if (
+        response.type ===
+        ("FIND_VALUE_RESPONSE" as DHTMessageType.FIND_VALUE_RESPONSE)
+      ) {
         return { value: (response as FindValueResponse).value };
-      } else if (response.type === ('FIND_VALUE_NODES' as DHTMessageType.FIND_VALUE_NODES)) {
+      } else if (
+        response.type ===
+        ("FIND_VALUE_NODES" as DHTMessageType.FIND_VALUE_NODES)
+      ) {
         return { nodes: (response as FindValueNodesResponse).nodes };
       }
     } catch {
       const bucket = this.bucketManager.getBucket(
-        getBucketIndex(this.localNodeId, contact.nodeId)
+        getBucketIndex(this.localNodeId, contact.nodeId),
       );
       bucket?.recordFailure(contact.nodeId);
     }
@@ -654,12 +705,16 @@ export class KademliaRoutingTable {
   /**
    * Send STORE request
    */
-  private async sendStore(contact: DHTContact, key: DHTKey, value: DHTValue): Promise<boolean> {
+  private async sendStore(
+    contact: DHTContact,
+    key: DHTKey,
+    value: DHTValue,
+  ): Promise<boolean> {
     if (!this.sendRpc) return false;
 
     const messageId = this.generateMessageId();
     const request: StoreRequest = {
-      type: 'STORE' as DHTMessageType.STORE,
+      type: "STORE" as DHTMessageType.STORE,
       senderId: this.localNodeId,
       messageId,
       timestamp: Date.now(),
@@ -669,8 +724,10 @@ export class KademliaRoutingTable {
 
     try {
       const response = await this.sendRpcWithTimeout(contact, request);
-      return response.type === ('STORE_RESPONSE' as DHTMessageType.STORE_RESPONSE) &&
-             (response as StoreResponse).success;
+      return (
+        response.type === ("STORE_RESPONSE" as DHTMessageType.STORE_RESPONSE) &&
+        (response as StoreResponse).success
+      );
     } catch {
       return false;
     }
@@ -681,16 +738,16 @@ export class KademliaRoutingTable {
    */
   private async sendRpcWithTimeout(
     contact: DHTContact,
-    request: DHTRPCMessage
+    request: DHTRPCMessage,
   ): Promise<DHTRPCMessage> {
     if (!this.sendRpc) {
-      throw new Error('RPC sender not configured');
+      throw new Error("RPC sender not configured");
     }
 
     return new Promise<DHTRPCMessage>((resolve, reject) => {
       const timeout = setTimeout(() => {
         this.pendingRequests.delete(request.messageId);
-        reject(new Error('RPC timeout'));
+        reject(new Error("RPC timeout"));
       }, this.config.pingTimeout);
 
       this.pendingRequests.set(request.messageId, {
@@ -716,7 +773,7 @@ export class KademliaRoutingTable {
     if (pending) {
       clearTimeout(pending.timeout);
       this.pendingRequests.delete(response.messageId);
-      
+
       // Update RTT for the responding contact via addContact to properly update LRU
       const rtt = Date.now() - pending.sentAt;
       const existingContact = this.getContact(response.senderId);
@@ -728,7 +785,7 @@ export class KademliaRoutingTable {
           lastSeen: Date.now(),
         });
       }
-      
+
       pending.resolve(response);
     }
   }
@@ -745,7 +802,7 @@ export class KademliaRoutingTable {
    */
   private async refreshBuckets(): Promise<void> {
     const bucketsToRefresh = this.bucketManager.getBucketsNeedingRefresh(
-      this.config.refreshInterval
+      this.config.refreshInterval,
     );
 
     for (const bucket of bucketsToRefresh) {
@@ -766,7 +823,7 @@ export class KademliaRoutingTable {
    */
   private async republishValues(): Promise<void> {
     const now = Date.now();
-    
+
     for (const [keyHex, value] of this.valueStore.entries()) {
       // Check if value is expired
       if (now - value.storedAt > value.ttl) {
@@ -790,7 +847,7 @@ export class KademliaRoutingTable {
         if (!byteArray) {
           continue;
         }
-        const key = new Uint8Array(byteArray.map(byte => parseInt(byte, 16)));
+        const key = new Uint8Array(byteArray.map((byte) => parseInt(byte, 16)));
         await this.store(key, value);
       }
     }
@@ -801,16 +858,17 @@ export class KademliaRoutingTable {
    */
   getStats(): DHTStats {
     const bucketStats = this.bucketManager.getStats();
-    
+
     return {
       nodeCount: bucketStats.totalContacts,
       valueCount: this.valueStore.size,
       activeBuckets: bucketStats.activeBuckets,
       totalLookups: this.stats.totalLookups,
       successfulLookups: this.stats.successfulLookups,
-      avgLookupTime: this.stats.totalLookups > 0
-        ? this.stats.totalLookupTime / this.stats.totalLookups
-        : 0,
+      avgLookupTime:
+        this.stats.totalLookups > 0
+          ? this.stats.totalLookupTime / this.stats.totalLookups
+          : 0,
       memoryUsage: this.estimateMemoryUsage(),
     };
   }
@@ -827,25 +885,10 @@ export class KademliaRoutingTable {
   }
 
   /**
-   * Get all contacts (for integration with existing mesh)
-   */
-  getAllContacts(): DHTContact[] {
-    return this.bucketManager.getAllContacts();
-  }
-
-  /**
    * Get bucket distribution (for network state awareness)
    */
   getBucketDistribution(): number[] {
     return this.bucketManager.getStats().bucketDistribution;
-  }
-
-  /**
-   * Check if a specific bucket is empty (for bootstrap bucket population)
-   */
-  isBucketEmpty(bucketIndex: number): boolean {
-    const bucket = this.bucketManager.getBucket(bucketIndex);
-    return !bucket || bucket.size === 0;
   }
 
   /**

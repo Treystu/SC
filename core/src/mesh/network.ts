@@ -199,38 +199,107 @@ export class MeshNetwork {
       });
     });
 
-    // Handle message forwarding (flood routing)
+    // Handle message forwarding (Smart Routing)
     this.messageRelay.onForwardMessage(
       (message: Message, excludePeerId: string) => {
         const encodedMessage = encodeMessage(message);
         this.messagesSent++;
         this.bytesTransferred += encodedMessage.byteLength;
 
-        // Broadcast via WebRTC
-        this.peerPool.broadcast(encodedMessage, excludePeerId);
+        // "Smart Flood" / Tiered Routing Logic
+        // 1. Get all candidates excluding sender
+        // 2. Rank them by likelihood to reach target (Direct > Route > Closeness)
+        // 3. Select Top N% (e.g. 10%) or minimum K (e.g. 3) to ensure redundancy
 
-        // Broadcast via Native/External Transport
-        if (this.outboundTransportCallback) {
-          // In a real flood, we might just ask the native layer to "broadcast"
-          // or we iterate known external peers.
-          // For now, let's assume the native layer handles "broadcast" if we pass a special target or
-          // we iterate here if we knew them.
-          // Simplest Native Bridge: we just emit the packet and let Native handle routing if it's a "broadcast"?
-          // Or we rely on the Native Bridge to be smart.
-          // Let's iterate known non-WebRTC peers from routing table?
+        // Note: For broadcast messages (e.g. Discovery), we still flood everyone.
+        // We need to parse target from message payload? Or assume header.type implies flood?
+        // Actually, Message structure doesn't strictly enforce a 'recipient' in header,
+        // but 'network.ts' sendMessage puts it in payload?
+        // Wait, routing is usually based on Recipient.
+        // Our 'Message' interface header has 'senderId', but no 'recipientId'.
+        // The payload usually contains the recipient. We technically need to peek at payload
+        // or add recipient to header for proper routing at Layer 3.
+        // However, existing 'sendMessage' stores recipient in JSON payload.
+        // This is inefficient for routing (Layer 3 shouldn't parse Layer 7 JSON).
+        // For now, we'll try to extract it or fallback to Flood.
 
-          // UNIFICATION PLAN: "Flood routing... works for 500 users... Task 2.1: Implement DHT"
-          // With DHT, we shouldn't be flooding as much.
-          // But for now, let's support flooding to external peers.
+        let targetId: string | undefined;
+        try {
+          // Optimization: we could move recipient to header in future protocol update
+          const payloadStr = new TextDecoder().decode(message.payload);
+          const data = JSON.parse(payloadStr);
+          targetId = data.recipient;
+        } catch (e) {
+          // Not a JSON payload or parsing failed -> Broadcast
+        }
 
-          this.routingTable.getAllPeers().forEach((peer) => {
-            if (peer.id !== excludePeerId && peer.id !== this.localPeerId) {
-              // If we possess a specific connection to them that is NOT WebRTC
-              if (!this.peerPool.getPeer(peer.id)) {
-                this.outboundTransportCallback!(peer.id, encodedMessage);
-              }
+        if (targetId) {
+          const candidates =
+            this.routingTable.getRankedPeersForTarget(targetId);
+
+          // Filter: Exclude sender and self
+          const validCandidates = candidates.filter(
+            (p) =>
+              p.id !== excludePeerId &&
+              p.id !== this.localPeerId &&
+              p.state === "connected",
+          );
+
+          // Adaptive Selection Logic
+          // "when there are few close nodes - flood to all. - when there are tons of choices, be more selective."
+          const totalCandidates = validCandidates.length;
+          const FLOOD_THRESHOLD = 5; // "Few" threshold
+
+          let countToSelect;
+          if (totalCandidates <= FLOOD_THRESHOLD) {
+            // Few peers: Flood to all to ensure connectivity
+            countToSelect = totalCandidates;
+            console.log(
+              `[MeshNetwork] Smart Routing: Few peers (${totalCandidates}), flooding all.`,
+            );
+          } else {
+            // Many peers: Select Top 10%, but maintain a safety floor (FLOOD_THRESHOLD)
+            // This implements "choose top 10% of routes" for larger networks
+            countToSelect = Math.max(
+              FLOOD_THRESHOLD,
+              Math.ceil(totalCandidates * 0.1),
+            );
+            console.log(
+              `[MeshNetwork] Smart Routing: Many peers (${totalCandidates}), selecting Top ${countToSelect} (10% + floor).`,
+            );
+          }
+
+          const selectedPeers = validCandidates.slice(0, countToSelect);
+
+          if (selectedPeers.length === 0) {
+            console.warn(
+              `[MeshNetwork] No valid peers for forwarding to ${targetId}. Dropping.`,
+            );
+          }
+
+          selectedPeers.forEach((peer) => {
+            const conn = this.peerPool.getPeer(peer.id);
+            if (conn) {
+              conn.send(encodedMessage);
+            } else if (this.outboundTransportCallback) {
+              this.outboundTransportCallback(peer.id, encodedMessage);
             }
           });
+        } else {
+          // No target found (e.g. Broadcast/Discovery), or parsing failed.
+          // Fallback to Full Flood.
+          this.peerPool.broadcast(encodedMessage, excludePeerId);
+
+          // Broadcast via Native
+          if (this.outboundTransportCallback) {
+            this.routingTable.getAllPeers().forEach((peer) => {
+              if (peer.id !== excludePeerId && peer.id !== this.localPeerId) {
+                if (!this.peerPool.getPeer(peer.id)) {
+                  this.outboundTransportCallback!(peer.id, encodedMessage);
+                }
+              }
+            });
+          }
         }
       },
     );
@@ -543,12 +612,20 @@ export class MeshNetwork {
     const encodedMessage = encodeMessage(message);
     const nextHop = this.routingTable.getNextHop(recipientId);
 
+    console.log(
+      `[MeshNetwork] sendMessage to ${recipientId}: nextHop=${nextHop}`,
+    );
+
     if (nextHop) {
       // Direct route available
       const peer = this.peerPool.getPeer(nextHop);
       if (peer && peer.getState() === "connected") {
+        console.log(`[MeshNetwork] Sending directly via WebRTC to ${nextHop}`);
         peer.send(encodedMessage);
       } else if (this.outboundTransportCallback) {
+        console.log(
+          `[MeshNetwork] Sending via external transport to ${nextHop}`,
+        );
         // Try external transport
         this.outboundTransportCallback(nextHop, encodedMessage).catch((err) =>
           console.error(
@@ -556,19 +633,65 @@ export class MeshNetwork {
             err,
           ),
         );
+      } else {
+        console.warn(
+          `[MeshNetwork] Next hop ${nextHop} found but no transport available. Peer state: ${peer?.getState()}`,
+        );
       }
     } else {
-      // Broadcast to all peers (flood routing)
-      this.peerPool.broadcast(encodedMessage);
+      console.log(
+        `[MeshNetwork] No direct route to ${recipientId}, initiating Smart Flood...`,
+      );
 
-      // Also broadcast via external transport
-      if (this.outboundTransportCallback) {
-        this.routingTable.getAllPeers().forEach((peer) => {
-          if (peer.id !== this.localPeerId && !this.peerPool.getPeer(peer.id)) {
-            this.outboundTransportCallback!(peer.id, encodedMessage);
-          }
-        });
+      // Smart Routing for Source (same as forwarding)
+      const candidates = this.routingTable.getRankedPeersForTarget(recipientId);
+      const validCandidates = candidates.filter(
+        (p) => p.state === "connected" && p.id !== this.localPeerId,
+      );
+
+      const totalCandidates = validCandidates.length;
+      const FLOOD_THRESHOLD = 5;
+
+      let countToSelect;
+      if (totalCandidates <= FLOOD_THRESHOLD) {
+        countToSelect = totalCandidates;
+        console.log(
+          `[MeshNetwork] Source Smart Routing: Few peers (${totalCandidates}), flooding all.`,
+        );
+      } else {
+        countToSelect = Math.max(
+          FLOOD_THRESHOLD,
+          Math.ceil(totalCandidates * 0.1),
+        );
+        console.log(
+          `[MeshNetwork] Source Smart Routing: Many peers (${totalCandidates}), selecting Top ${countToSelect} (10% + floor).`,
+        );
       }
+
+      const selectedPeers = validCandidates.slice(0, countToSelect);
+
+      if (selectedPeers.length === 0) {
+        console.warn(
+          `[MeshNetwork] No peers available to route message to ${recipientId}`,
+        );
+      }
+
+      // Send to selected peers
+      selectedPeers.forEach((peer) => {
+        const conn = this.peerPool.getPeer(peer.id);
+        if (conn) {
+          conn.send(encodedMessage);
+        } else if (this.outboundTransportCallback) {
+          this.outboundTransportCallback(peer.id, encodedMessage);
+        }
+      });
+
+      // Also ensure we try external transports for peers we didn't select above IF they are "better"?
+      // Or just assume routing table covers all known peers (WebRTC + External).
+      // If we have external-only peers, they should be in routingTable.
+      // The original code iterated `routingTable.getAllPeers()` checking for `!peerPool.getPeer`.
+      // Our `validCandidates` comes from `routingTable`, so it includes external peers.
+      // So the loop above handles both WebRTC and External transport.
     }
   }
 
