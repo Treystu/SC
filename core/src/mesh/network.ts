@@ -476,7 +476,10 @@ export class MeshNetwork {
 
     // Broadcast manually to all connected peers
     this.routingTable.getAllPeers().forEach((peer) => {
-      if (peer.state === PeerState.CONNECTED) {
+      if (
+        peer.state === PeerState.CONNECTED ||
+        peer.state === PeerState.DEGRADED
+      ) {
         this.transportManager.send(peer.id, encodedMessage).catch(() => {});
       }
     });

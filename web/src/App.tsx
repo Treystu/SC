@@ -426,8 +426,8 @@ function App() {
           id: result.contact.peerId,
           publicKey: publicKeyBase64,
           displayName:
-            result.contact.name ||
             pendingInviteData.inviterName ||
+            result.contact.name ||
             "New Contact",
           lastSeen: Date.now(),
           createdAt: Date.now(),
@@ -1159,6 +1159,7 @@ function App() {
                         onReaction={handleReaction}
                         isLoading={contactsLoading}
                         onClose={() => setSelectedConversation(null)}
+                        onUpdateContact={refreshContacts}
                       />
                     )
                   ) : (

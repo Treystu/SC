@@ -30,6 +30,7 @@ interface ChatViewProps {
   onReaction?: (messageId: string, emoji: string) => void;
   isLoading?: boolean;
   onClose?: () => void;
+  onUpdateContact?: () => void;
 }
 
 function ChatView({
@@ -42,6 +43,7 @@ function ChatView({
   isLoading = false,
   messages: liveMessages = [], // Live messages from useMeshNetwork
   onClose,
+  onUpdateContact,
 }: ChatViewProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -284,6 +286,7 @@ function ChatView({
         <ContactProfileDialog
           contactId={conversationId}
           onClose={() => setShowProfile(false)}
+          onUpdate={onUpdateContact}
         />
       )}
     </div>

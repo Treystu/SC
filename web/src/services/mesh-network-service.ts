@@ -90,10 +90,47 @@ export const getMeshNetwork = async (): Promise<MeshNetwork> => {
           console.log("Generated and saved new identity:", fingerprint);
         }
       } catch (error) {
-        console.error("Failed to load/generate identity:", error);
-        // Fallback to temporary identity if DB fails
-        const { generateIdentity } = await import("@sc/core");
-        identityKeyPair = generateIdentity();
+        console.error(
+          "Failed to load identity (likely corruption/decryption error). Resetting DB...",
+          error,
+        );
+
+        try {
+          // Clear corrupted data
+          await db.clearAllData();
+
+          // Generate and save new identity
+          const { generateIdentity, generateFingerprint } =
+            await import("@sc/core");
+          const newIdentity = generateIdentity();
+          const fingerprint = await generateFingerprint(newIdentity.publicKey);
+          const newId = fingerprint.substring(0, 16);
+
+          const displayName = localStorage.getItem("sc-display-name");
+
+          await db.saveIdentity({
+            id: newId,
+            publicKey: newIdentity.publicKey,
+            privateKey: newIdentity.privateKey,
+            fingerprint: fingerprint,
+            createdAt: Date.now(),
+            isPrimary: true,
+            label: "Primary Identity",
+            displayName: displayName || undefined,
+          });
+
+          identityKeyPair = {
+            ...newIdentity,
+            displayName: displayName || undefined,
+          };
+          peerId = newId;
+          console.log("Identity reset and saved:", fingerprint);
+        } catch (resetError) {
+          console.error("Failed to reset identity:", resetError);
+          // Ultimate fallback to temporary identity
+          const { generateIdentity } = await import("@sc/core");
+          identityKeyPair = generateIdentity();
+        }
       }
 
       const network = new MeshNetwork({

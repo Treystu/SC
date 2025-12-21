@@ -56,12 +56,6 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     }
   };
 
-  const handleSkip = () => {
-    if (currentStep === "add-contact") {
-      setCurrentStep("privacy");
-    }
-  };
-
   const handleRestoreClick = () => {
     fileInputRef.current?.click();
   };
@@ -167,7 +161,11 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                     onChange={(e) => setRestorePassword(e.target.value)}
                     placeholder="Password"
                   />
-                  <button onClick={handlePasswordSubmit} disabled={isRestoring}>
+                  <button 
+                    className="btn btn-primary"
+                    onClick={handlePasswordSubmit} 
+                    disabled={isRestoring}
+                  >
                     {isRestoring ? "Decrypting..." : "Restore"}
                   </button>
                 </div>
@@ -201,7 +199,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
 
             <div className="actions">
               <button
-                className="primary-button"
+                className="btn btn-primary"
                 onClick={handleNext}
                 disabled={!displayName.trim() || isGenerating}
               >
@@ -237,11 +235,8 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
             </div>
 
             <div className="actions">
-              <button className="primary-button" onClick={handleNext}>
-                Continue
-              </button>
-              <button className="secondary-button" onClick={handleSkip}>
-                Skip for Now
+              <button className="btn btn-primary" onClick={handleNext}>
+                Next
               </button>
             </div>
           </div>
@@ -277,7 +272,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
             </div>
 
             <div className="actions">
-              <button className="primary-button" onClick={handleNext}>
+              <button className="btn btn-primary" onClick={handleNext}>
                 Start Messaging
               </button>
             </div>

@@ -255,67 +255,6 @@
   margin-top: 32px;
 }
 
-.onboarding-btn {
-  padding: 14px 32px;
-  font-size: 16px;
-  font-weight: 600;
-  min-width: 160px;
-}
-
-.btn-primary {
-  background: #4CAF50;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  padding: 12px 24px;
-  cursor: pointer;
-  font-size: 16px;
-  font-weight: 600;
-  transition: all 0.2s;
-}
-
-.btn-primary:hover {
-  background: #45a049;
-  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
-}
-
-.btn-primary:active {
-  transform: scale(0.98);
-}
-
-.btn-secondary {
-  background: transparent;
-  color: #b0b0b0;
-  border: 2px solid #333;
-  border-radius: 8px;
-  padding: 12px 24px;
-  cursor: pointer;
-  font-size: 16px;
-  font-weight: 600;
-  transition: all 0.2s;
-}
-
-.btn-secondary:hover {
-  border-color: #4CAF50;
-  color: #4CAF50;
-}
-
-.btn-text {
-  background: none;
-  border: none;
-  color: #888;
-  cursor: pointer;
-  font-size: 14px;
-  padding: 8px;
-  margin-top: 16px;
-  text-decoration: underline;
-  transition: color 0.2s;
-}
-
-.btn-text:hover {
-  color: #b0b0b0;
-}
-
 /* Responsive design */
 @media (max-width: 640px) {
   .onboarding-container {
@@ -338,12 +277,6 @@
   .onboarding-actions {
     flex-direction: column-reverse;
   }
-
-  .onboarding-btn,
-  .btn-primary,
-  .btn-secondary {
-    width: 100%;
-  }
 }
 
 /* Accessibility improvements */
@@ -356,10 +289,7 @@
 
   .progress-dot,
   .onboarding-input,
-  .method-card,
-  .btn-primary,
-  .btn-secondary,
-  .btn-text {
+  .method-card {
     transition: none;
   }
 }
@@ -371,10 +301,6 @@
   }
 
   .progress-dot.active {
-    outline: 2px solid #ffffff;
-  }
-
-  .btn-primary {
     outline: 2px solid #ffffff;
   }
 }

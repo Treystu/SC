@@ -8,6 +8,7 @@ interface ContactProfileDialogProps {
   onVerify?: (id: string, verified: boolean) => void;
   onBlock?: (id: string, blocked: boolean) => void;
   onDelete?: (id: string) => void;
+  onUpdate?: () => void;
 }
 
 export const ContactProfileDialog: React.FC<ContactProfileDialogProps> = ({
@@ -16,9 +17,12 @@ export const ContactProfileDialog: React.FC<ContactProfileDialogProps> = ({
   onVerify,
   onBlock,
   onDelete,
+  onUpdate,
 }) => {
   const [contact, setContact] = useState<StoredContact | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState("");
 
   useEffect(() => {
     const fetchContact = async () => {
@@ -27,6 +31,7 @@ export const ContactProfileDialog: React.FC<ContactProfileDialogProps> = ({
         const c = await db.getContact(contactId);
         if (c) {
           setContact(c);
+          setEditName(c.displayName);
         }
       } catch (err) {
         console.error("Failed to load contact details", err);
@@ -36,6 +41,20 @@ export const ContactProfileDialog: React.FC<ContactProfileDialogProps> = ({
     };
     fetchContact();
   }, [contactId]);
+
+  const handleSaveName = async () => {
+    if (!contact || !editName.trim()) return;
+    try {
+      const db = getDatabase();
+      const updatedContact = { ...contact, displayName: editName.trim() };
+      await db.saveContact(updatedContact);
+      setContact(updatedContact);
+      setIsEditing(false);
+      if (onUpdate) onUpdate();
+    } catch (e) {
+      console.error("Failed to save name", e);
+    }
+  };
 
   const handleToggleBlock = async () => {
     if (!contact) return;
@@ -123,7 +142,31 @@ export const ContactProfileDialog: React.FC<ContactProfileDialogProps> = ({
           <div className="profile-avatar large">
             {contact.displayName.charAt(0).toUpperCase()}
           </div>
-          <h2>{contact.displayName}</h2>
+          {isEditing ? (
+            <div className="edit-name-container" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', justifyContent: 'center', margin: '1rem 0' }}>
+              <input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="edit-name-input"
+                autoFocus
+                style={{ padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}
+              />
+              <button onClick={handleSaveName} className="btn btn-primary btn-sm">Save</button>
+              <button onClick={() => setIsEditing(false)} className="btn btn-secondary btn-sm">Cancel</button>
+            </div>
+          ) : (
+            <div className="name-display" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+              <h2>{contact.displayName}</h2>
+              <button 
+                onClick={() => setIsEditing(true)} 
+                className="btn-icon edit-btn"
+                title="Edit Name"
+                style={{ opacity: 0.7 }}
+              >
+                ✏️
+              </button>
+            </div>
+          )}
           {contact.verified && (
             <span className="verified-badge">✓ Verified</span>
           )}
