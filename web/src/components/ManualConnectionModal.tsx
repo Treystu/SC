@@ -31,10 +31,16 @@ export function ManualConnectionModal({
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (initialPeerId) {
-      setPeerId(initialPeerId);
+    if (isOpen) {
+      setStep("input");
+      setError(null);
+      setOfferData("");
+      setAnswerData("");
+      setLoading(false);
+      // Preserve initialPeerId if provided, otherwise clear unless user typed it
+      if (initialPeerId) setPeerId(initialPeerId);
     }
-  }, [initialPeerId]);
+  }, [isOpen, initialPeerId]);
 
   const handleGenerateOffer = async () => {
     if (!peerId) {
@@ -108,9 +114,13 @@ export function ManualConnectionModal({
     }
   };
 
-  const copyToClipboard = (text: string) => {
+  // UX: Use a temporary state for "Copied!" feedback instead of alert()
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+
+  const copyToClipboard = (text: string, label: string = "Copied!") => {
     navigator.clipboard.writeText(text);
-    alert("Copied to clipboard!");
+    setCopyFeedback(label);
+    setTimeout(() => setCopyFeedback(null), 2000);
   };
 
   if (!isOpen) return null;

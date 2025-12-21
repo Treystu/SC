@@ -1,6 +1,7 @@
 import { useState } from "react";
 import "./AddContactDialog.css";
 import { QRCodeScanner } from "./QRCodeScanner";
+import { useErrorToast } from "./Toast/Toast";
 import { decodePairingData } from "@sc/core";
 
 interface AddContactDialogProps {
@@ -17,6 +18,7 @@ export function AddContactDialog({
   const [peerId, setPeerId] = useState("");
   const [name, setName] = useState("");
   const [isScanning, setIsScanning] = useState(false);
+  const showError = useErrorToast();
 
   if (!isOpen) return null;
 
@@ -69,7 +71,7 @@ export function AddContactDialog({
       onAdd(scannedId, finalName);
       onClose();
     } else {
-      alert("Could not detect a valid Peer ID in QR code.");
+      showError("Could not detect a valid Peer ID in QR code.");
     }
   };
 

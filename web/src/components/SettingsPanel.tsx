@@ -3,6 +3,7 @@ import { useMeshNetwork } from "../hooks/useMeshNetwork";
 import { getDatabase } from "../storage/database";
 import { BackupManager } from "./BackupManager";
 import { ProfileManager, UserProfile } from "../managers/ProfileManager";
+import { useSuccessToast, useErrorToast, useInfoToast } from "./Toast/Toast";
 
 export function SettingsPanel() {
   const { status } = useMeshNetwork();
@@ -10,6 +11,10 @@ export function SettingsPanel() {
   const [displayName, setDisplayName] = useState("");
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
+
+  const showSuccess = useSuccessToast();
+  const showError = useErrorToast();
+  const showInfo = useInfoToast();
   const [networkSettings, setNetworkSettings] = useState({
     webrtc: true,
     mdns: true,
@@ -41,15 +46,15 @@ export function SettingsPanel() {
     const profileManager = new ProfileManager();
     try {
       await profileManager.updateProfile({ displayName });
-      alert("Profile updated successfully!");
+      showSuccess("Profile updated successfully!");
     } catch (error) {
-      alert(`Failed to update profile: ${error}`);
+      showError(`Failed to update profile: ${error}`);
     }
   };
 
   const handleDeleteAllData = async () => {
     if (deleteConfirmation !== "DELETE ALL MY DATA") {
-      alert("Please type the exact phrase to confirm deletion");
+      showError("Please type the exact phrase to confirm deletion");
       return;
     }
 
@@ -61,16 +66,20 @@ export function SettingsPanel() {
       localStorage.clear();
       sessionStorage.clear();
 
-      alert(
-        "All local data has been permanently deleted. The application will now reload.",
+      showInfo(
+        "All local data has been deleted. Reloading application...",
+        5000,
       );
+
       setShowDeleteDialog(false);
       setDeleteConfirmation("");
 
-      // Force reload to clear memory state
-      window.location.reload();
+      // Force reload to clear memory state - slight delay to let user see toast
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
     } catch (error) {
-      alert(`Failed to delete data: ${error}`);
+      showError(`Failed to delete data: ${error}`);
     }
   };
 

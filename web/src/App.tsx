@@ -15,6 +15,7 @@ import { RoomView } from "./components/RoomView";
 import { GroupChat } from "./components/GroupChat";
 import { PWAInstall, UpdateNotification } from "./components/PWAInstall";
 import { HelpModal } from "./components/HelpModal";
+import { ToastProvider } from "./components/Toast/Toast";
 import { useMeshNetwork } from "./hooks/useMeshNetwork";
 import { useInvite } from "./hooks/useInvite";
 import { useConversations } from "./hooks/useConversations";
@@ -933,350 +934,352 @@ function App() {
 
   return (
     <ErrorBoundary>
-      <PWAInstall />
-      <UpdateNotification />
-      {/* Initialization Error Banner */}
-      {status.initializationError && (
-        <div className="error-banner" role="alert">
-          <div className="error-content">
-            <h3>⚠️ Startup Error</h3>
-            <p>{status.initializationError}</p>
-            <button
-              onClick={() =>
-                navigator.clipboard.writeText(status.initializationError!)
-              }
-              className="copy-error-btn"
-            >
-              Copy Error
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Onboarding Flow */}
-      {showOnboarding && (
-        <OnboardingFlow onComplete={() => setShowOnboarding(false)} />
-      )}
-
-      {/* Share App Modal */}
-      {showShareApp && invite && (
-        <QRCodeShare invite={invite} onClose={handleCloseShareApp} />
-      )}
-
-      {/* Invite Acceptance Modal */}
-      {pendingInviteData && (
-        <InviteAcceptanceModal
-          inviterName={pendingInviteData.inviterName || "A friend"}
-          onAccept={handleAcceptInvite}
-          onDecline={handleDeclineInvite}
-        />
-      )}
-
-      {toast && (
-        <div
-          data-testid="notification-toast"
-          className="notification-toast"
-          role="status"
-        >
-          {toast.message}
-        </div>
-      )}
-
-      {/* Network Diagnostics Modal */}
-      {showDiagnostics && (
-        <div
-          className="modal-overlay"
-          onClick={() => setShowDiagnostics(false)}
-        >
-          <div
-            className="modal-content diagnostics-modal"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              className="modal-close"
-              onClick={() => setShowDiagnostics(false)}
-              aria-label="Close diagnostics"
-            >
-              ×
-            </button>
-            <NetworkDiagnostics />
-          </div>
-        </div>
-      )}
-
-      <div
-        className="app"
-        role="application"
-        aria-label="Sovereign Communications Messenger"
-      >
-        {/* Skip to main content link for keyboard navigation */}
-        <a href="#main-content" className="skip-link">
-          Skip to main content
-        </a>
-
-        <div className="app-header">
-          <h1>Sovereign Communications</h1>
-          <div className="header-controls" data-testid="connection-status">
-            <ConnectionStatus quality={status.connectionQuality} />
-            <span className="peer-count" data-testid="peer-count">
-              {status.peerCount}
-            </span>
-            <span
-              className="encryption-indicator"
-              data-testid="encryption-status"
-              aria-label="encrypted"
-            >
-              🔒 Encrypted
-            </span>
-          </div>
-        </div>
-
-        {!status.isConnected && (
-          <div className="offline-banner" data-testid="offline-indicator">
-            Offline - attempting to reconnect
+      <ToastProvider>
+        <PWAInstall />
+        <UpdateNotification />
+        {/* Initialization Error Banner */}
+        {status.initializationError && (
+          <div className="error-banner" role="alert">
+            <div className="error-content">
+              <h3>⚠️ Startup Error</h3>
+              <p>{status.initializationError}</p>
+              <button
+                onClick={() =>
+                  navigator.clipboard.writeText(status.initializationError!)
+                }
+                className="copy-error-btn"
+              >
+                Copy Error
+              </button>
+            </div>
           </div>
         )}
 
-        {/* Only show main app UI if not onboarding */}
-        {!showOnboarding && (
-          <>
+        {/* Onboarding Flow */}
+        {showOnboarding && (
+          <OnboardingFlow onComplete={() => setShowOnboarding(false)} />
+        )}
+
+        {/* Share App Modal */}
+        {showShareApp && invite && (
+          <QRCodeShare invite={invite} onClose={handleCloseShareApp} />
+        )}
+
+        {/* Invite Acceptance Modal */}
+        {pendingInviteData && (
+          <InviteAcceptanceModal
+            inviterName={pendingInviteData.inviterName || "A friend"}
+            onAccept={handleAcceptInvite}
+            onDecline={handleDeclineInvite}
+          />
+        )}
+
+        {toast && (
+          <div
+            data-testid="notification-toast"
+            className="notification-toast"
+            role="status"
+          >
+            {toast.message}
+          </div>
+        )}
+
+        {/* Network Diagnostics Modal */}
+        {showDiagnostics && (
+          <div
+            className="modal-overlay"
+            onClick={() => setShowDiagnostics(false)}
+          >
             <div
-              className={`main-layout ${selectedConversation ? "chat-active" : ""}`}
+              className="modal-content diagnostics-modal"
+              onClick={(e) => e.stopPropagation()}
             >
-              <div className="sidebar">
-                <div className="sidebar-header">
-                  <div className="user-profile">
-                    <div className="avatar">
-                      {status.localPeerId.substring(0, 2).toUpperCase()}
-                    </div>
-                    <div className="user-info">
-                      <span className="username">Me</span>
-                      <span className="status-indicator online"></span>
-                    </div>
-                    <div className="header-controls">
-                      <button
-                        onClick={() => setShowDiagnostics(!showDiagnostics)}
-                        className="diagnostics-btn"
-                        aria-label="Network Diagnostics"
-                        title="Network Diagnostics"
-                      >
-                        📶
-                      </button>
-                      <button
-                        onClick={() => setShowHelp(true)}
-                        className="help-btn"
-                        aria-label="Help"
-                        title="Help & FAQ"
-                        style={{
-                          background: "none",
-                          border: "none",
-                          cursor: "pointer",
-                          fontSize: "1.2rem",
-                        }}
-                      >
-                        ❓
-                      </button>
-                      <button
-                        className="settings-btn"
-                        onClick={() => setShowSettings(true)}
-                        aria-label="Settings"
-                        data-testid="settings-btn"
-                      >
-                        ⚙️
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Tab Navigation */}
-                  <div className="flex border-b border-gray-200 mt-2">
-                    <button
-                      className={`flex-1 py-2 text-sm font-medium ${activeTab === "chats" ? "text-blue-600 border-b-2 border-blue-600" : "text-gray-500 hover:text-gray-700"}`}
-                      onClick={() => setActiveTab("chats")}
-                    >
-                      Chats
-                    </button>
-                    <button
-                      className={`flex-1 py-2 text-sm font-medium ${activeTab === "groups" ? "text-blue-600 border-b-2 border-blue-600" : "text-gray-500 hover:text-gray-700"}`}
-                      onClick={() => setActiveTab("groups")}
-                    >
-                      Groups
-                    </button>
-                  </div>
-                </div>
-
-                {activeTab === "chats" ? (
-                  <ConversationList
-                    conversations={allConversations}
-                    loading={contactsLoading || conversationsLoading}
-                    selectedId={selectedConversation}
-                    onSelect={handleSelectConversation}
-                    onDelete={handleDeleteConversation}
-                    onAddContact={handleAddContact}
-                    onImportContact={handleImportContact}
-                    onShareApp={handleShareApp}
-                    localPeerId={status.localPeerId}
-                    generateConnectionOffer={generateConnectionOffer}
-                    onJoinRoom={handleJoinRoom}
-                    onJoinRelay={joinRoom}
-                    onInitiateConnection={handleManualConnectionInitiated}
-                    connectionStatus={status.isConnected}
-                  />
-                ) : (
-                  <GroupChat onSelectGroup={handleSelectConversation} />
-                )}
-              </div>
-
-              <div
-                className="content-area main-content"
-                id="main-content"
-                data-testid="main-content"
+              <button
+                className="modal-close"
+                onClick={() => setShowDiagnostics(false)}
+                aria-label="Close diagnostics"
               >
-                {selectedConversation ? (
-                  selectedConversation === "public-room" ? (
-                    <RoomView
-                      isOpen={true}
-                      onClose={() => setSelectedConversation(null)}
-                      discoveredPeers={discoveredPeers}
-                      connectedPeers={peers.map((p) => p.id)}
-                      roomMessages={roomMessages}
-                      onSendMessage={sendRoomMessage}
-                      onConnect={handleConnectToPeer}
+                ×
+              </button>
+              <NetworkDiagnostics />
+            </div>
+          </div>
+        )}
+
+        <div
+          className="app"
+          role="application"
+          aria-label="Sovereign Communications Messenger"
+        >
+          {/* Skip to main content link for keyboard navigation */}
+          <a href="#main-content" className="skip-link">
+            Skip to main content
+          </a>
+
+          <div className="app-header">
+            <h1>Sovereign Communications</h1>
+            <div className="header-controls" data-testid="connection-status">
+              <ConnectionStatus quality={status.connectionQuality} />
+              <span className="peer-count" data-testid="peer-count">
+                {status.peerCount}
+              </span>
+              <span
+                className="encryption-indicator"
+                data-testid="encryption-status"
+                aria-label="encrypted"
+              >
+                🔒 Encrypted
+              </span>
+            </div>
+          </div>
+
+          {!status.isConnected && (
+            <div className="offline-banner" data-testid="offline-indicator">
+              Offline - attempting to reconnect
+            </div>
+          )}
+
+          {/* Only show main app UI if not onboarding */}
+          {!showOnboarding && (
+            <>
+              <div
+                className={`main-layout ${selectedConversation ? "chat-active" : ""}`}
+              >
+                <div className="sidebar">
+                  <div className="sidebar-header">
+                    <div className="user-profile">
+                      <div className="avatar">
+                        {status.localPeerId.substring(0, 2).toUpperCase()}
+                      </div>
+                      <div className="user-info">
+                        <span className="username">Me</span>
+                        <span className="status-indicator online"></span>
+                      </div>
+                      <div className="header-controls">
+                        <button
+                          onClick={() => setShowDiagnostics(!showDiagnostics)}
+                          className="diagnostics-btn"
+                          aria-label="Network Diagnostics"
+                          title="Network Diagnostics"
+                        >
+                          📶
+                        </button>
+                        <button
+                          onClick={() => setShowHelp(true)}
+                          className="help-btn"
+                          aria-label="Help"
+                          title="Help & FAQ"
+                          style={{
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            fontSize: "1.2rem",
+                          }}
+                        >
+                          ❓
+                        </button>
+                        <button
+                          className="settings-btn"
+                          onClick={() => setShowSettings(true)}
+                          aria-label="Settings"
+                          data-testid="settings-btn"
+                        >
+                          ⚙️
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Tab Navigation */}
+                    <div className="flex border-b border-gray-200 mt-2">
+                      <button
+                        className={`flex-1 py-2 text-sm font-medium ${activeTab === "chats" ? "text-blue-600 border-b-2 border-blue-600" : "text-gray-500 hover:text-gray-700"}`}
+                        onClick={() => setActiveTab("chats")}
+                      >
+                        Chats
+                      </button>
+                      <button
+                        className={`flex-1 py-2 text-sm font-medium ${activeTab === "groups" ? "text-blue-600 border-b-2 border-blue-600" : "text-gray-500 hover:text-gray-700"}`}
+                        onClick={() => setActiveTab("groups")}
+                      >
+                        Groups
+                      </button>
+                    </div>
+                  </div>
+
+                  {activeTab === "chats" ? (
+                    <ConversationList
+                      conversations={allConversations}
+                      loading={contactsLoading || conversationsLoading}
+                      selectedId={selectedConversation}
+                      onSelect={handleSelectConversation}
+                      onDelete={handleDeleteConversation}
+                      onAddContact={handleAddContact}
+                      onImportContact={handleImportContact}
+                      onShareApp={handleShareApp}
                       localPeerId={status.localPeerId}
-                      embedded={true}
+                      generateConnectionOffer={generateConnectionOffer}
+                      onJoinRoom={handleJoinRoom}
+                      onJoinRelay={joinRoom}
+                      onInitiateConnection={handleManualConnectionInitiated}
+                      connectionStatus={status.isConnected}
                     />
                   ) : (
-                    <ChatView
-                      conversationId={selectedConversation}
-                      contactName={getContactName(selectedConversation)}
-                      isOnline={peers.some(
-                        (p) => p.id === selectedConversation,
-                      )} // Groups are always "online" effectively, or check if any member is online
-                      messages={messages}
-                      onSendMessage={handleSendMessage}
-                      onSendVoice={handleSendVoice}
-                      onReaction={handleReaction}
-                      isLoading={contactsLoading}
-                      onClose={() => setSelectedConversation(null)}
-                    />
-                  )
-                ) : (
-                  <div className="empty-state">
-                    <div className="empty-state-content">
-                      <div className="dashboard-header">
-                        <h2>Sovereign Communications</h2>
-                        <span className="version-badge">v1.0 Ready</span>
-                      </div>
+                    <GroupChat onSelectGroup={handleSelectConversation} />
+                  )}
+                </div>
 
-                      <div className="dashboard-card user-card">
-                        <h3>Your Identity</h3>
-                        <div className="identity-display">
-                          <div className="avatar-large">
-                            {status.localPeerId
-                              ? status.localPeerId.charAt(0).toUpperCase()
-                              : "?"}
-                          </div>
-                          <div className="identity-details">
-                            <p className="peer-id-label">Peer ID</p>
-                            <code
-                              className="peer-id-code"
-                              onClick={() => {
-                                navigator.clipboard.writeText(
-                                  status.localPeerId,
-                                );
-                                alert("Peer ID copied to clipboard!");
-                              }}
-                              title="Click to copy"
-                            >
-                              {status.localPeerId || "Generating..."}
-                            </code>
-                            <div className="status-indicator">
-                              <span
-                                className={`status-dot ${status.isConnected ? "online" : "offline"}`}
-                              ></span>
-                              {status.isConnected
-                                ? `Online (${status.peerCount} peers)`
-                                : "Connecting..."}
+                <div
+                  className="content-area main-content"
+                  id="main-content"
+                  data-testid="main-content"
+                >
+                  {selectedConversation ? (
+                    selectedConversation === "public-room" ? (
+                      <RoomView
+                        isOpen={true}
+                        onClose={() => setSelectedConversation(null)}
+                        discoveredPeers={discoveredPeers}
+                        connectedPeers={peers.map((p) => p.id)}
+                        roomMessages={roomMessages}
+                        onSendMessage={sendRoomMessage}
+                        onConnect={handleConnectToPeer}
+                        localPeerId={status.localPeerId}
+                        embedded={true}
+                      />
+                    ) : (
+                      <ChatView
+                        conversationId={selectedConversation}
+                        contactName={getContactName(selectedConversation)}
+                        isOnline={peers.some(
+                          (p) => p.id === selectedConversation,
+                        )} // Groups are always "online" effectively, or check if any member is online
+                        messages={messages}
+                        onSendMessage={handleSendMessage}
+                        onSendVoice={handleSendVoice}
+                        onReaction={handleReaction}
+                        isLoading={contactsLoading}
+                        onClose={() => setSelectedConversation(null)}
+                      />
+                    )
+                  ) : (
+                    <div className="empty-state">
+                      <div className="empty-state-content">
+                        <div className="dashboard-header">
+                          <h2>Sovereign Communications</h2>
+                          <span className="version-badge">v1.0 Ready</span>
+                        </div>
+
+                        <div className="dashboard-card user-card">
+                          <h3>Your Identity</h3>
+                          <div className="identity-display">
+                            <div className="avatar-large">
+                              {status.localPeerId
+                                ? status.localPeerId.charAt(0).toUpperCase()
+                                : "?"}
+                            </div>
+                            <div className="identity-details">
+                              <p className="peer-id-label">Peer ID</p>
+                              <code
+                                className="peer-id-code"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(
+                                    status.localPeerId,
+                                  );
+                                  alert("Peer ID copied to clipboard!");
+                                }}
+                                title="Click to copy"
+                              >
+                                {status.localPeerId || "Generating..."}
+                              </code>
+                              <div className="status-indicator">
+                                <span
+                                  className={`status-dot ${status.isConnected ? "online" : "offline"}`}
+                                ></span>
+                                {status.isConnected
+                                  ? `Online (${status.peerCount} peers)`
+                                  : "Connecting..."}
+                              </div>
                             </div>
                           </div>
+                          <div className="dashboard-actions">
+                            <button
+                              className="btn-primary"
+                              onClick={() => setShowSettings(true)}
+                            >
+                              Share Profile
+                            </button>
+                          </div>
                         </div>
-                        <div className="dashboard-actions">
-                          <button
-                            className="btn-primary"
-                            onClick={() => setShowSettings(true)}
-                          >
-                            Share Profile
-                          </button>
-                        </div>
-                      </div>
 
-                      <div className="dashboard-grid">
-                        <div className="dashboard-card action-card">
-                          <div className="card-icon">👥</div>
-                          <h3>Connect</h3>
-                          <p>
-                            Use the <strong>+</strong> button in the sidebar to
-                            add friends.
-                          </p>
-                        </div>
-                        <div
-                          className="dashboard-card action-card"
-                          onClick={() =>
-                            window.open(
-                              "https://github.com/Treystu/SC",
-                              "_blank",
-                            )
-                          }
-                          style={{ cursor: "pointer" }}
-                        >
-                          <div className="card-icon">⭐</div>
-                          <h3>Star on GitHub</h3>
-                          <p>Support the project and get updates.</p>
+                        <div className="dashboard-grid">
+                          <div className="dashboard-card action-card">
+                            <div className="card-icon">👥</div>
+                            <h3>Connect</h3>
+                            <p>
+                              Use the <strong>+</strong> button in the sidebar
+                              to add friends.
+                            </p>
+                          </div>
+                          <div
+                            className="dashboard-card action-card"
+                            onClick={() =>
+                              window.open(
+                                "https://github.com/Treystu/SC",
+                                "_blank",
+                              )
+                            }
+                            style={{ cursor: "pointer" }}
+                          >
+                            <div className="card-icon">⭐</div>
+                            <h3>Star on GitHub</h3>
+                            <p>Support the project and get updates.</p>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Settings Modal */}
-            {showSettings && (
-              <div
-                className="modal-overlay"
-                onClick={() => setShowSettings(false)}
-              >
-                <div
-                  className="modal-content settings-modal"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <button
-                    className="modal-close"
-                    onClick={() => setShowSettings(false)}
-                    aria-label="Close settings"
-                  >
-                    ×
-                  </button>
-                  <SettingsPanel />
+                  )}
                 </div>
               </div>
-            )}
 
-            {/* Room View Overlay - Only if activeRoom is explicitly set (legacy/URL) */}
-            <RoomView
-              isOpen={!!activeRoom}
-              onClose={handleLeaveRoom}
-              discoveredPeers={discoveredPeers}
-              connectedPeers={peers.map((p) => p.id)}
-              roomMessages={roomMessages}
-              onSendMessage={sendRoomMessage}
-              onConnect={handleConnectToPeer}
-              localPeerId={status.localPeerId}
-            />
-          </>
-        )}
-      </div>
+              {/* Settings Modal */}
+              {showSettings && (
+                <div
+                  className="modal-overlay"
+                  onClick={() => setShowSettings(false)}
+                >
+                  <div
+                    className="modal-content settings-modal"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      className="modal-close"
+                      onClick={() => setShowSettings(false)}
+                      aria-label="Close settings"
+                    >
+                      ×
+                    </button>
+                    <SettingsPanel />
+                  </div>
+                </div>
+              )}
 
-      {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
+              {/* Room View Overlay - Only if activeRoom is explicitly set (legacy/URL) */}
+              <RoomView
+                isOpen={!!activeRoom}
+                onClose={handleLeaveRoom}
+                discoveredPeers={discoveredPeers}
+                connectedPeers={peers.map((p) => p.id)}
+                roomMessages={roomMessages}
+                onSendMessage={sendRoomMessage}
+                onConnect={handleConnectToPeer}
+                localPeerId={status.localPeerId}
+              />
+            </>
+          )}
+        </div>
+
+        {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
+      </ToastProvider>
     </ErrorBoundary>
   );
 }

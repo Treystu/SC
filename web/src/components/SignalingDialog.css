@@ -4,38 +4,38 @@
 }
 
 .signaling-instructions {
-  color: #ccc;
-  margin-bottom: 16px;
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
   line-height: 1.5;
 }
 
 .signaling-code-container {
-  background: #1a1a1a;
-  border: 1px solid #333;
-  border-radius: 4px;
-  padding: 12px;
-  margin: 16px 0;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem;
+  margin: 1rem 0;
   max-height: 300px;
   overflow-y: auto;
 }
 
 .signaling-code {
   margin: 0;
-  font-family: 'Monaco', 'Courier New', monospace;
+  font-family: "Monaco", "Courier New", monospace;
   font-size: 0.85rem;
-  color: #00d4aa;
+  color: var(--accent-primary);
   white-space: pre-wrap;
   word-break: break-all;
 }
 
 .signaling-code-input {
   width: 100%;
-  padding: 12px;
-  border: 1px solid #444;
-  border-radius: 4px;
-  background: #1a1a1a;
-  color: #fff;
-  font-family: 'Monaco', 'Courier New', monospace;
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-family: "Monaco", "Courier New", monospace;
   font-size: 0.85rem;
   resize: vertical;
   min-height: 150px;
@@ -43,32 +43,32 @@
 
 .signaling-code-input:focus {
   outline: none;
-  border-color: #00d4aa;
+  border-color: var(--accent-primary);
 }
 
 .signaling-code-input::placeholder {
-  color: #666;
+  color: var(--text-tertiary);
 }
 
 .signaling-note {
   background: rgba(0, 212, 170, 0.1);
-  border-left: 3px solid #00d4aa;
-  padding: 12px;
-  margin-top: 16px;
+  border-left: 3px solid var(--accent-primary);
+  padding: 0.75rem;
+  margin-top: 1rem;
   font-size: 0.9rem;
-  color: #ccc;
+  color: var(--text-secondary);
   line-height: 1.5;
 }
 
 .signaling-note strong {
-  color: #00d4aa;
+  color: var(--accent-primary);
 }
 
 .error-message {
-  background: rgba(255, 68, 68, 0.1);
-  border-left: 3px solid #ff4444;
-  padding: 12px;
-  margin: 12px 0;
-  color: #ff6b6b;
+  background: rgba(239, 68, 68, 0.1);
+  border-left: 3px solid var(--error);
+  padding: 0.75rem;
+  margin: 0.75rem 0;
+  color: var(--error);
   font-size: 0.9rem;
 }
