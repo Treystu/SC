@@ -102,10 +102,24 @@ export function SettingsPanel() {
   };
 
   useEffect(() => {
-    document.documentElement.setAttribute(
-      "data-theme",
-      appearanceSettings.theme,
-    );
+    const applyTheme = () => {
+      let theme = appearanceSettings.theme;
+      if (theme === "auto") {
+        theme = window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light";
+      }
+      document.documentElement.setAttribute("data-theme", theme);
+    };
+
+    applyTheme();
+
+    // Listen for system changes if auto
+    if (appearanceSettings.theme === "auto") {
+      const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+      mediaQuery.addEventListener("change", applyTheme);
+      return () => mediaQuery.removeEventListener("change", applyTheme);
+    }
   }, [appearanceSettings.theme]);
 
   return (

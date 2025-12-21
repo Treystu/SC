@@ -13,6 +13,12 @@
   --glass-border: rgba(255, 255, 255, 0.08);
   --glass-blur: 12px;
 
+  /* Layout Backgrounds */
+  --header-bg: rgba(5, 5, 5, 0.8);
+  --sidebar-bg: rgba(15, 16, 18, 0.6);
+  --radial-start: #111827;
+  --empty-state-start: var(--bg-tertiary); /* fallback or variable */
+
   /* Text Colors */
   --text-primary: #ffffff;
   --text-secondary: #a1a1aa;
@@ -54,6 +60,39 @@
   --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
   --duration-fast: 150ms;
   --duration-normal: 300ms;
+}
+
+[data-theme="light"] {
+  /* Premium Light Palette */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8fafc; /* Slate 50 */
+  --bg-tertiary: #f1f5f9; /* Slate 100 */
+  --bg-surface: #ffffff;
+
+  /* Glassmorphism - Light */
+  --glass-bg: rgba(255, 255, 255, 0.8);
+  --glass-border: rgba(0, 0, 0, 0.05);
+
+  /* Layout Backgrounds - Light */
+  --header-bg: rgba(255, 255, 255, 0.8);
+  --sidebar-bg: rgba(241, 245, 249, 0.6); /* Slate 100 with opacity */
+  --radial-start: #e2e8f0; /* Slate 200 */
+  --empty-state-start: #f8fafc;
+
+  /* Text Colors - Light */
+  --text-primary: #0f172a; /* Slate 900 */
+  --text-secondary: #475569; /* Slate 600 */
+  --text-tertiary: #94a3b8; /* Slate 400 */
+
+  /* Spacing & Layout */
+  --border-color: #e2e8f0; /* Slate 200 */
+
+  /* Update gradients for light mode availability */
+  --gradient-glass: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.4) 0%,
+    rgba(255, 255, 255, 0.2) 100%
+  );
 }
 
 * {

@@ -3,6 +3,7 @@
 
 import React, { useState, useRef, KeyboardEvent } from "react";
 import { VoiceRecorder } from "./VoiceRecorder";
+import "./MessageInput.css";
 
 interface MessageInputProps {
   onSendMessage: (content: string, attachments?: File[]) => void;
@@ -93,64 +94,22 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   };
 
   return (
-    <div
-      style={{
-        background: "#1f2937",
-        borderTop: "1px solid #374151",
-        padding: "16px",
-      }}
-    >
+    <div className="message-input-container">
       {/* Attachments Preview */}
       {attachments.length > 0 && (
-        <div
-          style={{
-            marginBottom: "12px",
-            display: "flex",
-            flexWrap: "wrap",
-            gap: "8px",
-          }}
-        >
+        <div className="attachments-preview">
           {attachments.map((file, index) => (
-            <div
-              key={index}
-              style={{
-                background: "#374151",
-                borderRadius: "6px",
-                padding: "8px 12px",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                fontSize: "12px",
-                color: "#f9fafb",
-              }}
-            >
+            <div key={index} className="attachment-chip">
               <span>📎</span>
-              <div style={{ flex: 1 }}>
-                <div
-                  style={{
-                    fontWeight: "500",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    maxWidth: "150px",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {file.name}
-                </div>
-                <div style={{ color: "#9ca3af" }}>
+              <div>
+                <div className="attachment-name">{file.name}</div>
+                <div className="attachment-size">
                   {formatFileSize(file.size)}
                 </div>
               </div>
               <button
                 onClick={() => removeAttachment(index)}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  color: "#ef4444",
-                  cursor: "pointer",
-                  padding: "4px",
-                  fontSize: "16px",
-                }}
+                className="remove-attachment-btn"
               >
                 ×
               </button>
@@ -160,9 +119,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       )}
 
       {/* Input Area */}
-      <div style={{ display: "flex", gap: "12px", alignItems: "flex-end" }}>
+      <div className="input-area">
         {/* Action Buttons */}
-        <div style={{ display: "flex", gap: "8px" }}>
+        <div className="input-actions">
           <button
             onClick={() => {
               setShowFileDialog((prev) => !prev);
@@ -170,16 +129,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             disabled={disabled}
             data-testid="attach-file-btn"
             aria-controls="file-upload-dialog"
-            style={{
-              background: "#374151",
-              border: "none",
-              borderRadius: "6px",
-              padding: "10px",
-              cursor: disabled ? "not-allowed" : "pointer",
-              color: "#f9fafb",
-              fontSize: "18px",
-              opacity: disabled ? 0.5 : 1,
-            }}
+            className="action-btn"
             title="Attach file"
           >
             📎
@@ -198,16 +148,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             onClick={handleVoiceRecord}
             disabled={disabled}
             data-testid="voice-record-btn"
-            style={{
-              background: isRecording ? "#ef4444" : "#374151",
-              border: "none",
-              borderRadius: "6px",
-              padding: "10px",
-              cursor: disabled ? "not-allowed" : "pointer",
-              color: "#f9fafb",
-              fontSize: "18px",
-              opacity: disabled ? 0.5 : 1,
-            }}
+            className={`action-btn ${isRecording ? "recording" : ""}`}
             title={isRecording ? "Stop recording" : "Start voice recording"}
           >
             🎤
@@ -224,18 +165,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           disabled={disabled}
           rows={1}
           data-testid="message-input"
-          style={{
-            flex: 1,
-            background: "#374151",
-            border: "1px solid #4b5563",
-            borderRadius: "6px",
-            padding: "10px 12px",
-            color: "#f9fafb",
-            fontSize: "14px",
-            resize: "none",
-            maxHeight: "150px",
-            fontFamily: "inherit",
-          }}
+          className="message-textarea"
         />
 
         {/* Send Button */}
@@ -244,22 +174,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           disabled={disabled || (!message.trim() && attachments.length === 0)}
           data-testid="send-message-btn"
           aria-label="Send message"
-          style={{
-            background:
-              disabled || (!message.trim() && attachments.length === 0)
-                ? "#4b5563"
-                : "#10b981",
-            border: "none",
-            borderRadius: "6px",
-            padding: "10px 20px",
-            cursor:
-              disabled || (!message.trim() && attachments.length === 0)
-                ? "not-allowed"
-                : "pointer",
-            color: "white",
-            fontSize: "14px",
-            fontWeight: "500",
-          }}
+          className="send-btn"
         >
           Send
         </button>
@@ -269,48 +184,21 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         <div
           id="file-upload-dialog"
           data-testid="file-upload-dialog"
-          style={{
-            marginTop: "8px",
-            background: "#111827",
-            border: "1px solid #1f2937",
-            borderRadius: "6px",
-            padding: "8px 12px",
-            color: "#f9fafb",
-          }}
+          className="file-upload-dialog"
         >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: "8px",
-            }}
-          >
+          <div className="dialog-header">
             <span>Choose files to send</span>
             <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
               <button
                 onClick={() => fileInputRef.current?.click()}
-                style={{
-                  background: "#2563eb",
-                  border: "none",
-                  borderRadius: "6px",
-                  padding: "6px 10px",
-                  cursor: "pointer",
-                  color: "#f9fafb",
-                  fontSize: "13px",
-                }}
+                className="browse-btn"
                 aria-label="Open file picker"
               >
                 Browse
               </button>
               <button
                 onClick={() => setShowFileDialog(false)}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  color: "#9ca3af",
-                  cursor: "pointer",
-                }}
+                className="close-dialog-btn"
                 aria-label="Close file dialog"
               >
                 ×
@@ -333,7 +221,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       )}
 
       {/* Helper Text */}
-      <div style={{ marginTop: "8px", color: "#9ca3af", fontSize: "12px" }}>
+      <div className="helper-text">
         Press Enter to send, Shift+Enter for new line
       </div>
     </div>
