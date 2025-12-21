@@ -13,7 +13,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ onClose }) => {
         onClick={(e) => e.stopPropagation()}
       >
         <button
-          className="modal-close"
+          className="modal-close btn-icon"
           onClick={onClose}
           aria-label="Close help"
         >

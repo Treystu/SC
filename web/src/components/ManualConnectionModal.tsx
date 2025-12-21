@@ -131,7 +131,7 @@ export function ManualConnectionModal({
         className="modal-content manual-connection-modal"
         onClick={(e) => e.stopPropagation()}
       >
-        <button className="modal-close" onClick={onClose}>
+        <button className="modal-close btn-icon" onClick={onClose}>
           ×
         </button>
 
@@ -144,6 +144,7 @@ export function ManualConnectionModal({
           <div className="peer-id-display">
             <code>{status.localPeerId}</code>
             <button
+              className="btn-icon"
               onClick={() => copyToClipboard(status.localPeerId)}
               title="Copy Peer ID"
             >
@@ -157,15 +158,15 @@ export function ManualConnectionModal({
 
         {step === "input" && (
           <div className="step-content">
-            <div className="mode-toggle">
+            <div className="mode-toggle" style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
               <button
-                className={mode === "initiate" ? "active" : ""}
+                className={`btn ${mode === "initiate" ? "btn-primary" : "btn-secondary"}`}
                 onClick={() => setMode("initiate")}
               >
                 Initiate Connection
               </button>
               <button
-                className={mode === "join" ? "active" : ""}
+                className={`btn ${mode === "join" ? "btn-primary" : "btn-secondary"}`}
                 onClick={() => setMode("join")}
               >
                 Join Connection
@@ -181,7 +182,7 @@ export function ManualConnectionModal({
                   onChange={(e) => setPeerId(e.target.value)}
                   placeholder="Enter Peer ID of the person you want to call"
                 />
-                <button onClick={handleGenerateOffer} disabled={loading}>
+                <button className="btn btn-primary" onClick={handleGenerateOffer} disabled={loading}>
                   {loading ? "Generating..." : "Generate Offer"}
                 </button>
               </div>
@@ -193,7 +194,7 @@ export function ManualConnectionModal({
                   onChange={(e) => setOfferData(e.target.value)}
                   placeholder="Paste the offer string here..."
                 />
-                <button onClick={handleProcessOffer} disabled={loading}>
+                <button className="btn btn-primary" onClick={handleProcessOffer} disabled={loading}>
                   {loading ? "Processing..." : "Generate Answer"}
                 </button>
               </div>
@@ -206,7 +207,7 @@ export function ManualConnectionModal({
             <h3>Step 1: Share Offer</h3>
             <p>Send this data to your friend:</p>
             <textarea readOnly value={offerData} />
-            <button onClick={() => copyToClipboard(offerData)}>
+            <button className="btn btn-secondary" onClick={() => copyToClipboard(offerData)}>
               Copy Offer
             </button>
 
@@ -219,7 +220,7 @@ export function ManualConnectionModal({
               onChange={(e) => setAnswerData(e.target.value)}
               placeholder="Paste answer here..."
             />
-            <button onClick={handleFinalize} disabled={loading}>
+            <button className="btn btn-primary" onClick={handleFinalize} disabled={loading}>
               {loading ? "Connecting..." : "Finalize Connection"}
             </button>
           </div>
@@ -230,7 +231,7 @@ export function ManualConnectionModal({
             <h3>Step 2: Share Answer</h3>
             <p>Send this data back to the initiator:</p>
             <textarea readOnly value={answerData} />
-            <button onClick={() => copyToClipboard(answerData)}>
+            <button className="btn btn-secondary" onClick={() => copyToClipboard(answerData)}>
               Copy Answer
             </button>
             <p className="hint">

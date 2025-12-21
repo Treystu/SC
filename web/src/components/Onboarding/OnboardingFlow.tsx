@@ -136,14 +136,14 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
             </div>
 
             <div className="actions">
-              <button className="primary-button" onClick={handleNext}>
+              <button className="btn btn-primary" onClick={handleNext}>
                 Get Started
               </button>
 
               <div className="restore-section">
                 <p>Already have an account?</p>
                 <button
-                  className="secondary-button"
+                  className="btn btn-secondary"
                   onClick={handleRestoreClick}
                   disabled={isRestoring}
                 >

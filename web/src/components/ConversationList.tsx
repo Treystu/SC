@@ -321,7 +321,7 @@ function ConversationList({
               <p>No conversations yet</p>
               <p className="hint">Start connecting with your peers</p>
               <button
-                className="btn-primary"
+                className="btn btn-primary"
                 onClick={() => setShowAddDialog(true)}
                 style={{ marginTop: "1rem" }}
               >

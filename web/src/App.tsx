@@ -1203,7 +1203,7 @@ function App() {
                           </div>
                           <div className="dashboard-actions">
                             <button
-                              className="btn-primary"
+                              className="btn btn-primary"
                               onClick={() => setShowSettings(true)}
                             >
                               Share Profile

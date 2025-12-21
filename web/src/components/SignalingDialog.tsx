@@ -57,10 +57,10 @@ export function SignalingExportDialog({ isOpen, onClose, localPeerId, generateOf
           </div>
 
           <div className="dialog-actions">
-            <button onClick={handleCopy} className="btn-primary">
+            <button onClick={handleCopy} className="btn btn-primary">
               {copied ? '✓ Copied!' : 'Copy to Clipboard'}
             </button>
-            <button onClick={onClose} className="btn-secondary">
+            <button onClick={onClose} className="btn btn-secondary">
               Close
             </button>
           </div>
@@ -114,7 +114,7 @@ export function SignalingImportDialog({ isOpen, onClose, onImport }: SignalingIm
       <div className="dialog signaling-dialog" onClick={(e) => e.stopPropagation()}>
         <div className="dialog-header">
           <h3>Add Contact via Code</h3>
-          <button className="dialog-close" onClick={onClose}>&times;</button>
+          <button className="dialog-close btn-icon" onClick={onClose}>&times;</button>
         </div>
         
         <form onSubmit={handleSubmit} className="dialog-form">
@@ -152,12 +152,12 @@ export function SignalingImportDialog({ isOpen, onClose, onImport }: SignalingIm
           )}
 
           <div className="dialog-actions">
-            <button type="button" onClick={onClose} className="btn-secondary">
+            <button type="button" onClick={onClose} className="btn btn-secondary">
               Cancel
             </button>
             <button 
               type="submit" 
-              className="btn-primary" 
+              className="btn btn-primary" 
               disabled={!code.trim() || !name.trim()}
             >
               Connect

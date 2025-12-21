@@ -69,7 +69,7 @@ export function FileAttachment({ onFileSelected, onCancel }: FileAttachmentProps
           </div>
 
           <div className="dialog-actions">
-            <button onClick={onCancel} className="cancel-btn">
+            <button onClick={onCancel} className="btn btn-secondary cancel-btn">
               Cancel
             </button>
           </div>

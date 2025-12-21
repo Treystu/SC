@@ -1,225 +1,65 @@
 # GitHub Copilot Instructions for Sovereign Communications
 
 ## Project Overview
+Sovereign Communications (SC) is a decentralized, end-to-end encrypted mesh networking platform.
+- **Core Philosophy**: Sovereignty (no servers), Scalability (DHT), Security (Zero-Trust).
+- **Monorepo**:
+  - **`core/` (@sc/core)**: Shared TypeScript logic. **The Brain**. Crypto, Protocol, Mesh, DHT.
+  - **`web/` (@sc/web)**: React 18 + Vite PWA. Uses `core-adapters` to interface with core.
+  - **`android/`**: Native Android (Kotlin + Jetpack Compose).
+  - **`ios/`**: Native iOS (Swift + SwiftUI).
+  - **`tests/`**: Cross-platform integration & E2E tests.
 
-Sovereign Communications (SC) is a decentralized, end-to-end encrypted mesh networking communication platform that works across Web, Android, and iOS with no central servers.
+## Critical Developer Workflows
+- **Build Core First**: `npm run build -w core` (Required before building web or running tests).
+- **Run Integration Tests**: `npm run test:integration` (Uses `jest.integration.config.js`).
+- **Run E2E Tests**: `npm run test:e2e` (Playwright).
+- **Local CI**: `npm run ci:local` (Lint + Build + Test).
 
-### Core Technologies
-- **Cryptography**: Ed25519 signing, X25519 key exchange, XChaCha20-Poly1305 encryption
-- **Protocol**: Binary message format with 109-byte header
-- **Networking**: WebRTC data channels, mesh routing, flood algorithm
-- **Frontend**: React 18 + TypeScript + Vite (web), Jetpack Compose (Android)
-- **Backend**: Node.js/TypeScript core library
+## Architecture & Patterns
 
-## Architecture
+### 1. Core Protocol (Strict Binary Format)
+- **Header Size**: **108 bytes** (Fixed).
+- **Endianness**: Big Endian.
+- **Signature**: 64 bytes (Ed25519 Compact). **Do NOT pad to 65 bytes.**
+- **Message Structure**:
+  ```typescript
+  // core/src/protocol/message.ts
+  export const HEADER_SIZE = 108;
+  export interface Message {
+    header: {
+      version: number;      // 1 byte
+      type: MessageType;    // 1 byte
+      ttl: number;          // 1 byte (Max 255)
+      reserved: number;     // 1 byte (0x00)
+      timestamp: number;    // 8 bytes
+      senderId: Uint8Array; // 32 bytes (Ed25519 PubKey)
+      signature: Uint8Array;// 64 bytes (Ed25519 Sig)
+    };
+    payload: Uint8Array;
+  }
+  ```
 
-### Monorepo Structure
-```
-SC/
-├── core/           # @sc/core - Shared TypeScript cryptography and protocol
-├── web/            # Vite + React + TypeScript PWA
-├── android/        # Kotlin + Jetpack Compose
-├── ios/            # Swift + SwiftUI (planned)
-├── docs/           # Documentation
-└── tests/          # Integration tests
-```
+### 2. Cryptography
+- **Rule**: **NEVER** implement crypto primitives.
+- **Library**: Use `@noble/curves` (Ed25519) and `@noble/ciphers` (XChaCha20).
+- **Keys**: Public keys are 32 bytes. Signatures are 64 bytes.
 
-### Key Components
+### 3. Mesh Networking
+- **Peers**: Defined in `core/src/mesh/routing.ts`.
+- **State**: Use `PeerState` enum (CONNECTING, CONNECTED, etc.).
+- **Routing**: Kademlia-based DHT.
 
-1. **Core Library** (`core/src/`)
-   - `crypto/` - Ed25519, X25519, ChaCha20-Poly1305, session keys
-   - `protocol/` - Binary message encoding/decoding
-   - `mesh/` - Routing table, peer registry, health monitoring, message relay
-   - `transport/` - WebRTC, transport abstractions
+### 4. Web Integration
+- **Hooks**: Use `web/src/hooks/useMeshNetwork.ts` for mesh interaction.
+- **Adapters**: Logic often lives in `web/src/core-adapters/` to bridge React and Core.
 
-2. **Web Application** (`web/src/`)
-   - `components/` - React UI components
-   - `hooks/` - Custom React hooks for mesh networking
-   - `stores/` - State management (IndexedDB)
-
-3. **Android Application** (`android/app/src/`)
-   - `ui/` - Jetpack Compose screens
-   - `data/` - Room database, repositories
-   - `service/` - Foreground service for connectivity
-
-## Coding Standards
-
-### TypeScript/JavaScript
-- Use TypeScript strict mode
-- Prefer functional programming patterns
-- Use async/await for asynchronous operations
-- Include JSDoc comments for public APIs
-- Write comprehensive unit tests (Jest)
-
-### Code Style
-- 2-space indentation
-- Use const/let, not var
-- Use template literals for strings
-- Use arrow functions for callbacks
-- Prefer interfaces over type aliases for objects
-
-### Testing
-- Unit tests: Jest for TypeScript
-- Test coverage: Aim for >80%
-- Name tests descriptively: "should [behavior] when [condition]"
-- Use beforeEach/afterEach for setup/cleanup
-
-### Cryptography
-- Never implement custom crypto primitives
-- Always use audited libraries (@noble/curves, @noble/ciphers)
-- Validate all cryptographic inputs
-- Use constant-time operations where applicable
-- Document security assumptions
-
-### Mesh Networking
-- Messages must be deduplicated (SHA-256 hash cache)
-- Implement TTL to prevent infinite loops
-- Support multi-hop routing with metrics
-- Track peer health with adaptive heartbeats
-- Handle network partitions gracefully
-
-## Common Patterns
-
-### Creating Messages
-```typescript
-const message: Message = {
-  header: {
-    version: 0x01,
-    type: MessageType.TEXT,
-    ttl: 10,
-    timestamp: Date.now(),
-    senderId: identity.publicKey,
-    signature: new Uint8Array(65), // Placeholder
-  },
-  payload: encryptedData,
-};
-
-// Sign message
-const messageBytes = encodeMessage(message);
-const sig64 = signMessage(messageBytes, identity.privateKey);
-
-// Pad to 65 bytes for compact signature format
-const sig65 = new Uint8Array(65);
-sig65.set(sig64, 0);
-sig65[64] = 0; // Recovery byte
-message.header.signature = sig65;
-```
-
-### Managing Peers
-```typescript
-// Use helper function for consistency
-const peer = createPeer(peerId, publicKey, 'webrtc');
-routingTable.addPeer(peer);
-
-// Update reputation
-routingTable.updatePeerReputation(peerId, success);
-
-// Blacklist problematic peers
-if (peer.metadata.failureCount > 10) {
-  routingTable.blacklistPeer(peerId, 3600000); // 1 hour
-}
-```
-
-### Handling Fragments
-```typescript
-// Fragment large messages
-const fragments = fragmentMessage(largeMessage, messageId);
-
-// Reassemble
-const reassembler = new MessageReassembler();
-reassembler.onComplete((id, message) => {
-  // Process complete message
-});
-
-fragments.forEach(fragment => {
-  reassembler.addFragment(fragment);
-});
-```
-
-## Performance Targets
-
-- **Throughput**: 1000+ messages per second
-- **Peers**: Support 100+ simultaneous connections
-- **Latency**: Sub-100ms message relay
-- **Memory**: Minimal footprint (<100MB for core)
-
-## Security Considerations
-
-1. **Message Authentication**: All messages signed with Ed25519
-2. **Perfect Forward Secrecy**: Session keys rotate automatically
-3. **Peer Verification**: Public key fingerprints for out-of-band verification
-4. **DoS Protection**: Rate limiting, flood detection, peer blacklisting
-5. **Input Validation**: Validate all message headers and payloads
-
-## Development Workflow
-
-### Building
-```bash
-# Install dependencies
-npm install
-
-# Build core library
-cd core && npm run build
-
-# Build web app
-cd web && npm run build
-```
-
-### Testing
-```bash
-# Run all tests
-npm test
-
-# Run tests with coverage
-npm test -- --coverage
-
-# Run specific test file
-npm test -- routing.test.ts
-```
-
-### Linting
-```bash
-# Lint all TypeScript files
-npm run lint
-```
+## Common Pitfalls
+- **Signature Size**: Previous docs incorrectly stated 65 bytes. It is **64 bytes**.
+- **TTL**: Always decrement TTL. Drop if <= 0 to prevent loops.
+- **Build Order**: `core` must be built before `web` or `tests` will run.
 
 ## Documentation
-
-- Keep README.md up to date
-- Document all public APIs with JSDoc
-- Update PROGRESS.md when completing tasks
-- Write architecture docs in docs/
-
-## Common Issues
-
-### Signature Size Mismatch
-Ed25519 signatures are 64 bytes but the protocol expects 65 bytes (compact format with recovery byte). Always pad:
-```typescript
-const sig65 = new Uint8Array(65);
-sig65.set(sig64, 0);
-sig65[64] = 0;
-```
-
-### Peer State Management
-Always use `createPeer()` helper to ensure all required fields (state, metadata) are initialized.
-
-### Memory Leaks
-- Cleanup intervals/timeouts in beforeDestroy
-- Remove event listeners when unmounting
-- Use WeakMap for caches when appropriate
-
-## Contributing
-
-- Write tests for new features
-- Update documentation
-- Follow existing code style
-- Keep commits focused and well-described
-- Run tests before pushing
-
-## Questions?
-
-Refer to:
-- docs/protocol.md - Message protocol specification
-- docs/security.md - Security model and threat analysis
-- docs/SETUP.md - Development environment setup
-- README.md - Quick start and API examples
+- **Source of Truth**: The code in `core/src` is the ultimate truth.
+- **Roadmap**: `V1_ROLLOUT_MASTER_PLAN.md`.
+- **Protocol**: `core/src/protocol/message.ts`.

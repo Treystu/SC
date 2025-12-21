@@ -86,7 +86,7 @@ export const QRCodeScanner: React.FC<QRCodeScannerProps> = ({
     <div className="qr-scanner-overlay">
       <div className="qr-scanner-container">
         <button
-          className="close-btn"
+          className="modal-close btn-icon"
           onClick={onClose}
           aria-label="Close scanner"
         >
@@ -99,7 +99,7 @@ export const QRCodeScanner: React.FC<QRCodeScannerProps> = ({
             <p>{error}</p>
             <button
               onClick={onClose}
-              className="btn-secondary"
+              className="btn btn-secondary"
               style={{ marginTop: "10px" }}
             >
               Close

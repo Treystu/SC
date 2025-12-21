@@ -114,7 +114,7 @@ export const ContactProfileDialog: React.FC<ContactProfileDialogProps> = ({
       >
         <div className="dialog-header">
           <h3>Contact Info</h3>
-          <button className="dialog-close" onClick={onClose}>
+          <button className="dialog-close btn-icon" onClick={onClose}>
             ×
           </button>
         </div>
@@ -162,16 +162,16 @@ export const ContactProfileDialog: React.FC<ContactProfileDialogProps> = ({
         </div>
 
         <div className="dialog-actions profile-actions">
-          <button onClick={handleToggleVerify} className="btn-secondary">
+          <button onClick={handleToggleVerify} className="btn btn-secondary">
             {contact.verified ? "Unverify" : "Mark Verified"}
           </button>
           <button
             onClick={handleToggleBlock}
-            className="btn-secondary danger-text"
+            className="btn btn-secondary danger-text"
           >
             {contact.blocked ? "Unblock" : "Block"}
           </button>
-          <button onClick={handleDelete} className="btn-danger">
+          <button onClick={handleDelete} className="btn btn-danger">
             Delete Contact
           </button>
         </div>

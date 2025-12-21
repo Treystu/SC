@@ -30,14 +30,14 @@ export const InviteAcceptanceModal: React.FC<InviteAcceptanceModalProps> = ({
         <div className="modal-actions">
           <button 
             onClick={onDecline} 
-            className="btn-secondary"
+            className="btn btn-secondary"
             aria-label="Decline invitation"
           >
             Decline
           </button>
           <button 
             onClick={onAccept} 
-            className="btn-primary"
+            className="btn btn-primary"
             aria-label="Accept invitation"
             autoFocus
           >

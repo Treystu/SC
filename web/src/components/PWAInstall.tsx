@@ -92,7 +92,7 @@ export const PWAInstall: React.FC = () => {
             <a
               href={apkDownloadUrl}
               download="sovereign-communications.apk"
-              className="btn-primary"
+              className="btn btn-primary"
               style={{
                 width: "100%",
                 marginBottom: "10px",
@@ -105,12 +105,12 @@ export const PWAInstall: React.FC = () => {
             </a>
           )}
 
-          <button onClick={handleInstallClick} className="btn-primary">
+          <button onClick={handleInstallClick} className="btn btn-primary">
             Install Web App
           </button>
 
-          <button onClick={handleDismiss} className="btn-secondary">
-            Not Now
+                    <button onClick={handleDismiss} className="btn btn-secondary">
+            Maybe Later
           </button>
         </div>
       </div>

@@ -128,12 +128,12 @@ export function AddContactDialog({
           </div>
 
           <div className="dialog-actions">
-            <button type="button" onClick={onClose} className="btn-secondary">
+            <button type="button" onClick={onClose} className="btn btn-secondary">
               Cancel
             </button>
             <button
               type="submit"
-              className="btn-primary"
+              className="btn btn-primary"
               disabled={!peerId.trim()}
               data-testid="save-contact-btn"
             >

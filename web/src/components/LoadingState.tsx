@@ -22,7 +22,7 @@ export function LoadingState({ loading, error, retry, children }: LoadingStatePr
       <div className="error-state" role="alert">
         <p className="error-message">{error}</p>
         {retry && (
-          <button onClick={retry} className="retry-button">
+          <button onClick={retry} className="btn btn-primary retry-button">
             Retry
           </button>
         )}
