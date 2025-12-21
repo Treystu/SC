@@ -1,10 +1,10 @@
 /**
  * BLE Transport Implementation
- * 
+ *
  * A Transport abstraction for Bluetooth Low Energy communication.
  * This provides a platform-agnostic interface that can be implemented
  * by platform-specific BLE code (Android, iOS).
- * 
+ *
  * This module defines:
  * 1. BleTransport interface extending Transport
  * 2. BleTransportConfig for BLE-specific settings
@@ -211,10 +211,14 @@ export interface BleTransport extends Transport {
  * These follow the Bluetooth SIG base UUID format.
  */
 export const BLE_MESH_SERVICE_UUID = "5c000001-0000-1000-8000-00805f9b34fb";
-export const BLE_TX_CHARACTERISTIC_UUID = "5c000002-0000-1000-8000-00805f9b34fb";
-export const BLE_RX_CHARACTERISTIC_UUID = "5c000003-0000-1000-8000-00805f9b34fb";
-export const BLE_VERSION_CHARACTERISTIC_UUID = "5c000004-0000-1000-8000-00805f9b34fb";
-export const BLE_METADATA_CHARACTERISTIC_UUID = "5c000005-0000-1000-8000-00805f9b34fb";
+export const BLE_TX_CHARACTERISTIC_UUID =
+  "5c000002-0000-1000-8000-00805f9b34fb";
+export const BLE_RX_CHARACTERISTIC_UUID =
+  "5c000003-0000-1000-8000-00805f9b34fb";
+export const BLE_VERSION_CHARACTERISTIC_UUID =
+  "5c000004-0000-1000-8000-00805f9b34fb";
+export const BLE_METADATA_CHARACTERISTIC_UUID =
+  "5c000005-0000-1000-8000-00805f9b34fb";
 
 /**
  * Default BLE transport configuration.
@@ -243,6 +247,7 @@ export const DEFAULT_BLE_CONFIG: Required<BleTransportConfig> = {
  */
 export class MockBleTransport implements BleTransport {
   readonly localPeerId: TransportPeerId;
+  readonly name = "bluetooth";
 
   private config: Required<BleTransportConfig>;
   private events: BleTransportEvents | null = null;
@@ -321,7 +326,10 @@ export class MockBleTransport implements BleTransport {
     peer.lastSeen = Date.now();
   }
 
-  async broadcast(payload: Uint8Array, excludePeerId?: TransportPeerId): Promise<void> {
+  async broadcast(
+    payload: Uint8Array,
+    excludePeerId?: TransportPeerId,
+  ): Promise<void> {
     const sendPromises: Promise<void>[] = [];
     for (const [peerId, peer] of this.peers) {
       if (peerId !== excludePeerId && peer.state === "connected") {
@@ -341,7 +349,9 @@ export class MockBleTransport implements BleTransport {
     return this.peers.get(peerId);
   }
 
-  getConnectionState(peerId: TransportPeerId): TransportConnectionState | undefined {
+  getConnectionState(
+    peerId: TransportPeerId,
+  ): TransportConnectionState | undefined {
     return this.peers.get(peerId)?.state;
   }
 
@@ -406,7 +416,10 @@ export class MockBleTransport implements BleTransport {
     return this.peers.get(peerId)?.mtu;
   }
 
-  async requestMtu(peerId: TransportPeerId, requestedMtu: number): Promise<number> {
+  async requestMtu(
+    peerId: TransportPeerId,
+    requestedMtu: number,
+  ): Promise<number> {
     const peer = this.peers.get(peerId);
     if (!peer) {
       throw new Error(`Peer ${peerId} not found`);
@@ -475,5 +488,5 @@ transportRegistry.register("bluetooth", (config?: TransportConfig) => {
  */
 export type BleTransportFactory = (
   localPeerId: TransportPeerId,
-  config?: BleTransportConfig
+  config?: BleTransportConfig,
 ) => BleTransport;

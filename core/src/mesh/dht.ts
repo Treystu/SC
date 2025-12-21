@@ -6,11 +6,14 @@
 import { Message, MessageType } from "../protocol/message.js";
 import { RoutingTable, Peer } from "./routing.js";
 import { xorDistance } from "./kademlia.js";
+import { StorageAdapter } from "./dht/storage/StorageAdapter.js";
+import { MemoryStorage } from "./dht/storage/MemoryStorage.js";
 
 export interface DHTConfig {
   alpha?: number; // Concurrency parameter (default 3)
   k?: number; // Replication parameter (default 20)
   lookupTimeout?: number; // Timeout for a single lookup query (default 5000ms)
+  storage?: StorageAdapter; // Persistence adapter
 }
 
 export interface NodeLookupResult {
@@ -35,9 +38,8 @@ export class DHT {
     { resolve: (val: any) => void; reject: (err: any) => void }
   > = new Map();
 
-  // Simple in-memory storage for DHT values
-  // In a real app, this would be backed by a database or filesystem
-  private storage: Map<string, Uint8Array> = new Map();
+  // Storage Adapter for DHT values
+  private storage: StorageAdapter;
 
   constructor(
     routingTable: RoutingTable,
@@ -53,6 +55,7 @@ export class DHT {
     this.alpha = config.alpha || 3;
     this.k = config.k || 20;
     this.lookupTimeout = config.lookupTimeout || 5000;
+    this.storage = config.storage || new MemoryStorage();
   }
 
   /**
@@ -94,7 +97,7 @@ export class DHT {
 
       const closest = this.routingTable.findClosestPeers(targetId, this.k);
 
-      const nodes = closest.map((p) => ({
+      const nodes = closest.map((p: Peer) => ({
         id: p.id,
         publicKey: Array.from(p.publicKey),
         transportType: p.transportType,
@@ -146,13 +149,13 @@ export class DHT {
       const data = JSON.parse(new TextDecoder().decode(payload));
       const key = data.key; // Key is usually the transparent hash
 
-      if (this.storage.has(key)) {
+      const storedValue = await this.storage.get(key);
+      if (storedValue) {
         // We have the value!
-        const value = this.storage.get(key)!;
         const responsePayload = new TextEncoder().encode(
           JSON.stringify({
             key,
-            value: Array.from(value), // Encode as array for JSON
+            value: Array.from(storedValue), // Encode as array for JSON
             requestId: data.requestId,
           }),
         );
@@ -217,12 +220,17 @@ export class DHT {
       const { key, value } = data;
 
       // TODO: Add quotas and validation
-      this.storage.set(key, new Uint8Array(value));
-
-      // Ideally send ACK
-      // For now, silent success
+      this.handleStoreAsync(key, value);
     } catch (e) {
       console.error("Error handling STORE:", e);
+    }
+  }
+
+  private async handleStoreAsync(key: string, value: any): Promise<void> {
+    try {
+      await this.storage.store(key, new Uint8Array(value));
+    } catch (e) {
+      console.error("Failed to store value in DHT adapter", e);
     }
   }
 
@@ -236,7 +244,7 @@ export class DHT {
     // 1. Start with closest nodes from local table
     let shortlist = this.routingTable
       .findClosestPeers(targetId, this.k)
-      .map((p) => ({
+      .map((p: Peer) => ({
         peer: p,
         distance: xorDistance(targetId, p.id),
         queried: false,
@@ -317,53 +325,55 @@ export class DHT {
 
       if (toQuery.length === 0 && activeQueries === 0) break; // Done
 
-      const promises = toQuery.map(async (node) => {
-        node.queried = true;
-        activeQueries++;
+      const promises = toQuery.map(
+        async (node: { peer: Peer; queried: boolean }) => {
+          node.queried = true;
+          activeQueries++;
 
-        // Send query
-        try {
-          const subRequestId = `${requestId}-${node.peer.id}`;
-          const payload = new TextEncoder().encode(
-            JSON.stringify({
-              targetId,
-              requestId: subRequestId,
-            }),
-          );
+          // Send query
+          try {
+            const subRequestId = `${requestId}-${node.peer.id}`;
+            const payload = new TextEncoder().encode(
+              JSON.stringify({
+                targetId,
+                requestId: subRequestId,
+              }),
+            );
 
-          // We need to wait for response
-          // This requires a temporary promise in pendingLookups
-          return await new Promise<any>((resolve) => {
-            const timeout = setTimeout(() => {
-              this.pendingLookups.delete(subRequestId);
-              resolve(null);
-            }, this.lookupTimeout);
+            // We need to wait for response
+            // This requires a temporary promise in pendingLookups
+            return await new Promise<any>((resolve) => {
+              const timeout = setTimeout(() => {
+                this.pendingLookups.delete(subRequestId);
+                resolve(null);
+              }, this.lookupTimeout);
 
-            this.pendingLookups.set(subRequestId, {
-              resolve: (val) => {
+              this.pendingLookups.set(subRequestId, {
+                resolve: (val) => {
+                  clearTimeout(timeout);
+                  this.pendingLookups.delete(subRequestId);
+                  resolve(val);
+                },
+                reject: () => {},
+              });
+
+              this.sendRequest(
+                node.peer.id,
+                MessageType.DHT_FIND_NODE,
+                payload,
+              ).catch(() => {
                 clearTimeout(timeout);
                 this.pendingLookups.delete(subRequestId);
-                resolve(val);
-              },
-              reject: () => {},
+                resolve(null);
+              });
             });
-
-            this.sendRequest(
-              node.peer.id,
-              MessageType.DHT_FIND_NODE,
-              payload,
-            ).catch(() => {
-              clearTimeout(timeout);
-              this.pendingLookups.delete(subRequestId);
-              resolve(null);
-            });
-          });
-        } catch (e) {
-          return null;
-        } finally {
-          activeQueries--;
-        }
-      });
+          } catch (e) {
+            return null;
+          } finally {
+            activeQueries--;
+          }
+        },
+      );
 
       const results = await Promise.all(promises);
 
@@ -386,7 +396,7 @@ export class DHT {
       if (!madeProgress && activeQueries === 0) break;
     }
 
-    return shortlist.map((s) => s.peer);
+    return shortlist.map((s: { peer: Peer }) => s.peer);
   }
 
   /**
@@ -396,14 +406,15 @@ export class DHT {
     const requestId = Math.random().toString(36).substring(7);
 
     // 1. Check local storage first
-    if (this.storage.has(key)) {
-      return this.storage.get(key)!;
+    const localValue = await this.storage.get(key);
+    if (localValue) {
+      return localValue;
     }
 
     // 2. Iterative lookup (similar to findNode but looking for value)
     const shortlist = this.routingTable
       .findClosestPeers(key, this.k)
-      .map((p) => ({
+      .map((p: Peer) => ({
         peer: p,
         distance: xorDistance(key, p.id),
         queried: false,
@@ -559,6 +570,6 @@ export class DHT {
 
     // Also store locally if we are among closest?
     // For simplicity, always store locally as a cache or if we are the origin
-    this.storage.set(key, value);
+    await this.storage.store(key, value);
   }
 }

@@ -1,10 +1,10 @@
 /**
  * Transport Abstraction Layer
- * 
+ *
  * Defines a platform-agnostic transport interface that all mesh/routing logic
  * depends on. Concrete implementations (WebRTC, BLE, Wi-Fi Direct, etc.) are
  * provided by platform-specific code.
- * 
+ *
  * This abstraction ensures protocol and routing logic remain decoupled from
  * platform-specific APIs (browser WebRTC, Android BLE, iOS CoreBluetooth, etc.).
  */
@@ -90,7 +90,10 @@ export interface TransportEvents {
    * @param peerId The peer's ID
    * @param state The new connection state
    */
-  onStateChange?(peerId: TransportPeerId, state: TransportConnectionState): void;
+  onStateChange?(
+    peerId: TransportPeerId,
+    state: TransportConnectionState,
+  ): void;
 
   /**
    * Called when an error occurs.
@@ -139,11 +142,11 @@ export interface SignalingData {
 
 /**
  * Transport interface defining the contract all transport implementations must follow.
- * 
+ *
  * This abstraction allows the mesh networking layer to work with any transport
  * mechanism (WebRTC, Bluetooth LE, Wi-Fi Direct, TCP, etc.) without coupling
  * to specific platform APIs.
- * 
+ *
  * @example
  * ```typescript
  * const transport: Transport = new WebRTCTransport(config);
@@ -151,7 +154,7 @@ export interface SignalingData {
  *   onMessage: (msg) => console.log('Received:', msg),
  *   onPeerConnected: (peerId) => console.log('Connected:', peerId),
  * });
- * 
+ *
  * await transport.connect('peer-id-123');
  * await transport.send('peer-id-123', new Uint8Array([1, 2, 3]));
  * ```
@@ -161,6 +164,11 @@ export interface Transport {
    * The local peer ID for this transport instance.
    */
   readonly localPeerId: TransportPeerId;
+
+  /**
+   * The name of this transport (e.g., 'webrtc', 'ble').
+   */
+  readonly name: string;
 
   /**
    * Start the transport and begin listening for connections.
@@ -181,7 +189,10 @@ export interface Transport {
    * @param signalingData Optional signaling data for connection establishment
    * @returns Promise that resolves when connection is established
    */
-  connect(peerId: TransportPeerId, signalingData?: SignalingData): Promise<void>;
+  connect(
+    peerId: TransportPeerId,
+    signalingData?: SignalingData,
+  ): Promise<void>;
 
   /**
    * Disconnect from a specific peer.
@@ -204,7 +215,10 @@ export interface Transport {
    * @param excludePeerId Optional peer ID to exclude from broadcast
    * @returns Promise that resolves when broadcast is complete
    */
-  broadcast(payload: Uint8Array, excludePeerId?: TransportPeerId): Promise<void>;
+  broadcast(
+    payload: Uint8Array,
+    excludePeerId?: TransportPeerId,
+  ): Promise<void>;
 
   /**
    * Get the list of currently connected peer IDs.
@@ -224,14 +238,18 @@ export interface Transport {
    * @param peerId The peer ID to query
    * @returns Connection state or undefined if peer is unknown
    */
-  getConnectionState(peerId: TransportPeerId): TransportConnectionState | undefined;
+  getConnectionState(
+    peerId: TransportPeerId,
+  ): TransportConnectionState | undefined;
 
   /**
    * Handle incoming signaling data (for transports that require signaling).
    * @param signalingData The signaling data to process
    * @returns Promise that resolves with optional response signaling data
    */
-  handleSignaling?(signalingData: SignalingData): Promise<SignalingData | undefined>;
+  handleSignaling?(
+    signalingData: SignalingData,
+  ): Promise<SignalingData | undefined>;
 
   /**
    * Generate signaling data to initiate a connection (for transports that require signaling).

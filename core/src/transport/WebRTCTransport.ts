@@ -1,9 +1,9 @@
 /**
  * WebRTC Transport Implementation
- * 
+ *
  * A Transport implementation that uses WebRTC for peer-to-peer communication.
  * This wraps the existing WebRTC functionality to conform to the Transport interface.
- * 
+ *
  * Browser-only: This implementation uses browser WebRTC APIs and should only
  * be used in web environments. Platform-specific implementations (Android, iOS)
  * should provide their own Transport implementations.
@@ -62,14 +62,19 @@ interface PeerConnectionWrapper {
  */
 export class WebRTCTransport implements Transport {
   readonly localPeerId: TransportPeerId;
+  readonly name = "webrtc";
 
   private config: WebRTCTransportConfig;
   private events: TransportEvents | null = null;
   private peers: Map<TransportPeerId, PeerConnectionWrapper> = new Map();
   private isRunning = false;
-  private pendingIceCandidates: Map<TransportPeerId, RTCIceCandidateInit[]> = new Map();
+  private pendingIceCandidates: Map<TransportPeerId, RTCIceCandidateInit[]> =
+    new Map();
 
-  constructor(localPeerId: TransportPeerId, config: WebRTCTransportConfig = {}) {
+  constructor(
+    localPeerId: TransportPeerId,
+    config: WebRTCTransportConfig = {},
+  ) {
     if (!isWebRTCAvailable()) {
       throw new Error("WebRTC is not available in this environment");
     }
@@ -114,7 +119,11 @@ export class WebRTCTransport implements Transport {
 
       if (state === "connected") {
         this.handlePeerConnected(peerId);
-      } else if (state === "disconnected" || state === "failed" || state === "closed") {
+      } else if (
+        state === "disconnected" ||
+        state === "failed" ||
+        state === "closed"
+      ) {
         this.handlePeerDisconnected(peerId, `Connection ${state}`);
       }
     };
@@ -125,7 +134,10 @@ export class WebRTCTransport implements Transport {
         // ICE candidates need to be sent via signaling
         // The signaling mechanism is external to this transport
         // Emit a custom event that can be captured for signaling
-        console.debug(`ICE candidate generated for ${peerId}:`, event.candidate.toJSON());
+        console.debug(
+          `ICE candidate generated for ${peerId}:`,
+          event.candidate.toJSON(),
+        );
       }
     };
 
@@ -147,7 +159,10 @@ export class WebRTCTransport implements Transport {
   /**
    * Set up event handlers for a data channel.
    */
-  private setupDataChannel(peerId: TransportPeerId, channel: RTCDataChannel): void {
+  private setupDataChannel(
+    peerId: TransportPeerId,
+    channel: RTCDataChannel,
+  ): void {
     const wrapper = this.peers.get(peerId);
     if (!wrapper) return;
 
@@ -175,15 +190,23 @@ export class WebRTCTransport implements Transport {
 
     channel.onerror = (event) => {
       // RTCErrorEvent contains the actual error in event.error
-      const errorMessage = (event as RTCErrorEvent).error?.message || 'Unknown data channel error';
-      console.error(`Data channel ${channel.label} error for ${peerId}:`, errorMessage);
-      this.events?.onError?.(new Error(`Data channel error: ${errorMessage}`), peerId);
+      const errorMessage =
+        (event as RTCErrorEvent).error?.message || "Unknown data channel error";
+      console.error(
+        `Data channel ${channel.label} error for ${peerId}:`,
+        errorMessage,
+      );
+      this.events?.onError?.(
+        new Error(`Data channel error: ${errorMessage}`),
+        peerId,
+      );
     };
 
     channel.onmessage = (event) => {
-      const payload = event.data instanceof ArrayBuffer
-        ? new Uint8Array(event.data)
-        : new TextEncoder().encode(event.data);
+      const payload =
+        event.data instanceof ArrayBuffer
+          ? new Uint8Array(event.data)
+          : new TextEncoder().encode(event.data);
 
       wrapper.bytesReceived += payload.length;
       wrapper.lastSeen = Date.now();
@@ -202,18 +225,21 @@ export class WebRTCTransport implements Transport {
   /**
    * Create data channels for a peer connection.
    */
-  private createDataChannels(peerId: TransportPeerId, connection: RTCPeerConnection): void {
+  private createDataChannels(
+    peerId: TransportPeerId,
+    connection: RTCPeerConnection,
+  ): void {
     // Reliable channel for important messages
     const reliableChannel = connection.createDataChannel(
       this.config.reliableChannelLabel!,
-      { ordered: true }
+      { ordered: true },
     );
     this.setupDataChannel(peerId, reliableChannel);
 
     // Unreliable channel for real-time data
     const unreliableChannel = connection.createDataChannel(
       this.config.unreliableChannelLabel!,
-      { ordered: false, maxRetransmits: 0 }
+      { ordered: false, maxRetransmits: 0 },
     );
     this.setupDataChannel(peerId, unreliableChannel);
   }
@@ -241,7 +267,10 @@ export class WebRTCTransport implements Transport {
   /**
    * Handle peer disconnected event.
    */
-  private handlePeerDisconnected(peerId: TransportPeerId, reason?: string): void {
+  private handlePeerDisconnected(
+    peerId: TransportPeerId,
+    reason?: string,
+  ): void {
     const wrapper = this.peers.get(peerId);
     if (!wrapper) return;
 
@@ -272,7 +301,10 @@ export class WebRTCTransport implements Transport {
     this.events = null;
   }
 
-  async connect(peerId: TransportPeerId, signalingData?: SignalingData): Promise<void> {
+  async connect(
+    peerId: TransportPeerId,
+    signalingData?: SignalingData,
+  ): Promise<void> {
     if (!this.isRunning) {
       throw new Error("Transport is not running");
     }
@@ -337,7 +369,10 @@ export class WebRTCTransport implements Transport {
     wrapper.bytesSent += payload.length;
   }
 
-  async broadcast(payload: Uint8Array, excludePeerId?: TransportPeerId): Promise<void> {
+  async broadcast(
+    payload: Uint8Array,
+    excludePeerId?: TransportPeerId,
+  ): Promise<void> {
     const promises: Promise<void>[] = [];
 
     for (const peerId of this.peers.keys()) {
@@ -345,7 +380,7 @@ export class WebRTCTransport implements Transport {
         promises.push(
           this.send(peerId, payload).catch((err) => {
             console.error(`Failed to send to ${peerId}:`, err);
-          })
+          }),
         );
       }
     }
@@ -374,11 +409,15 @@ export class WebRTCTransport implements Transport {
     };
   }
 
-  getConnectionState(peerId: TransportPeerId): TransportConnectionState | undefined {
+  getConnectionState(
+    peerId: TransportPeerId,
+  ): TransportConnectionState | undefined {
     return this.peers.get(peerId)?.state;
   }
 
-  async handleSignaling(signalingData: SignalingData): Promise<SignalingData | undefined> {
+  async handleSignaling(
+    signalingData: SignalingData,
+  ): Promise<SignalingData | undefined> {
     const peerId = signalingData.from;
     if (!peerId) {
       throw new Error("Signaling data missing 'from' peer ID");
@@ -495,7 +534,10 @@ export class WebRTCTransport implements Transport {
   /**
    * Wait for ICE gathering to complete (with timeout).
    */
-  async waitForIceGathering(peerId: TransportPeerId, timeoutMs = 2000): Promise<void> {
+  async waitForIceGathering(
+    peerId: TransportPeerId,
+    timeoutMs = 2000,
+  ): Promise<void> {
     const wrapper = this.peers.get(peerId);
     if (!wrapper) return;
 
@@ -507,15 +549,24 @@ export class WebRTCTransport implements Transport {
       const checkState = () => {
         if (wrapper.connection.iceGatheringState === "complete") {
           clearTimeout(timeoutId);
-          wrapper.connection.removeEventListener("icegatheringstatechange", checkState);
+          wrapper.connection.removeEventListener(
+            "icegatheringstatechange",
+            checkState,
+          );
           resolve();
         }
       };
 
-      wrapper.connection.addEventListener("icegatheringstatechange", checkState);
+      wrapper.connection.addEventListener(
+        "icegatheringstatechange",
+        checkState,
+      );
 
       const timeoutId = setTimeout(() => {
-        wrapper.connection.removeEventListener("icegatheringstatechange", checkState);
+        wrapper.connection.removeEventListener(
+          "icegatheringstatechange",
+          checkState,
+        );
         resolve(); // Resolve anyway on timeout
       }, timeoutMs);
     });
@@ -524,7 +575,9 @@ export class WebRTCTransport implements Transport {
   /**
    * Get the local session description for a peer.
    */
-  async getLocalDescription(peerId: TransportPeerId): Promise<RTCSessionDescription | null> {
+  async getLocalDescription(
+    peerId: TransportPeerId,
+  ): Promise<RTCSessionDescription | null> {
     const wrapper = this.peers.get(peerId);
     return wrapper?.connection.localDescription || null;
   }
@@ -541,7 +594,11 @@ export class WebRTCTransport implements Transport {
   /**
    * Add a media track to a peer connection.
    */
-  addTrack(peerId: TransportPeerId, track: MediaStreamTrack, stream: MediaStream): void {
+  addTrack(
+    peerId: TransportPeerId,
+    track: MediaStreamTrack,
+    stream: MediaStream,
+  ): void {
     const wrapper = this.peers.get(peerId);
     if (!wrapper) {
       throw new Error(`Peer ${peerId} not found`);

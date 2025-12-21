@@ -134,8 +134,10 @@ export {
 
 // Discovery
 export * from "./discovery/peer.js";
+export * from "./discovery/http-bootstrap.js";
 export * from "./mesh/discovery.js";
 export * from "./mesh/bootstrap-discovery.js";
+export * from "./mesh/rendezvous.js";
 
 export {
   MDNSBroadcaster,
@@ -309,6 +311,10 @@ export {
   TypedMemoryStorage,
   type StorageAdapter,
 } from "./storage/memory.js";
+
+// DHT Storage (Binary)
+export { IndexedDBStorage } from "./mesh/dht/storage/IndexedDBStorage.js";
+export { type StorageAdapter as DHTStorageAdapter } from "./mesh/dht/storage/StorageAdapter.js";
 
 // Backup & Restore
 export {

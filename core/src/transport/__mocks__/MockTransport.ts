@@ -1,9 +1,9 @@
 /**
  * MockTransport - A mock implementation of the Transport interface for testing.
- * 
+ *
  * This mock transport simulates peer-to-peer communication in memory,
  * allowing unit and integration tests to run without actual network connectivity.
- * 
+ *
  * Features:
  * - Simulates latency and message delivery
  * - Tracks sent/received messages for test assertions
@@ -48,6 +48,7 @@ const mockNetworkRegistry: Map<TransportPeerId, MockTransport> = new Map();
  */
 export class MockTransport implements Transport {
   readonly localPeerId: TransportPeerId;
+  readonly name = "mock";
 
   private config: MockTransportConfig;
   private events: TransportEvents | null = null;
@@ -91,7 +92,9 @@ export class MockTransport implements Transport {
    */
   private async simulateLatency(): Promise<void> {
     if (this.config.latencyMs && this.config.latencyMs > 0) {
-      await new Promise((resolve) => setTimeout(resolve, this.config.latencyMs));
+      await new Promise((resolve) =>
+        setTimeout(resolve, this.config.latencyMs),
+      );
     }
   }
 
@@ -122,7 +125,10 @@ export class MockTransport implements Transport {
     this.events = null;
   }
 
-  async connect(peerId: TransportPeerId, _signalingData?: SignalingData): Promise<void> {
+  async connect(
+    peerId: TransportPeerId,
+    _signalingData?: SignalingData,
+  ): Promise<void> {
     this.connectionAttempts.push(peerId);
 
     if (this.config.failConnections) {
@@ -133,7 +139,9 @@ export class MockTransport implements Transport {
 
     // Simulate connection delay
     if (this.config.connectionDelayMs && this.config.connectionDelayMs > 0) {
-      await new Promise((resolve) => setTimeout(resolve, this.config.connectionDelayMs));
+      await new Promise((resolve) =>
+        setTimeout(resolve, this.config.connectionDelayMs),
+      );
     }
 
     // Update state to connecting
@@ -158,7 +166,11 @@ export class MockTransport implements Transport {
 
     // If the remote peer exists in the network, establish bidirectional connection
     const remotePeer = mockNetworkRegistry.get(peerId);
-    if (remotePeer && remotePeer !== this && !remotePeer.peers.has(this.localPeerId)) {
+    if (
+      remotePeer &&
+      remotePeer !== this &&
+      !remotePeer.peers.has(this.localPeerId)
+    ) {
       await remotePeer.handleIncomingConnection(this.localPeerId);
     }
   }
@@ -273,7 +285,8 @@ export class MockTransport implements Transport {
     // Update bytes received
     const peerInfo = this.peers.get(message.from);
     if (peerInfo) {
-      peerInfo.bytesReceived = (peerInfo.bytesReceived || 0) + message.payload.length;
+      peerInfo.bytesReceived =
+        (peerInfo.bytesReceived || 0) + message.payload.length;
       peerInfo.lastSeen = Date.now();
     }
 
@@ -281,14 +294,19 @@ export class MockTransport implements Transport {
     this.events?.onMessage(message);
   }
 
-  async broadcast(payload: Uint8Array, excludePeerId?: TransportPeerId): Promise<void> {
+  async broadcast(
+    payload: Uint8Array,
+    excludePeerId?: TransportPeerId,
+  ): Promise<void> {
     const promises: Promise<void>[] = [];
 
     for (const peerId of this.peers.keys()) {
       if (peerId !== excludePeerId) {
-        promises.push(this.send(peerId, payload).catch(() => {
-          // Ignore individual send failures during broadcast
-        }));
+        promises.push(
+          this.send(peerId, payload).catch(() => {
+            // Ignore individual send failures during broadcast
+          }),
+        );
       }
     }
 
@@ -305,7 +323,9 @@ export class MockTransport implements Transport {
     return this.peers.get(peerId);
   }
 
-  getConnectionState(peerId: TransportPeerId): TransportConnectionState | undefined {
+  getConnectionState(
+    peerId: TransportPeerId,
+  ): TransportConnectionState | undefined {
     return this.peers.get(peerId)?.state;
   }
 

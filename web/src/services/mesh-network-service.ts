@@ -1,4 +1,4 @@
-import { MeshNetwork } from "@sc/core";
+import { MeshNetwork, IndexedDBStorage } from "@sc/core";
 import { WebPersistenceAdapter } from "../utils/WebPersistenceAdapter";
 import { getDatabase } from "../storage/database";
 
@@ -102,6 +102,7 @@ export const getMeshNetwork = async (): Promise<MeshNetwork> => {
         persistence: new WebPersistenceAdapter(),
         identity: identityKeyPair,
         peerId: peerId,
+        dhtStorage: new IndexedDBStorage(),
       });
 
       meshNetworkInstance = network;

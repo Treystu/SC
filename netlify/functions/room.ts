@@ -19,6 +19,45 @@ export const handler: Handler = async (event, context) => {
     return { statusCode: 200, headers: CORS_HEADERS, body: "" };
   }
 
+  // Handle plain GET for simple bootstrapping (HttpBootstrapProvider compatibility)
+  if (event.httpMethod === "GET") {
+    try {
+      console.log(`[${requestId}] Handling GET bootstrap request`);
+      const db = await connectToDatabase();
+      const peersCollection = db.collection("peers");
+
+      // Get active peers (last 5 mins)
+      const activeWindow = 5;
+      const timeAgo = new Date(Date.now() - activeWindow * 60 * 1000);
+
+      const activePeers = await peersCollection
+        .find({ lastSeen: { $gt: timeAgo } })
+        .project({ _id: 1, metadata: 1 })
+        .limit(50) // Cap at 50 for bootstrap
+        .toArray();
+
+      // Remap _id to id for consistency with DiscoveryPeer interface
+      const peers = activePeers.map((p: any) => ({
+        id: p._id,
+        transportType: "webrtc", // Default for now
+        ...p,
+      }));
+
+      return {
+        statusCode: 200,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+        body: JSON.stringify({ peers }),
+      };
+    } catch (error) {
+      console.error(`[${requestId}] GET Error:`, error);
+      return {
+        statusCode: 500,
+        headers: CORS_HEADERS,
+        body: JSON.stringify({ error: "Internal Server Error" }),
+      };
+    }
+  }
+
   try {
     console.log(`[${requestId}] Connecting to database...`);
     const db = await connectToDatabase();

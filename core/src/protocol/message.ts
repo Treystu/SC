@@ -53,6 +53,19 @@ export enum MessageType {
   DHT_FOUND_VALUE = 0x45,
   // Self-update
   UPDATE_MANIFEST = 0x50,
+  // Rendezvous
+  RENDEZVOUS_ANNOUNCE = 0x60,
+  RENDEZVOUS_QUERY = 0x61,
+  RENDEZVOUS_RESPONSE = 0x62,
+
+  // Content Addressing (Phase 4)
+  REQUEST_BLOB = 0x70,
+  RESPONSE_BLOB = 0x71,
+
+  // Social Recovery (Phase 4)
+  STORE_SHARE = 0x80,
+  REQUEST_SHARE = 0x81,
+  RESPONSE_SHARE = 0x82,
 }
 
 // Protocol constants
@@ -346,6 +359,11 @@ export function getMessageTypeName(type: MessageType): string {
     [MessageType.DHT_STORE_ACK]: "DHT_STORE_ACK",
     [MessageType.DHT_FOUND_VALUE]: "DHT_FOUND_VALUE",
     [MessageType.UPDATE_MANIFEST]: "UPDATE_MANIFEST",
+    [MessageType.REQUEST_BLOB]: "REQUEST_BLOB",
+    [MessageType.RESPONSE_BLOB]: "RESPONSE_BLOB",
+    [MessageType.STORE_SHARE]: "STORE_SHARE",
+    [MessageType.REQUEST_SHARE]: "REQUEST_SHARE",
+    [MessageType.RESPONSE_SHARE]: "RESPONSE_SHARE",
   };
   return typeNames[type] || `UNKNOWN(0x${type.toString(16).padStart(2, "0")})`;
 }

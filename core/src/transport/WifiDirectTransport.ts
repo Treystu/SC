@@ -1,10 +1,10 @@
 /**
  * Wi-Fi Direct Transport Implementation
- * 
+ *
  * A Transport abstraction for Wi-Fi Direct (Wi-Fi P2P) communication.
  * This provides a platform-agnostic interface that can be implemented
  * by platform-specific Wi-Fi Direct code (Android, iOS).
- * 
+ *
  * Wi-Fi Direct enables high-bandwidth, low-latency peer-to-peer connections
  * without requiring a traditional Wi-Fi network infrastructure.
  */
@@ -238,7 +238,9 @@ export interface WifiDirectTransport extends Transport {
   /**
    * Request Wi-Fi Direct connection info (IP addresses, etc.).
    */
-  requestConnectionInfo(): Promise<{ groupOwnerAddress: string; isGroupOwner: boolean } | undefined>;
+  requestConnectionInfo(): Promise<
+    { groupOwnerAddress: string; isGroupOwner: boolean } | undefined
+  >;
 
   /**
    * Register a local service for service discovery.
@@ -261,7 +263,9 @@ export interface WifiDirectTransport extends Transport {
    * Get Wi-Fi Direct-specific peer info.
    * @param peerId The peer ID to query
    */
-  getWifiDirectPeerInfo(peerId: TransportPeerId): WifiDirectPeerInfo | undefined;
+  getWifiDirectPeerInfo(
+    peerId: TransportPeerId,
+  ): WifiDirectPeerInfo | undefined;
 }
 
 /**
@@ -287,6 +291,7 @@ export const DEFAULT_WIFI_DIRECT_CONFIG: Required<WifiDirectTransportConfig> = {
  */
 export class MockWifiDirectTransport implements WifiDirectTransport {
   readonly localPeerId: TransportPeerId;
+  readonly name = "wifi-direct";
 
   private config: Required<WifiDirectTransportConfig>;
   private events: WifiDirectTransportEvents | null = null;
@@ -298,7 +303,10 @@ export class MockWifiDirectTransport implements WifiDirectTransport {
   private _groupInfo: WifiDirectGroupInfo | undefined;
   private discoveryInterval: NodeJS.Timeout | null = null;
 
-  constructor(localPeerId: TransportPeerId, config: WifiDirectTransportConfig = {}) {
+  constructor(
+    localPeerId: TransportPeerId,
+    config: WifiDirectTransportConfig = {},
+  ) {
     this.localPeerId = localPeerId;
     this.config = { ...DEFAULT_WIFI_DIRECT_CONFIG, ...config };
   }
@@ -367,7 +375,10 @@ export class MockWifiDirectTransport implements WifiDirectTransport {
     peer.lastSeen = Date.now();
   }
 
-  async broadcast(payload: Uint8Array, excludePeerId?: TransportPeerId): Promise<void> {
+  async broadcast(
+    payload: Uint8Array,
+    excludePeerId?: TransportPeerId,
+  ): Promise<void> {
     const sendPromises: Promise<void>[] = [];
     for (const [peerId, peer] of this.peers) {
       if (peerId !== excludePeerId && peer.state === "connected") {
@@ -387,7 +398,9 @@ export class MockWifiDirectTransport implements WifiDirectTransport {
     return this.peers.get(peerId);
   }
 
-  getConnectionState(peerId: TransportPeerId): TransportConnectionState | undefined {
+  getConnectionState(
+    peerId: TransportPeerId,
+  ): TransportConnectionState | undefined {
     return this.peers.get(peerId)?.state;
   }
 
@@ -431,7 +444,7 @@ export class MockWifiDirectTransport implements WifiDirectTransport {
 
   async createGroup(): Promise<WifiDirectGroupInfo> {
     this._role = WifiDirectRole.GROUP_OWNER;
-    
+
     const ownerDevice: WifiDirectDeviceInfo = {
       deviceId: this.localPeerId,
       name: "This Device",
@@ -478,7 +491,9 @@ export class MockWifiDirectTransport implements WifiDirectTransport {
     return true;
   }
 
-  async requestConnectionInfo(): Promise<{ groupOwnerAddress: string; isGroupOwner: boolean } | undefined> {
+  async requestConnectionInfo(): Promise<
+    { groupOwnerAddress: string; isGroupOwner: boolean } | undefined
+  > {
     if (!this._groupInfo) {
       return undefined;
     }
@@ -500,10 +515,15 @@ export class MockWifiDirectTransport implements WifiDirectTransport {
 
   async discoverServices(serviceType?: string): Promise<void> {
     // Mock: simulate service discovery
-    console.log("Discovering Wi-Fi Direct services:", serviceType || this.config.serviceType);
+    console.log(
+      "Discovering Wi-Fi Direct services:",
+      serviceType || this.config.serviceType,
+    );
   }
 
-  getWifiDirectPeerInfo(peerId: TransportPeerId): WifiDirectPeerInfo | undefined {
+  getWifiDirectPeerInfo(
+    peerId: TransportPeerId,
+  ): WifiDirectPeerInfo | undefined {
     return this.peers.get(peerId);
   }
 
@@ -537,7 +557,10 @@ export class MockWifiDirectTransport implements WifiDirectTransport {
 // Register the mock Wi-Fi Direct transport factory
 transportRegistry.register("wifi-direct", (config?: TransportConfig) => {
   const peerId = `wfd-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  return new MockWifiDirectTransport(peerId, config as WifiDirectTransportConfig);
+  return new MockWifiDirectTransport(
+    peerId,
+    config as WifiDirectTransportConfig,
+  );
 });
 
 /**
@@ -545,5 +568,5 @@ transportRegistry.register("wifi-direct", (config?: TransportConfig) => {
  */
 export type WifiDirectTransportFactory = (
   localPeerId: TransportPeerId,
-  config?: WifiDirectTransportConfig
+  config?: WifiDirectTransportConfig,
 ) => WifiDirectTransport;
