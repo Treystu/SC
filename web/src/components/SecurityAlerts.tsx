@@ -12,7 +12,7 @@ import {
   SecurityAlertType,
   AlertSeverity,
   PeerSecurityAlertSystem,
-} from '../../../core/src/mesh/peer-security-alerts';
+} from '@sc/core';
 
 interface SecurityAlertsProps {
   alertSystem: PeerSecurityAlertSystem;

@@ -222,6 +222,46 @@ rm -rf .gradle build app/build
 
 ## Next Steps
 
+
+## E2E Test Environment Setup (Appium/WebDriver)
+
+To run end-to-end (E2E) tests involving Android devices/emulators, you must:
+
+1. **Start the Android Emulator**
+   - Open Android Studio → AVD Manager → Start your virtual device
+   - Or use the command line:
+     ```sh
+     emulator -avd <your_avd_name>
+     ```
+
+2. **Start the Appium Server**
+   - Install Appium globally if not already installed:
+     ```sh
+     npm install -g appium
+     ```
+   - Start Appium:
+     ```sh
+     appium
+     ```
+
+3. **Verify Device Connection**
+   - Ensure your emulator or device is listed:
+     ```sh
+     adb devices
+     ```
+
+4. **Build the APK**
+   - See above for build instructions. The APK must exist at `android/app/build/outputs/apk/debug/app-debug.apk`.
+
+5. **Run E2E Tests**
+   - From the project root:
+     ```sh
+     npm run test:e2e
+     ```
+
+If you see errors like `RequestError` or cannot connect to `http://localhost:4723/wd/hub`, ensure Appium is running and the emulator/device is available.
+
+---
 1. **Run on Emulator**: Open Android Studio → AVD Manager → Create Virtual Device
 2. **Run on Device**: Enable USB Debugging on your Android device
 3. **Test BLE**: BLE features require a physical device (not available in emulator)

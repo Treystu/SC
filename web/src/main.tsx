@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import { initializeEncryption } from "./bootstrap";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import "./sentry"; // Sentry is initialized in sentry.ts
 import "./index.css";
@@ -49,11 +50,16 @@ const rootElement = document.getElementById("root");
 if (!rootElement) {
   console.error("Failed to find the root element");
 } else {
-  ReactDOM.createRoot(rootElement).render(
-    <React.StrictMode>
-      <ErrorBoundary>
-        <App />
-      </ErrorBoundary>
-    </React.StrictMode>,
-  );
+  (async () => {
+    // Ensure encryption is ready before mounting app to avoid decryption races
+    await initializeEncryption();
+
+    ReactDOM.createRoot(rootElement).render(
+      <React.StrictMode>
+        <ErrorBoundary>
+          <App />
+        </ErrorBoundary>
+      </React.StrictMode>,
+    );
+  })();
 }

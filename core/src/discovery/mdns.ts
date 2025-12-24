@@ -455,6 +455,14 @@ export class MDNSDiscoverer {
     this.cleanupInterval = setInterval(() => {
       this.cleanupExpiredServices();
     }, this.CLEANUP_INTERVAL_MS);
+    // Do not keep Node process alive in tests
+    try {
+      if (this.cleanupInterval && typeof (this.cleanupInterval as any).unref === 'function') {
+        (this.cleanupInterval as any).unref();
+      }
+    } catch (e) {
+      // ignore on platforms without unref
+    }
     
     console.log(`[mDNS] Started discovery for: ${this.config.serviceTypes?.join(', ')}`);
     

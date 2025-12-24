@@ -126,7 +126,7 @@ PLAN:
 Plan: Comprehensive SC Platform Upgrade
 This plan addresses all critical gaps identified in the TODO document: test coverage, JavaScript bridge security, missing build resources, transport layer issues, database migrations, security implementations, and performance concerns. The plan is ordered by priority with explicit file paths and changes required.
 
-Phase 1: Create Missing Build Resources (Day 1)
+Phase 1: Create Missing Build Resources (Sprint 1)
 1.1 Create nginx configuration
 
 Create /nginx/nginx.conf with HTTPS config, proxy settings for web app (port 3000), and security headers (X-Content-Type-Options, X-Frame-Options, CSP)
@@ -138,7 +138,7 @@ Create /monitoring/grafana/dashboards/ with JSON dashboards for: mesh network he
 1.3 Update docker-compose.yml
 
 Verify all volume mounts reference newly created files at docker-compose.yml lines 1-50
-Phase 2: Fix Security Test Placeholders (Day 1-2)
+Phase 2: Fix Security Test Placeholders (Sprint 1-2)
 2.1 Implement vulnerability scanning tests
 
 Edit vulnerability-scanning.test.ts - Replace expect(true).toBe(true) with:
@@ -159,7 +159,7 @@ Edit rate-limiting.test.ts - Replace placeholder with:
 Test message flooding detection
 Test peer connection rate limits
 Test DHT query rate limiting
-Phase 3: Enable Skipped E2E Tests (Day 2-4)
+Phase 3: Enable Skipped E2E Tests (Sprint 2-4)
 3.1 Fix messaging E2E tests
 
 Edit messaging.e2e.test.ts:
@@ -182,7 +182,7 @@ Line 272: Implement actual WebRTC connection between contexts
 Edit web-to-android.e2e.test.ts - Line 9: Change test.skip(!runMobileE2E) to test.skip(false) after configuring Appium
 Edit web-to-ios.e2e.test.ts - Same pattern
 Configure appium.config.ts with actual device/emulator capabilities
-Phase 4: Configure Certificate Pinning (Day 3)
+Phase 4: Configure Certificate Pinning (Sprint 3)
 4.1 iOS - Add actual certificate pins
 
 Edit CertificatePinningManager.swift:
@@ -194,7 +194,7 @@ Create new file android/app/src/main/kotlin/.../security/CertificatePinningManag
 Use OkHttp's CertificatePinner.Builder()
 Add pins for the same domains as iOS
 Integrate with any network client in the app
-Phase 5: Add TURN Server Configuration (Day 3-4)
+Phase 5: Add TURN Server Configuration (Sprint 3-4)
 5.1 Update WebRTC core configuration
 
 Edit webrtc.ts line ~80-90:
@@ -208,14 +208,14 @@ Add same TURN servers to PeerConnection.RTCConfiguration
 
 Edit WebRTCManager.swift:
 Add TURN servers to RTCConfiguration.iceServers
-Phase 6: IndexedDB Migration Strategy (Day 4)
+Phase 6: IndexedDB Migration Strategy (Sprint 4)
 6.1 Add versioned migrations to web database
 
 Edit database.ts:
 Add version tracking: const DB_VERSION = 2;
 Implement onupgradeneeded handler:
 Add data migration for existing records if schema changes
-Phase 7: Enable Property-Based Crypto Tests (Day 5)
+Phase 7: Enable Property-Based Crypto Tests (Sprint 5)
 7.1 Fix and enable crypto property tests
 
 Locate crypto tests with describe.skip (search for Property-Based in test files)
@@ -226,7 +226,7 @@ Fix any failing property tests by ensuring crypto functions handle edge cases:
 Empty inputs
 Maximum-size inputs (1MB)
 Invalid key sizes
-Phase 8: Implement Real Load Testing (Day 5-6)
+Phase 8: Implement Real Load Testing (Sprint 5-6)
 8.1 Update concurrent users test
 
 Edit concurrent-users.test.ts:
@@ -240,7 +240,7 @@ Edit database-performance.test.ts:
 Test IndexedDB with 10K, 50K, 100K messages
 Test Room DB (Android) and Core Data (iOS) via integration tests
 Measure: write throughput, read latency, query performance
-Phase 9: Evaluate Native Crypto (Day 6-7) - Architecture Decision
+Phase 9: Evaluate Native Crypto (Sprint 6-7) - Architecture Decision
 9.1 Document current bridge security risks
 
 Current flow in android/app/.../core/CoreBridge.kt passes private keys through JavaScript
@@ -254,7 +254,7 @@ Android: Use java.security + BouncyCastle for Ed25519
 iOS: Use CryptoKit (iOS 13+) for Ed25519
 Create native interfaces matching @sc/core crypto API
 This is a significant refactor - plan for 2-3 week sprint
-Phase 10: Add DHT Persistence (Day 7)
+Phase 10: Add DHT Persistence (Sprint 7)
 10.1 Create file-based storage adapter
 
 Edit or create core/src/mesh/dht/storage.ts:

@@ -1,5 +1,5 @@
 import React from 'react';
-import { ConnectionQuality } from '../../core/src/connection-quality';
+import { type ConnectionQuality } from '@sc/core';
 
 interface ConnectionStatusProps {
   quality: ConnectionQuality;
@@ -19,7 +19,7 @@ export function ConnectionStatus({ quality }: ConnectionStatusProps) {
   return (
     <div className="flex items-center space-x-2" title={`Connection: ${label}`}>
       <div className={`w-3 h-3 rounded-full ${color}`}></div>
-      <span className="text-sm text-gray-600 sr-only">{label}</span>
+      <span className="text-sm text-gray-600">{label}</span>
     </div>
   );
 }

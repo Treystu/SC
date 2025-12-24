@@ -69,9 +69,20 @@ export class GossipProtocol {
       this.performGossipRound();
     }, this.config.gossipInterval);
 
+    try {
+      if (this.gossipInterval && typeof (this.gossipInterval as any).unref === 'function') {
+        (this.gossipInterval as any).unref();
+      }
+    } catch (e) {}
+
     this.pruneInterval = setInterval(() => {
       this.pruneOldMessages();
     }, this.config.pruneInterval);
+    try {
+      if (this.pruneInterval && typeof (this.pruneInterval as any).unref === 'function') {
+        (this.pruneInterval as any).unref();
+      }
+    } catch (e) {}
   }
 
   /**

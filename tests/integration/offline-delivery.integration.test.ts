@@ -67,11 +67,11 @@ describe('Offline Message Delivery Integration Test', () => {
   it('should queue message when peer is offline and deliver when online', async () => {
     const network = new MockNetwork();
     
-    const senderRelay = new MessageRelay('sender', new RoutingTable());
+    const senderRelay = new MessageRelay('sender', new RoutingTable('sender'));
     const senderQueue = new MockOfflineQueue();
     network.register('sender', senderRelay, senderQueue);
 
-    const receiverRelay = new MessageRelay('receiver', new RoutingTable());
+    const receiverRelay = new MessageRelay('receiver', new RoutingTable('receiver'));
     const receiverQueue = new MockOfflineQueue();
     network.register('receiver', receiverRelay, receiverQueue);
     

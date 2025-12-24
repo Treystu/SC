@@ -103,6 +103,11 @@ export interface NATType {
   requiresRelay: boolean;
 }
 
+// When running tests we want to avoid noisy console output that can
+// trigger "Cannot log after tests are done" when async callbacks fire
+// after Jest has finished. Use a simple module-level flag to guard logs.
+const IS_TEST = process.env.NODE_ENV === 'test';
+
 // ============================================================================
 // WebRTC Peer Connection Manager
 // ============================================================================
@@ -196,7 +201,7 @@ export class WebRTCPeerEnhanced {
   }
 
   private handleInitializationError(error: any): void {
-    console.error('Failed to initialize peer connection:', error);
+    if (!IS_TEST) console.error('Failed to initialize peer connection:', error);
     this.emit('error', { 
       type: 'initialization', 
       error, 
@@ -276,19 +281,19 @@ export class WebRTCPeerEnhanced {
 
   private setupDataChannelHandlers(channel: RTCDataChannel, type: DataChannelType): void {
     channel.onopen = () => {
-      console.log(`Data channel ${channel.label} (${type}) opened`);
+      if (!IS_TEST) console.log(`Data channel ${channel.label} (${type}) opened`);
       this.emit('channel-open', { type, label: channel.label });
       this.processQueue(); // Process any queued messages
     };
 
     channel.onclose = () => {
-      console.log(`Data channel ${channel.label} (${type}) closed`);
+      if (!IS_TEST) console.log(`Data channel ${channel.label} (${type}) closed`);
       this.dataChannels.delete(type);
       this.emit('channel-close', { type, label: channel.label });
     };
 
     channel.onerror = (error) => {
-      console.error(`Data channel ${channel.label} error:`, error);
+      if (!IS_TEST) console.error(`Data channel ${channel.label} error:`, error);
       this.emit('channel-error', { type, error, label: channel.label });
       this.handleChannelError(type, error);
     };
@@ -313,13 +318,13 @@ export class WebRTCPeerEnhanced {
       } else if (typeof data === 'string') {
         payload = new TextEncoder().encode(data);
       } else {
-        console.warn('Unsupported data type received:', typeof data);
+        if (!IS_TEST) console.warn('Unsupported data type received:', typeof data);
         return;
       }
 
       this.emit('message', { type, data: payload, peerId: this.peerId });
     } catch (error) {
-      console.error('Error handling message:', error);
+      if (!IS_TEST) console.error('Error handling message:', error);
       this.emit('error', { type: 'message-handling', error });
     }
   }
@@ -500,13 +505,13 @@ export class WebRTCPeerEnhanced {
 
     this.peerConnection.onicegatheringstatechange = () => {
       const state = this.peerConnection?.iceGatheringState;
-      console.log('ICE gathering state:', state);
+      if (!IS_TEST) console.log('ICE gathering state:', state);
       this.emit('ice-gathering-state', { state });
     };
 
     this.peerConnection.oniceconnectionstatechange = () => {
       const state = this.peerConnection?.iceConnectionState;
-      console.log('ICE connection state:', state);
+      if (!IS_TEST) console.log('ICE connection state:', state);
       this.emit('ice-connection-state', { state });
       
       if (state === 'failed') {
@@ -517,7 +522,7 @@ export class WebRTCPeerEnhanced {
     // Connection state monitoring
     this.peerConnection.onconnectionstatechange = () => {
       const state = this.peerConnection?.connectionState as ConnectionState;
-      console.log('Connection state:', state);
+      if (!IS_TEST) console.log('Connection state:', state);
       this.setState(state);
 
       if (state === 'failed' || state === 'disconnected') {
@@ -553,7 +558,7 @@ export class WebRTCPeerEnhanced {
     // Prioritize candidates based on type
     // Priority: host > srflx > relay
     // This is handled by the browser, but we can log it
-    console.log(`ICE candidate: type=${candidate.type}, protocol=${candidate.protocol}`);
+    if (!IS_TEST) console.log(`ICE candidate: type=${candidate.type}, protocol=${candidate.protocol}`);
     
     return candidate;
   }
@@ -601,7 +606,7 @@ export class WebRTCPeerEnhanced {
       
       this.emit('ice-restart', { sdp: offer.sdp });
     } catch (error) {
-      console.error('Failed to restart ICE:', error);
+      if (!IS_TEST) console.error('Failed to restart ICE:', error);
       this.emit('error', { type: 'ice-restart', error });
     }
   }
@@ -614,7 +619,7 @@ export class WebRTCPeerEnhanced {
     const oldState = this.state;
     this.state = newState;
     
-    console.log(`Connection state transition: ${oldState} -> ${newState}`);
+    if (!IS_TEST) console.log(`Connection state transition: ${oldState} -> ${newState}`);
     
     this.emit('state-change', { 
       oldState, 
@@ -825,7 +830,7 @@ export class WebRTCPeerEnhanced {
       channel.send(data as any);
       this.emit('message-sent', { type, size: data.byteLength });
     } catch (error) {
-      console.error('Failed to send message:', error);
+      if (!IS_TEST) console.error('Failed to send message:', error);
       this.sendQueue.push({ type, data }); // Retry later
       this.emit('error', { type: 'send', error });
     }
@@ -854,7 +859,7 @@ export class WebRTCPeerEnhanced {
         channel.send(item.data as any);
         this.emit('message-sent', { type: item.type, size: item.data.byteLength });
       } catch (error) {
-        console.error('Failed to send queued message:', error);
+        if (!IS_TEST) console.error('Failed to send queued message:', error);
         // Don't requeue, message is lost
       }
     }
@@ -917,6 +922,12 @@ export class WebRTCPeerEnhanced {
     this.metricsTimer = setInterval(async () => {
       await this.collectMetrics();
     }, this.config.metricsInterval);
+
+    try {
+      (this.metricsTimer as any)?.unref?.();
+    } catch (e) {
+      // Ignore in browser environments where unref not available
+    }
   }
 
   private async collectMetrics(): Promise<void> {
@@ -953,7 +964,7 @@ export class WebRTCPeerEnhanced {
       this.emit('metrics', { metrics: this.metrics });
       
     } catch (error) {
-      console.error('Failed to collect metrics:', error);
+      if (!IS_TEST) console.error('Failed to collect metrics:', error);
     }
   }
 
@@ -986,7 +997,7 @@ export class WebRTCPeerEnhanced {
         try {
           handler(data);
         } catch (error) {
-          console.error(`Error in event handler for ${event}:`, error);
+            if (!IS_TEST) console.error(`Error in event handler for ${event}:`, error);
         }
       });
     }
@@ -1084,7 +1095,7 @@ export class WebRTCConnectionPool {
         try {
           peer.send(data, type);
         } catch (error) {
-          console.error(`Failed to broadcast to ${peerId}:`, error);
+          if (!IS_TEST) console.error(`Failed to broadcast to ${peerId}:`, error);
         }
       }
     });
@@ -1141,7 +1152,7 @@ export class WebRTCConnectionPool {
         try {
           handler(data);
         } catch (error) {
-          console.error(`Error in pool event handler for ${event}:`, error);
+          if (!IS_TEST) console.error(`Error in pool event handler for ${event}:`, error);
         }
       });
     }

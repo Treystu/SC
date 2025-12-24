@@ -1,0 +1,155 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Sovereign Communications - DHT Statistics",
+    "tags": ["sovereign-communications", "dht", "distributed-hash-table"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "DHT Nodes Count",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sc_dht_nodes_total",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 2,
+        "title": "DHT Lookup Success Rate",
+        "type": "gauge",
+        "targets": [
+          {
+            "expr": "rate(sc_dht_lookups_successful_total[5m]) / rate(sc_dht_lookups_total[5m]) * 100",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "red",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 90
+                },
+                {
+                  "color": "green",
+                  "value": 95
+                }
+              ]
+            }
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 8,
+          "y": 0
+        }
+      },
+      {
+        "id": 3,
+        "title": "DHT Storage Size",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sc_dht_storage_bytes",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 16,
+          "y": 0
+        }
+      },
+      {
+        "id": 4,
+        "title": "DHT Query Latency",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "sc_dht_query_latency_ms",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 8
+        }
+      },
+      {
+        "id": 5,
+        "title": "DHT Bucket Distribution",
+        "type": "heatmap",
+        "targets": [
+          {
+            "expr": "sc_dht_bucket_size",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 8
+        }
+      },
+      {
+        "id": 6,
+        "title": "DHT Replication Factor",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sc_dht_replication_factor",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 0,
+          "y": 16
+        }
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "timepicker": {},
+    "templating": {
+      "list": []
+    },
+    "annotations": {
+      "list": []
+    },
+    "refresh": "30s",
+    "schemaVersion": 27,
+    "version": 0,
+    "links": []
+  }
+}

@@ -77,6 +77,13 @@ export class ProximityDiscovery {
     this.scanTimer = setInterval(() => {
       this.performScan();
     }, this.config.scanInterval);
+
+    // Allow Node to exit if this timer is the only thing left
+    try {
+      (this.scanTimer as any)?.unref?.();
+    } catch (e) {
+      // Ignore if unref not available (browser environments)
+    }
   }
 
   /**
@@ -189,6 +196,12 @@ export class ProximityDiscovery {
     this.cleanupTimer = setInterval(() => {
       this.cleanupStalePeers();
     }, this.config.discoveryTimeout / 2);
+
+    try {
+      (this.cleanupTimer as any)?.unref?.();
+    } catch (e) {
+      // Ignore if unref not available (browser environments)
+    }
   }
 
   /**

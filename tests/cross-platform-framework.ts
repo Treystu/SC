@@ -171,9 +171,22 @@ export class AndroidClient extends PlatformClient {
   }
 
   async initialize(): Promise<void> {
+    // Separate W3C and Appium-specific capabilities
+    const w3cCaps: Record<string, any> = {};
+    const appiumCaps: Record<string, any> = {};
+    for (const [key, value] of Object.entries(config.android)) {
+      // Only allow W3C top-level keys
+      if (key === 'platformName' || key === 'browserName') {
+        w3cCaps[key] = value;
+      } else {
+        appiumCaps[key] = value;
+      }
+    }
+    // Override deviceName for parallelization
+    appiumCaps.deviceName = `${config.android.deviceName}-${this.clientId}`;
     const capabilities: RemoteOptions['capabilities'] = {
-      ...config.android,
-      'appium:deviceName': `${config.android.deviceName}-${this.clientId}`,
+      ...w3cCaps,
+      'appium:options': appiumCaps,
     };
 
     this.driver = await remote({
@@ -329,9 +342,22 @@ export class iOSClient extends PlatformClient {
   }
 
   async initialize(): Promise<void> {
+    // Separate W3C and Appium-specific capabilities
+    const w3cCaps: Record<string, any> = {};
+    const appiumCaps: Record<string, any> = {};
+    for (const [key, value] of Object.entries(config.ios)) {
+      // Only allow W3C top-level keys
+      if (key === 'platformName' || key === 'browserName') {
+        w3cCaps[key] = value;
+      } else {
+        appiumCaps[key] = value;
+      }
+    }
+    // Override deviceName for parallelization
+    appiumCaps.deviceName = `${config.ios.deviceName}-${this.clientId}`;
     const capabilities: RemoteOptions['capabilities'] = {
-      ...config.ios,
-      'appium:deviceName': `${config.ios.deviceName}-${this.clientId}`,
+      ...w3cCaps,
+      'appium:options': appiumCaps,
     };
 
     this.driver = await remote({

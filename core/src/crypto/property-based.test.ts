@@ -12,7 +12,7 @@ import {
 } from './primitives';
 import { randomBytes } from '@noble/hashes/utils.js';
 
-describe.skip('Crypto Property-Based Tests', () => {
+describe('Crypto Property-Based Tests', () => {
   describe('Identity generation', () => {
     it('should generate unique identities', async () => {
       await fc.assert(
@@ -150,10 +150,16 @@ describe.skip('Crypto Property-Based Tests', () => {
             const nonce = randomBytes(24);
             const encrypted = await encryptMessage(plaintext, senderSecret, nonce);
             
-            // Should fail to decrypt with attacker's key
-            await expect(
-              decryptMessage(encrypted, attackerSecret, nonce)
-            ).rejects.toThrow();
+            // decryptMessage is synchronous and throws on auth failure.
+            // Use a try/catch to assert it throws instead of using `rejects`.
+            let threw = false;
+            try {
+              decryptMessage(encrypted, attackerSecret, nonce);
+            } catch (err) {
+              threw = true;
+            }
+
+            expect(threw).toBe(true);
           }
         ),
         { numRuns: 30 }

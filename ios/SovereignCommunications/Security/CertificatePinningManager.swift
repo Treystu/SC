@@ -34,13 +34,18 @@ class CertificatePinningManager: NSObject {
     ///   openssl dgst -sha256 -binary | \
     ///   openssl enc -base64
     /// ```
-    private let pinnedCertificates: [String: Set<String>] = [:]
-
-    // Example (uncomment and replace when ready):
-    // "api.sovereigncommunications.app": [
-    //     "PIN1...",
-    //     "PIN2..."
-    // ]
+    private let pinnedCertificates: [String: Set<String>] = [
+        // TURN/STUN servers for WebRTC connectivity
+        // Add actual certificate pins for production TURN servers
+        "turn.sovereigncommunications.app": [
+            // Placeholder - replace with actual certificate pins
+            "PLACEHOLDER_PIN_SHA256_BASE64"
+        ],
+        "stun.sovereigncommunications.app": [
+            // Placeholder - replace with actual certificate pins
+            "PLACEHOLDER_PIN_SHA256_BASE64"
+        ]
+    ]
 
     /// Whether to enforce certificate pinning
     /// Set to false for development/testing with self-signed certificates

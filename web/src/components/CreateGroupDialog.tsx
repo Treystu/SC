@@ -43,11 +43,12 @@ export const CreateGroupDialog: React.FC<CreateGroupDialogProps> = ({
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label="Create Group Dialog">
       <div
         className="modal-content"
         onClick={(e) => e.stopPropagation()}
         style={{ maxWidth: "400px" }}
+        tabIndex={-1}
       >
         <h3 className="text-lg font-semibold mb-4">Create New Group</h3>
 

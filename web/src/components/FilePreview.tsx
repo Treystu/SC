@@ -154,7 +154,14 @@ export const FilePreview: React.FC<FilePreviewProps> = ({ file, onClose, onDownl
   };
 
   return (
-    <div className="file-preview-modal" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.9)', zIndex: 9999, display: 'flex', flexDirection: 'column' }}>
+    <div
+      className="file-preview-modal"
+      style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.9)', zIndex: 9999, display: 'flex', flexDirection: 'column' }}
+      role="dialog"
+      aria-modal="true"
+      aria-label="File Preview"
+      tabIndex={-1}
+    >
       {/* Header */}
       <div className="preview-header" style={{ padding: '16px', backgroundColor: '#2a2a2a', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div className="file-info">
@@ -168,6 +175,7 @@ export const FilePreview: React.FC<FilePreviewProps> = ({ file, onClose, onDownl
             <button
               onClick={onDownload}
               style={{ padding: '8px 16px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '14px' }}
+              aria-label="Download file"
             >
               📥 Download
             </button>
@@ -175,9 +183,10 @@ export const FilePreview: React.FC<FilePreviewProps> = ({ file, onClose, onDownl
           <button
             onClick={onClose}
             style={{ padding: '8px 16px', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '14px' }}
+            aria-label="Close file preview"
           >
             ✕ Close
-            </button>
+          </button>
         </div>
       </div>
 

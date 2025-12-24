@@ -596,6 +596,27 @@ export class RoutingTable {
   }
 
   /**
+   * Find peers via DHT lookup
+   */
+  async findPeerViaDHT(targetPeerId: string): Promise<Peer[]> {
+    if (!this.dhtRoutingTable) {
+      throw new Error('DHT routing table not configured');
+    }
+
+    // For now, return peers that are close to the target in the routing table
+    // In a real implementation, this would perform a DHT lookup
+    const allPeers = this.getAllPeers();
+    const targetPeer = this.getPeer(targetPeerId);
+    
+    if (targetPeer) {
+      return [targetPeer];
+    }
+
+    // Return a subset of peers (simulating DHT lookup results)
+    return allPeers.slice(0, Math.min(5, allPeers.length));
+  }
+
+  /**
    * Get peers ranked by likelihood of reaching the target
    * Scoring strategy: "Score for NOW" (Real-time Value > History)
    * 1. Direct connection (Immediate Delivery)

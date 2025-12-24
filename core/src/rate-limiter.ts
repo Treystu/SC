@@ -99,4 +99,9 @@ export class RateLimiter {
 export const rateLimiter = new RateLimiter();
 
 // Cleanup every 5 minutes
-setInterval(() => rateLimiter.cleanup(), 5 * 60 * 1000);
+const __rateLimiterCleanupTimer = setInterval(() => rateLimiter.cleanup(), 5 * 60 * 1000);
+try {
+  if (__rateLimiterCleanupTimer && typeof (__rateLimiterCleanupTimer as any).unref === 'function') {
+    (__rateLimiterCleanupTimer as any).unref();
+  }
+} catch (e) {}

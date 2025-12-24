@@ -715,9 +715,42 @@ export class DatabaseManager {
     if (!identity) return null;
 
     // Decrypt sensitive fields (especially privateKey)
-    return (await decryptSensitiveFields(identity as any, [
-      "privateKey",
-    ])) as Identity;
+    let decrypted = identity as any;
+    try {
+      decrypted = (await decryptSensitiveFields(identity as any, [
+        "privateKey",
+      ])) as Identity;
+    } catch (e) {
+      console.warn("Failed to decrypt identity privateKey, attempting best-effort normalization:", e);
+      decrypted = identity as any;
+    }
+
+    // Normalize publicKey/privateKey to Uint8Array if they're stored as base64 strings
+    const normalizeKey = (val: any): Uint8Array | undefined => {
+      if (!val && val !== 0) return undefined;
+      if (val instanceof Uint8Array) return val;
+      if (typeof val === "string") {
+        try {
+          const bytes = atob(val)
+            .split("")
+            .map((c) => c.charCodeAt(0));
+          return new Uint8Array(bytes);
+        } catch (e) {
+          console.warn("Failed to parse base64 key:", e);
+          return undefined;
+        }
+      }
+      return undefined;
+    };
+
+    const pub = normalizeKey((decrypted as any).publicKey);
+    const priv = normalizeKey((decrypted as any).privateKey);
+
+    return {
+      ...decrypted,
+      publicKey: pub || (decrypted.publicKey as Uint8Array),
+      privateKey: priv || (decrypted.privateKey as Uint8Array),
+    } as Identity;
   }
 
   /**
@@ -726,7 +759,32 @@ export class DatabaseManager {
    */
   async getPrimaryIdentity(): Promise<Identity | null> {
     const identities = await this.getAllIdentities();
-    return identities.find((id) => id.isPrimary) || null;
+    const primary = identities.find((id) => id.isPrimary) || null;
+    if (!primary) return null;
+
+    // Ensure keys normalized (safeguard in case migration left strings)
+    const normalizeKey = (val: any): Uint8Array | undefined => {
+      if (!val && val !== 0) return undefined;
+      if (val instanceof Uint8Array) return val;
+      if (typeof val === "string") {
+        try {
+          const bytes = atob(val)
+            .split("")
+            .map((c) => c.charCodeAt(0));
+          return new Uint8Array(bytes);
+        } catch (e) {
+          console.warn("Failed to parse base64 key in primary identity:", e);
+          return undefined;
+        }
+      }
+      return undefined;
+    };
+
+    return {
+      ...primary,
+      publicKey: normalizeKey((primary as any).publicKey) || primary.publicKey,
+      privateKey: normalizeKey((primary as any).privateKey) || primary.privateKey,
+    } as Identity;
   }
 
   /**

@@ -35,6 +35,10 @@ export default {
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
   },
+  // Prevent Jest from scanning compiled artifacts which can contain duplicate
+  // manual mocks (e.g. `dist/**/__mocks__`). This keeps module resolution
+  // deterministic and avoids jest-haste-map warnings.
+  modulePathIgnorePatterns: ['<rootDir>/dist/'],
   transform: {
     '^.+\\.ts$': ['ts-jest', {
       useESM: true,

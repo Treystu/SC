@@ -119,6 +119,13 @@ export class ConnectionManager {
     }, this.config.keepAliveInterval);
 
     this.keepAliveTimers.set(peerId, timer);
+    try {
+      if (timer && typeof (timer as any).unref === 'function') {
+        (timer as any).unref();
+      }
+    } catch (e) {
+      // ignore
+    }
   }
 
   private clearKeepAlive(peerId: string): void {

@@ -21,6 +21,22 @@ jest.mock("@sc/core", () => ({
     .fn()
     .mockReturnValue({ publicKey: "pub", privateKey: "priv" }),
   generateFingerprint: jest.fn().mockResolvedValue("fingerprint-123"),
+  ConnectionMonitor: jest.fn().mockImplementation(() => ({
+    updateLatency: jest.fn(),
+    updatePacketLoss: jest.fn(),
+    getQuality: jest.fn().mockReturnValue("good"),
+  })),
+  rateLimiter: {
+    canSendMessage: jest.fn().mockReturnValue({ allowed: true }),
+    canSendFile: jest.fn().mockReturnValue({ allowed: true }),
+  },
+  performanceMonitor: {
+    startMeasure: jest.fn().mockReturnValue(() => {}),
+  },
+  offlineQueue: {
+    processQueue: jest.fn(),
+    enqueue: jest.fn(),
+  },
 }));
 
 jest.mock("../../storage/database", () => ({
@@ -45,33 +61,8 @@ jest.mock("../../utils/WebPersistenceAdapter", () => ({
   WebPersistenceAdapter: jest.fn(),
 }));
 
-jest.mock("../../../../core/src/connection-quality", () => ({
-  ConnectionMonitor: jest.fn().mockImplementation(() => ({
-    updateLatency: jest.fn(),
-    updatePacketLoss: jest.fn(),
-    getQuality: jest.fn().mockReturnValue("good"),
-  })),
-}));
-
-jest.mock("../../../../core/src/rate-limiter", () => ({
-  rateLimiter: {
-    canSendMessage: jest.fn().mockReturnValue({ allowed: true }),
-    canSendFile: jest.fn().mockReturnValue({ allowed: true }),
-  },
-}));
-
-jest.mock("../../../../core/src/performance-monitor", () => ({
-  performanceMonitor: {
-    startMeasure: jest.fn().mockReturnValue(() => {}),
-  },
-}));
-
-jest.mock("../../../../core/src/offline-queue", () => ({
-  offlineQueue: {
-    processQueue: jest.fn(),
-    enqueue: jest.fn(),
-  },
-}));
+// Note: core helpers (ConnectionMonitor, rateLimiter, performanceMonitor, offlineQueue)
+// are mocked above in the @sc/core mock to match how the module is imported in the hook.
 
 describe("useMeshNetwork", () => {
   let mockMeshInstance: any;

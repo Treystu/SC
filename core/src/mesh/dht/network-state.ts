@@ -110,6 +110,11 @@ export class NetworkStateManager {
     this.monitorInterval = setInterval(() => {
       this.checkNetworkState();
     }, intervalMs);
+    try {
+      if (this.monitorInterval && typeof (this.monitorInterval as any).unref === 'function') {
+        (this.monitorInterval as any).unref();
+      }
+    } catch (e) {}
     
     // Initial check
     this.checkNetworkState();

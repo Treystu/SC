@@ -126,12 +126,13 @@ export function ManualConnectionModal({
   if (!isOpen) return null;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label="Manual Connection Modal">
       <div
         className="modal-content manual-connection-modal"
         onClick={(e) => e.stopPropagation()}
+        tabIndex={-1}
       >
-        <button className="modal-close btn-icon" onClick={onClose}>
+        <button className="modal-close btn-icon" onClick={onClose} aria-label="Close manual connection modal">
           ×
         </button>
 
@@ -175,8 +176,9 @@ export function ManualConnectionModal({
 
             {mode === "initiate" ? (
               <div className="form-group">
-                <label>Remote Peer ID:</label>
+                <label htmlFor="remote-peer-id">Remote Peer ID:</label>
                 <input
+                  id="remote-peer-id"
                   type="text"
                   value={peerId}
                   onChange={(e) => setPeerId(e.target.value)}
@@ -188,8 +190,9 @@ export function ManualConnectionModal({
               </div>
             ) : (
               <div className="form-group">
-                <label>Paste Offer Data:</label>
+                <label htmlFor="offer-data">Paste Offer Data:</label>
                 <textarea
+                  id="offer-data"
                   value={offerData}
                   onChange={(e) => setOfferData(e.target.value)}
                   placeholder="Paste the offer string here..."

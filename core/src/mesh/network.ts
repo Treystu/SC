@@ -102,9 +102,10 @@ export class MeshNetwork {
     // Initialize identity
     this.identity = config.identity || generateIdentity();
 
-    // Unified Identity: Use provided ID (likely fingerprint from DB) or generate new fingerprint
+    // Unified Identity: Use provided ID or the full hex-encoded public key as peer ID
+    // Peer IDs across the codebase are expected to be the hex-encoded public key.
     this.localPeerId =
-      config.peerId || generateFingerprintSync(this.identity.publicKey);
+      config.peerId || Buffer.from(this.identity.publicKey).toString("hex");
 
     // Configuration
     this.defaultTTL = config.defaultTTL || 10;
@@ -190,11 +191,23 @@ export class MeshNetwork {
         try {
           await this.transportManager.send(peerId, encodedMessage);
         } catch (e) {
-          // Fallback to flood if needed, or handle error
-          console.warn(
-            `[DHT] Failed to send message to ${peerId} via transports.`,
-            e,
-          );
+          // If an outbound transport callback is registered (simulation / native), use it
+          if (this.outboundTransportCallback) {
+            try {
+              await this.outboundTransportCallback(peerId, encodedMessage);
+            } catch (err) {
+              console.warn(
+                `[DHT] Failed to deliver message to ${peerId} via outboundTransportCallback.`,
+                err,
+              );
+            }
+          } else {
+            // Fallback to flood if needed, or handle error
+            console.warn(
+              `[DHT] Failed to send message to ${peerId} via transports.`,
+              e,
+            );
+          }
         }
       },
       { storage: config.dhtStorage },
@@ -234,7 +247,15 @@ export class MeshNetwork {
         try {
           await this.transportManager.send(peerId, encodedMessage);
         } catch (e) {
-          console.warn(`[Rendezvous] Failed to send to ${peerId}`, e);
+          if (this.outboundTransportCallback) {
+            try {
+              await this.outboundTransportCallback(peerId, encodedMessage);
+            } catch (err) {
+              console.warn(`[Rendezvous] Failed to deliver to ${peerId} via outboundTransportCallback.`, err);
+            }
+          } else {
+            console.warn(`[Rendezvous] Failed to send to ${peerId}`, e);
+          }
         }
       },
     );
@@ -428,12 +449,22 @@ export class MeshNetwork {
     this.heartbeatInterval = setInterval(() => {
       this.broadcastPing();
     }, intervalMs);
+    try {
+      if (this.heartbeatInterval && typeof (this.heartbeatInterval as any).unref === 'function') {
+        (this.heartbeatInterval as any).unref();
+      }
+    } catch (e) {}
 
     // Also start health check loop
     if (this.healthCheckInterval) clearInterval(this.healthCheckInterval);
     this.healthCheckInterval = setInterval(() => {
       this.monitorConnectionHealth();
     }, 5000); // Check every 5 seconds
+    try {
+      if (this.healthCheckInterval && typeof (this.healthCheckInterval as any).unref === 'function') {
+        (this.healthCheckInterval as any).unref();
+      }
+    } catch (e) {}
   }
 
   /**

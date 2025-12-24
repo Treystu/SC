@@ -43,9 +43,28 @@ export const getMeshNetwork = async (): Promise<MeshNetwork> => {
             storedIdentity.displayName = displayName;
           }
 
+          // Normalize keys to Uint8Array (some stores may have base64 strings)
+          const normalize = (v: any) => {
+            if (v instanceof Uint8Array) return v;
+            if (typeof v === "string") {
+              try {
+                return new Uint8Array(
+                  atob(v)
+                    .split("")
+                    .map((c) => c.charCodeAt(0)),
+                );
+              } catch {
+                return undefined;
+              }
+            }
+            return undefined;
+          };
+
           identityKeyPair = {
-            publicKey: storedIdentity.publicKey,
-            privateKey: storedIdentity.privateKey,
+            publicKey:
+              normalize(storedIdentity.publicKey) || (storedIdentity.publicKey as any),
+            privateKey:
+              normalize(storedIdentity.privateKey) || (storedIdentity.privateKey as any),
             displayName: storedIdentity.displayName,
           };
           peerId = storedIdentity.id.replace(/\s/g, "");

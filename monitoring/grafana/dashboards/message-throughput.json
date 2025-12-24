@@ -1,0 +1,183 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Sovereign Communications - Message Throughput",
+    "tags": ["sovereign-communications", "messages", "throughput"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Messages Per Second",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rate(sc_messages_total[1m])",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 2,
+        "title": "Message Delivery Rate",
+        "type": "gauge",
+        "targets": [
+          {
+            "expr": "rate(sc_messages_delivered_total[5m]) / rate(sc_messages_sent_total[5m]) * 100",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "red",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 95
+                },
+                {
+                  "color": "green",
+                  "value": 99
+                }
+              ]
+            }
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 8,
+          "y": 0
+        }
+      },
+      {
+        "id": 3,
+        "title": "Average Message Size",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sc_message_size_bytes_avg",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 16,
+          "y": 0
+        }
+      },
+      {
+        "id": 4,
+        "title": "Message Throughput Over Time",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(sc_messages_total[5m])",
+            "refId": "A",
+            "legendFormat": "Messages/sec"
+          },
+          {
+            "expr": "rate(sc_messages_bytes_total[5m]) / 1024 / 1024",
+            "refId": "B",
+            "legendFormat": "MB/sec"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 8
+        }
+      },
+      {
+        "id": 5,
+        "title": "Message Types Distribution",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "sum by (type) (rate(sc_messages_by_type_total[5m]))",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 8
+        }
+      },
+      {
+        "id": 6,
+        "title": "Message Queue Depth",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "sc_message_queue_depth",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 16
+        }
+      },
+      {
+        "id": 7,
+        "title": "Transport Protocol Usage",
+        "type": "barchart",
+        "targets": [
+          {
+            "expr": "sum by (transport) (rate(sc_messages_by_transport_total[5m]))",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 16
+        }
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "timepicker": {},
+    "templating": {
+      "list": []
+    },
+    "annotations": {
+      "list": []
+    },
+    "refresh": "30s",
+    "schemaVersion": 27,
+    "version": 0,
+    "links": []
+  }
+}

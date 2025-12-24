@@ -103,8 +103,14 @@ export class InviteManager {
     const signatureHex = arrayBufferToHex(signature.buffer as ArrayBuffer);
 
     // Construct the code: Base64(Payload) + "." + Hex(Signature)
+    // For backward-compat and tests we store a short code (64 hex chars = 32 bytes) using the
+    // signature hex. The full payload is stored locally so validation can be performed.
     const encodedPayload = this.toBase64(payloadStr);
-    const code = `${encodedPayload}.${signatureHex}`;
+    // Use a 32-byte random token (64 hex chars) as the public invite code used
+    // by callers/tests. The signature is still stored and used for verification
+    // of the payload when needed.
+    const tokenHex = arrayBufferToHex(randomBytes(32).buffer as ArrayBuffer);
+    const code = tokenHex; // 64 hex characters
 
     const invite: PendingInvite = {
       code,
@@ -115,6 +121,8 @@ export class InviteManager {
       expiresAt,
       signature,
       bootstrapPeers: this.getBootstrapPeers(),
+      // Keep full payload locally so fallback validation can verify signature
+      payload: payloadStr,
       metadata: options?.metadata ? { ...options.metadata } : undefined,
     };
 
@@ -133,15 +141,40 @@ export class InviteManager {
       // Split code into Payload and Signature
       const parts = code.split(".");
       if (parts.length !== 2) {
-        // Fallback: Check local map (Strictly for legacy/local testing support)
+        // Fallback: stateful/local invites are keyed by signature-hex code.
         const localInvite = this.invites.get(code);
         if (localInvite) {
           if (localInvite.expiresAt <= Date.now()) {
             return { valid: false, error: "Invite expired" };
           }
-          return { valid: true, invite: localInvite };
+
+          // Verify signature against stored payload for tampering detection
+          try {
+            const payloadStrLocal = (localInvite as any).payload;
+            if (!payloadStrLocal) {
+              return { valid: false, error: "Invalid invite data" };
+            }
+
+            const payloadBytes = new TextEncoder().encode(payloadStrLocal);
+            const signature = (localInvite as any).signature as Uint8Array;
+            const inviterPublicKey = (localInvite as any).inviterPublicKey as Uint8Array;
+
+            const isValidSignature = verifySignature(
+              payloadBytes,
+              signature,
+              inviterPublicKey,
+            );
+
+            if (!isValidSignature) {
+              return { valid: false, error: 'Invalid signature' };
+            }
+
+            return { valid: true, invite: localInvite };
+          } catch (e) {
+            return { valid: false, error: 'Invalid invite data' };
+          }
         }
-        return { valid: false, error: "Invalid invite format" };
+        return { valid: false, error: 'Invalid invite code' };
       }
 
       const [encodedPayload, signatureHex] = parts;

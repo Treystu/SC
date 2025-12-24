@@ -91,9 +91,15 @@ export function RoomView({
   };
 
   return (
-    <div className={embedded ? "room-embedded" : "room-overlay"}>
+    <div
+      className={embedded ? "room-embedded" : "room-overlay"}
+      role={embedded ? undefined : "dialog"}
+      aria-modal={embedded ? undefined : "true"}
+      aria-label={embedded ? undefined : "Public Room"}
+      tabIndex={embedded ? undefined : -1}
+    >
       <div className="room-container">
-        <div className="room-header">
+        <div className="room-header" role="banner">
           <div className="room-title">
             <h2>🌐 Public Room</h2>
             <span className="room-status">
@@ -106,6 +112,7 @@ export function RoomView({
                 className="download-app-btn"
                 onClick={handleDownloadMobileApp}
                 title="Download mobile app with current peers"
+                aria-label="Download mobile app with current peers"
                 style={{ marginRight: "8px" }}
               >
                 📲 Get Mobile App
@@ -114,6 +121,7 @@ export function RoomView({
                 className="close-room-btn"
                 onClick={onClose}
                 title="Close view"
+                aria-label="Close room view"
               >
                 ×
               </button>
@@ -124,29 +132,30 @@ export function RoomView({
                 className="download-app-btn"
                 onClick={handleDownloadMobileApp}
                 title="Download mobile app with current peers"
+                aria-label="Download mobile app with current peers"
                 style={{ marginRight: "8px" }}
               >
                 📲 Get Mobile App
               </button>
-              <button className="close-btn" onClick={onClose}>
+              <button className="close-btn" onClick={onClose} aria-label="Leave Room">
                 Leave Room
               </button>
             </>
           )}
         </div>
 
-        <div className="room-content">
+        <div className="room-content" role="main" id="main-content">
           {/* Sidebar: Peers */}
-          <div className="room-sidebar">
-            <div className="peers-section">
+          <div className="room-sidebar" aria-label="Peer Discovery Sidebar">
+            <div className="peers-section" aria-label="Connected Peers">
               <h3>Connected Mesh ({uniqueConnected.length})</h3>
-              <div className="peers-list">
+              <div className="peers-list" role="list" aria-label="Connected Peers List">
                 {uniqueConnected.length === 0 && (
-                  <p className="empty-text">No active connections</p>
+                  <p className="empty-text" aria-live="polite">No active connections yet. Once you connect to a peer, they will appear here.</p>
                 )}
                 {uniqueConnected.map((peerId) => (
-                  <div key={peerId} className="peer-item connected">
-                    <div className="peer-avatar">
+                  <div key={peerId} className="peer-item connected" role="listitem">
+                    <div className="peer-avatar" aria-hidden="true">
                       {peerId.substring(0, 2).toUpperCase()}
                     </div>
                     <div className="peer-info">
@@ -160,15 +169,22 @@ export function RoomView({
               </div>
             </div>
 
-            <div className="peers-section">
+            <div className="peers-section" aria-label="Discovered Peers">
               <h3>Discovered ({uniqueDiscovered.length})</h3>
-              <div className="peers-list">
+              <div className="peers-list" role="list" aria-label="Discovered Peers List">
                 {uniqueDiscovered.length === 0 && (
-                  <p className="empty-text">Scanning for peers...</p>
+                  <div className="empty-text" aria-live="polite">
+                    <p>No peers discovered yet.</p>
+                    <ul>
+                      <li>Make sure you and your friends are on the same Wi-Fi or local network.</li>
+                      <li>Try refreshing the page or toggling your device's Wi-Fi.</li>
+                      <li>Peers will appear here automatically when discovered.</li>
+                    </ul>
+                  </div>
                 )}
                 {uniqueDiscovered.map((peerId) => (
-                  <div key={peerId} className="peer-item discovered">
-                    <div className="peer-avatar">
+                  <div key={peerId} className="peer-item discovered" role="listitem">
+                    <div className="peer-avatar" aria-hidden="true">
                       {peerId.substring(0, 2).toUpperCase()}
                     </div>
                     <div className="peer-info">
@@ -179,6 +195,7 @@ export function RoomView({
                         className="connect-btn"
                         onClick={() => handleConnectClick(peerId)}
                         disabled={connectingPeers.has(peerId)}
+                        aria-label={connectingPeers.has(peerId) ? `Connecting to peer ${peerId}` : `Connect to peer ${peerId}`}
                       >
                         {connectingPeers.has(peerId)
                           ? "Connecting..."
@@ -192,15 +209,20 @@ export function RoomView({
           </div>
 
           {/* Main: Chat */}
-          <div className="room-chat">
+          <div className="room-chat" aria-label="Room Chat Area">
             <div className="chat-messages">
               {roomMessages.length === 0 && (
-                <div className="welcome-message">
+                <div className="welcome-message" aria-live="polite">
                   <h3>Welcome to the Room!</h3>
                   <p>
                     Messages sent here are broadcast to everyone in the room.
                   </p>
                   <p>Connect with peers to start private, encrypted chats.</p>
+                  <ul>
+                    <li>To connect, click "Connect" next to a discovered peer.</li>
+                    <li>Once connected, you can start a private chat from the Contacts list.</li>
+                    <li>Need help? See the Help section in the menu.</li>
+                  </ul>
                 </div>
               )}
               {roomMessages.map((msg, idx) => (
@@ -228,18 +250,20 @@ export function RoomView({
               <div ref={messagesEndRef} />
             </div>
 
-            <form className="chat-input-area" onSubmit={handleSend}>
+            <form className="chat-input-area" onSubmit={handleSend} aria-label="Send public message">
               <input
                 type="text"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder="Type a public message..."
                 className="chat-input"
+                aria-label="Type a public message"
               />
               <button
                 type="submit"
                 className="send-btn"
                 disabled={!message.trim()}
+                aria-label="Send public message"
               >
                 Send
               </button>

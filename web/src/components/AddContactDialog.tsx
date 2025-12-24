@@ -82,16 +82,16 @@ export function AddContactDialog({
   }
 
   return (
-    <div className="dialog-overlay" onClick={onClose}>
-      <div className="dialog" onClick={(e) => e.stopPropagation()}>
+    <div className="dialog-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label="Add Contact Dialog">
+      <div className="dialog" onClick={(e) => e.stopPropagation()} tabIndex={-1}>
         <div className="dialog-header">
-          <h3>Add Contact</h3>
-          <button className="dialog-close" onClick={onClose}>
+          <h3 id="add-contact-title">Add Contact</h3>
+          <button className="dialog-close" onClick={onClose} aria-label="Close add contact dialog">
             &times;
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="dialog-form">
+        <form onSubmit={handleSubmit} className="dialog-form" aria-labelledby="add-contact-title">
           <div className="form-group">
             <label htmlFor="contact-name">Contact Name</label>
             <input
@@ -115,16 +115,19 @@ export function AddContactDialog({
                 onChange={(e) => setPeerId(e.target.value)}
                 placeholder="Enter peer ID or scan QR"
                 data-testid="contact-publickey-input"
+                aria-describedby="peer-id-desc"
               />
               <button
                 type="button"
                 className="scan-btn"
                 onClick={() => setIsScanning(true)}
                 title="Scan QR Code"
+                aria-label="Scan QR Code for Peer ID"
               >
                 📷
               </button>
             </div>
+            <span id="peer-id-desc" className="sr-only">You can scan a QR code to fill this field automatically.</span>
           </div>
 
           <div className="dialog-actions">

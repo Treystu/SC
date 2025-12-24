@@ -258,6 +258,8 @@
   border-top-left-radius: 2px;
   color: #fff;
   line-height: 1.4;
+  word-break: break-word;
+  font-family: inherit, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', 'EmojiOne Color', 'Twemoji', sans-serif;
 }
 
 .chat-message.own .message-content {

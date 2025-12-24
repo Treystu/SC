@@ -66,15 +66,15 @@ export function ContactManager() {
   );
 
   return (
-    <div className="contact-manager">
-      <div className="contact-header">
+    <div className="contact-manager" role="region" aria-label="Contact Manager">
+      <div className="contact-header" role="banner">
         <h2>Contacts</h2>
         <button onClick={() => setShowAddDialog(true)} className="add-contact-btn">
           + Add Contact
         </button>
       </div>
 
-      <div className="search-bar">
+      <div className="search-bar" role="search">
         <input
           type="text"
           placeholder="Search contacts..."
@@ -84,7 +84,7 @@ export function ContactManager() {
         />
       </div>
 
-      <div className="contact-list">
+      <div className="contact-list" role="list" aria-label="Contact List">
         {filteredContacts.length === 0 ? (
           <div className="empty-state">
             <p>No contacts yet</p>
@@ -92,7 +92,7 @@ export function ContactManager() {
           </div>
         ) : (
           filteredContacts.map(contact => (
-            <div key={contact.id} className="contact-item">
+            <div key={contact.id} className="contact-item" role="listitem">
               <div className="contact-avatar">
                 {contact.displayName.charAt(0).toUpperCase()}
               </div>
@@ -108,6 +108,7 @@ export function ContactManager() {
                     onClick={() => handleVerifyContact(contact)}
                     className="verify-btn"
                     title="Verify contact"
+                    aria-label={`Verify contact ${contact.displayName}`}
                   >
                     Verify
                   </button>
@@ -116,6 +117,7 @@ export function ContactManager() {
                   onClick={() => handleDeleteContact(contact.id)}
                   className="delete-btn"
                   title="Delete contact"
+                  aria-label={`Delete contact ${contact.displayName}`}
                 >
                   ×
                 </button>
@@ -126,8 +128,8 @@ export function ContactManager() {
       </div>
 
       {showAddDialog && (
-        <div className="dialog-overlay" onClick={() => setShowAddDialog(false)}>
-          <div className="dialog" onClick={(e) => e.stopPropagation()}>
+        <div className="dialog-overlay" onClick={() => setShowAddDialog(false)} role="dialog" aria-modal="true" aria-label="Add Contact Dialog">
+          <div className="dialog" onClick={(e) => e.stopPropagation()} tabIndex={-1}>
             <h3>Add Contact</h3>
             <div className="form-group">
               <label>Name</label>

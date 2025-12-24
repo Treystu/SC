@@ -63,7 +63,7 @@ function createMockPeer(id?: string, publicKey?: Uint8Array): Peer {
 describe('DHT Routing Integration', () => {
   describe('RoutingTable DHT Mode', () => {
     it('should create routing table in FLOOD mode by default', () => {
-      const routingTable = new RoutingTable();
+      const routingTable = new RoutingTable('test-node-1');
       expect(routingTable.getRoutingMode()).toBe(RoutingMode.FLOOD);
     });
 
@@ -71,7 +71,7 @@ describe('DHT Routing Integration', () => {
       const localNodeId = generateNodeId();
       const dhtRoutingTable = new KademliaRoutingTable(localNodeId);
       
-      const routingTable = new RoutingTable({
+      const routingTable = new RoutingTable(Buffer.from(localNodeId).toString('hex'), {
         mode: RoutingMode.DHT,
         dhtRoutingTable,
       });
@@ -84,7 +84,7 @@ describe('DHT Routing Integration', () => {
       const localNodeId = generateNodeId();
       const dhtRoutingTable = new KademliaRoutingTable(localNodeId);
       
-      const routingTable = new RoutingTable({
+      const routingTable = new RoutingTable(Buffer.from(localNodeId).toString('hex'), {
         mode: RoutingMode.HYBRID,
         dhtRoutingTable,
       });
@@ -95,7 +95,7 @@ describe('DHT Routing Integration', () => {
 
     it('should throw error if DHT mode without DHT routing table', () => {
       expect(() => {
-        new RoutingTable({ mode: RoutingMode.DHT });
+        new RoutingTable('test-node-3', { mode: RoutingMode.DHT });
       }).toThrow('DHT routing table required');
     });
 
@@ -103,7 +103,7 @@ describe('DHT Routing Integration', () => {
       const localNodeId = generateNodeId();
       const dhtRoutingTable = new KademliaRoutingTable(localNodeId);
       
-      const routingTable = new RoutingTable({
+      const routingTable = new RoutingTable(Buffer.from(localNodeId).toString('hex'), {
         mode: RoutingMode.DHT,
         dhtRoutingTable,
       });
@@ -123,7 +123,7 @@ describe('DHT Routing Integration', () => {
       const localNodeId = generateNodeId();
       const dhtRoutingTable = new KademliaRoutingTable(localNodeId);
       
-      const routingTable = new RoutingTable({
+      const routingTable = new RoutingTable(Buffer.from(localNodeId).toString('hex'), {
         mode: RoutingMode.FLOOD,
         dhtRoutingTable, // DHT table provided but not used
       });
@@ -171,7 +171,7 @@ describe('DHT Routing Integration', () => {
       const localNodeId = generateNodeId();
       const dhtRoutingTable = new KademliaRoutingTable(localNodeId);
       
-      const routingTable = new RoutingTable({
+      const routingTable = new RoutingTable(Buffer.from(localNodeId).toString('hex'), {
         mode: RoutingMode.DHT,
         dhtRoutingTable,
       });
@@ -194,7 +194,7 @@ describe('DHT Routing Integration', () => {
     }, 10000);
 
     it('should throw error when finding peer without DHT', async () => {
-      const routingTable = new RoutingTable({ mode: RoutingMode.FLOOD });
+      const routingTable = new RoutingTable('test-node-4', { mode: RoutingMode.FLOOD });
       
       await expect(
         routingTable.findPeerViaDHT('some-peer-id')
@@ -260,7 +260,7 @@ describe('DHT Routing Integration', () => {
       const localNodeId = generateNodeId();
       const dhtRoutingTable = new KademliaRoutingTable(localNodeId);
       
-      const routingTable = new RoutingTable({
+      const routingTable = new RoutingTable(Buffer.from(localNodeId).toString('hex'), {
         mode: RoutingMode.DHT,
         dhtRoutingTable,
       });
@@ -286,7 +286,7 @@ describe('DHT Routing Integration', () => {
       const localNodeId = generateNodeId();
       const dhtRoutingTable = new KademliaRoutingTable(localNodeId);
       
-      const routingTable = new RoutingTable({
+      const routingTable = new RoutingTable(Buffer.from(localNodeId).toString('hex'), {
         mode: RoutingMode.DHT,
         dhtRoutingTable,
       });
@@ -311,7 +311,7 @@ describe('DHT Routing Integration', () => {
       const localNodeId = generateNodeId();
       const dhtRoutingTable = new KademliaRoutingTable(localNodeId);
       
-      const routingTable = new RoutingTable({
+      const routingTable = new RoutingTable(Buffer.from(localNodeId).toString('hex'), {
         mode: RoutingMode.HYBRID,
         dhtRoutingTable,
       });
@@ -331,7 +331,7 @@ describe('DHT Routing Integration', () => {
 
   describe('Backward Compatibility', () => {
     it('should work with existing code that does not specify mode', () => {
-      const routingTable = new RoutingTable();
+      const routingTable = new RoutingTable('test-node-5');
       
       const peer = createMockPeer();
       routingTable.addPeer(peer);
@@ -341,7 +341,7 @@ describe('DHT Routing Integration', () => {
     });
 
     it('should work with existing configuration objects', () => {
-      const routingTable = new RoutingTable({
+      const routingTable = new RoutingTable('test-node-6', {
         maxCacheSize: 5000,
         cacheTTL: 30000,
       });

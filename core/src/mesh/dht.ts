@@ -203,6 +203,9 @@ export class DHT {
 
       const resolver = this.pendingLookups.get(requestId);
       if (resolver) {
+        if (process.env.NODE_ENV === "test") {
+          console.log(`[DHT][TEST] Found value response from ${senderId} for ${requestId}`);
+        }
         // Resolve with the value
         resolver.resolve({ senderId, value: new Uint8Array(value) });
       }
@@ -498,6 +501,10 @@ export class DHT {
               requestId: subRequestId,
             }),
           );
+
+          if (process.env.NODE_ENV === "test") {
+            console.log(`[DHT][TEST] Querying ${node.peer.id} for key ${key} (req ${subRequestId})`);
+          }
 
           const result = await new Promise<any>((resolve) => {
             const timeout = setTimeout(() => {

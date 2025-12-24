@@ -133,12 +133,22 @@ export class KademliaRoutingTable {
       () => this.refreshBuckets(),
       this.config.refreshInterval,
     );
+    try {
+      if (this.refreshIntervalHandle && typeof (this.refreshIntervalHandle as any).unref === 'function') {
+        (this.refreshIntervalHandle as any).unref();
+      }
+    } catch (e) {}
 
     // Start value republishing
     this.republishIntervalHandle = setInterval(
       () => this.republishValues(),
       this.config.republishInterval,
     );
+    try {
+      if (this.republishIntervalHandle && typeof (this.republishIntervalHandle as any).unref === 'function') {
+        (this.republishIntervalHandle as any).unref();
+      }
+    } catch (e) {}
   }
 
   /**

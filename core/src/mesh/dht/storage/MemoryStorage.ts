@@ -26,4 +26,8 @@ export class MemoryStorage implements StorageAdapter {
   async clear(): Promise<void> {
     this.storeMap.clear();
   }
+
+  has(key: string): boolean {
+    return this.storeMap.has(key);
+  }
 }

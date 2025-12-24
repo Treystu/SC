@@ -436,7 +436,13 @@ export class TimingObfuscation {
     this.enabled = true;
     this.dummyMessageInterval = interval;
     
-    this.intervalId = setInterval(callback, interval) as unknown as number;
+    const t = setInterval(callback, interval);
+    this.intervalId = t as unknown as number;
+    try {
+      if (t && typeof (t as any).unref === 'function') {
+        (t as any).unref();
+      }
+    } catch (e) {}
   }
   
   /**

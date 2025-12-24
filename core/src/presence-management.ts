@@ -39,9 +39,16 @@ export class PresenceManager {
     }
 
     // Check for away status periodically
-    setInterval(() => {
+    const activityCheck = setInterval(() => {
       this.updateLocalStatus();
     }, 30000); // Check every 30 seconds
+    try {
+      if (activityCheck && typeof (activityCheck as any).unref === 'function') {
+        (activityCheck as any).unref();
+      }
+    } catch (e) {
+      // ignore on platforms without unref
+    }
   }
 
   /**
@@ -148,6 +155,13 @@ export class PresenceManager {
     this.statusBroadcastInterval = setInterval(() => {
       broadcastFn(this.getLocalStatus());
     }, intervalMs);
+    try {
+      if (this.statusBroadcastInterval && typeof (this.statusBroadcastInterval as any).unref === 'function') {
+        (this.statusBroadcastInterval as any).unref();
+      }
+    } catch (e) {
+      // ignore
+    }
   }
 
   /**

@@ -1,0 +1,58 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+scrape_configs:
+  # The job name is added as a label `job=<job_name>` to any timeseries scraped from this config.
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Sovereign Communications Web App
+  - job_name: 'sc-web'
+    static_configs:
+      - targets: ['web:3000']
+    scrape_interval: 5s
+    metrics_path: '/metrics'
+
+  # Node Exporter for system metrics
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+  # Docker containers
+  - job_name: 'docker'
+    static_configs:
+      - targets: ['docker.for.mac.host.internal:9323']
+    metrics_path: '/metrics'
+
+  # Mesh Network Metrics (if exposed)
+  - job_name: 'sc-mesh'
+    static_configs:
+      - targets: ['web:3000']
+    scrape_interval: 10s
+    metrics_path: '/api/metrics/mesh'
+    params:
+      format: ['prometheus']
+
+  # DHT Metrics
+  - job_name: 'sc-dht'
+    static_configs:
+      - targets: ['web:3000']
+    scrape_interval: 30s
+    metrics_path: '/api/metrics/dht'
+    params:
+      format: ['prometheus']
+
+  # Transport Layer Metrics
+  - job_name: 'sc-transport'
+    static_configs:
+      - targets: ['web:3000']
+    scrape_interval: 15s
+    metrics_path: '/api/metrics/transport'
+    params:
+      format: ['prometheus']

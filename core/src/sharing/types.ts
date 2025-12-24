@@ -19,6 +19,9 @@ export interface PendingInvite {
   expiresAt: number;
   signature: Uint8Array;
   bootstrapPeers: string[];
+  // For stateful invites we optionally keep the original payload string
+  // so validation can re-run signature checks against stored data.
+  payload?: string;
   metadata?: Record<string, unknown>;
 }
 

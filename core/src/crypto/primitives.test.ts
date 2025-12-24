@@ -261,6 +261,25 @@ describe('Cryptographic Primitives', () => {
       const aliceShared = performKeyExchange(alice.privateKey, bob.publicKey);
       const bobShared = performKeyExchange(bob.privateKey, alice.publicKey);
 
+      // If there's an asymmetry, dump hex context to aid debugging.
+      if (!timingSafeEqual(aliceShared, bobShared)) {
+        const toHex = (b: Uint8Array) => Array.from(b).map(x => x.toString(16).padStart(2, '0')).join('');
+        // eslint-disable-next-line no-console
+        console.error('[TEST-DEBUG] ECDH mismatch detected:');
+        // eslint-disable-next-line no-console
+        console.error('[TEST-DEBUG] alice.privateKey=', toHex(alice.privateKey));
+        // eslint-disable-next-line no-console
+        console.error('[TEST-DEBUG] alice.publicKey =', toHex(alice.publicKey));
+        // eslint-disable-next-line no-console
+        console.error('[TEST-DEBUG] bob.privateKey  =', toHex(bob.privateKey));
+        // eslint-disable-next-line no-console
+        console.error('[TEST-DEBUG] bob.publicKey  =', toHex(bob.publicKey));
+        // eslint-disable-next-line no-console
+        console.error('[TEST-DEBUG] aliceShared    =', toHex(aliceShared));
+        // eslint-disable-next-line no-console
+        console.error('[TEST-DEBUG] bobShared      =', toHex(bobShared));
+      }
+
       expect(timingSafeEqual(aliceShared, bobShared)).toBe(true);
     });
 

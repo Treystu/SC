@@ -260,22 +260,43 @@ export function performKeyExchange(
     throw new Error('Peer public key must be 32 bytes');
   }
 
-  // Perform ECDH
-  const sharedSecret = x25519.getSharedSecret(privateKey, peerPublicKey);
+    // Treat inputs as X25519-compatible and perform ECDH directly.
+    // Automatic conversion from Ed25519 is intentionally disabled to avoid
+    // accidental, data-dependent one-sided conversions that produced
+    // asymmetric shared secrets in CI. Callers that need Ed25519->X25519
+    // conversion should convert explicitly using ed25519.utils.toMontgomery*
+    // helpers.
 
-  // Use HKDF to derive proper key from shared secret
-  const derivedKey = hkdf(
-    sha256,
-    sharedSecret,
-    salt || new Uint8Array(32), // Salt
-    info || new Uint8Array(0),  // Info/context
-    32 // Output length
-  );
+    const sharedSecret = x25519.getSharedSecret(privateKey, peerPublicKey);
 
-  // Wipe shared secret from memory
-  secureWipe(sharedSecret);
+    // Optional debug logging for CI investigation
+    if (typeof process !== 'undefined' && process.env && process.env.TEST_CRYPTO_DBG) {
+      const toHex = (b: Uint8Array) => Array.from(b).map(x => x.toString(16).padStart(2, '0')).join('');
+      try {
+        // eslint-disable-next-line no-console
+        console.log('[TEST_CRYPTO_DBG] performKeyExchange:', {
+          privConverted: false,
+          pubConverted: false,
+          privForDHHex: privateKey ? toHex(privateKey).slice(0, 64) : null,
+          pubForDHHex: peerPublicKey ? toHex(peerPublicKey).slice(0, 64) : null,
+          sharedSecretHex: toHex(sharedSecret).slice(0, 64),
+        });
+      } catch (err) {
+        // ignore debug errors
+      }
+    }
 
-  return derivedKey;
+    const derivedKey = hkdf(
+      sha256,
+      sharedSecret,
+      salt || new Uint8Array(32),
+      info || new Uint8Array(0),
+      32
+    );
+
+    secureWipe(sharedSecret);
+
+    return derivedKey;
 }
 
 /**

@@ -53,7 +53,18 @@ class WebRTCManager(
         }
 
         val rtcConfig =
-            PeerConnection.RTCConfiguration(emptyList()).apply {
+            PeerConnection.RTCConfiguration(
+                listOf(
+                    // Public STUN servers (fallback)
+                    PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
+                    PeerConnection.IceServer.builder("stun:stun1.l.google.com:19302").createIceServer(),
+                    PeerConnection.IceServer.builder("stun:stun2.l.google.com:19302").createIceServer(),
+                    PeerConnection.IceServer.builder("stun:global.stun.twilio.com:3478").createIceServer(),
+                    // TURN servers (when available via system properties or secure config)
+                    // In production, these should be loaded from secure configuration
+                    // Example: turn:turn.sovereigncommunications.app:3478
+                ).filterNotNull()
+            ).apply {
                 sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
                 continualGatheringPolicy = PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUALLY
             }

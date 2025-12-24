@@ -38,6 +38,7 @@ export interface RateLimitInfo {
 export class TokenBucketRateLimiter {
   private tokens: Map<string, number> = new Map();
   private lastRefill: Map<string, number> = new Map();
+  private refillTimer?: NodeJS.Timeout;
   
   constructor(
     private maxTokens: number,
@@ -45,7 +46,12 @@ export class TokenBucketRateLimiter {
     private refillIntervalMs: number = 1000
   ) {
     // Start refill timer
-    setInterval(() => this.refillAllBuckets(), refillIntervalMs);
+    this.refillTimer = setInterval(() => this.refillAllBuckets(), refillIntervalMs);
+    try {
+      (this.refillTimer as any)?.unref?.();
+    } catch (e) {
+      // Ignore in browser-like environments
+    }
   }
   
   /**
@@ -125,13 +131,19 @@ export class TokenBucketRateLimiter {
  */
 export class SlidingWindowRateLimiter {
   private requests: Map<string, number[]> = new Map();
+  private cleanupTimer?: NodeJS.Timeout;
   
   constructor(
     private maxRequests: number,
     private windowMs: number
   ) {
     // Cleanup old entries periodically
-    setInterval(() => this.cleanup(), windowMs);
+    this.cleanupTimer = setInterval(() => this.cleanup(), windowMs);
+    try {
+      (this.cleanupTimer as any)?.unref?.();
+    } catch (e) {
+      // Ignore in browser-like environments
+    }
   }
   
   /**

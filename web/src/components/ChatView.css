@@ -162,6 +162,8 @@
   margin-bottom: 0.25rem;
   white-space: pre-wrap;
   line-height: 1.5;
+  word-break: break-word;
+  font-family: inherit, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', 'EmojiOne Color', 'Twemoji', sans-serif;
 }
 
 .message-meta {

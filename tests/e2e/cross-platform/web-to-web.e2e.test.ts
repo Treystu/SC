@@ -3,29 +3,36 @@
  * Tests messaging workflows between web clients
  */
 
-import { test, expect, Browser, Page } from '@playwright/test';
+import { test, expect, Browser, Page, BrowserContext } from '@playwright/test';
 import { CrossPlatformTestCoordinator, WebClient } from '../../cross-platform-framework';
 
-test.describe.skip('Web to Web Cross-Platform Tests', () => {
+test.describe('Web to Web Cross-Platform Tests', () => {
   let coordinator: CrossPlatformTestCoordinator;
   let webClient1: WebClient;
   let webClient2: WebClient;
-  let browser1: Browser;
-  let browser2: Browser;
+  let context1: BrowserContext;
+  let context2: BrowserContext;
   let page1: Page;
   let page2: Page;
 
-  test.beforeEach(async ({ browser, context }) => {
+  test.beforeEach(async ({ browser }) => {
     coordinator = new CrossPlatformTestCoordinator();
 
-    // Create two separate browser contexts for isolation
-    const context1 = await browser.newContext();
-    const context2 = await browser.newContext();
+    // Create two separate browser contexts for complete isolation
+    context1 = await browser.newContext({
+      viewport: { width: 1280, height: 720 },
+      userAgent: 'SC-Web-Client-1/1.0'
+    });
+
+    context2 = await browser.newContext({
+      viewport: { width: 1280, height: 720 },
+      userAgent: 'SC-Web-Client-2/1.0'
+    });
 
     page1 = await context1.newPage();
     page2 = await context2.newPage();
 
-    // Create two web clients
+    // Create two web clients with isolated contexts
     webClient1 = await coordinator.createClient(
       { platform: 'web', name: 'web-alice' },
       page1,
@@ -37,9 +44,16 @@ test.describe.skip('Web to Web Cross-Platform Tests', () => {
       page2,
       browser
     ) as WebClient;
+
+    // Initialize both clients
+    await webClient1.initialize();
+    await webClient2.initialize();
   });
 
   test.afterEach(async () => {
+    // Clean up contexts
+    await context1?.close();
+    await context2?.close();
     await coordinator.cleanup();
   });
 

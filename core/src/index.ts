@@ -240,6 +240,18 @@ export {
 
 export * from "./file-validation.js";
 
+// Connection quality utilities
+export * from "./connection-quality.js";
+
+// Offline queue for message retrying
+export * from "./offline-queue.js";
+
+// Peer security alerts
+export * from "./mesh/peer-security-alerts.js";
+
+// Rate limiter singleton
+export { rateLimiter } from "./rate-limiter.js";
+
 export {
   ValidationError,
   required,

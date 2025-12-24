@@ -5,7 +5,7 @@ import { Message, MessageType } from '../../core/src/protocol/message';
 describe('Relay Persistence Integration Test', () => {
   it('should persist stored messages across relay restarts', async () => {
     const persistence = new MemoryPersistenceAdapter();
-    const routingTable = new RoutingTable({ maxCacheSize: 1000 });
+    const routingTable = new RoutingTable('local-peer', { maxCacheSize: 1000 });
     let relay = new MessageRelay('local-peer', routingTable, {}, persistence);
 
     const message: Message = {

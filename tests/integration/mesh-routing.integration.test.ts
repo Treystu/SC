@@ -15,7 +15,7 @@ describe('Mesh Network Integration', () => {
   beforeEach(async () => {
     identity = await generateIdentity();
     localPeerId = Buffer.from(identity.publicKey).toString('hex');
-    routingTable = new RoutingTable();
+    routingTable = new RoutingTable(localPeerId);
     relay = new MessageRelay(localPeerId, routingTable);
   });
 

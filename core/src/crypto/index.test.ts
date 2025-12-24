@@ -140,6 +140,24 @@ describe('CryptoManager', () => {
       );
       
       expect(secret1).toHaveLength(32);
+      if (!timingSafeEqual(secret1, secret2)) {
+        const toHex = (b: Uint8Array) => Array.from(b).map(x => x.toString(16).padStart(2, '0')).join('');
+        // eslint-disable-next-line no-console
+        console.error('[TEST-DEBUG] CryptoManager deriveSecret mismatch:');
+        // eslint-disable-next-line no-console
+        console.error('[TEST-DEBUG] keypair1.privateKey=', toHex(keypair1.privateKey));
+        // eslint-disable-next-line no-console
+        console.error('[TEST-DEBUG] keypair1.publicKey =', toHex(keypair1.publicKey));
+        // eslint-disable-next-line no-console
+        console.error('[TEST-DEBUG] keypair2.privateKey=', toHex(keypair2.privateKey));
+        // eslint-disable-next-line no-console
+        console.error('[TEST-DEBUG] keypair2.publicKey =', toHex(keypair2.publicKey));
+        // eslint-disable-next-line no-console
+        console.error('[TEST-DEBUG] secret1=', toHex(secret1));
+        // eslint-disable-next-line no-console
+        console.error('[TEST-DEBUG] secret2=', toHex(secret2));
+      }
+
       expect(timingSafeEqual(secret1, secret2)).toBe(true);
     });
   });

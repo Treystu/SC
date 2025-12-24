@@ -52,6 +52,7 @@
   },
   "homepage": "https://github.com/Treystu/SC#readme",
   "devDependencies": {
+    "why-is-node-running": "^2.2.0",
     "@playwright/test": "^1.57.0",
     "@stryker-mutator/core": "^8.0.0",
     "@stryker-mutator/jest-runner": "^8.0.0",

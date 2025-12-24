@@ -24,6 +24,11 @@ export interface StorageAdapter {
   keys?(): Promise<string[]>;
 
   /**
+   * Check presence of a key
+   */
+  has?(key: string): Promise<boolean> | boolean;
+
+  /**
    * Clear all storage
    */
   clear(): Promise<void>;

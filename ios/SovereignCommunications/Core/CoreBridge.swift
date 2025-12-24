@@ -8,6 +8,8 @@
 import Foundation
 import JavaScriptCore
 import os.log
+import CryptoKit
+import Security
 import Security
 
 /// CoreBridge - Bridge between iOS and the core TypeScript/JavaScript library
@@ -217,22 +219,14 @@ class CoreBridge {
     func generateIdentity() async throws -> CoreIdentity {
         try await ensureInitialized()
         
-        let script = """
-            (function() {
-                var identity = SCCore.generateIdentity();
-                return JSON.stringify({
-                    publicKey: Array.from(identity.publicKey).map(b => b.toString(16).padStart(2, '0')).join(''),
-                    privateKey: Array.from(identity.privateKey).map(b => b.toString(16).padStart(2, '0')).join('')
-                });
-            })()
-        """
+        // Use native crypto instead of JavaScript bridge
+        let privateKey = NativeCryptoManager.shared.getEd25519PrivateKey()
+        let publicKey = NativeCryptoManager.shared.getEd25519PublicKey()
         
-        guard let result = jsContext.evaluateScript(script)?.toString(),
-              let data = result.data(using: .utf8),
-              let identity = try? JSONDecoder().decode(CoreIdentity.self, from: data) else {
-            throw CoreBridgeError.evaluationFailed("Failed to generate identity")
-        }
+        let publicKeyHex = publicKey.rawRepresentation.map { String(format: "%02x", $0) }.joined()
+        let privateKeyHex = privateKey.rawRepresentation.map { String(format: "%02x", $0) }.joined()
         
+        let identity = CoreIdentity(publicKey: publicKeyHex, privateKey: privateKeyHex)
         self.localIdentity = identity
         return identity
     }
@@ -241,18 +235,13 @@ class CoreBridge {
     func generateFingerprint(publicKeyHex: String) async throws -> String {
         try await ensureInitialized()
         
-        let script = """
-            (function() {
-                var publicKeyBytes = new Uint8Array('\(publicKeyHex)'.match(/.{2}/g).map(b => parseInt(b, 16)));
-                return SCCore.generateFingerprint(publicKeyBytes);
-            })()
-        """
-        
-        guard let result = jsContext.evaluateScript(script)?.toString() else {
-            throw CoreBridgeError.evaluationFailed("Failed to generate fingerprint")
+        // Use native crypto instead of JavaScript bridge
+        guard let publicKeyData = hexToData(publicKeyHex) else {
+            throw CoreBridgeError.evaluationFailed("Invalid public key hex")
         }
         
-        return result
+        let fingerprint = NativeCryptoManager.shared.sha256(publicKeyData)
+        return fingerprint.map { String(format: "%02x", $0) }.joined()
     }
     
     // MARK: - Cryptographic Operations
@@ -261,95 +250,44 @@ class CoreBridge {
     func signMessage(message: Data, privateKeyHex: String) async throws -> Data {
         try await ensureInitialized()
         
-        let messageHex = message.map { String(format: "%02x", $0) }.joined()
-        
-        let script = """
-            (function() {
-                var messageBytes = new Uint8Array('\(messageHex)'.match(/.{2}/g).map(b => parseInt(b, 16)));
-                var privateKeyBytes = new Uint8Array('\(privateKeyHex)'.match(/.{2}/g).map(b => parseInt(b, 16)));
-                var signature = SCCore.signMessage(messageBytes, privateKeyBytes);
-                return Array.from(signature).map(b => b.toString(16).padStart(2, '0')).join('');
-            })()
-        """
-        
-        guard let signatureHex = jsContext.evaluateScript(script)?.toString() else {
-            throw CoreBridgeError.evaluationFailed("Failed to sign message")
-        }
-        
-        return hexToData(signatureHex)
+        // Use native crypto instead of JavaScript bridge
+        let signature = NativeCryptoManager.shared.sign(message)
+        return signature
     }
     
     /// Verify a signature
     func verifySignature(message: Data, signature: Data, publicKeyHex: String) async throws -> Bool {
         try await ensureInitialized()
         
-        let messageHex = message.map { String(format: "%02x", $0) }.joined()
-        let signatureHex = signature.map { String(format: "%02x", $0) }.joined()
-        
-        let script = """
-            (function() {
-                var messageBytes = new Uint8Array('\(messageHex)'.match(/.{2}/g).map(b => parseInt(b, 16)));
-                var signatureBytes = new Uint8Array('\(signatureHex)'.match(/.{2}/g).map(b => parseInt(b, 16)));
-                var publicKeyBytes = new Uint8Array('\(publicKeyHex)'.match(/.{2}/g).map(b => parseInt(b, 16)));
-                return SCCore.verifySignature(messageBytes, signatureBytes, publicKeyBytes);
-            })()
-        """
-        
-        guard let result = jsContext.evaluateScript(script)?.toBool() else {
-            throw CoreBridgeError.evaluationFailed("Failed to verify signature")
+        // Use native crypto instead of JavaScript bridge
+        guard let publicKey = NativeCryptoManager.shared.base64ToPublicKey(publicKeyHex) else {
+            throw CoreBridgeError.evaluationFailed("Invalid public key")
         }
         
-        return result
+        return NativeCryptoManager.shared.verify(signature: signature, for: message, with: publicKey)
     }
     
     /// Encrypt a message
     func encryptMessage(plaintext: Data, key: Data, nonce: Data) async throws -> Data {
         try await ensureInitialized()
         
-        let plaintextHex = plaintext.map { String(format: "%02x", $0) }.joined()
-        let keyHex = key.map { String(format: "%02x", $0) }.joined()
-        let nonceHex = nonce.map { String(format: "%02x", $0) }.joined()
-        
-        let script = """
-            (function() {
-                var plaintextBytes = new Uint8Array('\(plaintextHex)'.match(/.{2}/g).map(b => parseInt(b, 16)));
-                var keyBytes = new Uint8Array('\(keyHex)'.match(/.{2}/g).map(b => parseInt(b, 16)));
-                var nonceBytes = new Uint8Array('\(nonceHex)'.match(/.{2}/g).map(b => parseInt(b, 16)));
-                var ciphertext = SCCore.encryptMessage(plaintextBytes, keyBytes, nonceBytes);
-                return Array.from(ciphertext).map(b => b.toString(16).padStart(2, '0')).join('');
-            })()
-        """
-        
-        guard let ciphertextHex = jsContext.evaluateScript(script)?.toString() else {
-            throw CoreBridgeError.evaluationFailed("Failed to encrypt message")
-        }
-        
-        return hexToData(ciphertextHex)
+        // Use native crypto instead of JavaScript bridge
+        // Convert key and nonce to SymmetricKey
+        let symmetricKey = SymmetricKey(data: key)
+        let encryptedData = NativeCryptoManager.shared.encryptChaCha20(plaintext, key: symmetricKey)
+        return encryptedData
     }
     
     /// Decrypt a message
     func decryptMessage(ciphertext: Data, key: Data, nonce: Data) async throws -> Data {
         try await ensureInitialized()
         
-        let ciphertextHex = ciphertext.map { String(format: "%02x", $0) }.joined()
-        let keyHex = key.map { String(format: "%02x", $0) }.joined()
-        let nonceHex = nonce.map { String(format: "%02x", $0) }.joined()
-        
-        let script = """
-            (function() {
-                var ciphertextBytes = new Uint8Array('\(ciphertextHex)'.match(/.{2}/g).map(b => parseInt(b, 16)));
-                var keyBytes = new Uint8Array('\(keyHex)'.match(/.{2}/g).map(b => parseInt(b, 16)));
-                var nonceBytes = new Uint8Array('\(nonceHex)'.match(/.{2}/g).map(b => parseInt(b, 16)));
-                var plaintext = SCCore.decryptMessage(ciphertextBytes, keyBytes, nonceBytes);
-                return Array.from(plaintext).map(b => b.toString(16).padStart(2, '0')).join('');
-            })()
-        """
-        
-        guard let plaintextHex = jsContext.evaluateScript(script)?.toString() else {
+        // Use native crypto instead of JavaScript bridge
+        let symmetricKey = SymmetricKey(data: key)
+        guard let decryptedData = NativeCryptoManager.shared.decryptChaCha20(ciphertext, key: symmetricKey) else {
             throw CoreBridgeError.evaluationFailed("Failed to decrypt message")
         }
-        
-        return hexToData(plaintextHex)
+        return decryptedData
     }
     
     // MARK: - Protocol Operations
@@ -394,24 +332,18 @@ class CoreBridge {
     func generateSessionKey() async throws -> SessionKeyResult {
         try await ensureInitialized()
         
-        let script = """
-            (function() {
-                var sessionKey = SCCore.generateSessionKey();
-                return JSON.stringify({
-                    key: Array.from(sessionKey.key).map(b => b.toString(16).padStart(2, '0')).join(''),
-                    nonce: Array.from(sessionKey.nonce).map(b => b.toString(16).padStart(2, '0')).join(''),
-                    timestamp: sessionKey.timestamp
-                });
-            })()
-        """
+        // Use native crypto instead of JavaScript bridge
+        let keyData = NativeCryptoManager.shared.generateRandomBytes(count: 32)
+        let nonceData = NativeCryptoManager.shared.generateRandomBytes(count: 12)
         
-        guard let result = jsContext.evaluateScript(script)?.toString(),
-              let data = result.data(using: .utf8),
-              let sessionKey = try? JSONDecoder().decode(SessionKeyResult.self, from: data) else {
-            throw CoreBridgeError.evaluationFailed("Failed to generate session key")
-        }
+        let keyHex = keyData.map { String(format: "%02x", $0) }.joined()
+        let nonceHex = nonceData.map { String(format: "%02x", $0) }.joined()
         
-        return sessionKey
+        return SessionKeyResult(
+            key: keyHex,
+            nonce: nonceHex,
+            timestamp: Int(Date().timeIntervalSince1970 * 1000)
+        )
     }
     
     // MARK: - Version
@@ -425,6 +357,40 @@ class CoreBridge {
         }
         
         return version
+    }
+    
+    // MARK: - Self-Hosting TURN Server
+    
+    /// Create configuration for self-hosted TURN server
+    func createSelfHostedTurnConfig() -> TurnServerConfig {
+        return NativeCryptoManager.shared.createSelfHostedTurnConfig()
+    }
+    
+    // MARK: - Mesh Networking
+    
+    /// Create a relay-ready encrypted message for mesh routing
+    func createRelayMessage(
+        _ message: Data,
+        recipientId: String,
+        ttl: Int = 255,
+        priority: MessagePriority = .normal
+    ) -> RelayMessage {
+        return NativeCryptoManager.shared.createRelayMessage(message, recipientId: recipientId, ttl: ttl, priority: priority)
+    }
+    
+    /// Process and potentially relay a message
+    func processRelayMessage(_ relayMessage: RelayMessage) -> RelayAction {
+        return NativeCryptoManager.shared.processRelayMessage(relayMessage)
+    }
+    
+    /// Encrypt message for specific recipient using native crypto
+    func encryptMessageForRecipient(_ message: Data, recipientPublicKey: Curve25519.KeyAgreement.PublicKey) -> EncryptedMessage {
+        return NativeCryptoManager.shared.encryptMessageForRecipient(message, recipientPublicKey: recipientPublicKey)
+    }
+    
+    /// Decrypt message intended for us using native crypto
+    func decryptMessageForUs(_ encryptedMessage: EncryptedMessage) -> Data? {
+        return NativeCryptoManager.shared.decryptMessageForUs(encryptedMessage)
     }
     
     // MARK: - Private Helpers
@@ -463,6 +429,48 @@ struct SessionKeyResult: Codable {
     let key: String
     let nonce: String
     let timestamp: Int
+}
+
+/// TURN server configuration for self-hosting
+struct TurnServerConfig {
+    let host: String
+    let port: Int
+    let username: String
+    let password: String
+    let isSelfHosted: Bool
+}
+
+/// Encrypted message for mesh routing
+struct EncryptedMessage {
+    let encryptedContent: Data
+    let ephemeralPublicKey: Data
+    let recipientPublicKey: Data
+}
+
+/// Relay message for mesh networking
+struct RelayMessage {
+    let id: String
+    let encryptedContent: Data
+    let recipientId: String
+    let senderId: String
+    let timestamp: TimeInterval
+    let ttl: Int
+    let priority: MessagePriority
+    let signature: String
+    var route: [String]
+}
+
+/// Message priority levels
+enum MessagePriority {
+    case low, normal, high, critical
+}
+
+/// Relay action for message processing
+enum RelayAction {
+    case deliver
+    case relay(ttl: Int)
+    case hold
+    case drop
 }
 
 // MARK: - Errors

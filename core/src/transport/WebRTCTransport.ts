@@ -85,10 +85,25 @@ export class WebRTCTransport implements Transport {
       connectionTimeout: 30000,
       heartbeatInterval: 30000,
       iceServers: [
+        // Public STUN servers (fallback)
         { urls: "stun:stun.l.google.com:19302" },
         { urls: "stun:stun1.l.google.com:19302" },
         { urls: "stun:stun2.l.google.com:19302" },
         { urls: "stun:global.stun.twilio.com:3478" },
+        // TURN servers (when available via environment variables)
+        // Format: turn:turn.sovereigncommunications.app:3478
+        // Credentials should be set via environment variables for security
+        ...(process.env.TURN_SERVER && process.env.TURN_USERNAME && process.env.TURN_PASSWORD ? [{
+          urls: process.env.TURN_SERVER,
+          username: process.env.TURN_USERNAME,
+          credential: process.env.TURN_PASSWORD
+        }] : []),
+        // Alternative TURN server
+        ...(process.env.TURN_SERVER_ALT && process.env.TURN_USERNAME_ALT && process.env.TURN_PASSWORD_ALT ? [{
+          urls: process.env.TURN_SERVER_ALT,
+          username: process.env.TURN_USERNAME_ALT,
+          credential: process.env.TURN_PASSWORD_ALT
+        }] : []),
       ],
       iceCandidatePoolSize: 10,
       reliableChannelLabel: "reliable",
