@@ -1,11 +1,13 @@
 // Jest setup file for ESM support
 // This file ensures Jest globals are available in all test files when using experimental-vm-modules
 
-import { jest } from '@jest/globals';
-import util from 'node:util';
 
-// Make jest available globally
-globalThis.jest = jest;
+// Jest globals are already available in the test environment.
+// If needed, assign globalThis.jest only if not present.
+if (typeof globalThis.jest === 'undefined') {
+    globalThis.jest = require('@jest/globals').jest;
+}
+const util = require('node:util');
 
 jest.mock('./src/database.js', () => ({
     getDatabase: jest.fn().mockResolvedValue(null),

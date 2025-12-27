@@ -338,7 +338,7 @@ export function isVersionSupported(version: number): boolean {
 /**
  * Get human-readable message type name
  */
-export function getMessageTypeName(type: MessageType): string {
+export function getMessageTypeName(type: number): string {
   const typeNames: Record<number, string> = {
     [MessageType.TEXT]: "TEXT",
     [MessageType.FILE_METADATA]: "FILE_METADATA",

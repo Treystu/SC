@@ -1,0 +1,152 @@
+name: iOS Build & Test
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ios-build.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ios-build.yml'
+
+jobs:
+  lint-swift:
+    name: Lint Swift Code
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Install SwiftLint
+        run: brew install swiftlint
+
+      - name: Run SwiftLint
+        working-directory: ios
+        run: swiftlint --strict --reporter github-actions-logging
+
+  build-ios:
+    name: Build iOS App
+    runs-on: macos-latest
+    timeout-minutes: 30
+    needs: [lint-swift]
+    strategy:
+      matrix:
+        destination: ['platform=iOS Simulator,name=iPhone 15,OS=latest']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Cache Swift Package Dependencies
+        uses: actions/cache@v4
+        with:
+          path: ios/.build
+          key: ${{ runner.os }}-spm-${{ hashFiles('ios/Package.swift') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+
+      - name: Build iOS App
+        working-directory: ios
+        run: |
+          echo "Building for iOS Simulator..."
+          xcodebuild -scheme SovereignCommunications \
+            -destination "${{ matrix.destination }}" \
+            -configuration Debug \
+            -derivedDataPath build \
+            -enableCodeCoverage YES \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Archive Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-${{ matrix.destination }}
+          path: ios/build
+
+  test-ios:
+    name: Run iOS Tests
+    runs-on: macos-latest
+    timeout-minutes: 20
+    needs: [build-ios]
+    strategy:
+      matrix:
+        destination: ['platform=iOS Simulator,name=iPhone 15,OS=latest']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Cache Swift Package Dependencies
+        uses: actions/cache@v4
+        with:
+          path: ios/.build
+          key: ${{ runner.os }}-spm-${{ hashFiles('ios/Package.swift') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+
+      - name: Run iOS Tests
+        working-directory: ios
+        run: |
+          echo "Running tests on iOS Simulator..."
+          xcodebuild -scheme SovereignCommunications \
+            -destination "${{ matrix.destination }}" \
+            -configuration Debug \
+            -derivedDataPath build \
+            -enableCodeCoverage YES \
+            CODE_SIGNING_ALLOWED=NO \
+            test
+
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-test-results-${{ matrix.destination }}
+          path: |
+            ios/build/Logs/Test/*.xcresult
+            ios/build/Logs/Test/*.log
+
+      - name: Upload Code Coverage
+        uses: codecov/codecov-action@v4
+        if: success()
+        with:
+          file: ./ios/build/*/Coverage.profdata
+          flags: ios
+          name: iOS Code Coverage
+
+  validate-dependencies:
+    name: Validate Dependencies
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Validate Package Dependencies
+        working-directory: ios
+        run: |
+          swift package resolve
+          swift package show-dependencies
+
+      - name: Check for Security Vulnerabilities
+        working-directory: ios
+        run: |
+          # Check for known vulnerable dependencies
+          swift package show-dependencies | grep -i "vulnerable\|security" || echo "No obvious vulnerabilities found"

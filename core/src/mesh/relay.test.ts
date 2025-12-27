@@ -4,7 +4,8 @@
 
 import { MessageRelay, RelayConfig } from './relay';
 import { RoutingTable } from './routing';
-import { Message, MessageType, encodeMessage } from '../protocol/message';
+import type { Message } from '../protocol/message';
+import { MessageType, encodeMessage } from '../protocol/message';
 
 describe('MessageRelay', () => {
   let relay: MessageRelay;

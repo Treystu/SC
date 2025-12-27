@@ -1,4 +1,6 @@
-import { RoutingTable, createPeer, PeerState, RouteMetrics } from './routing';
+import type { Peer, RouteMetrics } from './routing';
+import { PeerState } from './routing';
+import { RoutingTable, createPeer } from './routing';
 
 describe('Advanced Routing Table Features', () => {
   let routingTable: RoutingTable;

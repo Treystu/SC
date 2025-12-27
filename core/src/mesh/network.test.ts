@@ -1,5 +1,6 @@
 import { MeshNetwork } from './network';
-import { Peer, createPeer } from './routing';
+import type { Peer } from './routing';
+import { createPeer } from './routing';
 
 describe('MeshNetwork', () => {
   let network: MeshNetwork;

@@ -1,0 +1,175 @@
+# Fastfile for Sovereign Communications
+# Build and deploy iOS app to TestFlight
+
+default_platform(:ios)
+
+platform :ios do
+  desc "Build and upload to TestFlight"
+  lane :beta do
+    # Get the current build number from the project
+    build_number = get_info_plist_value(
+      path: "./ios/SovereignCommunications/Info.plist",
+      key: "CFBundleVersion"
+    ).to_i + 1
+
+    # Increment the build number
+    increment_info_plist_value(
+      path: "./ios/SovereignCommunications/Info.plist",
+      key: "CFBundleVersion",
+      string_value: build_number.to_s
+    )
+
+    # Resolve Swift Package dependencies
+    sh("cd ios && swift package resolve")
+
+    # Build the app
+    build_app(
+      workspace: "ios/SovereignCommunications.xcworkspace",
+      scheme: "SovereignCommunications",
+      configuration: "Release",
+      clean: true,
+      export_method: "app-store",
+      xcargs: "CODE_SIGN_IDENTITY='' CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO"
+    )
+
+    # Upload to TestFlight
+    upload_to_testflight(
+      api_key_path: "./fastlane/api_key.json",
+      skip_waiting_for_build_processing: true,
+      skip_submission: true
+    )
+
+    # Create a GitHub release comment
+    set_github_release(
+      repository_name: "sovereign-communications/sc",
+      tag_name: "v1.0.#{build_number}",
+      name: "TestFlight Build #{build_number}",
+      description: "Automated TestFlight build",
+      commitish: "main"
+    )
+
+    # Post to Slack (optional)
+    slack(
+      message: "🚀 New TestFlight build ##{build_number} uploaded successfully!",
+      channel: "#releases",
+      success: true
+    )
+  end
+
+  desc "Build for internal testing (ad-hoc distribution)"
+  lane :internal do
+    # Get version and build number
+    version = get_info_plist_value(
+      path: "./ios/SovereignCommunications/Info.plist",
+      key: "CFBundleShortVersionString"
+    )
+    build_number = get_info_plist_value(
+      path: "./ios/SovereignCommunications/Info.plist",
+      key: "CFBundleVersion"
+    )
+
+    # Build for ad-hoc distribution
+    build_app(
+      workspace: "ios/SovereignCommunications.xcworkspace",
+      scheme: "SovereignCommunications",
+      configuration: "Release",
+      clean: true,
+      export_method: "ad-hoc",
+      xcargs: "CODE_SIGN_IDENTITY='' CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO",
+      output_directory: "./build"
+    )
+
+    # Export the IPA path
+    ipa_path = lane_context[SharedValues::IPA_OUTPUT_PATH]
+    puts "📦 IPA created at: #{ipa_path}"
+
+    # Create an archive for distribution
+    sh("mkdir -p ./archives")
+    sh("cp '#{ipa_path}' ./archives/SovereignCommunications-v#{version}-b#{build_number}.ipa")
+
+    puts "✅ Build complete! IPA archived at: ./archives/SovereignCommunications-v#{version}-b#{build_number}.ipa"
+  end
+
+  desc "Run unit tests"
+  lane :test do
+    run_tests(
+      workspace: "ios/SovereignCommunications.xcworkspace",
+      scheme: "SovereignCommunications",
+      destination: "platform=iOS Simulator,name=iPhone 15",
+      clean: true,
+      code_coverage: true
+    )
+  end
+
+  desc "Lint Swift code"
+  lane :lint do
+    swiftlint(
+      mode: :lint,
+      strict: true,
+      reporter: "github-actions-logging"
+    )
+  end
+
+  desc "Create API key for App Store Connect"
+  lane :create_api_key do
+    api_key = app_store_connect_api_key(
+      key_id: ENV["APP_STORE_CONNECT_API_KEY_ID"],
+      issuer_id: ENV["APP_STORE_CONNECT_API_KEY_ISSUER_ID"],
+      key_content: ENV["APP_STORE_CONNECT_API_KEY_BASE64"],
+      is_key_content_base64: true
+    )
+
+    # Save API key to file for Fastlane to use
+    api_key_json = api_key.to_json
+    File.write("./fastlane/api_key.json", api_key_json)
+
+    puts "✅ API key saved to ./fastlane/api_key.json"
+  end
+
+  desc "Setup project for development"
+  lane :setup do
+    # Install dependencies
+    sh("cd ios && swift package resolve")
+
+    # Generate build files
+    sh("cd ios && xcodebuild -generateScheme SovereignCommunications")
+
+    puts "✅ Project setup complete!"
+  end
+
+  desc "Update version numbers"
+  lane :bump_version do |options|
+    new_version = options[:version] || prompt(text: "Enter new version number (e.g. 1.0.0): ")
+
+    # Update Info.plist
+    update_info_plist(
+      path: "./ios/SovereignCommunications/Info.plist",
+      block: proc {
+        InfoPlistSetting.CFBundleShortVersionString = new_version
+      }
+    )
+
+    # Update package.json if it exists
+    if File.exist?("./package.json")
+      sh("npm version #{new_version} --no-git-tag-version")
+    end
+
+    # Commit version bump
+    sh("git add -A")
+    sh("git commit -m 'Bump version to #{new_version}'")
+
+    puts "✅ Version bumped to #{new_version}"
+  end
+end
+
+# Android platform (placeholder for future implementation)
+platform :android do
+  desc "Build Android app"
+  lane :beta do
+    # Build APK
+    sh("./gradlew assembleRelease")
+
+    # Upload to Firebase App Distribution (placeholder)
+    puts "🟢 Android build complete!"
+  end
+end

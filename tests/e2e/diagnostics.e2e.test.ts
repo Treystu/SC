@@ -6,14 +6,14 @@ test.describe('NetworkDiagnostics', () => {
     await page.addInitScript(() => {
       Object.defineProperty(window, 'localStorage', {
         value: {
-          getItem: (key: string) => {
+          getItem: function(key) {
             if (key === 'sc-onboarding-complete') return 'true';
             if (key === 'sc-display-name') return 'Test User';
             return null;
           },
-          setItem: () => {},
-          removeItem: () => {},
-          clear: () => {},
+          setItem: function() {},
+          removeItem: function() {},
+          clear: function() {},
         },
         writable: true,
       });

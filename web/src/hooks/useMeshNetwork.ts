@@ -41,6 +41,8 @@ export function useMeshNetwork() {
     connectionQuality: "offline",
     initializationError: undefined,
   });
+  // Add identity state
+  const [identity, setIdentity] = useState<any>(null);
   const [peers, setPeers] = useState<Peer[]>([]);
   const [messages, setMessages] = useState<ReceivedMessage[]>([]);
   const meshNetworkRef = useRef<MeshNetwork | null>(null);
@@ -48,6 +50,20 @@ export function useMeshNetwork() {
   const seenMessageIdsRef = useRef<Set<string>>(new Set());
   const roomClientRef = useRef<RoomClient | null>(null); // Store RoomClient instance
   const roomPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); // Store poll timer
+  // Effect to update identity state from meshNetworkRef
+  useEffect(() => {
+    if (!meshNetworkRef.current) return;
+    const updateIdentity = async () => {
+      try {
+        const id = meshNetworkRef.current?.getIdentity?.();
+        setIdentity(id || null);
+      } catch (e) {
+        setIdentity(null);
+      }
+    };
+    updateIdentity();
+    // Optionally, listen for identity changes if meshNetwork supports events
+  }, [status.localPeerId]);
 
   // Initialize mesh network with persistence
   useEffect(() => {
@@ -1354,7 +1370,7 @@ export function useMeshNetwork() {
       onPeerTrack,
       discoveredPeers,
       roomMessages,
-      identity: meshNetworkRef.current?.getIdentity(), // Expose identity
+      identity,
       sendReaction,
       sendVoice,
     }),
@@ -1379,9 +1395,9 @@ export function useMeshNetwork() {
       onPeerTrack,
       discoveredPeers,
       roomMessages,
+      identity,
       sendReaction,
       sendVoice,
-      meshNetworkRef.current, // Add ref to deps to update when initialized
     ],
   );
 }

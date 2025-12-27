@@ -1,4 +1,5 @@
-import { RoutingTable, MessageQueue, Peer, createPeer } from '../mesh/routing';
+import type { Peer } from '../mesh/routing';
+import { RoutingTable, MessageQueue, createPeer } from '../mesh/routing';
 import { MessageType } from '../protocol/message';
 
 describe('Routing Table', () => {

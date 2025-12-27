@@ -1,6 +1,6 @@
-// Mock constants from @sc/core
-const HEADER_SIZE = 108;
-const MAX_PAYLOAD_SIZE = 1024 * 1024; // 1MB
+// Real imports from @sc/core
+import { validateMessageContent, validateStringLength, required } from '../../core/src/validation';
+import { crypto } from '../../core/src/crypto';
 
 describe('Input Validation Security Test', () => {
   describe('Message Size Limits', () => {

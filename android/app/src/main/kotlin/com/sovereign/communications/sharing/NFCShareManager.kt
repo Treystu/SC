@@ -9,6 +9,7 @@ import android.util.Base64
 import android.widget.Toast
 import com.sovereign.communications.sharing.models.Invite
 import com.sovereign.communications.sharing.models.SharePayload
+import com.sovereign.communications.identity.IdentityManager
 import org.json.JSONObject
 
 /**
@@ -17,6 +18,7 @@ import org.json.JSONObject
  */
 class NFCShareManager(
     private val activity: Activity,
+    private val identityManager: IdentityManager,
 ) : NfcAdapter.CreateNdefMessageCallback {
     private val nfcAdapter: NfcAdapter? = NfcAdapter.getDefaultAdapter(activity)
     private var currentInvite: Invite? = null
@@ -160,21 +162,56 @@ class NFCShareManager(
                     val json = JSONObject(payload)
 
                     if (json.optString("type") == "sc_invite") {
-                        // Parse invite from JSON
-                        return Invite(
-                            code = json.getString("code"),
-                            inviterPeerId = json.getString("peer"),
-                            inviterPublicKey = ByteArray(0), // Will be fetched via bootstrap
-                            inviterName = json.optString("name"),
-                            createdAt = json.optLong("timestamp", System.currentTimeMillis()),
-                            expiresAt = json.optLong("timestamp", System.currentTimeMillis()) + (7 * 24 * 60 * 60 * 1000),
-                            signature =
+                        val code = json.getString("code")
+                        val inviterPeerId = json.getString("peer")
+                        val inviterName = json.optString("name")
+                        val createdAt = json.optLong("timestamp", System.currentTimeMillis())
+                        val expiresAt = json.optLong("timestamp", System.currentTimeMillis()) + (7 * 24 * 60 * 60 * 1000)
+                        val signature = try {
+                            Base64.decode(json.getString("signature"), Base64.NO_WRAP)
+                        } catch (e: Exception) {
+                            ByteArray(64)
+                        }
+                        val bootstrapPeers = listOfNotNull(json.optString("bootstrap").takeIf { it.isNotEmpty() })
+
+                        // Extract inviterPublicKey from payload if available (as base64 or hex string)
+                        var inviterPublicKey = ByteArray(0)
+                        if (json.has("publicKey")) {
+                            val pkString = json.getString("publicKey")
+                            inviterPublicKey = try {
+                                // Try base64 decode first
+                                Base64.decode(pkString, Base64.NO_WRAP)
+                            } catch (e: Exception) {
                                 try {
-                                    Base64.decode(json.getString("signature"), Base64.NO_WRAP)
+                                    // Try hex decode if not base64
+                                    pkString.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
                                 } catch (e: Exception) {
-                                    ByteArray(64) // Fallback if missing/invalid
-                                },
-                            bootstrapPeers = listOfNotNull(json.optString("bootstrap").takeIf { it.isNotEmpty() }),
+                                    ByteArray(0)
+                                }
+                            }
+                        }
+
+                        // Ed25519 signature verification
+                        val dataToVerify = (code + inviterPeerId + createdAt).toByteArray(Charsets.UTF_8)
+                        if (inviterPublicKey.isNotEmpty()) {
+                            val valid = identityManager.verify(dataToVerify, signature, inviterPublicKey)
+                            if (!valid) {
+                                android.util.Log.w(TAG, "Invite signature invalid. Rejecting invite.")
+                                return null
+                            }
+                        } else {
+                            android.util.Log.w(TAG, "Inviter public key not found in payload. Skipping signature verification.")
+                        }
+
+                        return Invite(
+                            code = code,
+                            inviterPeerId = inviterPeerId,
+                            inviterPublicKey = inviterPublicKey,
+                            inviterName = inviterName,
+                            createdAt = createdAt,
+                            expiresAt = expiresAt,
+                            signature = signature,
+                            bootstrapPeers = bootstrapPeers,
                         )
                     }
                 }

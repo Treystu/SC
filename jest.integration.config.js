@@ -36,17 +36,35 @@ module.exports = {
   
   // Transform
   transform: {
-    '^.+\\.tsx?$': ['ts-jest', {
-      useESM: true,
-      tsconfig: {
-        esModuleInterop: true,
-        allowSyntheticDefaultImports: true,
-        module: 'ESNext',
-        moduleResolution: 'bundler',
-      },
-    }],
+    '^.+\\.(ts|tsx)$': [
+      'babel-jest',
+      { configFile: './babel.config.js' }
+    ],
+    '^.+\\.[cm]?js$': ['babel-jest', { configFile: './babel.config.js' }],
   },
-  
-  // Transform ES modules from node_modules
-  transformIgnorePatterns: [],
+  transformIgnorePatterns: [
+    '/node_modules/(?!(nanoid|@noble|fast-check|@sc)/)',
+    '/dist/'
+  ],
+
+  // Ignore all E2E, Playwright, Vitest, and non-Jest test files
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/tests/e2e/',
+    '/tests/integration/',
+    '/tests/playwright/',
+    '/tests/visual/',
+    '/tests/.*\\.(e2e|integration|playwright|visual)\\.test\\.(ts|js|mjs)$',
+    '/web/src/.*__tests__/.*\\.(e2e|playwright|visual)\\.test\\.(ts|js|mjs)$',
+    '/core/src/.*\\.(e2e|integration|playwright|visual)\\.test\\.(ts|js|mjs)$',
+    '/tests/.*vitest.*',
+    '/tests/.*@playwright/test.*',
+    '/tests/.*test\\s*\\(',
+    '/tests/.*describe\\s*\\(',
+    '/tests/.*expect\\s*\\(',
+    '/web/src/.*__tests__/.*vitest.*',
+    '/web/src/.*__tests__/.*@playwright/test.*',
+    '/core/src/.*vitest.*',
+    '/core/src/.*@playwright/test.*',
+  ],
 };

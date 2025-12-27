@@ -15,6 +15,7 @@ struct Invite: Codable {
     let inviterPeerId: String
     let createdAt: Date
     let expiresAt: Date
+    let signature: Data
     
     /// Generate shareable text
     func toShareText() -> String {
@@ -50,6 +51,21 @@ class ShareManager {
     static let shared = ShareManager()
     
     private init() {}
+
+    /// Create a signed invite
+    func createSignedInvite(code: String, inviterName: String?, inviterPeerId: String, createdAt: Date, expiresAt: Date) -> Invite? {
+        // Prepare data to sign: code + inviterPeerId + createdAt (as timestamp)
+        let dataToSign = (code + inviterPeerId + String(Int(createdAt.timeIntervalSince1970))).data(using: .utf8) ?? Data()
+        guard let signature = IdentityManager.shared.sign(data: dataToSign) else { return nil }
+        return Invite(
+            code: code,
+            inviterName: inviterName,
+            inviterPeerId: inviterPeerId,
+            createdAt: createdAt,
+            expiresAt: expiresAt,
+            signature: signature
+        )
+    }
     
     // MARK: - Share Sheet Integration
     

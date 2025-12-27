@@ -5,7 +5,7 @@
  * including the distance metric, k-bucket management, and peer lookup.
  */
 
-import { Peer } from './routing.js';
+import type { Peer } from './routing.js';
 
 const K = 20; // Kademlia constant for bucket size
 const ID_LENGTH = 256; // Peer ID length in bits

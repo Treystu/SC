@@ -245,30 +245,14 @@ function App() {
     },
   ]);
 
-  // Check if onboarding has been completed
+  // Check for diagnostics URL parameter
   useEffect(() => {
-    const onboardingComplete = localStorage.getItem("sc-onboarding-complete");
-    // Heuristic to skip onboarding during automated runs (Playwright/CI)
-    const shouldSkipOnboarding =
-      import.meta.env.MODE === "test" ||
-      import.meta.env.VITE_E2E === "true" ||
-      (typeof navigator !== "undefined" &&
-        "webdriver" in navigator &&
-        navigator.webdriver === true);
+    const urlParams = new URLSearchParams(window.location.search);
+    const hash = window.location.hash;
 
-    if (!onboardingComplete) {
-      if (shouldSkipOnboarding) {
-        localStorage.setItem("sc-onboarding-complete", "true");
-        setShowOnboarding(false);
-      } else {
-        setShowOnboarding(true);
-      }
-    } else {
-      setShowOnboarding(false);
+    if (urlParams.get('diagnostics') === 'true' || hash === '#diagnostics') {
+      setShowDiagnostics(true);
     }
-
-    const profileManager = new ProfileManager();
-    profileManager.getProfile().then(setUserProfile);
   }, []);
 
   const handleJoinRoom = useCallback(

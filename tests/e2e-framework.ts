@@ -10,7 +10,7 @@ export class E2ETestFramework {
   constructor(private page: Page) { }
 
   async navigateToApp() {
-    await this.page.goto('http://localhost:5173');
+    await this.page.goto('http://localhost:3000');
     await this.page.waitForLoadState('networkidle');
   }
 

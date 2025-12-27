@@ -1,4 +1,6 @@
-import sanitizeHtml from 'sanitize-html';
+// Use CommonJS require for Jest compatibility. For ESM, use import if needed.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const sanitizeHtml = require('sanitize-html');
 /**
  * Sanitize HTML content to prevent XSS attacks
  * 

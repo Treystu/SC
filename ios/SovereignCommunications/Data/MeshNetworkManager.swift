@@ -43,6 +43,8 @@ struct NetworkStats {
  * - Unified Peer ID (32-byte Hex String)
  */
 class MeshNetworkManager: NSObject, ObservableObject {
+    // Notification name for connection status changes
+    static let connectionStatusChangedNotification = Notification.Name("SCConnectionStatusChanged")
 
     static let shared = MeshNetworkManager()
 
@@ -52,12 +54,15 @@ class MeshNetworkManager: NSObject, ObservableObject {
 
     // Unified persistence adapter (matches Web/Android)
     private let persistenceAdapter: IOSPersistenceAdapter
-    
+
     // Room Client for Global Bootstrapping
     private let roomClient = RoomClient()
     private var signalingTask: Task<Void, Never>?
 
     @Published var connectedPeers: [String] = [] // List of connected Peer IDs
+
+    // Callback for connection status changes to inform JS Core
+    var connectionStatusCallback: ((String, String) -> Void)? // peerId, status (connected/disconnected)
 
     private var messagesSent: Int = 0
     private var messagesReceived: Int = 0
@@ -321,7 +326,10 @@ class MeshNetworkManager: NSObject, ObservableObject {
 // MARK: - BluetoothMeshManagerDelegate
 
 extension MeshNetworkManager: BluetoothMeshManagerDelegate {
-    func bluetoothMeshManager(_ manager: BluetoothMeshManager, didReceiveMessage data: Data, from peerId: String) {
+    func bluetoothMeshManager(_ manager: BluetoothMeshManager, didReceiveMessage data: Data, from _: String) {
+        let extractedPeerId: String? =
+            data.count >= 44 ? data.subdata(in: 12..<44).map { String(format: "%02x", $0) }.joined() : nil
+        let peerId = extractedPeerId ?? "unknown"
         passToCore(data: data, from: peerId)
     }
 
@@ -331,22 +339,30 @@ extension MeshNetworkManager: BluetoothMeshManagerDelegate {
             if !self.connectedPeers.contains(peerId) {
                 self.connectedPeers.append(peerId)
             }
+            NotificationCenter.default.post(name: MeshNetworkManager.connectionStatusChangedNotification, object: self, userInfo: ["peerId": peerId, "status": "connected", "transport": "BLE"])
         }
-        // TODO: Inform JS Core about connection status change?
+        // Inform JS Core about connection status change
+        connectionStatusCallback?(peerId, "connected")
     }
 
     func bluetoothMeshManager(_ manager: BluetoothMeshManager, didDisconnectFromPeer peerId: String) {
         logger.info("Disconnected from peer via BLE: \(peerId)")
         DispatchQueue.main.async {
             self.connectedPeers.removeAll { $0 == peerId }
+            NotificationCenter.default.post(name: MeshNetworkManager.connectionStatusChangedNotification, object: self, userInfo: ["peerId": peerId, "status": "disconnected", "transport": "BLE"])
         }
+        // Inform JS Core about disconnection
+        connectionStatusCallback?(peerId, "disconnected")
     }
 }
 
 // MARK: - WebRTCManagerDelegate
 
 extension MeshNetworkManager: WebRTCManagerDelegate {
-    func webRTCManager(_ manager: WebRTCManager, didReceiveData data: Data, from peerId: String) {
+    func webRTCManager(_ manager: WebRTCManager, didReceiveData data: Data, from _: String) {
+        let extractedPeerId: String? =
+            data.count >= 44 ? data.subdata(in: 12..<44).map { String(format: "%02x", $0) }.joined() : nil
+        let peerId = extractedPeerId ?? "unknown"
         passToCore(data: data, from: peerId)
     }
 
@@ -355,13 +371,19 @@ extension MeshNetworkManager: WebRTCManagerDelegate {
             if !self.connectedPeers.contains(peerId) {
                 self.connectedPeers.append(peerId)
             }
+            NotificationCenter.default.post(name: MeshNetworkManager.connectionStatusChangedNotification, object: self, userInfo: ["peerId": peerId, "status": "connected", "transport": "WebRTC"])
         }
+        // Inform JS Core about connection status change
+        connectionStatusCallback?(peerId, "connected")
     }
 
     func webRTCManager(_ manager: WebRTCManager, didCloseDataChannelFor peerId: String) {
         DispatchQueue.main.async {
              self.connectedPeers.removeAll { $0 == peerId }
+            NotificationCenter.default.post(name: MeshNetworkManager.connectionStatusChangedNotification, object: self, userInfo: ["peerId": peerId, "status": "disconnected", "transport": "WebRTC"])
         }
+        // Inform JS Core about disconnection
+        connectionStatusCallback?(peerId, "disconnected")
     }
 
     func webRTCManager(_ manager: WebRTCManager, didGenerateIceCandidate candidate: RTCIceCandidate, for peerId: String) {
@@ -398,14 +420,20 @@ extension MeshNetworkManager: LocalNetworkManagerDelegate {
             if !self.connectedPeers.contains(peerId) {
                 self.connectedPeers.append(peerId)
             }
+            NotificationCenter.default.post(name: MeshNetworkManager.connectionStatusChangedNotification, object: self, userInfo: ["peerId": peerId, "status": "connected", "transport": "LocalNetwork"])
         }
+        // Inform JS Core about connection status change
+        connectionStatusCallback?(peerId, "connected")
     }
 
     func didDisconnect(peerId: String) {
         logger.info("Disconnected from peer via Local Network: \(peerId)")
         DispatchQueue.main.async {
             self.connectedPeers.removeAll { $0 == peerId }
+            NotificationCenter.default.post(name: MeshNetworkManager.connectionStatusChangedNotification, object: self, userInfo: ["peerId": peerId, "status": "disconnected", "transport": "LocalNetwork"])
         }
+        // Inform JS Core about disconnection
+        connectionStatusCallback?(peerId, "disconnected")
     }
 }
 

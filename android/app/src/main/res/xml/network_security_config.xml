@@ -9,28 +9,8 @@
     </base-config>
 
     <!--
-        Certificate Pinning Configuration
-
-        To enable certificate pinning in production, uncomment the domain-config block below
-        and provide the SHA-256 hashes of your server's public keys.
-
-        Pin generation command:
-        openssl s_client -servername api.example.com -connect api.example.com:443 | \
-        openssl x509 -pubkey -noout | openssl pkey -pubin -outform der | \
-        openssl dgst -sha256 -binary | openssl enc -base64
-    -->
-
-    <!--
-    <domain-config cleartextTrafficPermitted="false">
-        <domain includeSubdomains="true">api.sovereigncommunications.app</domain>
-        <pin-set expiration="2026-12-31">
-            <pin digest="SHA-256">YOUR_PRIMARY_PIN_HERE</pin>
-            <pin digest="SHA-256">YOUR_BACKUP_PIN_HERE</pin>
-        </pin-set>
-        <trust-anchors>
-            <certificates src="system" />
-        </trust-anchors>
-    </domain-config>
+        No certificate pinning required: Sovereign Communications is fully decentralized (no central API).
+        This config trusts only system CAs for peer-to-peer connections.
     -->
 
     <!--

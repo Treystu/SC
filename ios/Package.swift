@@ -28,7 +28,10 @@ let package = Package(
         ),
         .testTarget(
             name: "SovereignCommunicationsTests",
-            dependencies: ["SovereignCommunications"]
+            dependencies: ["SovereignCommunications"],
+            resources: [
+                .process("Resources")
+            ]
         )
     ]
 )

@@ -260,43 +260,49 @@ export function performKeyExchange(
     throw new Error('Peer public key must be 32 bytes');
   }
 
-    // Treat inputs as X25519-compatible and perform ECDH directly.
-    // Automatic conversion from Ed25519 is intentionally disabled to avoid
-    // accidental, data-dependent one-sided conversions that produced
-    // asymmetric shared secrets in CI. Callers that need Ed25519->X25519
-    // conversion should convert explicitly using ed25519.utils.toMontgomery*
-    // helpers.
+  // Detect key types based on public key convertibility
+  // Ed25519 public keys can be converted to Montgomery form
+  // X25519 public keys are already in Montgomery form and conversion fails
+  let isEd25519PubKey = false;
+  let xPeerPublicKey: Uint8Array;
 
-    const sharedSecret = x25519.getSharedSecret(privateKey, peerPublicKey);
+  try {
+    xPeerPublicKey = ed25519.utils.toMontgomery(peerPublicKey);
+    isEd25519PubKey = true;
+  } catch {
+    // Public key is already in X25519 Montgomery form
+    xPeerPublicKey = peerPublicKey;
+  }
 
-    // Optional debug logging for CI investigation
-    if (typeof process !== 'undefined' && process.env && process.env.TEST_CRYPTO_DBG) {
-      const toHex = (b: Uint8Array) => Array.from(b).map(x => x.toString(16).padStart(2, '0')).join('');
-      try {
-        // eslint-disable-next-line no-console
-        console.log('[TEST_CRYPTO_DBG] performKeyExchange:', {
-          privConverted: false,
-          pubConverted: false,
-          privForDHHex: privateKey ? toHex(privateKey).slice(0, 64) : null,
-          pubForDHHex: peerPublicKey ? toHex(peerPublicKey).slice(0, 64) : null,
-          sharedSecretHex: toHex(sharedSecret).slice(0, 64),
-        });
-      } catch (err) {
-        // ignore debug errors
-      }
-    }
+  // Convert private key based on detected key type
+  let xPrivateKey: Uint8Array;
+  if (isEd25519PubKey) {
+    // Ed25519 private key -> X25519 Montgomery private key
+    xPrivateKey = ed25519.utils.toMontgomerySecret(privateKey);
+  } else {
+    // X25519 private key -> use directly
+    xPrivateKey = privateKey;
+  }
 
-    const derivedKey = hkdf(
-      sha256,
-      sharedSecret,
-      salt || new Uint8Array(32),
-      info || new Uint8Array(0),
-      32
-    );
+  // Perform X25519 key exchange
+  const sharedSecret = x25519.getSharedSecret(xPrivateKey, xPeerPublicKey);
 
-    secureWipe(sharedSecret);
+  // Wipe temporary Montgomery-form keys (only if we created new arrays)
+  if (isEd25519PubKey) {
+    secureWipe(xPrivateKey);
+  }
 
-    return derivedKey;
+  const derivedKey = hkdf(
+    sha256,
+    sharedSecret,
+    salt || new Uint8Array(32),
+    info || new Uint8Array(0),
+    32
+  );
+
+  secureWipe(sharedSecret);
+
+  return derivedKey;
 }
 
 /**

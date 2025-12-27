@@ -55,7 +55,7 @@ jobs:
           npm run build -w web
 
       - name: Run Web E2E tests
-        run: npm run test:e2e -- --project=${{ matrix.browser }} tests/e2e/app-basics.e2e.test.ts tests/e2e/messaging.e2e.test.ts
+        run: npm run test:e2e -- --project=${{ matrix.browser }} tests/e2e/app-basics.e2e.test.ts tests/e2e/messaging.e2e.test.ts tests/e2e/diagnostics.e2e.test.ts
         env:
           CI: true
 

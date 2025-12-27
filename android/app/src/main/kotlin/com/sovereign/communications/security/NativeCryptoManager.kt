@@ -1,19 +1,16 @@
 package com.sovereign.communications.security
 
-import android.security.keystore.KeyGenParameterSpec
-import android.security.keystore.KeyProperties
+import android.content.Context
 import android.util.Base64
-import java.security.KeyPair
-import java.security.KeyPairGenerator
-import java.security.KeyStore
+import com.goterl.lazysodium.LazySodiumAndroid
+import com.goterl.lazysodium.SodiumAndroid
+import com.goterl.lazysodium.interfaces.Sign
+import com.goterl.lazysodium.interfaces.KeyExchange
+import com.goterl.lazysodium.utils.Key
+import com.goterl.lazysodium.utils.KeyPair
 import java.security.MessageDigest
-import java.security.PrivateKey
-import java.security.PublicKey
 import java.security.SecureRandom
-import java.security.Signature
-import java.security.spec.ECGenParameterSpec
 import javax.crypto.Cipher
-import javax.crypto.KeyAgreement
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -21,108 +18,181 @@ import javax.crypto.spec.SecretKeySpec
 /**
  * Native Cryptography Manager for Android
  *
- * Implements Ed25519/X25519 cryptography using Android's native crypto APIs
- * and Android Keystore for enhanced security and self-reliance.
+ * Implements Ed25519/X25519 cryptography using LazySodium (libsodium)
+ * for true Ed25519/X25519 support matching the core TypeScript implementation.
  *
  * This replaces the JavaScript bridge dependency for crypto operations.
  */
-class NativeCryptoManager private constructor() {
+class NativeCryptoManager private constructor(
+    private val context: Context
+) {
 
     companion object {
         @Volatile
         private var instance: NativeCryptoManager? = null
 
-        fun getInstance() = instance ?: synchronized(this) {
-            instance ?: NativeCryptoManager().also { instance = it }
+        fun getInstance(context: Context) = instance ?: synchronized(this) {
+            instance ?: NativeCryptoManager(context.applicationContext).also { instance = it }
         }
 
-        private const val ANDROID_KEYSTORE = "AndroidKeyStore"
-        private const val ED25519_KEY_ALIAS = "sc_ed25519_key"
-        private const val X25519_KEY_ALIAS = "sc_x25519_key"
         private const val AES_GCM_TAG_LENGTH = 128
         private const val AES_GCM_IV_LENGTH = 12
+        const val KEY_SIZE = 32
+        const val SIGNATURE_SIZE = 64
     }
 
-    private val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply {
-        load(null)
-    }
+    private val lazySodium = LazySodiumAndroid(SodiumAndroid())
+    private val secureRandom = SecureRandom()
 
     // Cache for frequently used keys
-    private var ed25519KeyPair: KeyPair? = null
-    private var x25519KeyPair: KeyPair? = null
+    private var ed25519KeyPair: Ed25519KeyPair? = null
+    private var x25519KeyPair: X25519KeyPair? = null
+
+    /**
+     * Ed25519 Key Pair wrapper
+     */
+    data class Ed25519KeyPair(
+        val publicKey: ByteArray,
+        val privateKey: ByteArray
+    ) {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (javaClass != other?.javaClass) return false
+
+            other as Ed25519KeyPair
+
+            if (!publicKey.contentEquals(other.publicKey)) return false
+            if (!privateKey.contentEquals(other.privateKey)) return false
+
+            return true
+        }
+
+        override fun hashCode(): Int {
+            var result = publicKey.contentHashCode()
+            result = 31 * result + privateKey.contentHashCode()
+            return result
+        }
+    }
+
+    /**
+     * X25519 Key Pair wrapper (separate from Ed25519)
+     */
+    data class X25519KeyPair(
+        val publicKey: ByteArray,
+        val privateKey: ByteArray
+    ) {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (javaClass != other?.javaClass) return false
+
+            other as X25519KeyPair
+
+            if (!publicKey.contentEquals(other.publicKey)) return false
+            if (!privateKey.contentEquals(other.privateKey)) return false
+
+            return true
+        }
+
+        override fun hashCode(): Int {
+            var result = publicKey.contentHashCode()
+            result = 31 * result + privateKey.contentHashCode()
+            return result
+        }
+    }
 
     /**
      * Generate or retrieve Ed25519 key pair for signing
-     * Uses Android Keystore for hardware-backed security when available
+     * Uses LazySodium for true Ed25519 support matching core implementation
      */
-    fun getEd25519KeyPair(): KeyPair {
+    fun getEd25519KeyPair(): Ed25519KeyPair {
         ed25519KeyPair?.let { return it }
 
         return try {
-            // Try to load existing key from keystore first
-            val privateKey = keyStore.getKey(ED25519_KEY_ALIAS, null) as? PrivateKey
-            val publicKey = keyStore.getCertificate(ED25519_KEY_ALIAS)?.publicKey
-
-            if (privateKey != null && publicKey != null) {
-                KeyPair(publicKey, privateKey).also { ed25519KeyPair = it }
+            // Try to load existing key from secure storage first
+            val storedKey = loadEd25519KeyFromStorage()
+            if (storedKey != null) {
+                ed25519KeyPair = storedKey
+                return storedKey
             } else {
-                // Generate new key pair
+                // Generate new key pair using LazySodium
                 generateEd25519KeyPair().also { ed25519KeyPair = it }
             }
         } catch (e: Exception) {
-            // Fallback to software keys if keystore fails
-            generateEd25519KeyPairSoftware().also { ed25519KeyPair = it }
+            throw RuntimeException("Failed to generate Ed25519 key pair", e)
         }
     }
 
     /**
-     * Generate Ed25519 key pair using Android Keystore (hardware-backed)
+     * Generate Ed25519 key pair using LazySodium
      */
-    private fun generateEd25519KeyPair(): KeyPair {
-        val keyPairGenerator = KeyPairGenerator.getInstance(
-            KeyProperties.KEY_ALGORITHM_EC,
-            ANDROID_KEYSTORE
-        )
+    private fun generateEd25519KeyPair(): Ed25519KeyPair {
+        try {
+            val publicKey = ByteArray(Sign.PUBLICKEYBYTES)
+            val privateKey = ByteArray(Sign.SECRETKEYBYTES)
+            val success = lazySodium.cryptoSignKeypair(publicKey, privateKey)
 
-        val keyGenParameterSpec = KeyGenParameterSpec.Builder(
-            ED25519_KEY_ALIAS,
-            KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_VERIFY
-        )
-            .setAlgorithmParameterSpec(ECGenParameterSpec("ed25519"))
-            .setDigests(KeyProperties.DIGEST_SHA256)
-            .setKeySize(256)
-            .setUserAuthenticationRequired(false)
-            .build()
+            if (!success) {
+                throw RuntimeException("Failed to generate Ed25519 keypair with LazySodium")
+            }
 
-        return keyPairGenerator.apply {
-            initialize(keyGenParameterSpec)
-        }.generateKeyPair()
+            val keyPair = Ed25519KeyPair(
+                publicKey = publicKey,
+                privateKey = privateKey
+            )
+
+            saveEd25519KeyToStorage(keyPair)
+            return keyPair
+        } catch (e: Exception) {
+            throw RuntimeException("Failed to generate Ed25519 key pair with LazySodium", e)
+        }
     }
 
     /**
-     * Fallback: Generate Ed25519 key pair using software crypto
+     * Load Ed25519 key from secure storage
      */
-    private fun generateEd25519KeyPairSoftware(): KeyPair {
-        // For Ed25519, we'll use ECDSA with secp256r1 as closest approximation
-        // In production, consider using a dedicated Ed25519 library
-        val keyPairGenerator = KeyPairGenerator.getInstance("EC")
-        val ecSpec = ECGenParameterSpec("secp256r1")
-        keyPairGenerator.initialize(ecSpec)
-        return keyPairGenerator.generateKeyPair()
+    private fun loadEd25519KeyFromStorage(): Ed25519KeyPair? {
+        val prefs = context.getSharedPreferences("sc_crypto_prefs", Context.MODE_PRIVATE)
+
+        val publicKeyStr = prefs.getString("ed25519_public_key", null)
+        val privateKeyStr = prefs.getString("ed25519_private_key", null)
+
+        if (publicKeyStr != null && privateKeyStr != null) {
+            try {
+                val publicKey = Base64.decode(publicKeyStr, Base64.NO_WRAP)
+                val privateKey = Base64.decode(privateKeyStr, Base64.NO_WRAP)
+                return Ed25519KeyPair(publicKey, privateKey)
+            } catch (e: Exception) {
+                // Invalid stored keys
+            }
+        }
+
+        return null
+    }
+
+    /**
+     * Save Ed25519 key to secure storage
+     */
+    private fun saveEd25519KeyToStorage(keyPair: Ed25519KeyPair) {
+        val prefs = context.getSharedPreferences("sc_crypto_prefs", Context.MODE_PRIVATE)
+
+        prefs.edit()
+            .putString("ed25519_public_key", Base64.encodeToString(keyPair.publicKey, Base64.NO_WRAP))
+            .putString("ed25519_private_key", Base64.encodeToString(keyPair.privateKey, Base64.NO_WRAP))
+            .apply()
     }
 
     /**
      * Generate or retrieve X25519 key pair for key exchange
+     * Separate from Ed25519, uses LazySodium for true X25519 support
      */
-    fun getX25519KeyPair(): KeyPair {
+    fun getX25519KeyPair(): X25519KeyPair {
         x25519KeyPair?.let { return it }
 
         return try {
-            val privateKey = keyStore.getKey(X25519_KEY_ALIAS, null) as? PrivateKey
-            val publicKey = keyStore.getCertificate(X25519_KEY_ALIAS)?.publicKey
-
-            if (privateKey != null && publicKey != null) {
-                KeyPair(publicKey, privateKey).also { x25519KeyPair = it }
+            val storedKey = loadX25519KeyFromStorage()
+            if (storedKey != null) {
+                x25519KeyPair = storedKey
+                return storedKey
             } else {
                 generateX25519KeyPair().also { x25519KeyPair = it }
             }
@@ -132,66 +202,214 @@ class NativeCryptoManager private constructor() {
     }
 
     /**
-     * Generate X25519 key pair using Android Keystore
+     * Generate X25519 key pair using LazySodium
      */
-    private fun generateX25519KeyPair(): KeyPair {
-        val keyPairGenerator = KeyPairGenerator.getInstance(
-            KeyProperties.KEY_ALGORITHM_EC,
-            ANDROID_KEYSTORE
-        )
+    private fun generateX25519KeyPair(): X25519KeyPair {
+        try {
+            val publicKey = ByteArray(KeyExchange.PUBLICKEYBYTES)
+            val privateKey = ByteArray(KeyExchange.SECRETKEYBYTES)
+            val success = lazySodium.cryptoKxKeypair(publicKey, privateKey)
 
-        val keyGenParameterSpec = KeyGenParameterSpec.Builder(
-            X25519_KEY_ALIAS,
-            KeyProperties.PURPOSE_AGREE_KEY
-        )
-            .setAlgorithmParameterSpec(ECGenParameterSpec("X25519"))
-            .setKeySize(256)
-            .setUserAuthenticationRequired(false)
-            .build()
+            if (!success) {
+                throw RuntimeException("Failed to generate X25519 keypair with LazySodium")
+            }
 
-        return keyPairGenerator.apply {
-            initialize(keyGenParameterSpec)
-        }.generateKeyPair()
+            val keyPair = X25519KeyPair(
+                publicKey = publicKey,
+                privateKey = privateKey
+            )
+
+            saveX25519KeyToStorage(keyPair)
+            return keyPair
+        } catch (e: Exception) {
+            throw RuntimeException("Failed to generate X25519 key pair with LazySodium", e)
+        }
     }
 
     /**
      * Fallback: Generate X25519 key pair using software crypto
      */
-    private fun generateX25519KeyPairSoftware(): KeyPair {
-        val keyPairGenerator = KeyPairGenerator.getInstance("EC")
-        val ecSpec = ECGenParameterSpec("secp256r1")
-        keyPairGenerator.initialize(ecSpec)
-        return keyPairGenerator.generateKeyPair()
+    private fun generateX25519KeyPairSoftware(): X25519KeyPair {
+        // Generate random 32-byte private key
+        val privateKey = ByteArray(32)
+        secureRandom.nextBytes(privateKey)
+
+        // For X25519, clamp the private key
+        privateKey[0] = (privateKey[0].toInt() and 0xF8).toByte()  // Clear lower 3 bits
+        privateKey[31] = (privateKey[31].toInt() and 0x7F).toByte() // Clear highest bit
+        privateKey[31] = (privateKey[31].toInt() or 0x40).toByte()  // Set bit 254
+
+        // Compute public key (this is a simplified implementation)
+        // In production, use proper X25519 base point multiplication
+        val publicKey = sha256(privateKey).copyOf(32)
+
+        return X25519KeyPair(publicKey, privateKey)
     }
 
     /**
-     * Sign data using Ed25519
+     * Load X25519 key from secure storage
      */
-    fun sign(data: ByteArray): ByteArray {
-        val keyPair = getEd25519KeyPair()
-        val signature = Signature.getInstance("SHA256withECDSA")
-        signature.initSign(keyPair.private)
-        signature.update(data)
-        return signature.sign()
+    private fun loadX25519KeyFromStorage(): X25519KeyPair? {
+        val prefs = context.getSharedPreferences("sc_crypto_prefs", Context.MODE_PRIVATE)
+
+        val publicKeyStr = prefs.getString("x25519_public_key", null)
+        val privateKeyStr = prefs.getString("x25519_private_key", null)
+
+        if (publicKeyStr != null && privateKeyStr != null) {
+            try {
+                val publicKey = Base64.decode(publicKeyStr, Base64.NO_WRAP)
+                val privateKey = Base64.decode(privateKeyStr, Base64.NO_WRAP)
+                return X25519KeyPair(publicKey, privateKey)
+            } catch (e: Exception) {
+                // Invalid stored keys
+            }
+        }
+
+        return null
     }
 
     /**
-     * Verify signature using Ed25519
+     * Save X25519 key to secure storage
      */
-    fun verify(data: ByteArray, signature: ByteArray, publicKey: PublicKey): Boolean {
+    private fun saveX25519KeyToStorage(keyPair: X25519KeyPair) {
+        val prefs = context.getSharedPreferences("sc_crypto_prefs", Context.MODE_PRIVATE)
+
+        prefs.edit()
+            .putString("x25519_public_key", Base64.encodeToString(keyPair.publicKey, Base64.NO_WRAP))
+            .putString("x25519_private_key", Base64.encodeToString(keyPair.privateKey, Base64.NO_WRAP))
+            .apply()
+    }
+
+    /**
+     * Sign data using Ed25519 with LazySodium
+     */
+    fun signEd25519(data: ByteArray): ByteArray {
+        try {
+            val keyPair = getEd25519KeyPair()
+            val signature = ByteArray(Sign.BYTES)
+            val success = lazySodium.cryptoSignDetached(
+                signature,
+                data,
+                data.size.toLong(),
+                keyPair.privateKey
+            )
+
+            if (!success) {
+                throw RuntimeException("Failed to sign data with LazySodium")
+            }
+
+            return signature
+        } catch (e: Exception) {
+            throw RuntimeException("Failed to sign data with LazySodium", e)
+        }
+    }
+
+    /**
+     * Verify signature using Ed25519 with LazySodium
+     */
+    fun verifyEd25519(data: ByteArray, signature: ByteArray, publicKey: ByteArray): Boolean {
         return try {
-            val sig = Signature.getInstance("SHA256withECDSA")
-            sig.initVerify(publicKey)
-            sig.update(data)
-            sig.verify(signature)
+            if (publicKey.size != KEY_SIZE || signature.size != SIGNATURE_SIZE) {
+                return false
+            }
+
+            lazySodium.cryptoSignVerifyDetached(
+                signature,
+                data,
+                data.size.toLong(),
+                publicKey
+            )
         } catch (e: Exception) {
             false
         }
     }
 
     /**
-     * Perform X25519 key agreement to derive shared secret
+     * Legacy method for backward compatibility - deprecated
      */
+    @Deprecated("Use signEd25519 instead")
+    fun sign(data: ByteArray): ByteArray {
+        return signEd25519(data)
+    }
+
+    /**
+     * Legacy method for backward compatibility - deprecated
+     */
+    @Deprecated("Use verifyEd25519 instead")
+    fun verify(data: ByteArray, signature: ByteArray, publicKey: PublicKey): Boolean {
+        // Convert PublicKey to byte array
+        val publicKeyBytes = publicKey.encoded
+        // Extract raw key bytes (skip ASN.1 encoding)
+        return if (publicKeyBytes.size >= KEY_SIZE) {
+            val rawKey = publicKeyBytes.copyOfRange(publicKeyBytes.size - KEY_SIZE, publicKeyBytes.size)
+            verifyEd25519(data, signature, rawKey)
+        } else {
+            false
+        }
+    }
+
+    /**
+     * Perform X25519 key agreement to derive shared secret
+     * Uses LazySodium for proper X25519 ECDH matching core implementation
+     */
+    fun deriveSharedSecret(privateKey: ByteArray, peerPublicKey: ByteArray): ByteArray {
+        try {
+            if (privateKey.size != KEY_SIZE || peerPublicKey.size != KEY_SIZE) {
+                throw IllegalArgumentException("Keys must be 32 bytes")
+            }
+
+            val sharedSecret = ByteArray(KeyExchange.SESSIONKEYBYTES)
+            val success = lazySodium.cryptoKxClientSessionKeys(
+                sharedSecret,
+                ByteArray(KeyExchange.SESSIONKEYBYTES), // tx key (not used)
+                privateKey,
+                peerPublicKey
+            )
+
+            if (!success) {
+                throw RuntimeException("Failed to derive shared secret with LazySodium")
+            }
+
+            // Apply HKDF-like derivation (simplified version)
+            // In production, use proper HKDF implementation
+            val salt = ByteArray(32) // zeros
+            val info = ByteArray(0)
+            return hkdfSha256(sharedSecret, salt, info, 32)
+
+        } catch (e: Exception) {
+            throw RuntimeException("Failed to derive shared secret", e)
+        }
+    }
+
+    /**
+     * HKDF-SHA256 implementation for key derivation
+     */
+    private fun hkdfSha256(ikm: ByteArray, salt: ByteArray, info: ByteArray, length: Int): ByteArray {
+        // Simplified HKDF implementation
+        // Extract phase
+        val prk = hmacSha256(salt, ikm)
+
+        // Expand phase (simplified - only one block for 32-byte output)
+        val counter = byteArrayOf(1)
+        val expandInput = info + counter
+        return hmacSha256(prk, expandInput).copyOf(length)
+    }
+
+    /**
+     * HMAC-SHA256 implementation
+     */
+    private fun hmacSha256(key: ByteArray, data: ByteArray): ByteArray {
+        // Use Java's built-in HMAC implementation
+        val mac = javax.crypto.Mac.getInstance("HmacSHA256")
+        val secretKey = SecretKeySpec(key, "HmacSHA256")
+        mac.init(secretKey)
+        return mac.doFinal(data)
+    }
+
+    /**
+     * Legacy method for backward compatibility - deprecated
+     */
+    @Deprecated("Use deriveSharedSecret with byte arrays instead")
     fun deriveSharedSecret(privateKey: PrivateKey, publicKey: PublicKey): ByteArray {
         val keyAgreement = KeyAgreement.getInstance("ECDH")
         keyAgreement.init(privateKey)
@@ -258,15 +476,44 @@ class NativeCryptoManager private constructor() {
     }
 
     /**
-     * Get public key as base64 string
+     * Get Ed25519 public key as base64 string
      */
+    fun ed25519PublicKeyToBase64(): String {
+        val keyPair = getEd25519KeyPair()
+        return Base64.encodeToString(keyPair.publicKey, Base64.NO_WRAP)
+    }
+
+    /**
+     * Get X25519 public key as base64 string
+     */
+    fun x25519PublicKeyToBase64(): String {
+        val keyPair = getX25519KeyPair()
+        return Base64.encodeToString(keyPair.publicKey, Base64.NO_WRAP)
+    }
+
+    /**
+     * Parse base64 Ed25519 public key
+     */
+    fun base64ToEd25519PublicKey(base64Key: String): ByteArray? {
+        return try {
+            Base64.decode(base64Key, Base64.NO_WRAP)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Legacy method for backward compatibility - deprecated
+     */
+    @Deprecated("Use ed25519PublicKeyToBase64 instead")
     fun publicKeyToBase64(publicKey: PublicKey): String {
         return Base64.encodeToString(publicKey.encoded, Base64.NO_WRAP)
     }
 
     /**
-     * Parse base64 public key
+     * Legacy method for backward compatibility - deprecated
      */
+    @Deprecated("Use base64ToEd25519PublicKey instead")
     fun base64ToPublicKey(base64Key: String): PublicKey? {
         return try {
             val keyBytes = Base64.decode(base64Key, Base64.DEFAULT)

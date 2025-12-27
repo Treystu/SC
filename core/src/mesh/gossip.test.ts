@@ -3,7 +3,8 @@
  */
 
 import { GossipProtocol } from './gossip.js';
-import { Message, MessageType } from '../protocol/message.js';
+import type { Message } from '../protocol/message.js';
+import { MessageType } from '../protocol/message.js';
 
 describe('GossipProtocol', () => {
   let gossip: GossipProtocol;

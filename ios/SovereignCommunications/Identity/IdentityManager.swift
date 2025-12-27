@@ -1,3 +1,4 @@
+import CryptoKit
 //
 //  IdentityManager.swift
 //  SovereignCommunications
@@ -23,6 +24,22 @@ import os.log
  * - Fingerprint: SHA-256 of public key, stored in UserDefaults
  */
 class IdentityManager {
+
+        // MARK: - Ed25519 Signing/Verification
+
+        /// Sign data using the stored Ed25519 private key
+        func sign(data: Data) -> Data? {
+            guard let identity = getIdentity() else { return nil }
+            guard let privateKey = try? Curve25519.Signing.PrivateKey(rawRepresentation: identity.privateKey) else { return nil }
+            let signature = try? privateKey.signature(for: data)
+            return signature
+        }
+
+        /// Verify Ed25519 signature with a public key
+        func verify(data: Data, signature: Data, publicKey: Data) -> Bool {
+            guard let publicKey = try? Curve25519.Signing.PublicKey(rawRepresentation: publicKey) else { return false }
+            return publicKey.isValidSignature(signature, for: data)
+        }
     
     static let shared = IdentityManager()
     

@@ -1,6 +1,8 @@
 import { MessageRelay, fragmentMessage, MessageReassembler, calculateFragmentSize, calculateFragmentationOverhead } from './relay';
+import type { Peer } from './routing';
 import { RoutingTable, createPeer } from './routing';
-import { Message, MessageType, encodeMessage } from '../protocol/message';
+import type { Message } from '../protocol/message';
+import { MessageType, encodeMessage } from '../protocol/message';
 
 describe('Advanced Message Relay Features', () => {
   let relay: MessageRelay;

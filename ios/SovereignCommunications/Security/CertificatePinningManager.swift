@@ -26,26 +26,9 @@ class CertificatePinningManager: NSObject {
 
     /// Dictionary of domain names to their pinned certificate hashes
     ///
-    /// To generate certificate pins:
-    /// ```bash
-    /// openssl s_client -servername api.example.com -connect api.example.com:443 | \
-    ///   openssl x509 -pubkey -noout | \
-    ///   openssl pkey -pubin -outform der | \
-    ///   openssl dgst -sha256 -binary | \
-    ///   openssl enc -base64
-    /// ```
-    private let pinnedCertificates: [String: Set<String>] = [
-        // TURN/STUN servers for WebRTC connectivity
-        // Add actual certificate pins for production TURN servers
-        "turn.sovereigncommunications.app": [
-            // Placeholder - replace with actual certificate pins
-            "PLACEHOLDER_PIN_SHA256_BASE64"
-        ],
-        "stun.sovereigncommunications.app": [
-            // Placeholder - replace with actual certificate pins
-            "PLACEHOLDER_PIN_SHA256_BASE64"
-        ]
-    ]
+    /// For a fully decentralized mesh, certificate pinning is not required unless using custom relay (TURN/STUN) infrastructure.
+    /// If you operate your own relays, add their pins here. Otherwise, leave empty.
+    private let pinnedCertificates: [String: Set<String>] = [:]
 
     /// Whether to enforce certificate pinning
     /// Set to false for development/testing with self-signed certificates

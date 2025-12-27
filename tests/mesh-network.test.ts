@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from '@jest/globals';
 import { PeerRegistry } from '../core/src/peer-registry';
 import { RoutingTable } from '../core/src/routing-table';
 import { MessageDeduplication } from '../core/src/message-deduplication';

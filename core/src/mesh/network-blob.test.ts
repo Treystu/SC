@@ -1,5 +1,7 @@
 import { MeshNetwork } from "./network";
+import type { Message } from "../protocol/message";
 import { MessageType, encodeMessage } from "../protocol/message";
+// No runtime import of Message here, so no change needed.
 import { generateIdentity, signMessage } from "../crypto/primitives";
 
 describe("MeshNetwork Blob Integration", () => {

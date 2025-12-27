@@ -239,7 +239,7 @@ describe('Message Protocol', () => {
     it('should reject invalid message type', () => {
       const header = {
         version: PROTOCOL_VERSION,
-        type: 0xFF as MessageType,
+        type: 0xFF,
         ttl: 10,
         timestamp: Date.now(),
         senderId: mockSenderId,
@@ -359,7 +359,7 @@ describe('Message Protocol', () => {
     });
 
     it('should handle unknown types', () => {
-      const unknownType = 0xFF as MessageType;
+      const unknownType = 0xFF;
       const name = getMessageTypeName(unknownType);
       expect(name).toContain('UNKNOWN');
       expect(name).toContain('ff');

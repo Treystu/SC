@@ -2,11 +2,11 @@
  * Tests for validation utilities
  */
 
-import {
+const {
   sanitizeHTML,
   sanitizeUserInput,
   validateMessageContent
-} from './validation.js';
+} = require('./validation.ts');
 
 describe('Validation Utilities', () => {
   describe('sanitizeHTML', () => {

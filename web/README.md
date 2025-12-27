@@ -65,7 +65,9 @@ The `NetworkDiagnostics` component provides real-time monitoring:
 - Connection distribution visualization
 - Configurable refresh intervals (0.5s to 5s)
 
-**Usage**: Accessible via the signal icon (📶) in the header.
+**Usage**: 
+- Click the signal icon (📶) in the header
+- Or access directly via URL: `?diagnostics=true` or `#diagnostics`
 
 ### IndexedDB Storage
 

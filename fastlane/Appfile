@@ -1,0 +1,17 @@
+# Appfile for Sovereign Communications
+# Stores Apple Developer Portal configuration
+
+# Apple Developer Portal Team ID
+apple_dev_portal_id("$(echo $APPLE_TEAM_ID)")
+
+# App Store Connect Team ID
+app_store_connect_id("$(echo $APP_STORE_CONNECT_TEAM_ID)")
+
+# iOS App Bundle ID
+app_identifier("com.sovereign.communications")
+
+# iTunes Connect Username (deprecated, use API key instead)
+# itc_connect_id("$(echo $ITC_USER)")
+
+# For API key authentication, the Appfile doesn't need credentials
+# The API key is provided via api_key_path in the Fastfile

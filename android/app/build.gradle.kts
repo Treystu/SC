@@ -104,6 +104,8 @@ dependencies {
     // Note: androidx.security:security-crypto alpha library removed
     // Using KeystoreManager instead for production-ready key management
     implementation("org.bouncycastle:bcprov-jdk18on:1.78")
+    implementation("net.i2p.crypto:eddsa:0.3.0")
+    implementation("com.google.crypto.tink:tink-android:1.15.0")
 
     // SQLCipher for database encryption
     implementation("net.zetetic:android-database-sqlcipher:4.5.6")
