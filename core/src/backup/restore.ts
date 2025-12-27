@@ -8,8 +8,8 @@
  * - Conflict resolution
  */
 
-import { StorageAdapter } from "../storage/memory.js";
-import { BackupData, BackupMetadata } from "./backup.js";
+import type { StorageAdapter } from "../storage/memory";
+import type { BackupData, BackupMetadata } from "./backup";
 
 export interface RestoreOptions {
   overwriteExisting?: boolean;

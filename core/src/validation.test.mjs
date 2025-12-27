@@ -2,6 +2,8 @@
  * Tests for validation utilities (ESM)
  */
 
+// @jest-environment jsdom
+
 import { sanitizeHTML, sanitizeUserInput, validateMessageContent } from './validation.js';
 
 // Jest ESM test suite

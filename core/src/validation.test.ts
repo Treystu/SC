@@ -2,11 +2,13 @@
  * Tests for validation utilities
  */
 
-const {
+// @jest-environment jsdom
+
+import {
   sanitizeHTML,
   sanitizeUserInput,
   validateMessageContent
-} = require('./validation.ts');
+} from './validation.js';
 
 describe('Validation Utilities', () => {
   describe('sanitizeHTML', () => {

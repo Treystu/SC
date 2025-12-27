@@ -2,7 +2,8 @@
  * Integration tests for crypto and protocol interaction
  */
 import { generateIdentity, signMessage, verifySignature } from '../../core/src/crypto/primitives';
-import { encodeMessage, decodeMessage, Message, MessageType } from '../../core/src/protocol/message';
+import type { Message } from '../../core/src/protocol/message';
+import { encodeMessage, decodeMessage, MessageType } from '../../core/src/protocol/message';
 
 describe('Crypto-Protocol Integration', () => {
   let identity: { publicKey: Uint8Array; privateKey: Uint8Array };

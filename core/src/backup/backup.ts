@@ -10,7 +10,7 @@
  * Backups are encrypted using the user's identity key.
  */
 
-import { StorageAdapter } from "../storage/memory.js";
+import type { StorageAdapter } from "../storage/memory";
 
 export interface BackupMetadata {
   version: string;

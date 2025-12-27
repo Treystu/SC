@@ -51,10 +51,9 @@ module.exports = {
   testPathIgnorePatterns: [
     '/node_modules/',
     '/tests/e2e/',
-    '/tests/integration/',
     '/tests/playwright/',
     '/tests/visual/',
-    '/tests/.*\\.(e2e|integration|playwright|visual)\\.test\\.(ts|js|mjs)$',
+    '/tests/.*\\.(e2e|playwright|visual)\\.test\\.(ts|js|mjs)$',
     '/web/src/.*__tests__/.*\\.(e2e|playwright|visual)\\.test\\.(ts|js|mjs)$',
     '/core/src/.*\\.(e2e|integration|playwright|visual)\\.test\\.(ts|js|mjs)$',
     '/tests/.*vitest.*',

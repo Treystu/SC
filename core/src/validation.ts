@@ -1,17 +1,16 @@
-// Use CommonJS require for Jest compatibility. For ESM, use import if needed.
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const sanitizeHtml = require('sanitize-html');
+// Import DOMPurify for HTML sanitization, works in both Node.js and browser environments
+import DOMPurify from 'dompurify';
+
 /**
  * Sanitize HTML content to prevent XSS attacks
  * 
- * In Node.js environment (tests), we use sanitize-html npm package for robust sanitization.
- * In browser, DOMPurify will be used via the web bundle.
+ * Uses DOMPurify to remove all HTML tags and leave only text content
  */
 export function sanitizeHTML(html: string): string {
-  // Use sanitize-html to remove all HTML tags and leave only text content
-  return sanitizeHtml(html, {
-    allowedTags: [],
-    allowedAttributes: {},
+  // Use DOMPurify to remove all HTML tags and leave only text content
+  return DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: [],
+    ALLOWED_ATTR: [],
   });
 }
 
@@ -19,10 +18,10 @@ export function sanitizeHTML(html: string): string {
  * Sanitize user input for display
  */
 export function sanitizeUserInput(input: string): string {
-  // Remove any HTML tags using sanitize-html
-  const sanitized = sanitizeHtml(input, {
-    allowedTags: [],
-    allowedAttributes: {},
+  // Remove any HTML tags using DOMPurify
+  const sanitized = DOMPurify.sanitize(input, {
+    ALLOWED_TAGS: [],
+    ALLOWED_ATTR: [],
   });
 
   // Limit length

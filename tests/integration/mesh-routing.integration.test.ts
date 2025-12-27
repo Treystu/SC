@@ -3,7 +3,8 @@
  */
 import { RoutingTable, PeerState, createPeer } from '../../core/src/mesh/routing';
 import { MessageRelay } from '../../core/src/mesh/relay';
-import { Message, MessageType, encodeMessage } from '../../core/src/protocol/message';
+import type { Message } from '../../core/src/protocol/message';
+import { MessageType, encodeMessage } from '../../core/src/protocol/message';
 import { generateIdentity } from '../../core/src/crypto/primitives';
 
 describe('Mesh Network Integration', () => {

@@ -1,6 +1,7 @@
 import { MessageRelay, MemoryPersistenceAdapter } from '../../core/src/mesh/relay';
 import { RoutingTable } from '../../core/src/mesh/routing';
-import { Message, MessageType } from '../../core/src/protocol/message';
+import type { Message } from '../../core/src/protocol/message';
+import { MessageType } from '../../core/src/protocol/message';
 
 describe('Relay Persistence Integration Test', () => {
   it('should persist stored messages across relay restarts', async () => {
