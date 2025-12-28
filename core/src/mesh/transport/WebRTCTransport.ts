@@ -49,6 +49,8 @@ export class WebRTCTransport implements Transport {
     peerId: TransportPeerId,
     signalingData?: SignalingData,
   ): Promise<void> {
+    console.log(`[WebRTCTransport] connect called for ${peerId}`);
+    
     const peer = this.pool.getOrCreatePeer(peerId);
 
     // Attach listeners if not already attached?
@@ -58,9 +60,11 @@ export class WebRTCTransport implements Transport {
 
     peer.onStateChange((state) => {
       const transportState = this.mapState(state);
+      console.log(`[WebRTCTransport] Peer ${peerId} state changed: ${state} -> ${transportState}`);
       this.events?.onStateChange?.(peerId, transportState);
 
       if (transportState === "connected") {
+        console.log(`[WebRTCTransport] ✅ Connected to ${peerId}`);
         this.connectedPeers.add(peerId);
         this.events?.onPeerConnected?.(peerId, this.getPeerInfo(peerId));
       } else if (
@@ -68,6 +72,7 @@ export class WebRTCTransport implements Transport {
         transportState === "failed" ||
         transportState === "closed"
       ) {
+        console.log(`[WebRTCTransport] ❌ Disconnected from ${peerId}: ${state}`);
         this.connectedPeers.delete(peerId);
         this.events?.onPeerDisconnected?.(peerId, state);
       }
@@ -101,7 +106,18 @@ export class WebRTCTransport implements Transport {
 
   async send(peerId: TransportPeerId, payload: Uint8Array): Promise<void> {
     const peer = this.pool.getPeer(peerId);
-    if (!peer) throw new Error(`Peer ${peerId} not found in WebRTC pool`);
+    if (!peer) {
+      console.error(`[WebRTCTransport] Cannot send to ${peerId}: peer not found in pool`);
+      console.log(`[WebRTCTransport] Available peers:`, Array.from(this.pool.getConnectedPeers()));
+      throw new Error(`Peer ${peerId} not found in WebRTC pool`);
+    }
+    
+    const state = peer.getState();
+    if (state !== "connected") {
+      console.warn(`[WebRTCTransport] Attempting to send to ${peerId} but state is ${state}`);
+    }
+    
+    console.log(`[WebRTCTransport] Sending ${payload.byteLength} bytes to ${peerId} (state: ${state})`);
     peer.send(payload, "reliable");
   }
 

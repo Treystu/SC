@@ -150,14 +150,24 @@ export class MeshNetwork {
     // Special Hook: WebRTC Signaling via Mesh
     // Since WebRTC needs to send signals over the existing mesh (if available), we hook into the pool.
     // In the future, this should be event-driven from the Transport itself.
+    // NOTE: For direct P2P connections, signaling should go through RoomClient, not mesh.
+    // The outboundTransportCallback will be set by the UI layer (useMeshNetwork) to use RoomClient.
     this.webrtcTransport.getPool().onSignal((peerId, signal) => {
-      this.sendMessage(
-        peerId,
-        JSON.stringify({
-          type: "SIGNAL",
-          signal,
-        }),
-      ).catch((err) => console.error("Failed to send signal:", err));
+      if (this.outboundTransportCallback) {
+        // Send signal via external transport (RoomClient in web app)
+        this.outboundTransportCallback(peerId, new Uint8Array()).catch((err) =>
+          console.error("Failed to send signal via outbound transport:", err)
+        );
+      } else {
+        // Fallback: try mesh signaling (may fail if no direct connection exists)
+        this.sendMessage(
+          peerId,
+          JSON.stringify({
+            type: "SIGNAL",
+            signal,
+          }),
+        ).catch((err) => console.debug("Mesh signaling failed (expected for new connections):", err.message));
+      }
     });
 
     this.webrtcTransport.getPool().onTrack((peerId, track, stream) => {
@@ -607,14 +617,31 @@ export class MeshNetwork {
    * Connect to a peer via available transports
    */
   async connectToPeer(peerId: string): Promise<void> {
+    console.log(`[MeshNetwork] connectToPeer called for ${peerId}`);
+    
     if (this.routingTable.getAllPeers().length >= this.maxPeers) {
+      console.warn(`[MeshNetwork] Max peers reached (${this.maxPeers}), cannot connect to ${peerId}`);
       throw new Error("Maximum number of peers reached");
     }
 
+    // Check if already connected
+    const existingPeer = this.routingTable.getPeer(peerId);
+    if (existingPeer && existingPeer.state === "connected") {
+      console.log(`[MeshNetwork] Already connected to ${peerId}, skipping`);
+      return;
+    }
+
+    console.log(`[MeshNetwork] Initiating connection to ${peerId} via WebRTC...`);
+    
     // Use TransportManager to connect
     // Currently defaults to WebRTC as it's the only registered transport
     // but in future will try multiple
-    return this.transportManager.connect(peerId, "webrtc");
+    return this.transportManager.connect(peerId, "webrtc").then(() => {
+      console.log(`[MeshNetwork] Connection initiated to ${peerId}, waiting for signaling...`);
+    }).catch((err) => {
+      console.error(`[MeshNetwork] Failed to connect to ${peerId}:`, err);
+      throw err;
+    });
   }
 
   /**
@@ -652,6 +679,8 @@ export class MeshNetwork {
     content: string,
     type: MessageType = MessageType.TEXT,
   ): Promise<void> {
+    console.log(`[MeshNetwork] sendMessage to ${recipientId}, type=${MessageType[type]}`);
+    
     const payload = new TextEncoder().encode(
       JSON.stringify({
         text: content,
@@ -683,16 +712,27 @@ export class MeshNetwork {
     const encodedMessage = encodeMessage(message);
     const nextHop = this.routingTable.getNextHop(recipientId);
 
-    console.log(
-      `[MeshNetwork] sendMessage to ${recipientId}: nextHop=${nextHop}`,
-    );
+    console.log(`[MeshNetwork] Route lookup: nextHop=${nextHop || 'none'}, connectedPeers=${this.routingTable.getAllPeers().filter(p => p.state === 'connected').length}`);
 
     if (nextHop) {
       // Direct route available
+      console.log(`[MeshNetwork] Sending directly to nextHop=${nextHop}`);
       this.transportManager.send(nextHop, encodedMessage).catch((err) => {
-        console.error(`Failed to send to next hop ${nextHop}:`, err);
+        console.error(`[MeshNetwork] Failed to send to next hop ${nextHop}:`, err);
       });
     } else {
+      // Check if we have any connected peers at all
+      const connectedPeers = this.routingTable.getAllPeers().filter(
+        (p) => p.state === "connected" && p.id !== this.localPeerId
+      );
+      
+      console.log(`[MeshNetwork] No direct route. Connected peers: ${connectedPeers.length}`);
+      
+      if (connectedPeers.length === 0) {
+        console.warn(`[MeshNetwork] No connected peers! Cannot send message to ${recipientId}. Need to establish P2P connection first.`);
+        throw new Error("No connected peers. Establish P2P connection before sending messages.");
+      }
+
       // Attempt DHT lookup if no candidates found
       let candidates = this.routingTable.getRankedPeersForTarget(recipientId);
 
@@ -708,6 +748,7 @@ export class MeshNetwork {
           const foundPeers = await this.dht.findNode(recipientId);
           const targetPeer = foundPeers.find((p) => p.id === recipientId);
           if (targetPeer) {
+            console.log(`[MeshNetwork] Found ${recipientId} in DHT, attempting connection...`);
             await this.connectToPeer(recipientId);
           }
         } catch (e) {
