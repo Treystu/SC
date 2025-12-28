@@ -1,0 +1,192 @@
+/**
+ * Direct Connection QR Styles
+ */
+
+.direct-connection-qr-container {
+  padding: 20px;
+  max-width: 500px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.direct-connection-qr-container h2 {
+  margin-bottom: 20px;
+  color: #333;
+}
+
+.peer-info {
+  background: #f5f5f5;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.peer-info code {
+  background: #e0e0e0;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.9em;
+  word-break: break-all;
+}
+
+.peer-info-hint {
+  font-size: 0.85em;
+  color: #666;
+  margin-top: 8px;
+}
+
+.qr-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #3498db;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.qr-error {
+  padding: 20px;
+  color: #d32f2f;
+}
+
+.retry-btn {
+  margin-top: 12px;
+  padding: 8px 16px;
+  background: #2196f3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.qr-code-section {
+  margin: 20px 0;
+}
+
+.qr-code-image {
+  max-width: 300px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+}
+
+.qr-instruction {
+  margin-top: 12px;
+  color: #666;
+  font-size: 0.9em;
+}
+
+.offer-section {
+  margin-top: 24px;
+  text-align: left;
+}
+
+.offer-section h3 {
+  font-size: 1em;
+  margin-bottom: 12px;
+}
+
+.offer-json-container {
+  background: #263238;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.offer-json {
+  width: 100%;
+  height: 120px;
+  background: transparent;
+  border: none;
+  color: #aed581;
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 0.8em;
+  resize: none;
+}
+
+.offer-json:focus {
+  outline: none;
+}
+
+.offer-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.offer-actions button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+}
+
+.copy-btn {
+  background: #4caf50;
+  color: white;
+}
+
+.download-btn {
+  background: #2196f3;
+  color: white;
+}
+
+.how-it-works {
+  margin-top: 24px;
+  padding: 16px;
+  background: #e3f2fd;
+  border-radius: 8px;
+  text-align: left;
+}
+
+.how-it-works h3 {
+  font-size: 1em;
+  margin-bottom: 12px;
+  color: #1565c0;
+}
+
+.how-it-works ol {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.how-it-works li {
+  margin-bottom: 8px;
+  color: #333;
+  font-size: 0.9em;
+}
+
+/* Modal styles */
+.direct-connection-modal {
+  max-width: 600px;
+  width: 90%;
+}
+
+.modal-close {
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  background: none;
+  border: none;
+  font-size: 28px;
+  cursor: pointer;
+  color: #666;
+}
+
+.modal-close:hover {
+  color: #333;
+}

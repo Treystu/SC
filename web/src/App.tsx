@@ -9,6 +9,7 @@ import { SettingsPanel } from "./components/SettingsPanel";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { OnboardingFlow } from "./components/Onboarding/OnboardingFlow";
 import { QRCodeShare } from "./components/QRCodeShare";
+import { DirectConnectionQR } from "./components/DirectConnectionQR";
 import { InviteAcceptanceModal } from "./components/InviteAcceptanceModal";
 import { NetworkDiagnostics } from "./components/NetworkDiagnostics";
 import { RoomView } from "./components/RoomView";
@@ -54,6 +55,7 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showShareApp, setShowShareApp] = useState(false);
+  const [showDirectConnection, setShowDirectConnection] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [pendingInviteData, setPendingInviteData] = useState<{ code: string; inviterName: string | null } | null>(null);
@@ -312,6 +314,7 @@ function App() {
         setShowSettings(false);
         setShowDiagnostics(false);
         setShowShareApp(false);
+        setShowDirectConnection(false);
       },
     },
   ]);
@@ -1257,9 +1260,9 @@ function App() {
                           <div className="dashboard-actions">
                             <button
                               className="btn btn-primary"
-                              onClick={() => setShowSettings(true)}
+                              onClick={() => setShowDirectConnection(true)}
                             >
-                              Share Profile
+                              🔗 Direct Connect
                             </button>
                           </div>
                         </div>
@@ -1314,6 +1317,11 @@ function App() {
                     <SettingsPanel />
                   </div>
                 </div>
+              )}
+
+              {/* Direct Connection QR Modal */}
+              {showDirectConnection && (
+                <DirectConnectionQR onClose={() => setShowDirectConnection(false)} />
               )}
 
               {/* Room View Overlay - Only if activeRoom is explicitly set (legacy/URL) */}

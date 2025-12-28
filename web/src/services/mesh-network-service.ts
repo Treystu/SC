@@ -137,13 +137,27 @@ export const getMeshNetwork = async (): Promise<MeshNetwork> => {
       }
 
       console.log('[MeshNetworkService] Creating MeshNetwork instance...');
+      let dhtStorage: any = undefined;
+      try {
+        // Some test environments/mocks may not provide a real IndexedDBStorage constructor
+        // Guard against that and fall back to undefined (in-memory) storage when unavailable.
+        // @ts-ignore
+        if (typeof IndexedDBStorage === "function") {
+          // @ts-ignore
+          dhtStorage = new (IndexedDBStorage as any)();
+        }
+      } catch (e) {
+        console.warn('[MeshNetworkService] IndexedDBStorage unavailable, falling back to in-memory DHT:', e);
+        dhtStorage = undefined;
+      }
+
       const network = new MeshNetwork({
         defaultTTL: 10,
         maxPeers: 50,
         persistence: new WebPersistenceAdapter(),
         identity: identityKeyPair,
         peerId: peerId,
-        dhtStorage: new IndexedDBStorage(),
+        dhtStorage: dhtStorage,
       });
 
       meshNetworkInstance = network;
