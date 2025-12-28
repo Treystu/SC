@@ -34,31 +34,21 @@ export interface ReceivedMessage {
  * Integrated with IndexedDB persistence (V1)
  */
 export function useMeshNetwork() {
-      console.log('[useMeshNetwork] initMeshNetwork: starting initialization');
   const [status, setStatus] = useState<MeshStatus>({
-        console.log('[useMeshNetwork] initMeshNetwork: requesting MeshNetwork instance');
     isConnected: false,
-        console.log('[useMeshNetwork] initMeshNetwork: MeshNetwork instance returned', { localPeerId: network.getLocalPeerId?.() });
     peerCount: 0,
     localPeerId: "",
     connectionQuality: "offline",
     initializationError: undefined,
-        try {
-          network.startHeartbeat();
-          console.log('[useMeshNetwork] initMeshNetwork: started heartbeat');
-        } catch (hbErr) {
-          console.warn('[useMeshNetwork] initMeshNetwork: failed to start heartbeat', hbErr);
-        }
   });
+
   // Add identity state
   const [identity, setIdentity] = useState<any>(null);
-        console.log('[useMeshNetwork] initMeshNetwork: meshNetworkRef and connectionMonitor set');
   const [peers, setPeers] = useState<Peer[]>([]);
   const [messages, setMessages] = useState<ReceivedMessage[]>([]);
   const meshNetworkRef = useRef<MeshNetwork | null>(null);
   const connectionMonitorRef = useRef<ConnectionMonitor | null>(null);
   const seenMessageIdsRef = useRef<Set<string>>(new Set());
-          console.log(`[useMeshNetwork] Loaded ${activePeers.length} persisted peers`, activePeers.map((p) => p.id && p.id.substring ? p.id.substring(0,8) : p.id));
   const roomClientRef = useRef<RoomClient | null>(null); // Store RoomClient instance
   const roomPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); // Store poll timer
   // Effect to update identity state from meshNetworkRef
@@ -75,8 +65,6 @@ export function useMeshNetwork() {
     updateIdentity();
     // Optionally, listen for identity changes if meshNetwork supports events
   }, [status.localPeerId]);
-
-          console.log(`[useMeshNetwork] Loaded ${routes.length} persisted routes`);
   // Initialize mesh network with persistence
   useEffect(() => {
     let retryInterval: NodeJS.Timeout;
@@ -102,7 +90,6 @@ export function useMeshNetwork() {
       try {
         const network = await getMeshNetwork();
         const db = getDatabase();
-              console.log("useMeshNetwork:onMessage - Ignored echo message from self", senderId);
 
         // Start heartbeat
         network.startHeartbeat();
@@ -293,7 +280,6 @@ export function useMeshNetwork() {
                 recipientId: network.getLocalPeerId(),
                 type:
                   receivedMessage.type === MessageType.TEXT
-          console.log("useMeshNetwork:onPeerConnected - Peer connected:", peerId);
                     ? "text"
                     : receivedMessage.type === MessageType.FILE_METADATA ||
                         receivedMessage.type === MessageType.FILE_CHUNK
@@ -365,7 +351,6 @@ export function useMeshNetwork() {
               console.log(
                 `Creating new conversation for connected peer: ${peerId}`,
               );
-          console.log("useMeshNetwork:onPeerDiscovered - Discovered peer via Mesh Discovery:", { id: peer.id, info: peer });
               await db.saveConversation({
                 id: threadId,
                 contactId: peerId,
@@ -426,9 +411,9 @@ export function useMeshNetwork() {
           // Only add to discoveredPeers, connection is handled by user or auto-connect logic
           setDiscoveredPeers((prev) => {
             if (prev.includes(peer.id)) return prev;
-        console.log('[useMeshNetwork] initMeshNetwork: initialization complete', { localPeerId: localId });
             return [...prev, peer.id];
-        console.error("useMeshNetwork:initMeshNetwork - Failed to initialize mesh network:", error);
+          });
+
         });
 
         const updatePeerStatus = () => {
