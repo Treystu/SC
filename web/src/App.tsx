@@ -28,6 +28,7 @@ import { getDatabase } from "./storage/database";
 import { setMockDatabase } from "@sc/core";
 import {
   generateFingerprint,
+  generateIdentity,
   publicKeyToBase64,
   isValidPublicKey,
   logger,
@@ -177,17 +178,30 @@ function App() {
     const ensureIdentity = async () => {
       try {
         const db = getDatabase();
-        let id = identity;
+        let id = await db.getPrimaryIdentity();
+        
         if (!id || !id.publicKey || !id.privateKey) {
-          // Try to get from DB
-          id = await db.getPrimaryIdentity();
+          // No identity in DB, generate a new one
+          console.log('[App] No existing identity found, generating new identity...');
+          const keypair = generateIdentity();
+          const fingerprint = await generateFingerprint(keypair.publicKey);
+          
+          // Create identity record for DB
+          const newIdentity = {
+            id: fingerprint.substring(0, 16),
+            publicKey: keypair.publicKey,
+            privateKey: keypair.privateKey,
+            fingerprint,
+            createdAt: Date.now(),
+            isPrimary: true,
+          };
+          
+          // Save to database
+          await db.saveIdentity(newIdentity);
+          id = newIdentity;
+          console.log('[App] New identity generated and saved to database');
         }
-        if (!id || !id.publicKey || !id.privateKey) {
-          // If still missing, trigger mesh identity generation (if supported)
-          if (typeof window !== "undefined" && (window as any).generateIdentity) {
-            id = await (window as any).generateIdentity();
-          }
-        }
+        
         if (id && id.publicKey && id.privateKey) {
           // Always generate fingerprint for display and storage
           const fingerprint = await generateFingerprint(id.publicKey);
@@ -206,8 +220,10 @@ function App() {
           );
           // Optionally expose fingerprint for test selectors
           (window as any).__sc_identity_fingerprint = fingerprint;
+          console.log('[App] Identity ready, fingerprint:', fingerprint);
           setIdentityReady(true);
         } else {
+          console.error('[App] Failed to create valid identity');
           setIdentityReady(false);
         }
       } catch (error) {
@@ -217,7 +233,7 @@ function App() {
     };
     ensureIdentity();
     console.log('[App] useEffect: Identity initialization completed');
-  }, [identity, status.localPeerId]);
+  }, []);
 
   // Block main UI until identity is ready
   if (!identityReady) {
