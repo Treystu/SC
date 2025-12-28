@@ -16,15 +16,17 @@ export class ErrorBoundary extends Component<Props, State> {
   };
 
   public static getDerivedStateFromError(error: Error): State {
+    console.error('[ErrorBoundary] getDerivedStateFromError:', error);
     return { hasError: true, error };
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('Uncaught error:', error, errorInfo);
+    console.error('[ErrorBoundary] componentDidCatch:', error, errorInfo);
   }
 
   public render() {
     if (this.state.hasError) {
+      console.error('[ErrorBoundary] Rendering error state');
       if (this.props.fallback) {
         return this.props.fallback;
       }
@@ -40,6 +42,7 @@ export class ErrorBoundary extends Component<Props, State> {
       );
     }
 
+    console.log('[ErrorBoundary] Rendering children');
     return this.props.children;
   }
 }

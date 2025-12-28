@@ -95,88 +95,107 @@ function App() {
 
   // Setup logger
   useEffect(() => {
-    if (config.logUrl) {
-      logger.setRemoteUrl(config.logUrl);
+    console.log('[App] useEffect: Setup logger starting');
+    try {
+      if (config.logUrl) {
+        logger.setRemoteUrl(config.logUrl);
+      }
+
+      // Capture global errors
+      const handleGlobalError = (event: ErrorEvent) => {
+        logger.error("Global", event.message, {
+          filename: event.filename,
+          lineno: event.lineno,
+          colno: event.colno,
+          error: event.error ? event.error.stack : undefined,
+        });
+      };
+
+      const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+        const reason = event.reason;
+        logger.error("Global", "Unhandled Rejection", {
+          reason: reason,
+          message: reason instanceof Error ? reason.message : String(reason),
+          stack: reason instanceof Error ? reason.stack : undefined,
+        });
+      };
+
+      window.addEventListener("error", handleGlobalError);
+      window.addEventListener("unhandledrejection", handleUnhandledRejection);
+
+      return () => {
+        window.removeEventListener("error", handleGlobalError);
+        window.removeEventListener(
+          "unhandledrejection",
+          handleUnhandledRejection,
+        );
+      };
+    } catch (error) {
+      console.error('[App] useEffect: Setup logger error:', error);
     }
-
-    // Capture global errors
-    const handleGlobalError = (event: ErrorEvent) => {
-      logger.error("Global", event.message, {
-        filename: event.filename,
-        lineno: event.lineno,
-        colno: event.colno,
-        error: event.error ? event.error.stack : undefined,
-      });
-    };
-
-    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-      const reason = event.reason;
-      logger.error("Global", "Unhandled Rejection", {
-        reason: reason,
-        message: reason instanceof Error ? reason.message : String(reason),
-        stack: reason instanceof Error ? reason.stack : undefined,
-      });
-    };
-
-    window.addEventListener("error", handleGlobalError);
-    window.addEventListener("unhandledrejection", handleUnhandledRejection);
-
-    return () => {
-      window.removeEventListener("error", handleGlobalError);
-      window.removeEventListener(
-        "unhandledrejection",
-        handleUnhandledRejection,
-      );
-    };
+    console.log('[App] useEffect: Setup logger completed');
   }, []);
 
   // Update peer ID in logger
   useEffect(() => {
-    if (status.localPeerId) {
-      logger.setPeerId(status.localPeerId);
+    console.log('[App] useEffect: Update peer ID starting, localPeerId:', status.localPeerId);
+    try {
+      if (status.localPeerId) {
+        logger.setPeerId(status.localPeerId);
+      }
+    } catch (error) {
+      console.error('[App] useEffect: Update peer ID error:', error);
     }
+    console.log('[App] useEffect: Update peer ID completed');
   }, [status.localPeerId]);
 
   // Persist identity for tests and offline access
   // Ensure identity is generated and persisted to localStorage and IndexedDB
   useEffect(() => {
+    console.log('[App] useEffect: Identity initialization starting');
     const ensureIdentity = async () => {
-      const db = getDatabase();
-      let id = identity;
-      if (!id || !id.publicKey || !id.privateKey) {
-        // Try to get from DB
-        id = await db.getPrimaryIdentity();
-      }
-      if (!id || !id.publicKey || !id.privateKey) {
-        // If still missing, trigger mesh identity generation (if supported)
-        if (typeof window !== "undefined" && (window as any).generateIdentity) {
-          id = await (window as any).generateIdentity();
+      try {
+        const db = getDatabase();
+        let id = identity;
+        if (!id || !id.publicKey || !id.privateKey) {
+          // Try to get from DB
+          id = await db.getPrimaryIdentity();
         }
-      }
-      if (id && id.publicKey && id.privateKey) {
-        // Always generate fingerprint for display and storage
-        const fingerprint = await generateFingerprint(id.publicKey);
-        // Persist to localStorage in base64 for test compatibility and E2E selectors
-        const toBase64 = (bytes: Uint8Array) =>
-          typeof Buffer !== "undefined"
-            ? Buffer.from(bytes).toString("base64")
-            : btoa(String.fromCharCode(...Array.from(bytes)));
-        localStorage.setItem(
-          "identity",
-          JSON.stringify({
-            publicKey: toBase64(id.publicKey),
-            privateKey: toBase64(id.privateKey),
-            fingerprint,
-          }),
-        );
-        // Optionally expose fingerprint for test selectors
-        window.__sc_identity_fingerprint = fingerprint;
-        setIdentityReady(true);
-      } else {
+        if (!id || !id.publicKey || !id.privateKey) {
+          // If still missing, trigger mesh identity generation (if supported)
+          if (typeof window !== "undefined" && (window as any).generateIdentity) {
+            id = await (window as any).generateIdentity();
+          }
+        }
+        if (id && id.publicKey && id.privateKey) {
+          // Always generate fingerprint for display and storage
+          const fingerprint = await generateFingerprint(id.publicKey);
+          // Persist to localStorage in base64 for test compatibility and E2E selectors
+          const toBase64 = (bytes: Uint8Array) =>
+            typeof Buffer !== "undefined"
+              ? Buffer.from(bytes).toString("base64")
+              : btoa(String.fromCharCode(...Array.from(bytes)));
+          localStorage.setItem(
+            "identity",
+            JSON.stringify({
+              publicKey: toBase64(id.publicKey),
+              privateKey: toBase64(id.privateKey),
+              fingerprint,
+            }),
+          );
+          // Optionally expose fingerprint for test selectors
+          (window as any).__sc_identity_fingerprint = fingerprint;
+          setIdentityReady(true);
+        } else {
+          setIdentityReady(false);
+        }
+      } catch (error) {
+        console.error('[App] useEffect: Identity initialization error:', error);
         setIdentityReady(false);
       }
     };
     ensureIdentity();
+    console.log('[App] useEffect: Identity initialization completed');
   }, [identity, status.localPeerId]);
 
   // Block main UI until identity is ready
@@ -184,20 +203,26 @@ function App() {
     return <div className="app-loading">Loading identity...</div>;
   }
   useEffect(() => {
-    const handleToast = (event: Event) => {
-      const detail = (event as CustomEvent<{ message: string; type: string }>)
-        .detail;
-      if (detail?.message) {
-        setToast(detail);
-        setTimeout(() => setToast(null), 3000);
-      }
-    };
-    window.addEventListener("show-notification", handleToast as EventListener);
-    return () =>
-      window.removeEventListener(
-        "show-notification",
-        handleToast as EventListener,
-      );
+    console.log('[App] useEffect: Toast handler starting');
+    try {
+      const handleToast = (event: Event) => {
+        const detail = (event as CustomEvent<{ message: string; type: string }>)
+          .detail;
+        if (detail?.message) {
+          setToast(detail);
+          setTimeout(() => setToast(null), 3000);
+        }
+      };
+      window.addEventListener("show-notification", handleToast as EventListener);
+      return () =>
+        window.removeEventListener(
+          "show-notification",
+          handleToast as EventListener,
+        );
+    } catch (error) {
+      console.error('[App] useEffect: Toast handler error:', error);
+    }
+    console.log('[App] useEffect: Toast handler completed');
   }, []);
   const autoJoinedRef = useRef(false);
 

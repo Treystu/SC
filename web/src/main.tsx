@@ -51,15 +51,23 @@ if (!rootElement) {
   console.error("Failed to find the root element");
 } else {
   (async () => {
-    // Ensure encryption is ready before mounting app to avoid decryption races
-    await initializeEncryption();
+    console.log('[Main] Starting app initialization...');
+    try {
+      // Ensure encryption is ready before mounting app to avoid decryption races
+      console.log('[Main] Initializing encryption...');
+      await initializeEncryption();
+      console.log('[Main] Encryption initialized, mounting React app...');
 
-    ReactDOM.createRoot(rootElement).render(
-      <React.StrictMode>
-        <ErrorBoundary>
-          <App />
-        </ErrorBoundary>
-      </React.StrictMode>,
-    );
+      ReactDOM.createRoot(rootElement).render(
+        <React.StrictMode>
+          <ErrorBoundary>
+            <App />
+          </ErrorBoundary>
+        </React.StrictMode>,
+      );
+      console.log('[Main] React app mounted successfully');
+    } catch (error) {
+      console.error('[Main] Error during app initialization:', error);
+    }
   })();
 }
