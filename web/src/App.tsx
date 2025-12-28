@@ -75,45 +75,24 @@ function App() {
 
   const { groups, refreshGroups } = useGroups();
 
-  // Temporarily disabled useMeshNetwork to debug error #310
-  // const {
-  //   status,
-  //   peers,
-  //   messages,
-  //   sendMessage,
-  //   connectToPeer,
-  //   generateConnectionOffer,
-  //   acceptConnectionOffer,
-  //   identity,
-  //   joinRoom,
-  //   leaveRoom,
-  //   sendRoomMessage,
-  //   discoveredPeers,
-  //   roomMessages,
-  //   isJoinedToRoom,
-  //   sendReaction,
-  //   sendVoice,
-  // } = useMeshNetwork();
-
-  // Mock values for debugging
-  const status = { isConnected: false, peerCount: 0, localPeerId: "", connectionQuality: "offline" as const, joinError: null as string | null, initializationError: undefined as string | undefined };
-  const peers: any[] = [];
-  const messages: any[] = [];
-  
-  // Mock identity with proper typing - using 'as any' to avoid TypeScript conflicts with null
-  const identity = null as { publicKey: Uint8Array; privateKey: Uint8Array } | null;
-  const discoveredPeers: string[] = [];
-  const roomMessages: any[] = [];
-  const isJoinedToRoom = false;
-  const sendMessage = async (_recipientId: string, _content: string, _attachments?: File[], _groupId?: string) => {};
-  const connectToPeer = async (_peerId: string) => {};
-  const generateConnectionOffer = async () => "";
-  const acceptConnectionOffer = async (_offer: string) => "";
-  const joinRoom = async (_url: string) => {};
-  const leaveRoom = () => {};
-  const sendRoomMessage = async (_content: string) => {};
-  const sendReaction = async (_targetMessageId: string, _emoji: string, _recipientId: string, _groupId?: string) => {};
-  const sendVoice = async (_recipientId: string, _audioBlob: Blob, _duration?: number, _groupId?: string) => {};
+  const {
+    status,
+    peers,
+    messages,
+    sendMessage,
+    connectToPeer,
+    generateConnectionOffer,
+    acceptConnectionOffer,
+    identity,
+    joinRoom,
+    leaveRoom,
+    sendRoomMessage,
+    discoveredPeers,
+    roomMessages,
+    isJoinedToRoom,
+    sendReaction,
+    sendVoice,
+  } = useMeshNetwork();
 
   // Setup logger
   useEffect(() => {
@@ -172,38 +151,16 @@ function App() {
   }, [status.localPeerId]);
 
   // Persist identity for tests and offline access
-  // Ensure identity is generated and persisted to localStorage and IndexedDB
+  // Note: Identity is now primarily managed by mesh-network-service.ts
+  // This effect ensures localStorage sync and handles legacy cases
   useEffect(() => {
-    console.log('[App] useEffect: Identity initialization starting');
-    const ensureIdentity = async () => {
+    console.log('[App] useEffect: Identity sync starting');
+    const syncIdentity = async () => {
       try {
         const db = getDatabase();
-        let id = await db.getPrimaryIdentity();
+        const id = await db.getPrimaryIdentity();
         
-        if (!id || !id.publicKey || !id.privateKey) {
-          // No identity in DB, generate a new one
-          console.log('[App] No existing identity found, generating new identity...');
-          const keypair = generateIdentity();
-          const fingerprint = await generateFingerprint(keypair.publicKey);
-          
-          // Create identity record for DB
-          const newIdentity = {
-            id: fingerprint.substring(0, 16),
-            publicKey: keypair.publicKey,
-            privateKey: keypair.privateKey,
-            fingerprint,
-            createdAt: Date.now(),
-            isPrimary: true,
-          };
-          
-          // Save to database
-          await db.saveIdentity(newIdentity);
-          id = newIdentity;
-          console.log('[App] New identity generated and saved to database');
-        }
-        
-        if (id && id.publicKey && id.privateKey) {
-          // Always generate fingerprint for display and storage
+        if (id && id.publicKey) {
           const fingerprint = await generateFingerprint(id.publicKey);
           // Persist to localStorage in base64 for test compatibility and E2E selectors
           const toBase64 = (bytes: Uint8Array) =>
@@ -218,27 +175,79 @@ function App() {
               fingerprint,
             }),
           );
-          // Optionally expose fingerprint for test selectors
+          // Expose fingerprint for test selectors
           (window as any).__sc_identity_fingerprint = fingerprint;
-          console.log('[App] Identity ready, fingerprint:', fingerprint);
+          console.log('[App] Identity synced, fingerprint:', fingerprint);
           setIdentityReady(true);
         } else {
-          console.error('[App] Failed to create valid identity');
-          setIdentityReady(false);
+          // No identity yet - mesh-network-service should create one
+          // Wait a bit for it to initialize
+          console.log('[App] No identity found, waiting for mesh-network-service...');
+          let attempts = 0;
+          while (attempts < 50) { // Wait up to 5 seconds
+            await new Promise(r => setTimeout(r, 100));
+            const retryId = await db.getPrimaryIdentity();
+            if (retryId && retryId.publicKey) {
+              const fp = await generateFingerprint(retryId.publicKey);
+              const toBase64 = (bytes: Uint8Array) =>
+                typeof Buffer !== "undefined"
+                  ? Buffer.from(bytes).toString("base64")
+                  : btoa(String.fromCharCode(...Array.from(bytes)));
+              localStorage.setItem(
+                "identity",
+                JSON.stringify({
+                  publicKey: toBase64(retryId.publicKey),
+                  privateKey: toBase64(retryId.privateKey),
+                  fingerprint: fp,
+                }),
+              );
+              (window as any).__sc_identity_fingerprint = fp;
+              console.log('[App] Identity synced after wait, fingerprint:', fp);
+              setIdentityReady(true);
+              return;
+            }
+            attempts++;
+          }
+          // Fallback: generate identity if service did not
+          console.log("[App] Service did not create identity, generating fallback...");
+          const keypair = generateIdentity();
+          const fingerprint = await generateFingerprint(keypair.publicKey);
+          const newIdentity = {
+            id: fingerprint.substring(0, 16),
+            publicKey: keypair.publicKey,
+            privateKey: keypair.privateKey,
+            fingerprint,
+            createdAt: Date.now(),
+            isPrimary: true,
+          };
+          await db.saveIdentity(newIdentity);
+          const toBase64 = (bytes: Uint8Array) =>
+            typeof Buffer !== "undefined"
+              ? Buffer.from(bytes).toString("base64")
+              : btoa(String.fromCharCode(...Array.from(bytes)));
+          localStorage.setItem(
+            "identity",
+            JSON.stringify({
+              publicKey: toBase64(keypair.publicKey),
+              privateKey: toBase64(keypair.privateKey),
+              fingerprint,
+            }),
+          );
+          (window as any).__sc_identity_fingerprint = fingerprint;
+          setIdentityReady(true);
         }
       } catch (error) {
-        console.error('[App] useEffect: Identity initialization error:', error);
-        setIdentityReady(false);
+        console.error('[App] useEffect: Identity sync error:', error);
+        setIdentityReady(true); // Still allow app to load
       }
     };
-    ensureIdentity();
-    console.log('[App] useEffect: Identity initialization completed');
+    syncIdentity();
+    console.log('[App] useEffect: Identity sync completed');
   }, []);
 
-  // Block main UI until identity is ready
-  if (!identityReady) {
-    return <div className="app-loading">Loading identity...</div>;
-  }
+  // Note: identityReady is now managed by mesh-network-service
+  // We don't block rendering with a conditional return to avoid React hooks violations
+  // The loading state is shown inline in the UI below
   useEffect(() => {
     console.log('[App] useEffect: Toast handler starting');
     try {

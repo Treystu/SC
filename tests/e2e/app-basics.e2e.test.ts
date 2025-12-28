@@ -116,20 +116,38 @@ test.describe('Identity Management', () => {
     await expect(connectionStatus).toBeVisible();
   });
 
-  test.skip('should generate identity on first load', async ({ page }) => {
-    // Clear storage
+  test('should generate identity on first load', async ({ page }) => {
+    // Clear IndexedDB storage (identity is stored in IndexedDB)
     await page.goto('/');
     await page.evaluate(() => {
       localStorage.clear();
       indexedDB.deleteDatabase('sovereign-communications');
+      indexedDB.deleteDatabase('idb');
     });
     
     await page.reload();
+    // Wait for app to initialize and generate identity
     await page.waitForLoadState('networkidle');
+    // Wait for identity generation (IndexedDB operation)
+    await page.waitForTimeout(3000);
     
-    // Check that identity was generated
-    const hasIdentity = await page.evaluate(() => {
-      return localStorage.getItem('identity') !== null;
+    // Check that identity was generated in IndexedDB
+    const hasIdentity = await page.evaluate(async () => {
+      const dbName = 'sovereign-communications';
+      const storeName = 'identity';
+      
+      return new Promise<boolean>((resolve) => {
+        const request = indexedDB.open(dbName);
+        request.onsuccess = () => {
+          const db = request.result;
+          const transaction = db.transaction(storeName, 'readonly');
+          const store = transaction.objectStore(storeName);
+          const getRequest = store.get('identity');
+          getRequest.onsuccess = () => resolve(getRequest.result !== undefined);
+          getRequest.onerror = () => resolve(false);
+        };
+        request.onerror = () => resolve(false);
+      });
     });
     
     expect(hasIdentity).toBe(true);

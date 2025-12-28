@@ -36,16 +36,14 @@ test.describe('User Authentication and Setup', () => {
     // Wait for app to load
     await page.waitForLoadState('networkidle');
 
-    // Check if peer ID is displayed somewhere
-    const peerIdElement = page.locator('text=/Peer ID|Your Peer ID/i').first();
-    const isVisible = await peerIdElement.isVisible().catch(() => false);
-
-    if (isVisible) {
-      await expect(peerIdElement).toBeVisible();
-    } else {
-      // Skip if not visible - might be in different state
-      test.skip();
-    }
+    // Check if peer ID is displayed somewhere in the UI
+    // The peer ID should be visible in the dashboard or header
+    await expect(page.locator('.peer-id-code, [data-testid="peer-id"], .identity-display')).toBeVisible({ timeout: 10000 });
+    
+    // Verify the peer ID element contains some content
+    const peerIdContent = await page.locator('.peer-id-code, [data-testid="peer-id"], code').first().textContent();
+    expect(peerIdContent).toBeTruthy();
+    expect(peerIdContent?.length).toBeGreaterThan(8); // Peer ID should be reasonably long
   });
 
   test('should save identity to local storage', async ({ page }) => {
@@ -82,39 +80,38 @@ test.describe('Peer Discovery and Connection', () => {
   });
 
   test('should add peer via QR code', async ({ page }) => {
-    // Look for add contact button
-    const addButton = page.locator('[data-testid="add-contact-btn"]').first();
+    // Look for add contact button - use more flexible selector
+    const addButton = page.locator('button:has-text("Add Contact"), [data-testid="add-contact-btn"], .add-peer-btn').first();
 
-    const isVisible = await addButton.isVisible().catch(() => false);
-    if (!isVisible) {
-      test.skip(); // Skip if button not found
-      return;
-    }
+    // Wait for button to be available
+    await expect(addButton).toBeVisible({ timeout: 10000 });
 
     await addButton.click();
 
-    // Wait for dialog or modal
+    // Wait for dialog or modal to appear
     await page.waitForTimeout(500);
 
-    // Check if QR option exists
-    const qrOption = page.locator('text=/QR|qr code/i').first();
-    const qrVisible = await qrOption.isVisible().catch(() => false);
+    // Look for QR code option in the modal/dialog
+    const qrOption = page.locator('button:has-text("QR Code"), .qr-option, text=/QR/i').first();
+    await expect(qrOption).toBeVisible({ timeout: 5000 });
 
-    if (qrVisible) {
-      await expect(qrOption).toBeVisible();
+    await qrOption.click();
 
-      const mockPeerData = {
-        publicKey: '1'.repeat(64),
-        name: 'Test Peer'
-      };
+    // Wait for QR scanner to initialize
+    await page.waitForTimeout(500);
 
-      await page.evaluate((data) => {
-        window.dispatchEvent(new CustomEvent('qr-scanned', { detail: data }));
-      }, mockPeerData);
+    // Dispatch mock QR scan event
+    const mockPeerData = {
+      publicKey: '1'.repeat(64),
+      name: 'Test Peer'
+    };
 
-      // Verify peer added
-      await expect(page.locator('[data-testid="contact-Test Peer"]')).toBeVisible();
-    }
+    await page.evaluate((data) => {
+      window.dispatchEvent(new CustomEvent('qr-scanned', { detail: data }));
+    }, mockPeerData);
+
+    // Verify peer added
+    await expect(page.locator('[data-testid="contact-Test Peer"], .contact-Test-Peer')).toBeVisible({ timeout: 5000 });
   });
 
   test('should show peer connection status', async ({ page }) => {
@@ -393,11 +390,12 @@ test.describe('Security', () => {
     expect(content).toContain('Secret message'); // Message should be visible in chat
 
     // Check that the message is not exposed in localStorage or other client-side storage
-    const localStorage = await page.evaluate(() => {
-      return Object.keys(localStorage).map(key => localStorage.getItem(key));
+    const storageData = await page.evaluate((): (string | null)[] => {
+      const keys = Object.keys(window.localStorage);
+      return keys.map(key => window.localStorage.getItem(key));
     });
-    const hasPlaintextInStorage = localStorage.some(item =>
-      item && item.includes('Secret message')
+    const hasPlaintextInStorage = storageData.some((item): item is string =>
+      item !== null && item.includes('Secret message')
     );
     expect(hasPlaintextInStorage).toBe(false);
   });
