@@ -7,12 +7,12 @@ let activeInvite = null;
 
 // Install event - cache assets
 self.addEventListener("install", (event) => {
-  console.log("Service Worker: Installing...");
+  console.log("Service Worker: Installing...", { cache: CACHE_NAME, assets: ASSETS_TO_CACHE });
   event.waitUntil(
     caches
       .open(CACHE_NAME)
       .then((cache) => {
-        console.log("Service Worker: Caching assets");
+        console.log("Service Worker: Caching assets", ASSETS_TO_CACHE);
         return cache.addAll(ASSETS_TO_CACHE);
       })
       .then(() => {
@@ -52,6 +52,17 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // Helpful debug: log navigation requests and asset fetches that might fail
+  try {
+    if (event.request.mode === "navigate") {
+      console.log("Service Worker: Navigation fetch for:", url.pathname);
+    } else {
+      // Limit verbosity: only log failed asset fetches via catch below
+    }
+  } catch (e) {
+    console.warn("Service Worker: Error while logging fetch request", e);
+  }
+
   // Handle /join route with invite data
   if (url.pathname === "/join" && activeInvite) {
     event.respondWith(
@@ -88,64 +99,67 @@ self.addEventListener("fetch", (event) => {
   // STRATEGY: Network First for HTML (Navigation), Cache First for Assets
   if (event.request.mode === "navigate") {
     event.respondWith(
-      fetch(event.request)
-        .then((response) => {
+      (async () => {
+        try {
+          const response = await fetch(event.request);
           // Update cache with new version
-          const responseToCache = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
+          try {
+            const responseToCache = response.clone();
+            const cache = await caches.open(CACHE_NAME);
             cache.put(event.request, responseToCache);
-          });
+            console.log("Service Worker: Cached navigation response for", event.request.url);
+          } catch (cacheErr) {
+            console.warn("Service Worker: Failed to cache navigation response", cacheErr);
+          }
           return response;
-        })
-        .catch(() => {
-          // Fallback to cache if offline
-          return caches.match(event.request).then((response) => {
-            return response || caches.match("/index.html");
-          });
-        }),
+        } catch (fetchErr) {
+          console.warn("Service Worker: Network navigation fetch failed, attempting cache", fetchErr);
+          try {
+            const cached = await caches.match(event.request);
+            return cached || (await caches.match("/index.html"));
+          } catch (cacheErr) {
+            console.error("Service Worker: Both network and cache failed for navigation", cacheErr);
+            throw cacheErr;
+          }
+        }
+      })(),
     );
   } else {
     // Cache First for everything else (JS, CSS, Images)
     event.respondWith(
-      caches.match(event.request).then((response) => {
-        // Return cached response if found
-        if (response) {
-          return response;
-        }
-
-        // Clone the request
-        const fetchRequest = event.request.clone();
-
-        return fetch(fetchRequest)
-          .then((response) => {
-            // Check if valid response
-            if (
-              !response ||
-              response.status !== 200 ||
-              response.type !== "basic"
-            ) {
-              return response;
-            }
-
-            // Clone the response
-            const responseToCache = response.clone();
-
-            // Cache the fetched response if it's a GET request
+      (async () => {
+        const cached = await caches.match(event.request);
+        if (cached) return cached;
+        try {
+          const fetchRequest = event.request.clone();
+          const response = await fetch(fetchRequest);
+          if (!response || response.status !== 200) return response;
+          try {
             if (event.request.method === "GET") {
-              caches.open(CACHE_NAME).then((cache) => {
-                cache.put(event.request, responseToCache);
-              });
+              const cache = await caches.open(CACHE_NAME);
+              cache.put(event.request, response.clone());
+              console.log("Service Worker: Cached resource", event.request.url);
             }
-
-            return response;
-          })
-          .catch(() => {
-            // Return offline page if fetch fails
-            return caches.match("/index.html");
-          });
-      }),
+          } catch (cachePutErr) {
+            console.warn("Service Worker: Failed to cache fetched resource", cachePutErr);
+          }
+          return response;
+        } catch (err) {
+          console.warn("Service Worker: Fetch failed for resource, returning fallback index.html", event.request.url, err);
+          return caches.match("/index.html");
+        }
+      })(),
     );
   }
+});
+
+// Global error handlers inside the Service Worker to surface unexpected failures
+self.addEventListener('error', (e) => {
+  console.error('Service Worker: Global error event', e.filename, e.lineno, e.colno, e.message, e.error);
+});
+
+self.addEventListener('unhandledrejection', (e) => {
+  console.error('Service Worker: Unhandled promise rejection', e.reason);
 });
 
 // Background sync for offline messages
