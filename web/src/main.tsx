@@ -59,11 +59,10 @@ if (!rootElement) {
       console.log('[Main] Encryption initialized, mounting React app...');
 
       ReactDOM.createRoot(rootElement).render(
-        <React.StrictMode>
-          <ErrorBoundary>
-            <App />
-          </ErrorBoundary>
-        </React.StrictMode>,
+        // Temporarily disabled StrictMode to debug error #310
+        <ErrorBoundary>
+          <App />
+        </ErrorBoundary>,
       );
       console.log('[Main] React app mounted successfully');
     } catch (error) {

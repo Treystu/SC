@@ -74,24 +74,45 @@ function App() {
 
   const { groups, refreshGroups } = useGroups();
 
-  const {
-    status,
-    peers,
-    messages,
-    sendMessage,
-    connectToPeer,
-    generateConnectionOffer,
-    acceptConnectionOffer,
-    identity,
-    joinRoom,
-    leaveRoom,
-    sendRoomMessage,
-    discoveredPeers,
-    roomMessages,
-    isJoinedToRoom,
-    sendReaction,
-    sendVoice,
-  } = useMeshNetwork();
+  // Temporarily disabled useMeshNetwork to debug error #310
+  // const {
+  //   status,
+  //   peers,
+  //   messages,
+  //   sendMessage,
+  //   connectToPeer,
+  //   generateConnectionOffer,
+  //   acceptConnectionOffer,
+  //   identity,
+  //   joinRoom,
+  //   leaveRoom,
+  //   sendRoomMessage,
+  //   discoveredPeers,
+  //   roomMessages,
+  //   isJoinedToRoom,
+  //   sendReaction,
+  //   sendVoice,
+  // } = useMeshNetwork();
+
+  // Mock values for debugging
+  const status = { isConnected: false, peerCount: 0, localPeerId: "", connectionQuality: "offline" as const, joinError: null as string | null, initializationError: undefined as string | undefined };
+  const peers: any[] = [];
+  const messages: any[] = [];
+  
+  // Mock identity with proper typing - using 'as any' to avoid TypeScript conflicts with null
+  const identity = null as { publicKey: Uint8Array; privateKey: Uint8Array } | null;
+  const discoveredPeers: string[] = [];
+  const roomMessages: any[] = [];
+  const isJoinedToRoom = false;
+  const sendMessage = async (_recipientId: string, _content: string, _attachments?: File[], _groupId?: string) => {};
+  const connectToPeer = async (_peerId: string) => {};
+  const generateConnectionOffer = async () => "";
+  const acceptConnectionOffer = async (_offer: string) => "";
+  const joinRoom = async (_url: string) => {};
+  const leaveRoom = () => {};
+  const sendRoomMessage = async (_content: string) => {};
+  const sendReaction = async (_targetMessageId: string, _emoji: string, _recipientId: string, _groupId?: string) => {};
+  const sendVoice = async (_recipientId: string, _audioBlob: Blob, _duration?: number, _groupId?: string) => {};
 
   // Setup logger
   useEffect(() => {
