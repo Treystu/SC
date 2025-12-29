@@ -135,6 +135,7 @@ function ConversationList({
   const [showSignalingExport, setShowSignalingExport] = useState(false);
   const [showSignalingImport, setShowSignalingImport] = useState(false);
   const [showManualConnection, setShowManualConnection] = useState(false);
+  const [showRoomJoin, setShowRoomJoin] = useState(false);
 
   // Memoized select handler
   const handleSelect = useCallback(
