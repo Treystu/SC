@@ -22,12 +22,15 @@ echo ""
 
 # Build Android (if gradlew exists)
 if [ -f android/gradlew ]; then
-    echo "📱 Building Android application..."
-    cd android
-    ./gradlew assembleDebug
-    echo "✅ Android application built"
-    cd ..
-    echo ""
+        echo "📱 Building Android application..."
+        cd android
+        if ./gradlew assembleDebug; then
+            echo "✅ Android application built"
+        else
+            echo "⚠️  Android build failed; continuing without Android artifacts"
+        fi
+        cd ..
+        echo ""
 else
     echo "⚠️  Android gradlew not found, skipping Android build"
     echo ""

@@ -68,7 +68,36 @@
 
 <body>
   <noscript>You need to enable JavaScript to run this app.</noscript>
-  <div id="root"></div>
+  <div id="root">If you see this message, React did NOT mount. (E2E Fallback)</div>
+  <script>
+    setTimeout(function() {
+      var root = document.getElementById('root');
+      if (root && root.innerHTML && root.innerHTML.includes('React did NOT mount')) {
+        root.style.background = '#b91c1c';
+        root.style.color = 'white';
+        root.style.fontWeight = 'bold';
+        root.style.padding = '24px';
+        root.style.fontSize = '1.5em';
+      }
+    }, 3000);
+  </script>
+  <div id="global-error-banner" style="display:none;background:#b91c1c;color:white;padding:12px;font-weight:bold;z-index:99999;position:fixed;top:0;left:0;width:100%"></div>
+  <script>
+    window.addEventListener('error', function(e) {
+      var banner = document.getElementById('global-error-banner');
+      if (banner) {
+        banner.style.display = 'block';
+        banner.textContent = 'FATAL ERROR: ' + (e.error ? e.error.stack || e.error : e.message);
+      }
+    });
+    window.addEventListener('unhandledrejection', function(e) {
+      var banner = document.getElementById('global-error-banner');
+      if (banner) {
+        banner.style.display = 'block';
+        banner.textContent = 'UNHANDLED PROMISE: ' + (e.reason && e.reason.stack ? e.reason.stack : e.reason);
+      }
+    });
+  </script>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 

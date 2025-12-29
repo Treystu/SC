@@ -13,7 +13,7 @@ import {
   IdentityKeyPair,
   signMessage,
 } from "../crypto/primitives.js";
-import { generateFingerprintSync } from "../utils/fingerprint.js";
+import { generateFingerprintSync as _generateFingerprintSync } from "../utils/fingerprint.js";
 import { ConnectionMonitor } from "../connection-quality.js";
 import { DHT } from "./dht.js";
 import {
@@ -463,7 +463,7 @@ export class MeshNetwork {
       if (this.heartbeatInterval && typeof (this.heartbeatInterval as any).unref === 'function') {
         (this.heartbeatInterval as any).unref();
       }
-    } catch (e) {}
+    } catch (e) { /* no-op */ }
 
     // Also start health check loop
     if (this.healthCheckInterval) clearInterval(this.healthCheckInterval);
@@ -474,7 +474,7 @@ export class MeshNetwork {
       if (this.healthCheckInterval && typeof (this.healthCheckInterval as any).unref === 'function') {
         (this.healthCheckInterval as any).unref();
       }
-    } catch (e) {}
+    } catch (e) { /* no-op */ }
   }
 
   /**
@@ -734,7 +734,7 @@ export class MeshNetwork {
       }
 
       // Attempt DHT lookup if no candidates found
-      let candidates = this.routingTable.getRankedPeersForTarget(recipientId);
+      const candidates = this.routingTable.getRankedPeersForTarget(recipientId);
 
       const connectedCandidates = candidates.filter(
         (p) => p.state === "connected" && p.id !== this.localPeerId,
@@ -959,7 +959,7 @@ export class MeshNetwork {
     } else if (message.header.type === MessageType.RESPONSE_BLOB) {
       try {
         const data = JSON.parse(new TextDecoder().decode(message.payload));
-        const { hash, requestId, blob } = data;
+        const { hash: _hash, requestId, blob } = data;
 
         const pending = this.pendingBlobRequests.get(requestId);
         if (pending) {

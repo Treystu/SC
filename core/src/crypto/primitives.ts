@@ -649,7 +649,7 @@ export function generateKey(): Uint8Array {
     throw new Error('Insufficient entropy for key generation');
   }
   
-  return key;
+  return key instanceof Uint8Array ? key : Uint8Array.from(key as any);
 }
 
 /**
@@ -659,7 +659,8 @@ export function generateKey(): Uint8Array {
  * @returns 24-byte random nonce
  */
 export function generateNonce(): Uint8Array {
-  return randomBytes(24);
+  const n = randomBytes(24);
+  return n instanceof Uint8Array ? n : Uint8Array.from(n as any);
 }
 
 /**

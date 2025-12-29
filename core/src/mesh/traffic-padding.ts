@@ -442,7 +442,7 @@ export class TimingObfuscation {
       if (t && typeof (t as any).unref === 'function') {
         (t as any).unref();
       }
-    } catch (e) {}
+    } catch (e) { /* no-op */ }
   }
   
   /**

@@ -152,7 +152,7 @@ export const handler: Handler = async (event, context) => {
 
       case "signal": {
         // Store signal for another peer
-        let { to, type, signal } = payload;
+        const { to, type, signal } = payload;
         if (!to || !type || !signal) throw new Error("Invalid signal payload");
 
         // Sanitize recipient ID to match the sanitized peerId validation

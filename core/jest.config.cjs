@@ -47,12 +47,22 @@ module.exports = {
   globals: {
     'ts-jest': {
       useESM: true,
-      tsconfig: './tsconfig.test.json',
+      tsconfig: '<rootDir>/tsconfig.test.json',
     }
   },
   setupFilesAfterEnv: ['<rootDir>/jest.setup.cjs'],
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
+    '^@noble/hashes/utils$': '<rootDir>/jest-mocks/@noble-hashes-utils.cjs',
+    '^@noble/hashes/sha2.js$': '<rootDir>/jest-mocks/@noble-hashes-sha2.cjs',
+    '^@noble/hashes/sha2$': '<rootDir>/jest-mocks/@noble-hashes-sha2.cjs',
+    '^@noble/hashes/hkdf.js$': '<rootDir>/jest-mocks/@noble-hashes-hkdf.cjs',
+    '^@noble/hashes/hkdf$': '<rootDir>/jest-mocks/@noble-hashes-hkdf.cjs',
+    '^@noble/hashes/utils.js$': '<rootDir>/jest-mocks/@noble-hashes-utils.cjs',
+    '^@noble/curves/ed25519.js$': '<rootDir>/jest-mocks/@noble-curves-ed25519.cjs',
+    '^@noble/curves/ed25519$': '<rootDir>/jest-mocks/@noble-curves-ed25519.cjs',
+    '^@noble/ciphers/chacha.js$': '<rootDir>/jest-mocks/@noble-ciphers-chacha.cjs',
+    '^@noble/ciphers/chacha$': '<rootDir>/jest-mocks/@noble-ciphers-chacha.cjs',
   },
   modulePathIgnorePatterns: ['<rootDir>/dist/'],
   preset: 'ts-jest/presets/default-esm',
@@ -64,7 +74,7 @@ module.exports = {
     ]
   },
   transformIgnorePatterns: [
-    '/node_modules/(?!(@noble|@sc)/)',
+    '/node_modules/(?!(?:@noble|@sc|fflate)/)',
     '/dist/'
   ],
   injectGlobals: true,

@@ -114,7 +114,7 @@ export class NetworkStateManager {
       if (this.monitorInterval && typeof (this.monitorInterval as any).unref === 'function') {
         (this.monitorInterval as any).unref();
       }
-    } catch (e) {}
+    } catch (e) { /* no-op */ }
     
     // Initial check
     this.checkNetworkState();

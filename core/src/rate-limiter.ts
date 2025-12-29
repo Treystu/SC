@@ -104,4 +104,4 @@ try {
   if (__rateLimiterCleanupTimer && typeof (__rateLimiterCleanupTimer as any).unref === 'function') {
     (__rateLimiterCleanupTimer as any).unref();
   }
-} catch (e) {}
+  } catch (e) { /* no-op */ }

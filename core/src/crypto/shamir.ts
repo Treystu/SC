@@ -95,7 +95,7 @@ export function split(
 
     // Evaluate polynomial for each share (x=1..n)
     for (let j = 0; j < n; j++) {
-      let x = j + 1;
+      const x = j + 1;
       // Horner's method or direct? Direct is simpler for small k
       // y = c0 + c1*x + c2*x^2 ...
 

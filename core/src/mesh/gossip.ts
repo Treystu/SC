@@ -73,7 +73,7 @@ export class GossipProtocol {
       if (this.gossipInterval && typeof (this.gossipInterval as any).unref === 'function') {
         (this.gossipInterval as any).unref();
       }
-    } catch (e) {}
+    } catch (e) { /* no-op */ }
 
     this.pruneInterval = setInterval(() => {
       this.pruneOldMessages();
@@ -82,7 +82,7 @@ export class GossipProtocol {
       if (this.pruneInterval && typeof (this.pruneInterval as any).unref === 'function') {
         (this.pruneInterval as any).unref();
       }
-    } catch (e) {}
+    } catch (e) { /* no-op */ }
   }
 
   /**

@@ -5,6 +5,8 @@ import { defineConfig, devices } from '@playwright/test';
  * See https://playwright.dev/docs/test-configuration
  */
 export default defineConfig({
+  globalSetup: require.resolve('./tests/e2e/playwright.global-setup.js'),
+  globalTeardown: require.resolve('./tests/e2e/playwright.global-teardown.js'),
   testDir: './tests',
   testMatch: ['**/*.e2e.test.ts', '**/*.e2e.spec.ts', '**/cross-platform.e2e.test.ts'],
   
@@ -85,7 +87,7 @@ export default defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: 'npm run dev',
+    command: 'npm run dev -- --port 3000 --strictPort',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,

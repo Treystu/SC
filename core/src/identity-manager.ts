@@ -51,10 +51,25 @@ export class IdentityManager {
     this.storage = storage || new LocalStorageAdapter();
   }
 
+  // Use the global subtle where available, otherwise fall back to test shim
+  private get subtle() {
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    if (typeof globalThis !== 'undefined' && (globalThis.crypto && globalThis.crypto.subtle)) {
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
+      return globalThis.crypto.subtle;
+    }
+    // require relative shim for test environment
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const shim = require('../test-utils/webcrypto-shim.cjs');
+    return shim.subtle;
+  }
+
   // Generate new identity
   async generateIdentity(displayName?: string): Promise<Identity> {
     // Generate Ed25519 keypair for signing
-    const keyPair = await crypto.subtle.generateKey(
+    const keyPair = await this.subtle.generateKey(
       {
         name: "Ed25519",
         namedCurve: "Ed25519",
@@ -64,11 +79,11 @@ export class IdentityManager {
     );
 
     // Generate unique ID from public key
-    const publicKeyExport = await crypto.subtle.exportKey(
+    const publicKeyExport = await this.subtle.exportKey(
       "raw",
       keyPair.publicKey,
     );
-    const publicKeyHash = await crypto.subtle.digest(
+    const publicKeyHash = await this.subtle.digest(
       "SHA-256",
       publicKeyExport,
     );
@@ -97,7 +112,7 @@ export class IdentityManager {
       const data: IdentityExport = JSON.parse(stored);
 
       // Import keys
-      const publicKey = await crypto.subtle.importKey(
+      const publicKey = await this.subtle.importKey(
         "jwk",
         data.publicKeyJwk,
         { name: "Ed25519", namedCurve: "Ed25519" } as any,
@@ -105,7 +120,7 @@ export class IdentityManager {
         ["verify"],
       );
 
-      const privateKey = await crypto.subtle.importKey(
+      const privateKey = await this.subtle.importKey(
         "jwk",
         data.privateKeyJwk,
         { name: "Ed25519", namedCurve: "Ed25519" } as any,
@@ -140,11 +155,11 @@ export class IdentityManager {
   async exportIdentity(): Promise<IdentityExport> {
     if (!this.identity) throw new Error("No identity to export");
 
-    const publicKeyJwk = await crypto.subtle.exportKey(
+    const publicKeyJwk = await this.subtle.exportKey(
       "jwk",
       this.identity.publicKey,
     );
-    const privateKeyJwk = await crypto.subtle.exportKey(
+    const privateKeyJwk = await this.subtle.exportKey(
       "jwk",
       this.identity.privateKey,
     );
@@ -160,7 +175,7 @@ export class IdentityManager {
 
   // Import identity (from backup)
   async importIdentity(data: IdentityExport): Promise<Identity> {
-    const publicKey = await crypto.subtle.importKey(
+    const publicKey = await this.subtle.importKey(
       "jwk",
       data.publicKeyJwk,
       { name: "Ed25519", namedCurve: "Ed25519" } as any,
@@ -168,7 +183,7 @@ export class IdentityManager {
       ["verify"],
     );
 
-    const privateKey = await crypto.subtle.importKey(
+    const privateKey = await this.subtle.importKey(
       "jwk",
       data.privateKeyJwk,
       { name: "Ed25519", namedCurve: "Ed25519" } as any,
@@ -212,7 +227,7 @@ export class IdentityManager {
   // Get public key as bytes
   async getPublicKeyBytes(): Promise<Uint8Array> {
     if (!this.identity) throw new Error("No identity loaded");
-    const exported = await crypto.subtle.exportKey(
+    const exported = await this.subtle.exportKey(
       "raw",
       this.identity.publicKey,
     );
@@ -222,7 +237,7 @@ export class IdentityManager {
   // Get public key as hex string
   async getPublicKeyHex(): Promise<string> {
     if (!this.identity) throw new Error("No identity loaded");
-    const exported = await crypto.subtle.exportKey(
+    const exported = await this.subtle.exportKey(
       "raw",
       this.identity.publicKey,
     );
@@ -233,7 +248,7 @@ export class IdentityManager {
   async sign(data: Uint8Array): Promise<Uint8Array> {
     if (!this.identity) throw new Error("No identity loaded");
 
-    const signature = await crypto.subtle.sign(
+    const signature = await this.subtle.sign(
       { name: "Ed25519" } as any,
       this.identity.privateKey,
       data.buffer as ArrayBuffer,

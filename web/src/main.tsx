@@ -1,3 +1,5 @@
+// E2E test marker: write to localStorage as the very first line
+try { if (typeof localStorage !== 'undefined') localStorage.setItem('sc-e2e-marker', 'main-started'); } catch (e) {}
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
@@ -67,6 +69,19 @@ if (!rootElement) {
       console.log('[Main] React app mounted successfully');
     } catch (error) {
       console.error('[Main] Error during app initialization:', error);
+      // Show error in DOM for E2E/Playwright
+      rootElement.innerHTML = `<div style="background:#b91c1c;color:white;padding:24px;font-weight:bold;font-size:1.2em;">FATAL INIT ERROR: ${error && (error.stack || error.message || error)}</div>`;
+        // If running in E2E (Playwright), write error to a log file for extraction
+        try {
+          if (navigator.webdriver) {
+            // Write error to localStorage for Playwright to read
+            try {
+              localStorage.setItem('sc-e2e-fatal-error', String(error && (error.stack || error.message || error)));
+            } catch (e) {}
+          }
+        } catch (e) {
+          // Ignore
+        }
     }
   })();
 }

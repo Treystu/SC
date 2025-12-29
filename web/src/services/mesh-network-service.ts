@@ -141,9 +141,9 @@ export const getMeshNetwork = async (): Promise<MeshNetwork> => {
       try {
         // Some test environments/mocks may not provide a real IndexedDBStorage constructor
         // Guard against that and fall back to undefined (in-memory) storage when unavailable.
-        // @ts-ignore
+        // @ts-expect-error - defensive: IndexedDBStorage may not be present in some test environments
         if (typeof IndexedDBStorage === "function") {
-          // @ts-ignore
+          // @ts-expect-error - defensive: IndexedDBStorage type may be unavailable at compile time
           dhtStorage = new (IndexedDBStorage as any)();
         }
       } catch (e) {

@@ -137,7 +137,7 @@ export class KademliaRoutingTable {
       if (this.refreshIntervalHandle && typeof (this.refreshIntervalHandle as any).unref === 'function') {
         (this.refreshIntervalHandle as any).unref();
       }
-    } catch (e) {}
+    } catch (e) { /* no-op */ }
 
     // Start value republishing
     this.republishIntervalHandle = setInterval(
@@ -148,7 +148,7 @@ export class KademliaRoutingTable {
       if (this.republishIntervalHandle && typeof (this.republishIntervalHandle as any).unref === 'function') {
         (this.republishIntervalHandle as any).unref();
       }
-    } catch (e) {}
+    } catch (e) { /* no-op */ }
   }
 
   /**

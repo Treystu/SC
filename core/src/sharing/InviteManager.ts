@@ -100,12 +100,12 @@ export class InviteManager {
 
     // Sign the payload
     const signature = signMessage(payloadBytes, this.privateKey);
-    const signatureHex = arrayBufferToHex(signature.buffer as ArrayBuffer);
+    const _signatureHex = arrayBufferToHex(signature.buffer as ArrayBuffer);
 
     // Construct the code: Base64(Payload) + "." + Hex(Signature)
     // For backward-compat and tests we store a short code (64 hex chars = 32 bytes) using the
     // signature hex. The full payload is stored locally so validation can be performed.
-    const encodedPayload = this.toBase64(payloadStr);
+    const _encodedPayload = this.toBase64(payloadStr);
     // Use a 32-byte random token (64 hex chars) as the public invite code used
     // by callers/tests. The signature is still stored and used for verification
     // of the payload when needed.

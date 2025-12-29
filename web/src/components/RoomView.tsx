@@ -102,7 +102,7 @@ export function RoomView({
         <div className="room-header" role="banner">
           <div className="room-title">
             <h2>🌐 Public Room</h2>
-            <span className="room-status">
+            <span className="room-status" data-testid="room-status">
               {uniqueDiscovered.length + uniqueConnected.length + 1} Online
             </span>
           </div>
@@ -229,6 +229,7 @@ export function RoomView({
                 <div
                   key={idx}
                   className={`chat-message ${msg.from === localPeerId ? "own" : ""}`}
+                  data-testid="chat-message"
                 >
                   <div className="message-header">
                     <span className="message-sender">

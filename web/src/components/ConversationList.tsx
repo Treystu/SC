@@ -254,36 +254,47 @@ function ConversationList({
                 Manual Connect (WAN)
               </button>
               <button
-                onClick={async (e) => {
-                  const defaultUrl =
-                    window.location.origin + "/.netlify/functions/room";
-                  const url = prompt("Enter Public Room URL:", defaultUrl);
-                  if (url) {
-                    const btn = e.currentTarget;
-                    const originalText = btn.innerText;
-                    btn.innerText = "Joining...";
-                    btn.disabled = true;
-                    try {
-                      await onJoinRoom?.(url);
-                      alert("Successfully joined room! Discovery active.");
-                    } catch (err) {
-                      alert(
-                        "Failed to join room: " +
-                          (err instanceof Error ? err.message : String(err)),
-                      );
-                    } finally {
-                      btn.innerText = originalText;
-                      btn.disabled = false;
-                      setShowMenu(false);
-                    }
-                  } else {
-                    setShowMenu(false);
-                  }
-                }}
-                data-testid="join-public-room-btn"
+                onClick={() => setShowRoomJoin(true)}
+                data-testid="join-room-btn"
               >
                 🌐 Join Public Room (Netlify)
               </button>
+
+              {showRoomJoin && (
+                <div className="room-join-modal" style={{ position: 'fixed', zIndex: 1000, background: '#fff', padding: 24, borderRadius: 8, boxShadow: '0 2px 8px #0002', top: '30%', left: '50%', transform: 'translate(-50%, -30%)' }}>
+                  <h3>Join Public Room</h3>
+                  <input
+                    data-testid="room-url-input"
+                    type="text"
+                    defaultValue={window.location.origin + "/.netlify/functions/room"}
+                    style={{ width: 320, marginBottom: 12 }}
+                    ref={el => el && el.focus()}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        document.getElementById('confirm-join-room-btn')?.click();
+                      }
+                    }}
+                  />
+                  <div style={{ marginTop: 12 }}>
+                    <button
+                      id="confirm-join-room-btn"
+                      data-testid="confirm-join-room-btn"
+                      onClick={async () => {
+                        const input = document.querySelector('[data-testid="room-url-input"]') as HTMLInputElement;
+                        const url = input.value;
+                        try {
+                          await onJoinRoom?.(url);
+                          alert("Successfully joined room! Discovery active.");
+                          setShowRoomJoin(false);
+                        } catch (err) {
+                          alert("Failed to join room: " + (err instanceof Error ? err.message : String(err)));
+                        }
+                      }}
+                    >Join</button>
+                    <button style={{ marginLeft: 8 }} onClick={() => setShowRoomJoin(false)}>Cancel</button>
+                  </div>
+                </div>
+              )}
               <button
                 onClick={() => {
                   const url = prompt(
