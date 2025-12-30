@@ -54,6 +54,8 @@ interface PeerConnectionWrapper {
   bytesSent: number;
   bytesReceived: number;
   lastSeen: number;
+  lastRTT: number; // Last measured round-trip time in ms
+  pingTimestamp: number; // Timestamp when last PING was sent
 }
 
 /**
@@ -352,6 +354,8 @@ export class WebRTCTransport implements Transport {
       bytesSent: 0,
       bytesReceived: 0,
       lastSeen: Date.now(),
+      lastRTT: 0,
+      pingTimestamp: 0,
     };
     this.peers.set(peerId, wrapper);
 
@@ -426,11 +430,18 @@ export class WebRTCTransport implements Transport {
     const wrapper = this.peers.get(peerId);
     if (!wrapper) return undefined;
 
+    // Calculate connection quality based on RTT
+    // Quality formula: 100 - (RTT / 10)
+    // Examples: 0ms = 100, 100ms = 90, 500ms = 50, 1000ms+ = 0
+    const quality = wrapper.lastRTT > 0
+      ? Math.max(0, Math.min(100, 100 - wrapper.lastRTT / 10))
+      : 100; // Default to 100 if RTT not yet measured
+
     return {
       peerId,
       state: wrapper.state,
       transportType: "webrtc",
-      connectionQuality: 100, // TODO: Calculate based on RTT
+      connectionQuality: quality,
       bytesSent: wrapper.bytesSent,
       bytesReceived: wrapper.bytesReceived,
       lastSeen: wrapper.lastSeen,
@@ -466,6 +477,8 @@ export class WebRTCTransport implements Transport {
           bytesSent: 0,
           bytesReceived: 0,
           lastSeen: Date.now(),
+          lastRTT: 0,
+          pingTimestamp: 0,
         };
         this.peers.set(peerId, wrapper);
         this.events?.onStateChange?.(peerId, "connecting");
@@ -541,6 +554,8 @@ export class WebRTCTransport implements Transport {
         bytesSent: 0,
         bytesReceived: 0,
         lastSeen: Date.now(),
+        lastRTT: 0,
+        pingTimestamp: 0,
       };
       this.peers.set(peerId, wrapper);
 
