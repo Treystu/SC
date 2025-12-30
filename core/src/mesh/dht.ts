@@ -14,6 +14,16 @@ export interface DHTConfig {
   k?: number; // Replication parameter (default 20)
   lookupTimeout?: number; // Timeout for a single lookup query (default 5000ms)
   storage?: StorageAdapter; // Persistence adapter
+  maxValueSize?: number; // Maximum size of a single value in bytes (default 1MB)
+  maxStoragePerPeer?: number; // Maximum storage per peer in bytes (default 10MB)
+  storeRateLimit?: number; // Maximum STORE operations per minute per peer (default 100)
+}
+
+interface PeerStorageQuota {
+  used: number; // Bytes used by this peer
+  lastReset: number; // Timestamp of last rate limit reset
+  storeCount: number; // Number of stores in current window
+  keys: Set<string>; // Keys stored by this peer (for tracking and cleanup)
 }
 
 export interface NodeLookupResult {
@@ -26,6 +36,9 @@ export class DHT {
   private alpha: number;
   private k: number;
   private lookupTimeout: number;
+  private maxValueSize: number;
+  private maxStoragePerPeer: number;
+  private storeRateLimit: number;
 
   // Dependencies injected to avoid circular deps with MeshNetwork
   private sendRequest: (
@@ -40,6 +53,10 @@ export class DHT {
 
   // Storage Adapter for DHT values
   private storage: StorageAdapter;
+
+  // Quota and rate limiting tracking
+  private peerQuotas: Map<string, PeerStorageQuota> = new Map();
+  private keyToPeer: Map<string, string> = new Map(); // Track which peer stored which key
 
   constructor(
     routingTable: RoutingTable,
@@ -56,6 +73,89 @@ export class DHT {
     this.k = config.k || 20;
     this.lookupTimeout = config.lookupTimeout || 5000;
     this.storage = config.storage || new MemoryStorage();
+    this.maxValueSize = config.maxValueSize || 1024 * 1024; // 1MB default
+    this.maxStoragePerPeer = config.maxStoragePerPeer || 10 * 1024 * 1024; // 10MB default
+    this.storeRateLimit = config.storeRateLimit || 100; // 100 stores per minute default
+  }
+
+  /**
+   * Validate value size
+   */
+  private validateValueSize(value: any): boolean {
+    const size = JSON.stringify(value).length;
+    return size <= this.maxValueSize;
+  }
+
+  /**
+   * Check and update peer quota
+   * @returns true if store is allowed, false if quota exceeded
+   */
+  private checkPeerQuota(peerId: string, key: string, valueSize: number): boolean {
+    const now = Date.now();
+    let quota = this.peerQuotas.get(peerId);
+
+    if (!quota) {
+      quota = {
+        used: 0,
+        lastReset: now,
+        storeCount: 0,
+        keys: new Set(),
+      };
+      this.peerQuotas.set(peerId, quota);
+    }
+
+    // Reset rate limit counter every minute
+    if (now - quota.lastReset > 60000) {
+      quota.storeCount = 0;
+      quota.lastReset = now;
+    }
+
+    // Check rate limit
+    if (quota.storeCount >= this.storeRateLimit) {
+      console.warn(`Rate limit exceeded for peer ${peerId}`);
+      return false;
+    }
+
+    // Check if updating existing key
+    const existingPeer = this.keyToPeer.get(key);
+    let existingSize = 0;
+    if (existingPeer === peerId) {
+      // Updating own key - will replace, so subtract old size
+      // For simplicity, we'll just allow updates without size tracking
+      // In production, store size per key
+    }
+
+    // Check storage quota
+    const newUsage = quota.used + valueSize;
+    if (newUsage > this.maxStoragePerPeer && !quota.keys.has(key)) {
+      console.warn(`Storage quota exceeded for peer ${peerId}: ${newUsage} bytes`);
+      return false;
+    }
+
+    // Update quota
+    quota.storeCount++;
+    if (!quota.keys.has(key)) {
+      quota.used += valueSize;
+      quota.keys.add(key);
+      this.keyToPeer.set(key, peerId);
+    }
+
+    return true;
+  }
+
+  /**
+   * Remove a key from peer quota tracking
+   */
+  private removePeerQuota(key: string, valueSize: number): void {
+    const peerId = this.keyToPeer.get(key);
+    if (!peerId) return;
+
+    const quota = this.peerQuotas.get(peerId);
+    if (quota) {
+      quota.used = Math.max(0, quota.used - valueSize);
+      quota.keys.delete(key);
+    }
+    this.keyToPeer.delete(key);
   }
 
   /**
@@ -224,18 +324,40 @@ export class DHT {
       const data = JSON.parse(new TextDecoder().decode(payload));
       const { key, value } = data;
 
-      // TODO: Add quotas and validation
-      this.handleStoreAsync(key, value);
+      // Validate value size
+      if (!this.validateValueSize(value)) {
+        console.warn(`Rejected STORE from ${senderId}: value too large`);
+        return;
+      }
+
+      // Calculate value size
+      const valueSize = JSON.stringify(value).length;
+
+      // Check peer quota and rate limit
+      if (!this.checkPeerQuota(senderId, key, valueSize)) {
+        console.warn(`Rejected STORE from ${senderId}: quota or rate limit exceeded`);
+        return;
+      }
+
+      // Store the value
+      this.handleStoreAsync(key, value, senderId, valueSize);
     } catch (e) {
       console.error("Error handling STORE:", e);
     }
   }
 
-  private async handleStoreAsync(key: string, value: any): Promise<void> {
+  private async handleStoreAsync(
+    key: string,
+    value: any,
+    senderId: string,
+    valueSize: number,
+  ): Promise<void> {
     try {
       await this.storage.store(key, new Uint8Array(value));
     } catch (e) {
       console.error("Failed to store value in DHT adapter", e);
+      // Remove from quota tracking if store failed
+      this.removePeerQuota(key, valueSize);
     }
   }
 

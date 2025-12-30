@@ -651,7 +651,7 @@ export class MeshNetwork {
     const peer = createPeer(
       peerId,
       new Uint8Array(32), // Would be obtained during handshake
-      "webrtc", // Using WebRTC transport (webrtcTransport.name)
+      this.webrtcTransport.name as "webrtc" | "bluetooth" | "local", // Get actual transport type dynamically
     );
 
     this.routingTable.addPeer(peer);

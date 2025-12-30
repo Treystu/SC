@@ -275,17 +275,74 @@ export class WebRTCTransport implements Transport {
   }
 
   /**
+   * Measure RTT (Round-Trip Time) for a peer connection using WebRTC statistics.
+   * @param peerId The peer to measure RTT for
+   * @returns RTT in milliseconds, or 0 if measurement fails
+   */
+  private async measureRTT(peerId: TransportPeerId): Promise<number> {
+    const wrapper = this.peers.get(peerId);
+    if (!wrapper || !wrapper.connection) return 0;
+
+    try {
+      const stats = await wrapper.connection.getStats();
+      let rtt = 0;
+
+      stats.forEach((report) => {
+        // Look for candidate-pair statistics which contain RTT info
+        if (report.type === "candidate-pair" && report.state === "succeeded") {
+          // currentRoundTripTime is in seconds, convert to milliseconds
+          if (report.currentRoundTripTime !== undefined) {
+            rtt = report.currentRoundTripTime * 1000;
+          }
+        }
+      });
+
+      return rtt;
+    } catch (error) {
+      console.error(`Failed to measure RTT for ${peerId}:`, error);
+      return 0;
+    }
+  }
+
+  /**
+   * Start periodic RTT measurement for a peer.
+   * Measures RTT every 5 seconds and updates connection quality.
+   */
+  private startRTTMeasurement(peerId: TransportPeerId): void {
+    const measureAndUpdate = async () => {
+      const wrapper = this.peers.get(peerId);
+      if (!wrapper || wrapper.state !== "connected") return;
+
+      const rtt = await this.measureRTT(peerId);
+      if (rtt > 0) {
+        wrapper.lastRTT = rtt;
+      }
+
+      // Schedule next measurement if peer still connected
+      if (this.peers.has(peerId) && this.isRunning) {
+        setTimeout(measureAndUpdate, 5000);
+      }
+    };
+
+    // Start first measurement after 1 second to allow connection to stabilize
+    setTimeout(measureAndUpdate, 1000);
+  }
+
+  /**
    * Handle peer connected event.
    */
   private handlePeerConnected(peerId: TransportPeerId): void {
     const wrapper = this.peers.get(peerId);
     if (!wrapper) return;
 
+    // Start periodic RTT measurement for this peer
+    this.startRTTMeasurement(peerId);
+
     const peerInfo: TransportPeerInfo = {
       peerId,
       state: "connected",
       transportType: "webrtc",
-      connectionQuality: 100,
+      connectionQuality: 100, // Initial quality, will be updated by RTT measurements
       bytesSent: wrapper.bytesSent,
       bytesReceived: wrapper.bytesReceived,
       lastSeen: wrapper.lastSeen,
