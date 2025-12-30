@@ -228,3 +228,18 @@
   background: rgba(248, 113, 113, 0.1);
   color: var(--accent-danger);
 }
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.new-peer-notification {
+  animation: slideIn 0.3s ease-out;
+}

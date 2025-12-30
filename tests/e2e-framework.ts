@@ -12,27 +12,55 @@ export class E2ETestFramework {
   async navigateToApp() {
     await this.page.goto('http://localhost:3001');
     await this.page.waitForLoadState('networkidle');
+    // Wait for app to be fully initialized
+    await this.page.waitForSelector('[data-testid="local-peer-id"]', { timeout: 15000 });
   }
 
   async createNewContact(name: string, publicKey: string) {
+    // First, ensure the add menu is open
     await this.page.click('[data-testid="add-contact-btn"]');
+    
+    // Wait for menu to appear
+    await this.page.waitForTimeout(300);
 
-    // Click Quick Add if available (for demo/testing)
+    // Try Quick Add first (for demo/testing) - this auto-creates conversation
     const quickAdd = this.page.locator('[data-testid="quick-add-btn"]');
     if (await quickAdd.isVisible()) {
       await quickAdd.click();
+      // Wait for conversation to be created
+      await this.page.waitForTimeout(500);
+      return;
+    }
+
+    // Fall back to manual add
+    const addByIdBtn = this.page.locator('[data-testid="add-by-id-btn"]');
+    if (await addByIdBtn.isVisible()) {
+      await addByIdBtn.click();
+      await this.page.waitForTimeout(300);
     }
 
     await this.page.fill('[data-testid="contact-name-input"]', name);
     await this.page.fill('[data-testid="contact-publickey-input"]', publicKey);
     await this.page.click('[data-testid="save-contact-btn"]');
-    await this.page.waitForSelector(`[data-testid="contact-${name}"]`);
+    
+    // Wait for conversation to appear in the list
+    await this.page.waitForSelector(`[data-testid="contact-${name}"]`, { timeout: 10000 });
   }
 
   async sendMessage(contactName: string, message: string) {
+    // Click on the contact to open chat
     await this.page.click(`[data-testid="contact-${contactName}"]`);
+    
+    // Wait for chat to load
+    await this.page.waitForSelector('[data-testid="chat-container"]', { timeout: 5000 });
+    await this.page.waitForTimeout(300);
+    
+    // Type and send message
     await this.page.fill('[data-testid="message-input"]', message);
     await this.page.click('[data-testid="send-message-btn"]');
+    
+    // Wait for message to appear
+    await this.page.waitForTimeout(500);
   }
 
   async waitForMessageReceived(message: string) {

@@ -1,4 +1,4 @@
-import { useState, useCallback, memo } from "react";
+import { useState, useCallback, memo, useEffect } from "react";
 import "./ConversationList.css";
 import { AddContactDialog } from "./AddContactDialog";
 import {
@@ -136,6 +136,34 @@ function ConversationList({
   const [showSignalingImport, setShowSignalingImport] = useState(false);
   const [showManualConnection, setShowManualConnection] = useState(false);
   const [showRoomJoin, setShowRoomJoin] = useState(false);
+  const [newPeerNotification, setNewPeerNotification] = useState<{ peerId: string; name: string } | null>(null);
+
+  // Listen for peer-connected events to show notifications
+  useEffect(() => {
+    const handlePeerConnected = (event: CustomEvent) => {
+      const { peerId } = event.detail;
+      // Show notification for new peer
+      setNewPeerNotification({
+        peerId,
+        name: `Peer ${peerId.substring(0, 8)}`
+      });
+      // Auto-select the new conversation
+      setTimeout(() => {
+        handleSelect(peerId);
+      }, 500);
+    };
+
+    window.addEventListener('sc-peer-connected', handlePeerConnected as EventListener);
+    return () => window.removeEventListener('sc-peer-connected', handlePeerConnected as EventListener);
+  }, []);
+
+  // Clear notification after 5 seconds
+  useEffect(() => {
+    if (newPeerNotification) {
+      const timer = setTimeout(() => setNewPeerNotification(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [newPeerNotification]);
 
   // Memoized select handler
   const handleSelect = useCallback(
@@ -168,6 +196,28 @@ function ConversationList({
 
   return (
     <div className="conversation-list" data-testid="peer-list">
+      {/* New Peer Notification */}
+      {newPeerNotification && (
+        <div
+          className="new-peer-notification"
+          data-testid="new-peer-notification"
+          style={{
+            position: 'fixed',
+            top: '60px',
+            right: '20px',
+            background: '#4CAF50',
+            color: 'white',
+            padding: '12px 20px',
+            borderRadius: '8px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            zIndex: 1000,
+            animation: 'slideIn 0.3s ease-out'
+          }}
+        >
+          <strong>New conversation!</strong> Connected with {newPeerNotification.name}
+        </div>
+      )}
+      
       <AddContactDialog
         isOpen={showAddDialog}
         onClose={() => setShowAddDialog(false)}

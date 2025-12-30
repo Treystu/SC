@@ -288,6 +288,15 @@ export function useMeshNetwork() {
                 unreadCount: 0,
                 createdAt: Date.now(),
               });
+              // Notify the UI that a new conversation was created
+              // This will trigger the conversation list to refresh
+              const { notifyConversationsUpdated } = await import('./useConversations');
+              notifyConversationsUpdated();
+              
+              // Also dispatch a custom event for the chat popup
+              window.dispatchEvent(new CustomEvent('sc-peer-connected', {
+                detail: { peerId, timestamp: Date.now() }
+              }));
             }
           } catch (err) {
             useMeshNetworkLogger.error("Error ensuring conversation exists:", err);
@@ -432,7 +441,7 @@ export function useMeshNetwork() {
       const isConnected =
         meshNetworkRef.current && typeof (meshNetworkRef.current as any).isConnectedToPeer === "function"
           ? (meshNetworkRef.current as any).isConnectedToPeer(recipientId)
-          : Boolean(meshNetworkRef.current && meshNetworkRef.current.getConnectedPeers && meshNetworkRef.current.getConnectedPeers().includes(recipientId));
+          : Boolean(meshNetworkRef.current && meshNetworkRef.current.getConnectedPeers && meshNetworkRef.current.getConnectedPeers().some((p: Peer) => p.id === recipientId));
       useMeshNetworkLogger.debug(`Connected to ${recipientId}: ${isConnected}`);
 
       if (!isConnected) {
@@ -608,7 +617,7 @@ export function useMeshNetwork() {
     const alreadyConnected =
       meshNetworkRef.current && typeof (meshNetworkRef.current as any).isConnectedToPeer === "function"
         ? (meshNetworkRef.current as any).isConnectedToPeer(peerId)
-        : Boolean(meshNetworkRef.current && meshNetworkRef.current.getConnectedPeers && meshNetworkRef.current.getConnectedPeers().includes(peerId));
+        : Boolean(meshNetworkRef.current && meshNetworkRef.current.getConnectedPeers && meshNetworkRef.current.getConnectedPeers().some((p: Peer) => p.id === peerId));
 
     if (alreadyConnected) {
       useMeshNetworkLogger.debug(`Already connected to ${peerId}`);
@@ -1024,7 +1033,7 @@ export function useMeshNetwork() {
         const alreadyConnected =
           typeof (meshNetworkRef.current as any).isConnectedToPeer === "function"
             ? (meshNetworkRef.current as any).isConnectedToPeer(peerId)
-            : Boolean(meshNetworkRef.current && meshNetworkRef.current.getConnectedPeers && meshNetworkRef.current.getConnectedPeers().includes(peerId));
+            : Boolean(meshNetworkRef.current && meshNetworkRef.current.getConnectedPeers && meshNetworkRef.current.getConnectedPeers().some((p: Peer) => p.id === peerId));
 
         if (knownPeerIds.includes(peerId) && !alreadyConnected) {
           useMeshNetworkLogger.debug(`Auto-connecting to known peer from Room: ${peerId}`);
