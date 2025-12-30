@@ -8,14 +8,16 @@
 export const generateId = (): string => {
   const array = new Uint8Array(16);
   crypto.getRandomValues(array);
-  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+  return Array.from(array, (byte) => byte.toString(16).padStart(2, "0")).join(
+    "",
+  );
 };
 
 /**
  * Sleep for specified milliseconds
  */
 export const sleep = (ms: number): Promise<void> => {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 };
 
 /**
@@ -28,13 +30,13 @@ export const retry = async <T>(
     initialDelay?: number;
     maxDelay?: number;
     backoffFactor?: number;
-  } = {}
+  } = {},
 ): Promise<T> => {
   const {
     maxAttempts = 3,
     initialDelay = 1000,
     maxDelay = 30000,
-    backoffFactor = 2
+    backoffFactor = 2,
   } = options;
 
   let lastError: Error | undefined;
@@ -60,9 +62,9 @@ export const retry = async <T>(
  */
 export const debounce = <T extends (...args: any[]) => any>(
   func: T,
-  wait: number
+  wait: number,
 ): ((...args: Parameters<T>) => void) => {
-  let timeout: NodeJS.Timeout | null = null;
+  let timeout: ReturnType<typeof setTimeout> | null = null;
 
   return (...args: Parameters<T>) => {
     if (timeout) {
@@ -77,7 +79,7 @@ export const debounce = <T extends (...args: any[]) => any>(
  */
 export const throttle = <T extends (...args: any[]) => any>(
   func: T,
-  limit: number
+  limit: number,
 ): ((...args: Parameters<T>) => void) => {
   let inThrottle = false;
 
@@ -94,21 +96,21 @@ export const throttle = <T extends (...args: any[]) => any>(
  * Format bytes to human-readable string
  */
 export const formatBytes = (bytes: number, decimals: number = 2): string => {
-  if (bytes === 0) return '0 Bytes';
+  if (bytes === 0) return "0 Bytes";
 
   const k = 1024;
   const dm = decimals < 0 ? 0 : decimals;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
 
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
 };
 
 /**
  * Calculate SHA-256 hash of data
  */
 export const sha256 = async (data: ArrayBuffer): Promise<ArrayBuffer> => {
-  return crypto.subtle.digest('SHA-256', data);
+  return crypto.subtle.digest("SHA-256", data);
 };
 
 /**
@@ -116,8 +118,8 @@ export const sha256 = async (data: ArrayBuffer): Promise<ArrayBuffer> => {
  */
 export const arrayBufferToHex = (buffer: ArrayBuffer): string => {
   return Array.from(new Uint8Array(buffer))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 };
 
 /**
@@ -144,7 +146,7 @@ export const deepClone = <T>(obj: T): T => {
 export const deepEqual = (a: any, b: any): boolean => {
   if (a === b) return true;
   if (a == null || b == null) return false;
-  if (typeof a !== 'object' || typeof b !== 'object') return false;
+  if (typeof a !== "object" || typeof b !== "object") return false;
 
   const keysA = Object.keys(a);
   const keysB = Object.keys(b);
@@ -195,14 +197,14 @@ export const lerp = (start: number, end: number, t: number): number => {
  * Check if code is running in browser
  */
 export const isBrowser = (): boolean => {
-  return typeof window !== 'undefined';
+  return typeof window !== "undefined";
 };
 
 /**
  * Check if code is running in Node.js
  */
 export const isNode = (): boolean => {
-  return typeof process !== 'undefined' && process.versions?.node !== undefined;
+  return typeof process !== "undefined" && process.versions?.node !== undefined;
 };
 
 /**
@@ -218,7 +220,7 @@ export const now = (): number => {
 export const timeAgo = (timestamp: number): string => {
   const seconds = Math.floor((Date.now() - timestamp) / 1000);
 
-  if (seconds < 60) return 'just now';
+  if (seconds < 60) return "just now";
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
   if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;

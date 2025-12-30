@@ -1,6 +1,6 @@
 import { MeshNetwork } from "./network.js"; // Added .js
 import type { Transport } from "./transport/Transport.js"; // Correct casing // Added .js
-import type { Message } from "./message.js"; // Ensure Message is imported as type only
+import type { Message } from "../protocol/message.js"; // Ensure Message is imported as type only
 import { jest } from "@jest/globals";
 // Removed Transport import since we don't need the interface in JS
 

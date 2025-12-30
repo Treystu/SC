@@ -1,5 +1,5 @@
 module.exports = {
-  testEnvironment: 'jsdom',
+  testEnvironment: 'node',
   roots: ['<rootDir>/src'],
   testMatch: [
     '**/__tests__/**/*.ts',
@@ -53,16 +53,9 @@ module.exports = {
   setupFilesAfterEnv: ['<rootDir>/jest.setup.cjs'],
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
-    '^@noble/hashes/utils$': '<rootDir>/jest-mocks/@noble-hashes-utils.cjs',
-    '^@noble/hashes/sha2.js$': '<rootDir>/jest-mocks/@noble-hashes-sha2.cjs',
-    '^@noble/hashes/sha2$': '<rootDir>/jest-mocks/@noble-hashes-sha2.cjs',
-    '^@noble/hashes/hkdf.js$': '<rootDir>/jest-mocks/@noble-hashes-hkdf.cjs',
-    '^@noble/hashes/hkdf$': '<rootDir>/jest-mocks/@noble-hashes-hkdf.cjs',
-    '^@noble/hashes/utils.js$': '<rootDir>/jest-mocks/@noble-hashes-utils.cjs',
-    '^@noble/curves/ed25519.js$': '<rootDir>/jest-mocks/@noble-curves-ed25519.cjs',
-    '^@noble/curves/ed25519$': '<rootDir>/jest-mocks/@noble-curves-ed25519.cjs',
-    '^@noble/ciphers/chacha.js$': '<rootDir>/jest-mocks/@noble-ciphers-chacha.cjs',
-    '^@noble/ciphers/chacha$': '<rootDir>/jest-mocks/@noble-ciphers-chacha.cjs',
+    // NOTE: Removed jest mocks for @noble libraries because they use fake crypto implementations
+    // Tests that need real crypto (like test-vectors.test.ts) should use actual @noble libraries
+    // Only keep mocks for specific utilities if needed by non-crypto tests
   },
   modulePathIgnorePatterns: ['<rootDir>/dist/'],
   preset: 'ts-jest/presets/default-esm',

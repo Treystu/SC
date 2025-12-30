@@ -10,7 +10,21 @@
  */
 
 import { sha256 } from '@noble/hashes/sha2.js';
-import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
+
+// Utility functions for hex conversion
+const bytesToHex = (bytes: Uint8Array): string => {
+  return Array.from(bytes)
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+};
+
+const hexToBytes = (hex: string): Uint8Array => {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes[i / 2] = parseInt(hex.slice(i, i + 2), 16);
+  }
+  return bytes;
+};
 
 export interface QRPeerInfo {
   publicKey: Uint8Array;

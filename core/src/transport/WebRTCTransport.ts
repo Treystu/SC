@@ -93,17 +93,30 @@ export class WebRTCTransport implements Transport {
         // TURN servers (when available via environment variables)
         // Format: turn:turn.sovereigncommunications.app:3478
         // Credentials should be set via environment variables for security
-        ...(process.env.TURN_SERVER && process.env.TURN_USERNAME && process.env.TURN_PASSWORD ? [{
-          urls: process.env.TURN_SERVER,
-          username: process.env.TURN_USERNAME,
-          credential: process.env.TURN_PASSWORD
-        }] : []),
+        ...(typeof process !== "undefined" &&
+        process.env.TURN_SERVER &&
+        process.env.TURN_USERNAME &&
+        process.env.TURN_PASSWORD
+          ? [
+              {
+                urls: process.env.TURN_SERVER,
+                username: process.env.TURN_USERNAME,
+                credential: process.env.TURN_PASSWORD,
+              },
+            ]
+          : []),
         // Alternative TURN server
-        ...(process.env.TURN_SERVER_ALT && process.env.TURN_USERNAME_ALT && process.env.TURN_PASSWORD_ALT ? [{
-          urls: process.env.TURN_SERVER_ALT,
-          username: process.env.TURN_USERNAME_ALT,
-          credential: process.env.TURN_PASSWORD_ALT
-        }] : []),
+        ...(process.env.TURN_SERVER_ALT &&
+        process.env.TURN_USERNAME_ALT &&
+        process.env.TURN_PASSWORD_ALT
+          ? [
+              {
+                urls: process.env.TURN_SERVER_ALT,
+                username: process.env.TURN_USERNAME_ALT,
+                credential: process.env.TURN_PASSWORD_ALT,
+              },
+            ]
+          : []),
       ],
       iceCandidatePoolSize: 10,
       reliableChannelLabel: "reliable",

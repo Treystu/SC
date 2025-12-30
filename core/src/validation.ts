@@ -1,9 +1,40 @@
-// Import DOMPurify for HTML sanitization, works in both Node.js and browser environments
-import DOMPurify from 'dompurify';
+/**
+ * Validation and sanitization utilities
+ */
+
+// Import DOMPurify for HTML sanitization in browser environment
+// In Node.js/test environments, provide a fallback
+let DOMPurify: any;
+
+if (typeof window !== "undefined") {
+  // In the browser, assuming it will be available via global or handled by bundler
+  try {
+    DOMPurify = require("dompurify");
+  } catch {
+    DOMPurify = (globalThis as any).DOMPurify;
+  }
+} else {
+  // In Node.js/test environments, try to use jsdom
+  try {
+    const createDOMPurify = require("dompurify");
+    const { JSDOM } = require("jsdom");
+    const window = new JSDOM("").window;
+    DOMPurify = createDOMPurify(window);
+  } catch {
+    // Fallback if dependencies missing
+  }
+}
+
+// Ensure DOMPurify has a sanitize method even if loading failed
+if (!DOMPurify || !DOMPurify.sanitize) {
+  DOMPurify = {
+    sanitize: (input: string) => input.replace(/<[^>]*>/g, ""),
+  };
+}
 
 /**
  * Sanitize HTML content to prevent XSS attacks
- * 
+ *
  * Uses DOMPurify to remove all HTML tags and leave only text content
  */
 export function sanitizeHTML(html: string): string {

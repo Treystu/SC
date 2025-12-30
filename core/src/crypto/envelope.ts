@@ -8,7 +8,7 @@ import { x25519 } from '@noble/curves/ed25519.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { xchacha20poly1305 } from '@noble/ciphers/chacha.js';
 import { hkdf } from '@noble/hashes/hkdf.js';
-import { randomBytes } from '@noble/hashes/utils.js';
+import { randomBytes } from './primitives.js';
 
 /**
  * Encrypted envelope structure

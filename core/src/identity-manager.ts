@@ -51,19 +51,16 @@ export class IdentityManager {
     this.storage = storage || new LocalStorageAdapter();
   }
 
-  // Use the global subtle where available, otherwise fall back to test shim
+  // Use the global crypto.subtle which should always be available
   private get subtle() {
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore
-    if (typeof globalThis !== 'undefined' && (globalThis.crypto && globalThis.crypto.subtle)) {
+    if (typeof globalThis !== 'undefined' && globalThis.crypto && globalThis.crypto.subtle) {
       // eslint-disable-next-line @typescript-eslint/ban-ts-comment
       // @ts-ignore
       return globalThis.crypto.subtle;
     }
-    // require relative shim for test environment
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const shim = require('../test-utils/webcrypto-shim.cjs');
-    return shim.subtle;
+    throw new Error('crypto.subtle is not available in this environment');
   }
 
   // Generate new identity

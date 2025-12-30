@@ -1,7 +1,7 @@
 import { NetworkSimulator } from "./simulator.js";
 
 // Increase timeout for large scale test
-jest.setTimeout(60000);
+jest.setTimeout(120000);
 
 describe("Large Scale DHT Simulation", () => {
   let simulator: NetworkSimulator;

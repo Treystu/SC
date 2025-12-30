@@ -10,7 +10,7 @@
  * REFACTOR: Uses Stateless Invites (Self-contained signed payloads)
  */
 
-import { randomBytes } from "@noble/hashes/utils.js";
+import { randomBytes } from "../crypto/primitives.js";
 
 import { signMessage, verifySignature } from "../crypto/primitives.js";
 import { arrayBufferToHex, hexToArrayBuffer } from "../utils.js";

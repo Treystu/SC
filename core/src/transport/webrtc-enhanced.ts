@@ -1,6 +1,6 @@
 /**
  * Production-Ready WebRTC Transport Layer
- * 
+ *
  * Implements all requirements for Category 3: WebRTC Peer-to-Peer (Tasks 23-32)
  * - Task 23: Advanced PeerConnection initialization with ICE server config
  * - Task 24: Separate data channels for different data types
@@ -18,31 +18,31 @@
 // Types and Interfaces
 // ============================================================================
 
-export type ConnectionState = 
-  | 'new' 
-  | 'connecting' 
-  | 'connected' 
-  | 'disconnected' 
-  | 'failed' 
-  | 'closed';
+export type ConnectionState =
+  | "new"
+  | "connecting"
+  | "connected"
+  | "disconnected"
+  | "failed"
+  | "closed";
 
-export type DataChannelType = 
-  | 'reliable'      // Ordered, guaranteed delivery
-  | 'unreliable'    // Unordered, no retransmits (for real-time data)
-  | 'control'       // High-priority control messages
-  | 'file';         // File transfer channel
+export type DataChannelType =
+  | "reliable" // Ordered, guaranteed delivery
+  | "unreliable" // Unordered, no retransmits (for real-time data)
+  | "control" // High-priority control messages
+  | "file"; // File transfer channel
 
-export type SignalingMessageType = 
-  | 'offer' 
-  | 'answer' 
-  | 'ice-candidate' 
-  | 'ice-restart';
+export type SignalingMessageType =
+  | "offer"
+  | "answer"
+  | "ice-candidate"
+  | "ice-restart";
 
 export interface ICEServerConfig {
   urls: string | string[];
   username?: string;
   credential?: string;
-  credentialType?: 'password' | 'oauth';
+  credentialType?: "password" | "oauth";
 }
 
 export interface WebRTCConfig {
@@ -52,17 +52,17 @@ export interface WebRTCConfig {
   iceTransportPolicy?: RTCIceTransportPolicy;
   bundlePolicy?: RTCBundlePolicy;
   rtcpMuxPolicy?: RTCRtcpMuxPolicy;
-  
+
   // Connection parameters
   connectionTimeout?: number;
   reconnectMaxAttempts?: number;
   reconnectBaseDelay?: number;
   reconnectMaxDelay?: number;
-  
+
   // Data channel parameters
   maxBufferedAmount?: number;
   lowWaterMark?: number;
-  
+
   // Metrics
   metricsEnabled?: boolean;
   metricsInterval?: number;
@@ -98,7 +98,13 @@ export interface ConnectionMetrics {
 }
 
 export interface NATType {
-  type: 'open' | 'full-cone' | 'restricted' | 'port-restricted' | 'symmetric' | 'unknown';
+  type:
+    | "open"
+    | "full-cone"
+    | "restricted"
+    | "port-restricted"
+    | "symmetric"
+    | "unknown";
   supportsDirectConnection: boolean;
   requiresRelay: boolean;
 }
@@ -106,7 +112,8 @@ export interface NATType {
 // When running tests we want to avoid noisy console output that can
 // trigger "Cannot log after tests are done" when async callbacks fire
 // after Jest has finished. Use a simple module-level flag to guard logs.
-const IS_TEST = process.env.NODE_ENV === 'test';
+const IS_TEST =
+  typeof process !== "undefined" && process.env.NODE_ENV === "test";
 
 // ============================================================================
 // WebRTC Peer Connection Manager
@@ -117,30 +124,30 @@ export class WebRTCPeerEnhanced {
   private dataChannels: Map<DataChannelType, RTCDataChannel> = new Map();
   private pendingICECandidates: RTCIceCandidateInit[] = [];
   private iceCandidateBuffer: RTCIceCandidate[] = [];
-  
+
   private peerId: string;
   private config: Required<WebRTCConfig>;
-  private state: ConnectionState = 'new';
-  
+  private state: ConnectionState = "new";
+
   // Reconnection state
   private reconnectAttempts = 0;
-  private reconnectTimer: NodeJS.Timeout | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private isReconnecting = false;
-  
+
   // Metrics
   private metrics: ConnectionMetrics | null = null;
-  private metricsTimer: NodeJS.Timeout | null = null;
-  
+  private metricsTimer: ReturnType<typeof setInterval> | null = null;
+
   // Event handlers
   private eventHandlers: Map<string, Set<(...args: any[]) => any>> = new Map();
-  
+
   // Backpressure management
   private sendQueue: Array<{ type: DataChannelType; data: Uint8Array }> = [];
   private isSending = false;
-  
+
   // SDP preferences
-  private preferredCodecs: string[] = ['VP9', 'H264', 'opus'];
-  
+  private preferredCodecs: string[] = ["VP9", "H264", "opus"];
+
   constructor(config: WebRTCConfig) {
     this.peerId = config.peerId;
     this.config = this.applyDefaults(config);
@@ -155,13 +162,13 @@ export class WebRTCPeerEnhanced {
     return {
       peerId: config.peerId,
       iceServers: config.iceServers || [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
       ],
       iceCandidatePoolSize: config.iceCandidatePoolSize ?? 10,
-      iceTransportPolicy: config.iceTransportPolicy ?? 'all',
-      bundlePolicy: config.bundlePolicy ?? 'max-bundle',
-      rtcpMuxPolicy: config.rtcpMuxPolicy ?? 'require',
+      iceTransportPolicy: config.iceTransportPolicy ?? "all",
+      bundlePolicy: config.bundlePolicy ?? "max-bundle",
+      rtcpMuxPolicy: config.rtcpMuxPolicy ?? "require",
       connectionTimeout: config.connectionTimeout ?? 30000,
       reconnectMaxAttempts: config.reconnectMaxAttempts ?? 5,
       reconnectBaseDelay: config.reconnectBaseDelay ?? 1000,
@@ -186,12 +193,12 @@ export class WebRTCPeerEnhanced {
       this.peerConnection = new RTCPeerConnection(configuration);
       this.setupConnectionHandlers();
       this.setupDataChannels();
-      
+
       // Emit initialized event asynchronously to ensure listeners are attached
-      setImmediate(() => {
-        this.emit('initialized', { peerId: this.peerId });
-      });
-      
+      setTimeout(() => {
+        this.emit("initialized", { peerId: this.peerId });
+      }, 0);
+
       if (this.config.metricsEnabled) {
         this.startMetricsCollection();
       }
@@ -201,13 +208,13 @@ export class WebRTCPeerEnhanced {
   }
 
   private handleInitializationError(error: any): void {
-    if (!IS_TEST) console.error('Failed to initialize peer connection:', error);
-    this.emit('error', { 
-      type: 'initialization', 
-      error, 
-      peerId: this.peerId 
+    if (!IS_TEST) console.error("Failed to initialize peer connection:", error);
+    this.emit("error", {
+      type: "initialization",
+      error,
+      peerId: this.peerId,
     });
-    this.setState('failed');
+    this.setState("failed");
   }
 
   // ============================================================================
@@ -219,22 +226,22 @@ export class WebRTCPeerEnhanced {
 
     // Create control channel (high priority, reliable)
     const controlConfig: DataChannelConfig = {
-      type: 'control',
+      type: "control",
       ordered: true,
-      protocol: 'control-v1',
+      protocol: "control-v1",
     };
     this.createDataChannel(controlConfig);
 
     // Create reliable data channel
     const reliableConfig: DataChannelConfig = {
-      type: 'reliable',
+      type: "reliable",
       ordered: true,
     };
     this.createDataChannel(reliableConfig);
 
     // Create unreliable channel for real-time data (voice, video)
     const unreliableConfig: DataChannelConfig = {
-      type: 'unreliable',
+      type: "unreliable",
       ordered: false,
       maxRetransmits: 0,
     };
@@ -242,7 +249,7 @@ export class WebRTCPeerEnhanced {
 
     // Create file transfer channel
     const fileConfig: DataChannelConfig = {
-      type: 'file',
+      type: "file",
       ordered: true,
     };
     this.createDataChannel(fileConfig);
@@ -250,7 +257,7 @@ export class WebRTCPeerEnhanced {
 
   createDataChannel(config: DataChannelConfig): RTCDataChannel {
     if (!this.peerConnection) {
-      throw new Error('Peer connection not initialized');
+      throw new Error("Peer connection not initialized");
     }
 
     const label = `${this.peerId}-${config.type}`;
@@ -268,10 +275,10 @@ export class WebRTCPeerEnhanced {
     this.dataChannels.set(config.type, channel);
 
     // Emit channel-created event asynchronously
-    setImmediate(() => {
-      this.emit('channel-created', { type: config.type, label });
-    });
-    
+    setTimeout(() => {
+      this.emit("channel-created", { type: config.type, label });
+    }, 0);
+
     return channel;
   }
 
@@ -279,22 +286,28 @@ export class WebRTCPeerEnhanced {
   // Task 28: Data Channel Handlers with Message Type Routing
   // ============================================================================
 
-  private setupDataChannelHandlers(channel: RTCDataChannel, type: DataChannelType): void {
+  private setupDataChannelHandlers(
+    channel: RTCDataChannel,
+    type: DataChannelType,
+  ): void {
     channel.onopen = () => {
-      if (!IS_TEST) console.log(`Data channel ${channel.label} (${type}) opened`);
-      this.emit('channel-open', { type, label: channel.label });
+      if (!IS_TEST)
+        console.log(`Data channel ${channel.label} (${type}) opened`);
+      this.emit("channel-open", { type, label: channel.label });
       this.processQueue(); // Process any queued messages
     };
 
     channel.onclose = () => {
-      if (!IS_TEST) console.log(`Data channel ${channel.label} (${type}) closed`);
+      if (!IS_TEST)
+        console.log(`Data channel ${channel.label} (${type}) closed`);
       this.dataChannels.delete(type);
-      this.emit('channel-close', { type, label: channel.label });
+      this.emit("channel-close", { type, label: channel.label });
     };
 
     channel.onerror = (error) => {
-      if (!IS_TEST) console.error(`Data channel ${channel.label} error:`, error);
-      this.emit('channel-error', { type, error, label: channel.label });
+      if (!IS_TEST)
+        console.error(`Data channel ${channel.label} error:`, error);
+      this.emit("channel-error", { type, error, label: channel.label });
       this.handleChannelError(type, error);
     };
 
@@ -304,7 +317,7 @@ export class WebRTCPeerEnhanced {
 
     // Backpressure monitoring
     channel.onbufferedamountlow = () => {
-      this.emit('channel-ready', { type });
+      this.emit("channel-ready", { type });
       this.processQueue(); // Resume sending
     };
   }
@@ -312,27 +325,28 @@ export class WebRTCPeerEnhanced {
   private handleMessage(type: DataChannelType, data: any): void {
     try {
       let payload: Uint8Array;
-      
+
       if (data instanceof ArrayBuffer) {
         payload = new Uint8Array(data);
-      } else if (typeof data === 'string') {
+      } else if (typeof data === "string") {
         payload = new TextEncoder().encode(data);
       } else {
-        if (!IS_TEST) console.warn('Unsupported data type received:', typeof data);
+        if (!IS_TEST)
+          console.warn("Unsupported data type received:", typeof data);
         return;
       }
 
-      this.emit('message', { type, data: payload, peerId: this.peerId });
+      this.emit("message", { type, data: payload, peerId: this.peerId });
     } catch (error) {
-      if (!IS_TEST) console.error('Error handling message:', error);
-      this.emit('error', { type: 'message-handling', error });
+      if (!IS_TEST) console.error("Error handling message:", error);
+      this.emit("error", { type: "message-handling", error });
     }
   }
 
   private handleChannelError(type: DataChannelType, _error: Event): void {
     // Attempt to recreate the channel
     setTimeout(() => {
-      if (this.state === 'connected' && !this.dataChannels.has(type)) {
+      if (this.state === "connected" && !this.dataChannels.has(type)) {
         console.log(`Attempting to recreate ${type} channel`);
         this.setupDataChannels();
       }
@@ -345,7 +359,7 @@ export class WebRTCPeerEnhanced {
 
   async createOffer(): Promise<RTCSessionDescriptionInit> {
     if (!this.peerConnection) {
-      throw new Error('Peer connection not initialized');
+      throw new Error("Peer connection not initialized");
     }
 
     try {
@@ -356,85 +370,92 @@ export class WebRTCPeerEnhanced {
 
       // SDP munging for optimization
       const mungedOffer = this.mungeSDP(offer);
-      
+
       await this.peerConnection.setLocalDescription(mungedOffer);
-      
-      this.emit('offer-created', { sdp: mungedOffer.sdp });
-      
+
+      this.emit("offer-created", { sdp: mungedOffer.sdp });
+
       return mungedOffer;
     } catch (error) {
-      console.error('Failed to create offer:', error);
-      this.emit('error', { type: 'offer-creation', error });
+      console.error("Failed to create offer:", error);
+      this.emit("error", { type: "offer-creation", error });
       throw error;
     }
   }
 
-  async createAnswer(offer: RTCSessionDescriptionInit): Promise<RTCSessionDescriptionInit> {
+  async createAnswer(
+    offer: RTCSessionDescriptionInit,
+  ): Promise<RTCSessionDescriptionInit> {
     if (!this.peerConnection) {
-      throw new Error('Peer connection not initialized');
+      throw new Error("Peer connection not initialized");
     }
 
     try {
       // Validate SDP
       this.validateSDP(offer);
-      
+
       await this.peerConnection.setRemoteDescription(offer);
-      
+
       // Process pending ICE candidates
       await this.processPendingICECandidates();
-      
+
       const answer = await this.peerConnection.createAnswer();
-      
+
       // SDP munging for optimization
       const mungedAnswer = this.mungeSDP(answer);
-      
+
       await this.peerConnection.setLocalDescription(mungedAnswer);
-      
-      this.emit('answer-created', { sdp: mungedAnswer.sdp });
-      
+
+      this.emit("answer-created", { sdp: mungedAnswer.sdp });
+
       return mungedAnswer;
     } catch (error) {
-      console.error('Failed to create answer:', error);
-      this.emit('error', { type: 'answer-creation', error });
+      console.error("Failed to create answer:", error);
+      this.emit("error", { type: "answer-creation", error });
       throw error;
     }
   }
 
   async setRemoteAnswer(answer: RTCSessionDescriptionInit): Promise<void> {
     if (!this.peerConnection) {
-      throw new Error('Peer connection not initialized');
+      throw new Error("Peer connection not initialized");
     }
 
     try {
       // Validate SDP
       this.validateSDP(answer);
-      
+
       await this.peerConnection.setRemoteDescription(answer);
-      
+
       // Process pending ICE candidates
       await this.processPendingICECandidates();
-      
-      this.emit('answer-set', {});
+
+      this.emit("answer-set", {});
     } catch (error) {
-      console.error('Failed to set remote answer:', error);
-      this.emit('error', { type: 'answer-set', error });
+      console.error("Failed to set remote answer:", error);
+      this.emit("error", { type: "answer-set", error });
       throw error;
     }
   }
 
-  private mungeSDP(description: RTCSessionDescriptionInit): RTCSessionDescriptionInit {
+  private mungeSDP(
+    description: RTCSessionDescriptionInit,
+  ): RTCSessionDescriptionInit {
     if (!description.sdp) return description;
 
     let sdp = description.sdp;
 
     // Prefer specific codecs
     sdp = this.preferCodecs(sdp, this.preferredCodecs);
-    
+
     // Set maximum bandwidth
     sdp = this.setBandwidth(sdp, 2000); // 2Mbps
-    
+
     // Enable DTLS-SRTP for security
-    sdp = sdp.replace(/a=setup:actpass/g, 'a=setup:actpass\r\na=fingerprint:sha-256');
+    sdp = sdp.replace(
+      /a=setup:actpass/g,
+      "a=setup:actpass\r\na=fingerprint:sha-256",
+    );
 
     return {
       type: description.type,
@@ -450,35 +471,35 @@ export class WebRTCPeerEnhanced {
 
   private setBandwidth(sdp: string, bandwidth: number): string {
     // Add bandwidth constraints to SDP
-    const lines = sdp.split('\r\n');
+    const lines = sdp.split("\r\n");
     const newLines: string[] = [];
-    
+
     for (const line of lines) {
       newLines.push(line);
-      if (line.startsWith('c=IN')) {
+      if (line.startsWith("c=IN")) {
         newLines.push(`b=AS:${bandwidth}`);
       }
     }
-    
-    return newLines.join('\r\n');
+
+    return newLines.join("\r\n");
   }
 
   private validateSDP(description: RTCSessionDescriptionInit): void {
     if (!description.sdp || !description.type) {
-      throw new Error('Invalid SDP: missing sdp or type');
+      throw new Error("Invalid SDP: missing sdp or type");
     }
 
-    if (description.type !== 'offer' && description.type !== 'answer') {
+    if (description.type !== "offer" && description.type !== "answer") {
       throw new Error(`Invalid SDP type: ${description.type}`);
     }
 
     // Basic SDP validation
-    if (!description.sdp.includes('v=0')) {
-      throw new Error('Invalid SDP: missing version');
+    if (!description.sdp.includes("v=0")) {
+      throw new Error("Invalid SDP: missing version");
     }
 
-    if (!description.sdp.includes('m=application')) {
-      throw new Error('Invalid SDP: missing application media line');
+    if (!description.sdp.includes("m=application")) {
+      throw new Error("Invalid SDP: missing application media line");
     }
   }
 
@@ -495,26 +516,26 @@ export class WebRTCPeerEnhanced {
         const candidate = this.filterAndPrioritizeCandidate(event.candidate);
         if (candidate) {
           this.iceCandidateBuffer.push(candidate);
-          this.emit('ice-candidate', { candidate: candidate.toJSON() });
+          this.emit("ice-candidate", { candidate: candidate.toJSON() });
         }
       } else {
         // ICE gathering complete
-        this.emit('ice-gathering-complete', {});
+        this.emit("ice-gathering-complete", {});
       }
     };
 
     this.peerConnection.onicegatheringstatechange = () => {
       const state = this.peerConnection?.iceGatheringState;
-      if (!IS_TEST) console.log('ICE gathering state:', state);
-      this.emit('ice-gathering-state', { state });
+      if (!IS_TEST) console.log("ICE gathering state:", state);
+      this.emit("ice-gathering-state", { state });
     };
 
     this.peerConnection.oniceconnectionstatechange = () => {
       const state = this.peerConnection?.iceConnectionState;
-      if (!IS_TEST) console.log('ICE connection state:', state);
-      this.emit('ice-connection-state', { state });
-      
-      if (state === 'failed') {
+      if (!IS_TEST) console.log("ICE connection state:", state);
+      this.emit("ice-connection-state", { state });
+
+      if (state === "failed") {
         this.handleICEFailure();
       }
     };
@@ -522,10 +543,10 @@ export class WebRTCPeerEnhanced {
     // Connection state monitoring
     this.peerConnection.onconnectionstatechange = () => {
       const state = this.peerConnection?.connectionState as ConnectionState;
-      if (!IS_TEST) console.log('Connection state:', state);
+      if (!IS_TEST) console.log("Connection state:", state);
       this.setState(state);
 
-      if (state === 'failed' || state === 'disconnected') {
+      if (state === "failed" || state === "disconnected") {
         this.handleConnectionFailure();
       }
     };
@@ -542,30 +563,38 @@ export class WebRTCPeerEnhanced {
   }
 
   private getChannelType(label: string): DataChannelType | null {
-    if (label.includes('control')) return 'control';
-    if (label.includes('reliable')) return 'reliable';
-    if (label.includes('unreliable')) return 'unreliable';
-    if (label.includes('file')) return 'file';
+    if (label.includes("control")) return "control";
+    if (label.includes("reliable")) return "reliable";
+    if (label.includes("unreliable")) return "unreliable";
+    if (label.includes("file")) return "file";
     return null;
   }
 
-  private filterAndPrioritizeCandidate(candidate: RTCIceCandidate): RTCIceCandidate | null {
+  private filterAndPrioritizeCandidate(
+    candidate: RTCIceCandidate,
+  ): RTCIceCandidate | null {
     // Filter out candidates we don't want
-    if (candidate.protocol === 'tcp' && this.config.iceTransportPolicy === 'relay') {
+    if (
+      candidate.protocol === "tcp" &&
+      this.config.iceTransportPolicy === "relay"
+    ) {
       return null; // Skip TCP in relay-only mode
     }
 
     // Prioritize candidates based on type
     // Priority: host > srflx > relay
     // This is handled by the browser, but we can log it
-    if (!IS_TEST) console.log(`ICE candidate: type=${candidate.type}, protocol=${candidate.protocol}`);
-    
+    if (!IS_TEST)
+      console.log(
+        `ICE candidate: type=${candidate.type}, protocol=${candidate.protocol}`,
+      );
+
     return candidate;
   }
 
   async addIceCandidate(candidate: RTCIceCandidateInit): Promise<void> {
     if (!this.peerConnection) {
-      throw new Error('Peer connection not initialized');
+      throw new Error("Peer connection not initialized");
     }
 
     try {
@@ -576,24 +605,24 @@ export class WebRTCPeerEnhanced {
       }
 
       await this.peerConnection.addIceCandidate(candidate);
-      this.emit('ice-candidate-added', { candidate });
+      this.emit("ice-candidate-added", { candidate });
     } catch (error) {
-      console.error('Failed to add ICE candidate:', error);
-      this.emit('error', { type: 'ice-candidate', error });
+      console.error("Failed to add ICE candidate:", error);
+      this.emit("error", { type: "ice-candidate", error });
     }
   }
 
   private async processPendingICECandidates(): Promise<void> {
     const candidates = [...this.pendingICECandidates];
     this.pendingICECandidates = [];
-    
+
     for (const candidate of candidates) {
       await this.addIceCandidate(candidate);
     }
   }
 
   private handleICEFailure(): void {
-    console.log('ICE connection failed, attempting ICE restart');
+    console.log("ICE connection failed, attempting ICE restart");
     this.restartICE();
   }
 
@@ -603,11 +632,11 @@ export class WebRTCPeerEnhanced {
     try {
       const offer = await this.peerConnection.createOffer({ iceRestart: true });
       await this.peerConnection.setLocalDescription(offer);
-      
-      this.emit('ice-restart', { sdp: offer.sdp });
+
+      this.emit("ice-restart", { sdp: offer.sdp });
     } catch (error) {
-      if (!IS_TEST) console.error('Failed to restart ICE:', error);
-      this.emit('error', { type: 'ice-restart', error });
+      if (!IS_TEST) console.error("Failed to restart ICE:", error);
+      this.emit("error", { type: "ice-restart", error });
     }
   }
 
@@ -618,40 +647,44 @@ export class WebRTCPeerEnhanced {
   private setState(newState: ConnectionState): void {
     const oldState = this.state;
     this.state = newState;
-    
-    if (!IS_TEST) console.log(`Connection state transition: ${oldState} -> ${newState}`);
-    
-    this.emit('state-change', { 
-      oldState, 
-      newState, 
+
+    if (!IS_TEST)
+      console.log(`Connection state transition: ${oldState} -> ${newState}`);
+
+    this.emit("state-change", {
+      oldState,
+      newState,
       peerId: this.peerId,
-      timestamp: Date.now() 
+      timestamp: Date.now(),
     });
 
     // State-based actions
     this.handleStateTransition(oldState, newState);
   }
 
-  private handleStateTransition(oldState: ConnectionState, newState: ConnectionState): void {
+  private handleStateTransition(
+    oldState: ConnectionState,
+    newState: ConnectionState,
+  ): void {
     switch (newState) {
-      case 'connected':
+      case "connected":
         this.reconnectAttempts = 0;
         this.clearReconnectTimer();
         this.isReconnecting = false;
         break;
-      
-      case 'disconnected':
-        if (oldState === 'connected') {
+
+      case "disconnected":
+        if (oldState === "connected") {
           // Start reconnection
           this.scheduleReconnect();
         }
         break;
-      
-      case 'failed':
+
+      case "failed":
         this.scheduleReconnect();
         break;
-      
-      case 'closed':
+
+      case "closed":
         this.cleanup();
         break;
     }
@@ -667,19 +700,19 @@ export class WebRTCPeerEnhanced {
 
   private handleConnectionFailure(): void {
     if (this.isReconnecting) return;
-    
-    console.log('Connection failed, scheduling reconnection');
+
+    console.log("Connection failed, scheduling reconnection");
     this.scheduleReconnect();
   }
 
   private scheduleReconnect(): void {
     if (this.reconnectAttempts >= this.config.reconnectMaxAttempts) {
-      console.log('Max reconnection attempts reached');
-      this.emit('reconnect-failed', { 
+      console.log("Max reconnection attempts reached");
+      this.emit("reconnect-failed", {
         attempts: this.reconnectAttempts,
-        peerId: this.peerId 
+        peerId: this.peerId,
       });
-      this.setState('failed');
+      this.setState("failed");
       return;
     }
 
@@ -690,48 +723,51 @@ export class WebRTCPeerEnhanced {
     const maxDelay = this.config.reconnectMaxDelay;
     const exponentialDelay = Math.min(
       baseDelay * Math.pow(2, this.reconnectAttempts),
-      maxDelay
+      maxDelay,
     );
     const jitter = Math.random() * 1000; // Add up to 1s jitter
     const delay = exponentialDelay + jitter;
 
-    console.log(`Reconnecting in ${Math.round(delay)}ms (attempt ${this.reconnectAttempts + 1})`);
-    
+    console.log(
+      `Reconnecting in ${Math.round(delay)}ms (attempt ${this.reconnectAttempts + 1})`,
+    );
+
     this.reconnectTimer = setTimeout(() => {
       this.attemptReconnect();
     }, delay);
 
-    this.emit('reconnect-scheduled', { 
-      delay, 
+    this.emit("reconnect-scheduled", {
+      delay,
       attempt: this.reconnectAttempts + 1,
-      peerId: this.peerId 
+      peerId: this.peerId,
     });
   }
 
   private async attemptReconnect(): Promise<void> {
     this.reconnectAttempts++;
     this.isReconnecting = true;
-    
-    console.log(`Attempting reconnection (${this.reconnectAttempts}/${this.config.reconnectMaxAttempts})`);
-    
+
+    console.log(
+      `Attempting reconnection (${this.reconnectAttempts}/${this.config.reconnectMaxAttempts})`,
+    );
+
     try {
       // Close existing connection
       this.close(false); // Don't clear reconnect state
-      
+
       // Reinitialize
       this.initializePeerConnection();
-      
-      this.emit('reconnect-attempt', { 
+
+      this.emit("reconnect-attempt", {
         attempt: this.reconnectAttempts,
-        peerId: this.peerId 
+        peerId: this.peerId,
       });
-      
+
       // The actual reconnection will be handled by signaling layer
       // which will initiate new offer/answer exchange
-      
     } catch (error) {
-      console.error('Reconnection attempt failed:', error);
-      this.emit('error', { type: 'reconnection', error });
+      console.error("Reconnection attempt failed:", error);
+      this.emit("error", { type: "reconnection", error });
       this.scheduleReconnect(); // Try again
     }
   }
@@ -749,7 +785,7 @@ export class WebRTCPeerEnhanced {
 
   close(resetReconnect: boolean = true): void {
     console.log(`Closing connection to ${this.peerId}`);
-    
+
     if (resetReconnect) {
       this.clearReconnectTimer();
       this.reconnectAttempts = 0;
@@ -757,11 +793,16 @@ export class WebRTCPeerEnhanced {
     }
 
     // Close data channels in order
-    const channelOrder: DataChannelType[] = ['file', 'unreliable', 'reliable', 'control'];
-    
+    const channelOrder: DataChannelType[] = [
+      "file",
+      "unreliable",
+      "reliable",
+      "control",
+    ];
+
     for (const type of channelOrder) {
       const channel = this.dataChannels.get(type);
-      if (channel && channel.readyState === 'open') {
+      if (channel && channel.readyState === "open") {
         try {
           channel.close();
         } catch (error) {
@@ -769,7 +810,7 @@ export class WebRTCPeerEnhanced {
         }
       }
     }
-    
+
     this.dataChannels.clear();
 
     // Close peer connection
@@ -784,12 +825,12 @@ export class WebRTCPeerEnhanced {
       this.metricsTimer = null;
     }
 
-    this.setState('closed');
-    
-    this.emit('closed', { 
+    this.setState("closed");
+
+    this.emit("closed", {
       peerId: this.peerId,
-      reason: resetReconnect ? 'user-initiated' : 'reconnection',
-      timestamp: Date.now() 
+      reason: resetReconnect ? "user-initiated" : "reconnection",
+      timestamp: Date.now(),
     });
   }
 
@@ -805,47 +846,47 @@ export class WebRTCPeerEnhanced {
   // Task 28: Backpressure Handling and Message Sending
   // ============================================================================
 
-  send(data: Uint8Array, type: DataChannelType = 'reliable'): void {
+  send(data: Uint8Array, type: DataChannelType = "reliable"): void {
     const channel = this.dataChannels.get(type);
-    
-    if (!channel || channel.readyState !== 'open') {
+
+    if (!channel || channel.readyState !== "open") {
       // Queue message for later
       this.sendQueue.push({ type, data });
-      this.emit('message-queued', { type, size: data.byteLength });
+      this.emit("message-queued", { type, size: data.byteLength });
       return;
     }
 
     // Check buffered amount for backpressure
     if (channel.bufferedAmount > this.config.maxBufferedAmount) {
       this.sendQueue.push({ type, data });
-      this.emit('backpressure', { 
-        type, 
+      this.emit("backpressure", {
+        type,
         bufferedAmount: channel.bufferedAmount,
-        queueSize: this.sendQueue.length 
+        queueSize: this.sendQueue.length,
       });
       return;
     }
 
     try {
       channel.send(data as any);
-      this.emit('message-sent', { type, size: data.byteLength });
+      this.emit("message-sent", { type, size: data.byteLength });
     } catch (error) {
-      if (!IS_TEST) console.error('Failed to send message:', error);
+      if (!IS_TEST) console.error("Failed to send message:", error);
       this.sendQueue.push({ type, data }); // Retry later
-      this.emit('error', { type: 'send', error });
+      this.emit("error", { type: "send", error });
     }
   }
 
   private processQueue(): void {
     if (this.isSending || this.sendQueue.length === 0) return;
-    
+
     this.isSending = true;
 
     while (this.sendQueue.length > 0) {
       const item = this.sendQueue[0];
       const channel = this.dataChannels.get(item.type);
-      
-      if (!channel || channel.readyState !== 'open') {
+
+      if (!channel || channel.readyState !== "open") {
         break; // Can't send, wait for channel to open
       }
 
@@ -854,12 +895,15 @@ export class WebRTCPeerEnhanced {
       }
 
       this.sendQueue.shift();
-      
+
       try {
         channel.send(item.data as any);
-        this.emit('message-sent', { type: item.type, size: item.data.byteLength });
+        this.emit("message-sent", {
+          type: item.type,
+          size: item.data.byteLength,
+        });
       } catch (error) {
-        if (!IS_TEST) console.error('Failed to send queued message:', error);
+        if (!IS_TEST) console.error("Failed to send queued message:", error);
         // Don't requeue, message is lost
       }
     }
@@ -874,39 +918,39 @@ export class WebRTCPeerEnhanced {
   async detectNATType(): Promise<NATType> {
     // This is a simplified NAT type detection
     // Production implementation would use STUN binding tests
-    
+
     const candidates = this.iceCandidateBuffer;
-    
-    const hasHost = candidates.some(c => c.type === 'host');
-    const hasSrflx = candidates.some(c => c.type === 'srflx');
-    const hasRelay = candidates.some(c => c.type === 'relay');
-    
+
+    const hasHost = candidates.some((c) => c.type === "host");
+    const hasSrflx = candidates.some((c) => c.type === "srflx");
+    const hasRelay = candidates.some((c) => c.type === "relay");
+
     if (hasHost && !hasSrflx) {
       return {
-        type: 'open',
+        type: "open",
         supportsDirectConnection: true,
         requiresRelay: false,
       };
     }
-    
+
     if (hasSrflx) {
       return {
-        type: 'port-restricted',
+        type: "port-restricted",
         supportsDirectConnection: true,
         requiresRelay: false,
       };
     }
-    
+
     if (hasRelay) {
       return {
-        type: 'symmetric',
+        type: "symmetric",
         supportsDirectConnection: false,
         requiresRelay: true,
       };
     }
-    
+
     return {
-      type: 'unknown',
+      type: "unknown",
       supportsDirectConnection: false,
       requiresRelay: true,
     };
@@ -947,24 +991,31 @@ export class WebRTCPeerEnhanced {
       };
 
       stats.forEach((report) => {
-        if (report.type === 'inbound-rtp') {
-          metrics.bytesReceived = (metrics.bytesReceived || 0) + (report.bytesReceived || 0);
-          metrics.packetsReceived = (metrics.packetsReceived || 0) + (report.packetsReceived || 0);
-          metrics.packetsLost = (metrics.packetsLost || 0) + (report.packetsLost || 0);
+        if (report.type === "inbound-rtp") {
+          metrics.bytesReceived =
+            (metrics.bytesReceived || 0) + (report.bytesReceived || 0);
+          metrics.packetsReceived =
+            (metrics.packetsReceived || 0) + (report.packetsReceived || 0);
+          metrics.packetsLost =
+            (metrics.packetsLost || 0) + (report.packetsLost || 0);
           metrics.jitter = Math.max(metrics.jitter || 0, report.jitter || 0);
-        } else if (report.type === 'outbound-rtp') {
-          metrics.bytesSent = (metrics.bytesSent || 0) + (report.bytesSent || 0);
-          metrics.packetsSent = (metrics.packetsSent || 0) + (report.packetsSent || 0);
-        } else if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+        } else if (report.type === "outbound-rtp") {
+          metrics.bytesSent =
+            (metrics.bytesSent || 0) + (report.bytesSent || 0);
+          metrics.packetsSent =
+            (metrics.packetsSent || 0) + (report.packetsSent || 0);
+        } else if (
+          report.type === "candidate-pair" &&
+          report.state === "succeeded"
+        ) {
           metrics.roundTripTime = report.currentRoundTripTime || 0;
         }
       });
 
       this.metrics = metrics as ConnectionMetrics;
-      this.emit('metrics', { metrics: this.metrics });
-      
+      this.emit("metrics", { metrics: this.metrics });
     } catch (error) {
-      if (!IS_TEST) console.error('Failed to collect metrics:', error);
+      if (!IS_TEST) console.error("Failed to collect metrics:", error);
     }
   }
 
@@ -993,11 +1044,12 @@ export class WebRTCPeerEnhanced {
   private emit(event: string, data: any): void {
     const handlers = this.eventHandlers.get(event);
     if (handlers) {
-      handlers.forEach(handler => {
+      handlers.forEach((handler) => {
         try {
           handler(data);
         } catch (error) {
-            if (!IS_TEST) console.error(`Error in event handler for ${event}:`, error);
+          if (!IS_TEST)
+            console.error(`Error in event handler for ${event}:`, error);
         }
       });
     }
@@ -1033,7 +1085,10 @@ export class WebRTCConnectionPool {
     this.config = config;
   }
 
-  createPeer(peerId: string, customConfig?: Partial<WebRTCConfig>): WebRTCPeerEnhanced {
+  createPeer(
+    peerId: string,
+    customConfig?: Partial<WebRTCConfig>,
+  ): WebRTCPeerEnhanced {
     if (this.peers.has(peerId)) {
       throw new Error(`Peer ${peerId} already exists`);
     }
@@ -1045,23 +1100,31 @@ export class WebRTCConnectionPool {
     } as WebRTCConfig;
 
     const peer = new WebRTCPeerEnhanced(peerConfig);
-    
+
     // Forward events
     this.setupPeerEventForwarding(peer, peerId);
-    
+
     this.peers.set(peerId, peer);
-    this.emit('peer-created', { peerId });
-    
+    this.emit("peer-created", { peerId });
+
     return peer;
   }
 
-  private setupPeerEventForwarding(peer: WebRTCPeerEnhanced, peerId: string): void {
+  private setupPeerEventForwarding(
+    peer: WebRTCPeerEnhanced,
+    peerId: string,
+  ): void {
     const events = [
-      'state-change', 'message', 'error', 'ice-candidate',
-      'reconnect-attempt', 'reconnect-failed', 'closed'
+      "state-change",
+      "message",
+      "error",
+      "ice-candidate",
+      "reconnect-attempt",
+      "reconnect-failed",
+      "closed",
     ];
 
-    events.forEach(event => {
+    events.forEach((event) => {
       peer.on(event, (data: any) => {
         this.emit(event, { ...data, peerId });
       });
@@ -1077,7 +1140,7 @@ export class WebRTCConnectionPool {
     if (peer) {
       peer.close();
       this.peers.delete(peerId);
-      this.emit('peer-removed', { peerId });
+      this.emit("peer-removed", { peerId });
     }
   }
 
@@ -1086,43 +1149,49 @@ export class WebRTCConnectionPool {
   }
 
   getConnectedPeers(): WebRTCPeerEnhanced[] {
-    return this.getAllPeers().filter(p => p.getState() === 'connected');
+    return this.getAllPeers().filter((p) => p.getState() === "connected");
   }
 
-  broadcast(data: Uint8Array, type: DataChannelType = 'reliable', excludePeer?: string): void {
+  broadcast(
+    data: Uint8Array,
+    type: DataChannelType = "reliable",
+    excludePeer?: string,
+  ): void {
     this.peers.forEach((peer, peerId) => {
-      if (peerId !== excludePeer && peer.getState() === 'connected') {
+      if (peerId !== excludePeer && peer.getState() === "connected") {
         try {
           peer.send(data, type);
         } catch (error) {
-          if (!IS_TEST) console.error(`Failed to broadcast to ${peerId}:`, error);
+          if (!IS_TEST)
+            console.error(`Failed to broadcast to ${peerId}:`, error);
         }
       }
     });
   }
 
   closeAll(): void {
-    this.peers.forEach(peer => peer.close());
+    this.peers.forEach((peer) => peer.close());
     this.peers.clear();
-    this.emit('all-closed', {});
+    this.emit("all-closed", {});
   }
 
   getStats() {
     const peers = this.getAllPeers();
     const connected = this.getConnectedPeers();
-    
+
     return {
       totalPeers: peers.length,
       connectedPeers: connected.length,
       states: {
-        new: peers.filter(p => p.getState() === 'new').length,
-        connecting: peers.filter(p => p.getState() === 'connecting').length,
+        new: peers.filter((p) => p.getState() === "new").length,
+        connecting: peers.filter((p) => p.getState() === "connecting").length,
         connected: connected.length,
-        disconnected: peers.filter(p => p.getState() === 'disconnected').length,
-        failed: peers.filter(p => p.getState() === 'failed').length,
-        closed: peers.filter(p => p.getState() === 'closed').length,
+        disconnected: peers.filter((p) => p.getState() === "disconnected")
+          .length,
+        failed: peers.filter((p) => p.getState() === "failed").length,
+        closed: peers.filter((p) => p.getState() === "closed").length,
       },
-      peers: peers.map(peer => ({
+      peers: peers.map((peer) => ({
         peerId: peer.getPeerId(),
         state: peer.getState(),
         metrics: peer.getMetrics(),
@@ -1148,11 +1217,12 @@ export class WebRTCConnectionPool {
   private emit(event: string, data: any): void {
     const handlers = this.eventHandlers.get(event);
     if (handlers) {
-      handlers.forEach(handler => {
+      handlers.forEach((handler) => {
         try {
           handler(data);
         } catch (error) {
-          if (!IS_TEST) console.error(`Error in pool event handler for ${event}:`, error);
+          if (!IS_TEST)
+            console.error(`Error in pool event handler for ${event}:`, error);
         }
       });
     }

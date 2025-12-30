@@ -9,7 +9,15 @@ import {
   QR_FORMAT_VERSION,
   type QRPeerInfo,
 } from './qr-enhanced';
-import { hexToBytes } from '@noble/hashes/utils.js';
+
+// Utility function for hex conversion
+const hexToBytes = (hex: string): Uint8Array => {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes[i / 2] = parseInt(hex.slice(i, i + 2), 16);
+  }
+  return bytes;
+};
 
 describe('Enhanced QR Code Discovery', () => {
   const testPeerInfo: QRPeerInfo = {

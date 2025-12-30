@@ -10,8 +10,8 @@ export interface ConnectionConfig {
 
 export interface PeerConnection {
   id: string;
-  type: 'webrtc' | 'ble' | 'local';
-  status: 'connecting' | 'connected' | 'disconnected' | 'failed';
+  type: "webrtc" | "ble" | "local";
+  status: "connecting" | "connected" | "disconnected" | "failed";
   quality: number;
   latency: number;
   lastSeen: number;
@@ -21,8 +21,10 @@ export interface PeerConnection {
 export class ConnectionManager {
   private connections: Map<string, PeerConnection> = new Map();
   private config: ConnectionConfig;
-  private keepAliveTimers: Map<string, NodeJS.Timeout> = new Map();
-  private reconnectTimers: Map<string, NodeJS.Timeout> = new Map();
+  private keepAliveTimers: Map<string, ReturnType<typeof setInterval>> =
+    new Map();
+  private reconnectTimers: Map<string, ReturnType<typeof setTimeout>> =
+    new Map();
 
   constructor(config: Partial<ConnectionConfig> = {}) {
     this.config = {
@@ -33,11 +35,11 @@ export class ConnectionManager {
     };
   }
 
-  addConnection(peerId: string, type: PeerConnection['type']): void {
+  addConnection(peerId: string, type: PeerConnection["type"]): void {
     const connection: PeerConnection = {
       id: peerId,
       type,
-      status: 'connecting',
+      status: "connecting",
       quality: 0,
       latency: 0,
       lastSeen: Date.now(),
@@ -48,15 +50,18 @@ export class ConnectionManager {
     this.startKeepAlive(peerId);
   }
 
-  updateConnectionStatus(peerId: string, status: PeerConnection['status']): void {
+  updateConnectionStatus(
+    peerId: string,
+    status: PeerConnection["status"],
+  ): void {
     const conn = this.connections.get(peerId);
     if (conn) {
       conn.status = status;
       conn.lastSeen = Date.now();
 
-      if (status === 'connected') {
+      if (status === "connected") {
         this.clearReconnectTimer(peerId);
-      } else if (status === 'failed' || status === 'disconnected') {
+      } else if (status === "failed" || status === "disconnected") {
         this.scheduleReconnect(peerId);
       }
     }
@@ -64,7 +69,11 @@ export class ConnectionManager {
 
   updateConnectionMetrics(
     peerId: string,
-    metrics: { quality?: number; latency?: number; bandwidth?: { upload: number; download: number } }
+    metrics: {
+      quality?: number;
+      latency?: number;
+      bandwidth?: { upload: number; download: number };
+    },
   ): void {
     const conn = this.connections.get(peerId);
     if (conn) {
@@ -90,7 +99,9 @@ export class ConnectionManager {
   }
 
   getConnectedPeers(): PeerConnection[] {
-    return this.getAllConnections().filter((conn) => conn.status === 'connected');
+    return this.getAllConnections().filter(
+      (conn) => conn.status === "connected",
+    );
   }
 
   getBestConnection(): PeerConnection | null {
@@ -99,8 +110,11 @@ export class ConnectionManager {
 
     // Prioritize quality first, then latency as tiebreaker
     return connected.reduce((best, conn) =>
-      conn.quality > best.quality ? conn : 
-      conn.quality === best.quality && conn.latency < best.latency ? conn : best
+      conn.quality > best.quality
+        ? conn
+        : conn.quality === best.quality && conn.latency < best.latency
+          ? conn
+          : best,
     );
   }
 
@@ -114,13 +128,13 @@ export class ConnectionManager {
 
       const timeSinceLastSeen = Date.now() - conn.lastSeen;
       if (timeSinceLastSeen > this.config.connectionTimeout) {
-        this.updateConnectionStatus(peerId, 'disconnected');
+        this.updateConnectionStatus(peerId, "disconnected");
       }
     }, this.config.keepAliveInterval);
 
     this.keepAliveTimers.set(peerId, timer);
     try {
-      if (timer && typeof (timer as any).unref === 'function') {
+      if (timer && typeof (timer as any).unref === "function") {
         (timer as any).unref();
       }
     } catch (e) {
@@ -141,8 +155,8 @@ export class ConnectionManager {
 
     const timer = setTimeout(() => {
       const conn = this.connections.get(peerId);
-      if (conn && conn.status !== 'connected') {
-        this.updateConnectionStatus(peerId, 'connecting');
+      if (conn && conn.status !== "connected") {
+        this.updateConnectionStatus(peerId, "connecting");
         // Emit reconnect event that other systems can listen to
       }
       this.reconnectTimers.delete(peerId);
@@ -166,11 +180,16 @@ export class ConnectionManager {
     return {
       total: connections.length,
       connected: connected.length,
-      connecting: connections.filter((c) => c.status === 'connecting').length,
-      disconnected: connections.filter((c) => c.status === 'disconnected').length,
-      failed: connections.filter((c) => c.status === 'failed').length,
-      avgQuality: connected.reduce((sum, c) => sum + c.quality, 0) / (connected.length || 1),
-      avgLatency: connected.reduce((sum, c) => sum + c.latency, 0) / (connected.length || 1),
+      connecting: connections.filter((c) => c.status === "connecting").length,
+      disconnected: connections.filter((c) => c.status === "disconnected")
+        .length,
+      failed: connections.filter((c) => c.status === "failed").length,
+      avgQuality:
+        connected.reduce((sum, c) => sum + c.quality, 0) /
+        (connected.length || 1),
+      avgLatency:
+        connected.reduce((sum, c) => sum + c.latency, 0) /
+        (connected.length || 1),
       totalBandwidth: {
         upload: connected.reduce((sum, c) => sum + c.bandwidth.upload, 0),
         download: connected.reduce((sum, c) => sum + c.bandwidth.download, 0),
