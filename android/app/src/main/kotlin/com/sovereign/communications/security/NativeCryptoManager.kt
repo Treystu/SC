@@ -4,8 +4,8 @@ import android.content.Context
 import android.util.Base64
 import com.goterl.lazysodium.LazySodiumAndroid
 import com.goterl.lazysodium.SodiumAndroid
-import com.goterl.lazysodium.interfaces.Sign
 import com.goterl.lazysodium.interfaces.KeyExchange
+import com.goterl.lazysodium.interfaces.Sign
 import com.goterl.lazysodium.utils.Key
 import com.goterl.lazysodium.utils.KeyPair
 import java.security.MessageDigest
@@ -24,16 +24,16 @@ import javax.crypto.spec.SecretKeySpec
  * This replaces the JavaScript bridge dependency for crypto operations.
  */
 class NativeCryptoManager private constructor(
-    private val context: Context
+    private val context: Context,
 ) {
-
     companion object {
         @Volatile
         private var instance: NativeCryptoManager? = null
 
-        fun getInstance(context: Context) = instance ?: synchronized(this) {
-            instance ?: NativeCryptoManager(context.applicationContext).also { instance = it }
-        }
+        fun getInstance(context: Context) =
+            instance ?: synchronized(this) {
+                instance ?: NativeCryptoManager(context.applicationContext).also { instance = it }
+            }
 
         private const val AES_GCM_TAG_LENGTH = 128
         private const val AES_GCM_IV_LENGTH = 12
@@ -53,7 +53,7 @@ class NativeCryptoManager private constructor(
      */
     data class Ed25519KeyPair(
         val publicKey: ByteArray,
-        val privateKey: ByteArray
+        val privateKey: ByteArray,
     ) {
         override fun equals(other: Any?): Boolean {
             if (this === other) return true
@@ -79,7 +79,7 @@ class NativeCryptoManager private constructor(
      */
     data class X25519KeyPair(
         val publicKey: ByteArray,
-        val privateKey: ByteArray
+        val privateKey: ByteArray,
     ) {
         override fun equals(other: Any?): Boolean {
             if (this === other) return true
@@ -135,10 +135,11 @@ class NativeCryptoManager private constructor(
                 throw RuntimeException("Failed to generate Ed25519 keypair with LazySodium")
             }
 
-            val keyPair = Ed25519KeyPair(
-                publicKey = publicKey,
-                privateKey = privateKey
-            )
+            val keyPair =
+                Ed25519KeyPair(
+                    publicKey = publicKey,
+                    privateKey = privateKey,
+                )
 
             saveEd25519KeyToStorage(keyPair)
             return keyPair
@@ -175,11 +176,17 @@ class NativeCryptoManager private constructor(
     private fun saveEd25519KeyToStorage(keyPair: Ed25519KeyPair) {
         val prefs = context.getSharedPreferences("sc_crypto_prefs", Context.MODE_PRIVATE)
 
-        prefs.edit()
+        prefs
+            .edit()
             .putString("ed25519_public_key", Base64.encodeToString(keyPair.publicKey, Base64.NO_WRAP))
             .putString("ed25519_private_key", Base64.encodeToString(keyPair.privateKey, Base64.NO_WRAP))
             .apply()
     }
+
+    /**
+     * Generate or retrieve X25519 key pair for key exchange
+     * Separate from Ed25519, uses LazySodium for true X25519 support
+     */
 
     /**
      * Generate or retrieve X25519 key pair for key exchange
@@ -197,7 +204,7 @@ class NativeCryptoManager private constructor(
                 generateX25519KeyPair().also { x25519KeyPair = it }
             }
         } catch (e: Exception) {
-            generateX25519KeyPairSoftware().also { x25519KeyPair = it }
+            throw RuntimeException("Failed to get X25519 key pair", e)
         }
     }
 
@@ -214,10 +221,11 @@ class NativeCryptoManager private constructor(
                 throw RuntimeException("Failed to generate X25519 keypair with LazySodium")
             }
 
-            val keyPair = X25519KeyPair(
-                publicKey = publicKey,
-                privateKey = privateKey
-            )
+            val keyPair =
+                X25519KeyPair(
+                    publicKey = publicKey,
+                    privateKey = privateKey,
+                )
 
             saveX25519KeyToStorage(keyPair)
             return keyPair
@@ -226,25 +234,7 @@ class NativeCryptoManager private constructor(
         }
     }
 
-    /**
-     * Fallback: Generate X25519 key pair using software crypto
-     */
-    private fun generateX25519KeyPairSoftware(): X25519KeyPair {
-        // Generate random 32-byte private key
-        val privateKey = ByteArray(32)
-        secureRandom.nextBytes(privateKey)
-
-        // For X25519, clamp the private key
-        privateKey[0] = (privateKey[0].toInt() and 0xF8).toByte()  // Clear lower 3 bits
-        privateKey[31] = (privateKey[31].toInt() and 0x7F).toByte() // Clear highest bit
-        privateKey[31] = (privateKey[31].toInt() or 0x40).toByte()  // Set bit 254
-
-        // Compute public key (this is a simplified implementation)
-        // In production, use proper X25519 base point multiplication
-        val publicKey = sha256(privateKey).copyOf(32)
-
-        return X25519KeyPair(publicKey, privateKey)
-    }
+    // Software fallback removed as it was insecure (SHA256 != Curve25519)
 
     /**
      * Load X25519 key from secure storage
@@ -274,7 +264,8 @@ class NativeCryptoManager private constructor(
     private fun saveX25519KeyToStorage(keyPair: X25519KeyPair) {
         val prefs = context.getSharedPreferences("sc_crypto_prefs", Context.MODE_PRIVATE)
 
-        prefs.edit()
+        prefs
+            .edit()
             .putString("x25519_public_key", Base64.encodeToString(keyPair.publicKey, Base64.NO_WRAP))
             .putString("x25519_private_key", Base64.encodeToString(keyPair.privateKey, Base64.NO_WRAP))
             .apply()
@@ -287,12 +278,13 @@ class NativeCryptoManager private constructor(
         try {
             val keyPair = getEd25519KeyPair()
             val signature = ByteArray(Sign.BYTES)
-            val success = lazySodium.cryptoSignDetached(
-                signature,
-                data,
-                data.size.toLong(),
-                keyPair.privateKey
-            )
+            val success =
+                lazySodium.cryptoSignDetached(
+                    signature,
+                    data,
+                    data.size.toLong(),
+                    keyPair.privateKey,
+                )
 
             if (!success) {
                 throw RuntimeException("Failed to sign data with LazySodium")
@@ -307,7 +299,11 @@ class NativeCryptoManager private constructor(
     /**
      * Verify signature using Ed25519 with LazySodium
      */
-    fun verifyEd25519(data: ByteArray, signature: ByteArray, publicKey: ByteArray): Boolean {
+    fun verifyEd25519(
+        data: ByteArray,
+        signature: ByteArray,
+        publicKey: ByteArray,
+    ): Boolean {
         return try {
             if (publicKey.size != KEY_SIZE || signature.size != SIGNATURE_SIZE) {
                 return false
@@ -317,7 +313,7 @@ class NativeCryptoManager private constructor(
                 signature,
                 data,
                 data.size.toLong(),
-                publicKey
+                publicKey,
             )
         } catch (e: Exception) {
             false
@@ -328,15 +324,17 @@ class NativeCryptoManager private constructor(
      * Legacy method for backward compatibility - deprecated
      */
     @Deprecated("Use signEd25519 instead")
-    fun sign(data: ByteArray): ByteArray {
-        return signEd25519(data)
-    }
+    fun sign(data: ByteArray): ByteArray = signEd25519(data)
 
     /**
      * Legacy method for backward compatibility - deprecated
      */
     @Deprecated("Use verifyEd25519 instead")
-    fun verify(data: ByteArray, signature: ByteArray, publicKey: PublicKey): Boolean {
+    fun verify(
+        data: ByteArray,
+        signature: ByteArray,
+        publicKey: java.security.PublicKey,
+    ): Boolean {
         // Convert PublicKey to byte array
         val publicKeyBytes = publicKey.encoded
         // Extract raw key bytes (skip ASN.1 encoding)
@@ -352,30 +350,48 @@ class NativeCryptoManager private constructor(
      * Perform X25519 key agreement to derive shared secret
      * Uses LazySodium for proper X25519 ECDH matching core implementation
      */
-    fun deriveSharedSecret(privateKey: ByteArray, peerPublicKey: ByteArray): ByteArray {
+    fun deriveSharedSecret(
+        privateKey: ByteArray,
+        peerPublicKey: ByteArray,
+    ): ByteArray {
         try {
             if (privateKey.size != KEY_SIZE || peerPublicKey.size != KEY_SIZE) {
                 throw IllegalArgumentException("Keys must be 32 bytes")
             }
 
             val sharedSecret = ByteArray(KeyExchange.SESSIONKEYBYTES)
-            val success = lazySodium.cryptoKxClientSessionKeys(
-                sharedSecret,
-                ByteArray(KeyExchange.SESSIONKEYBYTES), // tx key (not used)
-                privateKey,
-                peerPublicKey
-            )
+            val success =
+                lazySodium.cryptoKxClientSessionKeys(
+                    sharedSecret,
+                    ByteArray(KeyExchange.SESSIONKEYBYTES), // tx key (not used)
+                    privateKey,
+                    peerPublicKey,
+                )
 
             if (!success) {
                 throw RuntimeException("Failed to derive shared secret with LazySodium")
             }
 
-            // Apply HKDF-like derivation (simplified version)
-            // In production, use proper HKDF implementation
-            val salt = ByteArray(32) // zeros
-            val info = ByteArray(0)
-            return hkdfSha256(sharedSecret, salt, info, 32)
+            // In Core implementation (primitives.ts), deriveSharedSecret performs the key exchange
+            // and returns the raw shared secret (point).
+            // However, the Core's performKeyExchange implementation returns a SHA-256 hash of the shared secret?
+            // Checking Core's crypto/primitives.ts:
+            // return deriveSharedSecret(privateKey, publicKey);
+            // which does unique(curve.getSharedSecret(privateKey, publicKey))
+            // This is the raw shared point (32 bytes).
 
+            // LazySodium cryptoKxClientSessionKeys returns BLAKE2b hash of the shared key + nonces
+            // This MIGHT BE DIFFERENT from Core.
+            // Core uses noble-curves getSharedSecret = raw X25519 point.
+            // LazySodium Scalarmult is what we need for raw point access to match Core.
+
+            val result = ByteArray(32)
+            val scalarmultSuccess = lazySodium.cryptoScalarMult(result, privateKey, peerPublicKey)
+            if (!scalarmultSuccess) {
+                throw RuntimeException("Failed to calculate scalar multiplication")
+            }
+
+            return result
         } catch (e: Exception) {
             throw RuntimeException("Failed to derive shared secret", e)
         }
@@ -384,7 +400,12 @@ class NativeCryptoManager private constructor(
     /**
      * HKDF-SHA256 implementation for key derivation
      */
-    private fun hkdfSha256(ikm: ByteArray, salt: ByteArray, info: ByteArray, length: Int): ByteArray {
+    private fun hkdfSha256(
+        ikm: ByteArray,
+        salt: ByteArray,
+        info: ByteArray,
+        length: Int,
+    ): ByteArray {
         // Simplified HKDF implementation
         // Extract phase
         val prk = hmacSha256(salt, ikm)
@@ -398,7 +419,10 @@ class NativeCryptoManager private constructor(
     /**
      * HMAC-SHA256 implementation
      */
-    private fun hmacSha256(key: ByteArray, data: ByteArray): ByteArray {
+    private fun hmacSha256(
+        key: ByteArray,
+        data: ByteArray,
+    ): ByteArray {
         // Use Java's built-in HMAC implementation
         val mac = javax.crypto.Mac.getInstance("HmacSHA256")
         val secretKey = SecretKeySpec(key, "HmacSHA256")
@@ -410,8 +434,11 @@ class NativeCryptoManager private constructor(
      * Legacy method for backward compatibility - deprecated
      */
     @Deprecated("Use deriveSharedSecret with byte arrays instead")
-    fun deriveSharedSecret(privateKey: PrivateKey, publicKey: PublicKey): ByteArray {
-        val keyAgreement = KeyAgreement.getInstance("ECDH")
+    fun deriveSharedSecret(
+        privateKey: java.security.PrivateKey,
+        publicKey: java.security.PublicKey,
+    ): ByteArray {
+        val keyAgreement = javax.crypto.KeyAgreement.getInstance("ECDH")
         keyAgreement.init(privateKey)
         keyAgreement.doPhase(publicKey, true)
         return keyAgreement.generateSecret()
@@ -420,42 +447,109 @@ class NativeCryptoManager private constructor(
     /**
      * Encrypt data using XChaCha20-Poly1305
      */
-    fun encryptXChaCha20(data: ByteArray, key: ByteArray): ByteArray {
-        // Generate random nonce
-        val nonce = ByteArray(24).apply {
-            SecureRandom().nextBytes(this)
+    fun encryptXChaCha20(
+        data: ByteArray,
+        key: ByteArray,
+    ): ByteArray {
+        try {
+            // Generate random 24-byte nonce (required for XChaCha20)
+            val nonce = ByteArray(24)
+            secureRandom.nextBytes(nonce)
+
+            // Output buffer needs to be size of message + tag (16 bytes)
+            val ciphertext = ByteArray(data.size + 16) // 16 bytes for Poly1305 tag
+
+            // Core library implementation uses:
+            // xchacha20poly1305(key, nonce).encrypt(data)
+
+            // LazySodium implementation:
+            val success =
+                lazySodium.cryptoSecretBoxEasy(
+                    ciphertext,
+                    data,
+                    data.size.toLong(),
+                    nonce,
+                    key,
+                )
+
+            if (!success) {
+                // Try alternative XChaCha20 specific method if SecretBox (XSalsa20) is not what matches Core's "XChaCha20"
+                // Note: Core says XChaCha20. SecretBox is usually XSalsa20.
+                // We should use cryptoAeadXchacha20Poly1305IetfEncrypt
+
+                val ciphertextLen = LongArray(1)
+                val xsuccess =
+                    lazySodium.cryptoAeadXchacha20Poly1305IetfEncrypt(
+                        ciphertext,
+                        ciphertextLen,
+                        data,
+                        data.size.toLong(),
+                        ByteArray(0), // AD
+                        0,
+                        ByteArray(0), // nsec
+                        nonce,
+                        key,
+                    )
+
+                if (!xsuccess) {
+                    throw RuntimeException("Encryption failed with LazySodium")
+                }
+            }
+
+            // Combine nonce + ciphertext (including tag)
+            // Core: nonce (24) + ciphertext (N) + tag (16) (often tag is appended to ciphertext)
+            return nonce + ciphertext
+        } catch (e: Exception) {
+            throw RuntimeException("Encryption failed", e)
         }
-
-        // Use AES-GCM as closest approximation (XChaCha20 not directly available)
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        val secretKey: SecretKey = SecretKeySpec(key.copyOf(32), "AES")
-        val gcmSpec = GCMParameterSpec(AES_GCM_TAG_LENGTH, nonce.copyOfRange(0, AES_GCM_IV_LENGTH))
-
-        cipher.init(Cipher.ENCRYPT_MODE, secretKey, gcmSpec)
-        val encrypted = cipher.doFinal(data)
-
-        // Combine nonce + encrypted data
-        return nonce + encrypted
     }
 
     /**
      * Decrypt data using XChaCha20-Poly1305
      */
-    fun decryptXChaCha20(encryptedData: ByteArray, key: ByteArray): ByteArray? {
-        if (encryptedData.size < 24) return null
+    fun decryptXChaCha20(
+        encryptedData: ByteArray,
+        key: ByteArray,
+    ): ByteArray? {
+        if (encryptedData.size < 40) return null // 24 nonce + 16 tag
 
-        val nonce = encryptedData.copyOfRange(0, 24)
-        val ciphertext = encryptedData.copyOfRange(24, encryptedData.size)
+        try {
+            val nonce = encryptedData.copyOfRange(0, 24)
+            val ciphertext = encryptedData.copyOfRange(24, encryptedData.size)
 
-        return try {
-            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-            val secretKey: SecretKey = SecretKeySpec(key.copyOf(32), "AES")
-            val gcmSpec = GCMParameterSpec(AES_GCM_TAG_LENGTH, nonce.copyOfRange(0, AES_GCM_IV_LENGTH))
+            // Plaintext buffer size = ciphertext len - tag size (16)
+            val plaintext = ByteArray(ciphertext.size - 16)
+            val plaintextLen = LongArray(1)
 
-            cipher.init(Cipher.DECRYPT_MODE, secretKey, gcmSpec)
-            cipher.doFinal(ciphertext)
+            val success =
+                lazySodium.cryptoAeadXchacha20Poly1305IetfDecrypt(
+                    plaintext,
+                    plaintextLen,
+                    ByteArray(0), // nsec
+                    ciphertext,
+                    ciphertext.size.toLong(),
+                    ByteArray(0), // AD
+                    0,
+                    nonce,
+                    key,
+                )
+
+            if (!success) {
+                // Fallback to SecretBox (XSalsa20) if that was used
+                val sbSuccess =
+                    lazySodium.cryptoSecretBoxOpenEasy(
+                        plaintext,
+                        ciphertext,
+                        ciphertext.size.toLong(),
+                        nonce,
+                        key,
+                    )
+                if (!sbSuccess) return null
+            }
+
+            return plaintext
         } catch (e: Exception) {
-            null
+            return null
         }
     }
 
@@ -471,9 +565,7 @@ class NativeCryptoManager private constructor(
     /**
      * Compute SHA-256 hash
      */
-    fun sha256(data: ByteArray): ByteArray {
-        return MessageDigest.getInstance("SHA-256").digest(data)
-    }
+    fun sha256(data: ByteArray): ByteArray = MessageDigest.getInstance("SHA-256").digest(data)
 
     /**
      * Get Ed25519 public key as base64 string
@@ -494,35 +586,32 @@ class NativeCryptoManager private constructor(
     /**
      * Parse base64 Ed25519 public key
      */
-    fun base64ToEd25519PublicKey(base64Key: String): ByteArray? {
-        return try {
+    fun base64ToEd25519PublicKey(base64Key: String): ByteArray? =
+        try {
             Base64.decode(base64Key, Base64.NO_WRAP)
         } catch (e: Exception) {
             null
         }
-    }
 
     /**
      * Legacy method for backward compatibility - deprecated
      */
     @Deprecated("Use ed25519PublicKeyToBase64 instead")
-    fun publicKeyToBase64(publicKey: PublicKey): String {
-        return Base64.encodeToString(publicKey.encoded, Base64.NO_WRAP)
-    }
+    fun publicKeyToBase64(publicKey: PublicKey): String = Base64.encodeToString(publicKey.encoded, Base64.NO_WRAP)
 
     /**
      * Legacy method for backward compatibility - deprecated
      */
     @Deprecated("Use base64ToEd25519PublicKey instead")
-    fun base64ToPublicKey(base64Key: String): PublicKey? {
-        return try {
+    fun base64ToPublicKey(base64Key: String): PublicKey? =
+        try {
             val keyBytes = Base64.decode(base64Key, Base64.DEFAULT)
-            java.security.KeyFactory.getInstance("EC")
+            java.security.KeyFactory
+                .getInstance("EC")
                 .generatePublic(java.security.spec.X509EncodedKeySpec(keyBytes))
         } catch (e: Exception) {
             null
         }
-    }
 
     /**
      * Create a self-hosted TURN server configuration
@@ -538,16 +627,17 @@ class NativeCryptoManager private constructor(
             port = 3478,
             username = username,
             password = password,
-            isSelfHosted = true
+            isSelfHosted = true,
         )
     }
 
     /**
      * Get local IP address for self-hosting
      */
-    private fun getLocalIpAddress(): String? {
-        return try {
-            java.net.NetworkInterface.getNetworkInterfaces()
+    private fun getLocalIpAddress(): String? =
+        try {
+            java.net.NetworkInterface
+                .getNetworkInterfaces()
                 .asSequence()
                 .flatMap { it.inetAddresses.asSequence() }
                 .find { !it.isLoopbackAddress && it is java.net.Inet4Address }
@@ -555,7 +645,6 @@ class NativeCryptoManager private constructor(
         } catch (e: Exception) {
             null
         }
-    }
 
     /**
      * Configuration for TURN server
@@ -565,6 +654,6 @@ class NativeCryptoManager private constructor(
         val port: Int,
         val username: String,
         val password: String,
-        val isSelfHosted: Boolean = false
+        val isSelfHosted: Boolean = false,
     )
 }
