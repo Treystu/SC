@@ -140,74 +140,95 @@ export class DatabaseManager {
   }
 
   /**
-   * Initialize database
+   * Initialize database with timeout protection
    */
   async init(): Promise<void> {
     if (this.db) return;
     if (this.initPromise) return this.initPromise;
 
-    this.initPromise = new Promise((resolve, reject) => {
-      // Add timeout to prevent infinite hanging
-      const timeoutId = setTimeout(() => {
-        if (this.initPromise) {
-          console.error("DatabaseManager: Initialization timed out");
-          this.initPromise = null;
-          reject(new Error("Database initialization timed out"));
-        }
-      }, 5000);
+    // Track retry attempts for exponential backoff
+    let retryCount = 0;
+    const maxRetries = 3;
+    
+    const attemptInit = async (): Promise<void> => {
+      return new Promise((resolve, reject) => {
+        // Exponential backoff: 2s, 4s, 8s
+        const baseTimeout = Math.min(10000, 2000 * Math.pow(2, retryCount));
+        
+        const timeoutId = setTimeout(() => {
+          console.warn(`DatabaseManager: Initialization attempt ${retryCount + 1} timed out after ${baseTimeout}ms`);
+          if (retryCount < maxRetries) {
+            retryCount++;
+            console.log(`DatabaseManager: Retrying initialization (attempt ${retryCount + 1}/${maxRetries + 1})...`);
+            // Clean up and retry
+            this.db = null;
+            this.initPromise = null;
+            attemptInit().then(resolve).catch(reject);
+          } else {
+            console.error("DatabaseManager: Max retries exceeded, giving up");
+            this.initPromise = null;
+            reject(new Error(`Database initialization failed after ${maxRetries + 1} attempts`));
+          }
+        }, baseTimeout);
 
-      const request = indexedDB.open(this.dbName, this.version);
+        const request = indexedDB.open(this.dbName, this.version);
 
-      request.onblocked = () => {
-        console.warn(
-          "DatabaseManager: Database upgrade blocked by another connection",
-        );
-        // Try to close the connection if it's somehow open on this instance
-        if (this.db) {
-          this.db.close();
-          this.db = null;
-        }
-      };
-
-      request.onerror = () => {
-        clearTimeout(timeoutId);
-        this.initPromise = null;
-        reject(request.error);
-      };
-
-      request.onsuccess = () => {
-        clearTimeout(timeoutId);
-        this.db = request.result;
-        // Handle connection closing
-        this.db.onversionchange = () => {
-          this.db?.close();
-          this.db = null;
-          this.initPromise = null;
-        };
-        this.db.onclose = () => {
-          this.db = null;
-          this.initPromise = null;
-        };
-        resolve();
-      };
-
-      request.onupgradeneeded = async (event) => {
-        // Don't clear timeout here as migration might take time,
-        // but maybe extend it? For now let's rely on the 5s total.
-        const db = (event.target as IDBOpenDBRequest).result;
-        const oldVersion = event.oldVersion;
-        try {
-          await validateAndMigrate(db, oldVersion);
-        } catch (error) {
+        request.onblocked = () => {
+          console.warn("DatabaseManager: Database upgrade blocked by another connection");
           clearTimeout(timeoutId);
-          console.error("DatabaseManager: Migration failed:", error);
-          request.transaction?.abort();
-          this.initPromise = null;
-          reject(error);
-        }
-      };
-    });
+          if (this.db) {
+            this.db.close();
+            this.db = null;
+          }
+          // Retry immediately on blocked
+          if (retryCount < maxRetries) {
+            retryCount++;
+            attemptInit().then(resolve).catch(reject);
+          } else {
+            this.initPromise = null;
+            reject(new Error("Database blocked after max retries"));
+          }
+        };
 
+        request.onerror = () => {
+          clearTimeout(timeoutId);
+          this.initPromise = null;
+          reject(request.error || new Error("Database open failed"));
+        };
+
+        request.onsuccess = () => {
+          clearTimeout(timeoutId);
+          this.db = request.result;
+          // Handle connection closing
+          this.db.onversionchange = () => {
+            this.db?.close();
+            this.db = null;
+            this.initPromise = null;
+          };
+          this.db.onclose = () => {
+            this.db = null;
+            this.initPromise = null;
+          };
+          resolve();
+        };
+
+        request.onupgradeneeded = async (event) => {
+          const db = (event.target as IDBOpenDBRequest).result;
+          const oldVersion = event.oldVersion;
+          try {
+            await validateAndMigrate(db, oldVersion);
+          } catch (error) {
+            clearTimeout(timeoutId);
+            console.error("DatabaseManager: Migration failed:", error);
+            request.transaction?.abort();
+            this.initPromise = null;
+            reject(error);
+          }
+        };
+      });
+    };
+
+    this.initPromise = attemptInit();
     return this.initPromise;
   }
 

@@ -36,12 +36,11 @@ test.describe('User Authentication and Setup', () => {
     // Wait for app to load
     await page.waitForLoadState('networkidle');
 
-    // Check if peer ID is displayed somewhere in the UI
-    // The peer ID should be visible in the dashboard or header
-    await expect(page.locator('.peer-id-code, [data-testid="peer-id"], .identity-display')).toBeVisible({ timeout: 10000 });
+    // Check if peer ID is displayed - use specific test ID
+    await expect(page.locator('[data-testid="local-peer-id"]')).toBeVisible({ timeout: 10000 });
     
     // Verify the peer ID element contains some content
-    const peerIdContent = await page.locator('.peer-id-code, [data-testid="peer-id"], code').first().textContent();
+    const peerIdContent = await page.locator('[data-testid="local-peer-id"]').textContent();
     expect(peerIdContent).toBeTruthy();
     expect(peerIdContent?.length).toBeGreaterThan(8); // Peer ID should be reasonably long
   });
@@ -92,7 +91,7 @@ test.describe('Peer Discovery and Connection', () => {
     await page.waitForTimeout(500);
 
     // Look for QR code option in the modal/dialog
-    const qrOption = page.locator('button:has-text("QR Code"), .qr-option, text=/QR/i').first();
+    const qrOption = page.locator('button:has-text("QR"), .qr-option').first();
     await expect(qrOption).toBeVisible({ timeout: 5000 });
 
     await qrOption.click();

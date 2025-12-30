@@ -40,8 +40,16 @@ export function useMeshNetwork() {
 
   // Safe env accessor for both Vite (import.meta.env) and Jest/node (process.env)
   const getRuntimeEnv = () => {
-    // In test/node environments use process.env. Vite's import.meta.env isn't available in Jest.
-    return process.env as Record<string, any>;
+    // In browser environments, use import.meta.env (Vite). In test/node environments use process.env.
+    if (typeof import.meta !== 'undefined' && import.meta.env) {
+      return import.meta.env as Record<string, any>;
+    }
+    // Fallback for test/node environments
+    if (typeof process !== 'undefined' && process.env) {
+      return process.env as Record<string, any>;
+    }
+    // Return empty object as last resort
+    return {} as Record<string, any>;
   };
 
   const [identity, setIdentity] = useState<any>(null);

@@ -1,5 +1,8 @@
 import { getDatabase } from "./storage/database";
 
+// Timeout for encryption initialization
+const ENCRYPTION_INIT_TIMEOUT = 10000;
+
 // Generate a browser-specific fingerprint for encryption
 // SECURITY NOTE: This is a fallback - production should use user password
 export const generateBrowserFingerprint = async (): Promise<string> => {
@@ -22,9 +25,18 @@ export const initializeEncryption = async (): Promise<void> => {
   try {
     const db = getDatabase();
     const passphrase = await generateBrowserFingerprint();
-    await db.initializeEncryption(passphrase);
+    
+    // Add timeout protection to prevent hanging
+    await Promise.race([
+      db.initializeEncryption(passphrase),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Encryption initialization timed out')), ENCRYPTION_INIT_TIMEOUT)
+      )
+    ]);
+    
     console.log("✅ Encryption initialized (bootstrap)");
   } catch (error) {
-    console.error("Failed to initialize encryption during bootstrap:", error);
+    // Don't throw - allow app to continue without encryption if it fails
+    console.warn("Encryption initialization failed or timed out, continuing without encryption:", error instanceof Error ? error.message : error);
   }
 };

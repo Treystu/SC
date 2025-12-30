@@ -277,12 +277,13 @@ function App() {
   }, []);
   const autoJoinedRef = useRef(false);
 
-  const { invite, createInvite, clearInvite } = useInvite(
-    status.localPeerId,
+  // Invite system - call useInvite at top level (hooks must be at top level)
+  const inviteData = useInvite(
+    status.localPeerId || "",
     identity?.publicKey || null,
     identity?.privateKey || null,
     userProfile?.displayName || "User",
-    discoveredPeers, // Pass discovered peers for bootstrapping
+    discoveredPeers,
   );
 
   // Check for pending invite from join.html page
@@ -880,7 +881,7 @@ function App() {
   const handleShareApp = async () => {
     // Ensure keys are initialized
     if (identity?.publicKey && identity?.privateKey) {
-      await createInvite();
+      await inviteData.createInvite();
       setShowShareApp(true);
     } else {
       console.warn("Identity not ready for sharing");
@@ -890,7 +891,7 @@ function App() {
 
   const handleCloseShareApp = () => {
     setShowShareApp(false);
-    clearInvite();
+    inviteData.clearInvite();
   };
 
   // Handle conversation selection and unread count reset
@@ -1019,8 +1020,8 @@ function App() {
         )}
 
         {/* Share App Modal */}
-        {showShareApp && invite && (
-          <QRCodeShare invite={invite} onClose={handleCloseShareApp} />
+        {showShareApp && inviteData.invite && (
+          <QRCodeShare invite={inviteData.invite} onClose={handleCloseShareApp} />
         )}
 
         {/* Invite Acceptance Modal */}

@@ -6,6 +6,9 @@ let meshNetworkInstance: MeshNetwork | null = null;
 
 let initializationPromise: Promise<MeshNetwork> | null = null;
 
+// Timeout for initialization (15 seconds)
+const INITIALIZATION_TIMEOUT_MS = 15000;
+
 export const getMeshNetwork = async (): Promise<MeshNetwork> => {
 
   if (meshNetworkInstance) {
@@ -20,10 +23,25 @@ export const getMeshNetwork = async (): Promise<MeshNetwork> => {
 
   console.log('[MeshNetworkService] Starting mesh network initialization');
   initializationPromise = (async () => {
+    // Create a timeout promise that rejects after 15 seconds
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`Mesh network initialization timed out after ${INITIALIZATION_TIMEOUT_MS}ms`));
+      }, INITIALIZATION_TIMEOUT_MS);
+    });
+
     try {
       const db = getDatabase();
       console.log('[MeshNetworkService] Initializing database...');
-      await db.init();
+      
+      // Race between database init and timeout
+      const initPromise = (async () => {
+        await db.init();
+        console.log('[MeshNetworkService] Database initialized successfully');
+      })();
+
+      // Wait for either successful init or timeout
+      await Promise.race([initPromise, timeoutPromise]);
 
       let identityKeyPair: any;
       let peerId: string | undefined;
@@ -141,9 +159,7 @@ export const getMeshNetwork = async (): Promise<MeshNetwork> => {
       try {
         // Some test environments/mocks may not provide a real IndexedDBStorage constructor
         // Guard against that and fall back to undefined (in-memory) storage when unavailable.
-        // @ts-expect-error - defensive: IndexedDBStorage may not be present in some test environments
         if (typeof IndexedDBStorage === "function") {
-          // @ts-expect-error - defensive: IndexedDBStorage type may be unavailable at compile time
           dhtStorage = new (IndexedDBStorage as any)();
         }
       } catch (e) {
@@ -163,9 +179,10 @@ export const getMeshNetwork = async (): Promise<MeshNetwork> => {
       meshNetworkInstance = network;
       console.log('[MeshNetworkService] MeshNetwork instance created and ready');
       return network;
-    } finally {
+    } catch (error) {
+      // On timeout or error, clear the promise so we can retry
       initializationPromise = null;
-      console.log('[MeshNetworkService] Initialization promise cleared');
+      throw error;
     }
   })();
 

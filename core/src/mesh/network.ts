@@ -729,8 +729,29 @@ export class MeshNetwork {
       console.log(`[MeshNetwork] No direct route. Connected peers: ${connectedPeers.length}`);
       
       if (connectedPeers.length === 0) {
-        console.warn(`[MeshNetwork] No connected peers! Cannot send message to ${recipientId}. Need to establish P2P connection first.`);
-        throw new Error("No connected peers. Establish P2P connection before sending messages.");
+        console.warn(`[MeshNetwork] No connected peers! Queuing message for ${recipientId} until connection established.`);
+        // Queue the message for later delivery instead of throwing an error
+        const queuedMessage = {
+          recipientId,
+          content,
+          type,
+          timestamp: Date.now(),
+        };
+        
+        // Store in offline queue for retry when peer connects
+        if (typeof (this as any).offlineQueue !== 'undefined') {
+          (this as any).offlineQueue.enqueue(queuedMessage);
+        } else {
+          // Fallback: store in localStorage for persistence
+          try {
+            const queued = JSON.parse(localStorage.getItem('sc_queued_messages') || '[]');
+            queued.push(queuedMessage);
+            localStorage.setItem('sc_queued_messages', JSON.stringify(queued));
+          } catch (e) {
+            console.error('[MeshNetwork] Failed to queue message:', e);
+          }
+        }
+        return; // Don't throw, just return
       }
 
       // Attempt DHT lookup if no candidates found
