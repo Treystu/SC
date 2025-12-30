@@ -16,7 +16,6 @@ import java.security.SecureRandom
  */
 @RunWith(AndroidJUnit4::class)
 class CryptoInstrumentedTest {
-
     private lateinit var context: Context
     private lateinit var cryptoManager: NativeCryptoManager
 
@@ -107,7 +106,7 @@ class CryptoInstrumentedTest {
     }
 
     @Test
-    fun testAESGCMEncryptionDecryption() {
+    fun testXChaCha20EncryptionDecryption() {
         val keyPair = cryptoManager.generateX25519KeyPair()
         val message = "Secret message to encrypt".toByteArray()
 
@@ -115,51 +114,34 @@ class CryptoInstrumentedTest {
         val sharedSecret = cryptoManager.deriveSharedSecret(keyPair.privateKey, keyPair.publicKey)
 
         // Encrypt
-        val (iv, ciphertext) = cryptoManager.encryptAESGCM(message, sharedSecret)
-        assertNotNull(iv)
-        assertNotNull(ciphertext)
-        assertEquals(12, iv.size) // GCM IV length
-        assertTrue(ciphertext.size > message.size) // Includes auth tag
+        val encryptedData = cryptoManager.encryptXChaCha20(message, sharedSecret)
+        assertNotNull(encryptedData)
+        assertTrue(encryptedData.size > message.size) // Includes nonce (24) + tag (16)
 
         // Decrypt
-        val decrypted = cryptoManager.decryptAESGCM(iv, ciphertext, sharedSecret)
+        val decrypted = cryptoManager.decryptXChaCha20(encryptedData, sharedSecret)
         assertNotNull(decrypted)
         assertArrayEquals(message, decrypted)
     }
 
     @Test
-    fun testAESGCMDecryptionWithWrongKey() {
+    fun testXChaCha20DecryptionWithWrongKey() {
         val keyPair1 = cryptoManager.generateX25519KeyPair()
         val keyPair2 = cryptoManager.generateX25519KeyPair()
         val message = "Secret message".toByteArray()
 
         // Encrypt with key pair 1
         val sharedSecret1 = cryptoManager.deriveSharedSecret(keyPair1.privateKey, keyPair1.publicKey)
-        val (iv, ciphertext) = cryptoManager.encryptAESGCM(message, sharedSecret1)
+        val encryptedData = cryptoManager.encryptXChaCha20(message, sharedSecret1)
 
         // Try to decrypt with key pair 2
         val sharedSecret2 = cryptoManager.deriveSharedSecret(keyPair2.privateKey, keyPair2.publicKey)
-        val decrypted = cryptoManager.decryptAESGCM(iv, ciphertext, sharedSecret2)
+        val decrypted = cryptoManager.decryptXChaCha20(encryptedData, sharedSecret2)
 
         assertNull(decrypted) // Should fail
     }
 
-    @Test
-    fun testSecureDeletion() {
-        val data = ByteArray(32).apply {
-            SecureRandom().nextBytes(this)
-        }
-        val originalData = data.copyOf()
-
-        cryptoManager.secureDelete(data)
-
-        // Data should be zeroed out
-        val allZeros = data.all { it == 0.toByte() }
-        assertTrue(allZeros)
-
-        // Should be different from original
-        assertFalse(data.contentEquals(originalData))
-    }
+    // Secure deletion removed as it's not implemented in the current manager
 
     @Test
     fun testEmptyMessageSigning() {
@@ -177,14 +159,16 @@ class CryptoInstrumentedTest {
     @Test
     fun testLargeMessageEncryption() {
         val keyPair = cryptoManager.generateX25519KeyPair()
-        val largeMessage = ByteArray(1024 * 1024).apply { // 1MB
-            SecureRandom().nextBytes(this)
-        }
+        val largeMessage =
+            ByteArray(1024 * 1024).apply {
+                // 1MB
+                SecureRandom().nextBytes(this)
+            }
 
         val sharedSecret = cryptoManager.deriveSharedSecret(keyPair.privateKey, keyPair.publicKey)
 
-        val (iv, ciphertext) = cryptoManager.encryptAESGCM(largeMessage, sharedSecret)
-        val decrypted = cryptoManager.decryptAESGCM(iv, ciphertext, sharedSecret)
+        val encryptedData = cryptoManager.encryptXChaCha20(largeMessage, sharedSecret)
+        val decrypted = cryptoManager.decryptXChaCha20(encryptedData, sharedSecret)
 
         assertNotNull(decrypted)
         assertArrayEquals(largeMessage, decrypted)
@@ -197,7 +181,7 @@ class CryptoInstrumentedTest {
 
         val sharedSecret = cryptoManager.deriveSharedSecret(keyPair.privateKey, peerKeyPair.publicKey)
 
-        // Shared secret should be 32 bytes (HKDF output)
+        // Shared secret should be 32 bytes (Curve25519 point)
         assertEquals(32, sharedSecret.size)
 
         // Should be deterministic for same inputs
@@ -225,18 +209,20 @@ class CryptoInstrumentedTest {
     }
 
     @Test
-    fun testPerformanceAESGCMEncryption() {
+    fun testPerformanceXChaCha20Encryption() {
         val keyPair = cryptoManager.generateX25519KeyPair()
-        val message = ByteArray(1024).apply { // 1KB
-            SecureRandom().nextBytes(this)
-        }
+        val message =
+            ByteArray(1024).apply {
+                // 1KB
+                SecureRandom().nextBytes(this)
+            }
         val sharedSecret = cryptoManager.deriveSharedSecret(keyPair.privateKey, keyPair.publicKey)
 
         val iterations = 100
         val startTime = System.nanoTime()
 
         for (i in 0 until iterations) {
-            cryptoManager.encryptAESGCM(message, sharedSecret)
+            cryptoManager.encryptXChaCha20(message, sharedSecret)
         }
 
         val endTime = System.nanoTime()
