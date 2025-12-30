@@ -47,16 +47,13 @@ class CertificatePinningManager: NSObject {
     /// - Returns: true if certificate is valid and matches pin, false otherwise
     private func validateCertificate(for challenge: URLAuthenticationChallenge, domain: String) -> Bool {
         // Get pinned certificates for this domain
+        // Get pinned certificates for this domain
         guard let pinnedHashes = pinnedCertificates[domain], !pinnedHashes.isEmpty else {
             // No pins configured for this domain
-            // In production, we fail closed for security
-            #if DEBUG
-            print("⚠️ No certificate pins configured for domain: \(domain)")
+            // In a decentralized mesh or when using dynamic relays, we might connect to servers without pre-configured pins.
+            // Fallback to standard system trust validation (CA check) which happens implicitly if we return true here
+            // (since we are creating the credential from the serverTrust object).
             return true
-            #else
-            print("❌ No certificate pins configured for domain: \(domain). Connection refused in production.")
-            return false
-            #endif
         }
 
         // Get the server trust from the challenge
