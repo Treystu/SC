@@ -82,7 +82,7 @@ export interface SignalingMessage {
   type: SignalingMessageType;
   peerId: string;
   timestamp: number;
-  data: any;
+  data: unknown;
   signature?: Uint8Array;
 }
 
@@ -139,7 +139,8 @@ export class WebRTCPeerEnhanced {
   private metricsTimer: ReturnType<typeof setInterval> | null = null;
 
   // Event handlers
-  private eventHandlers: Map<string, Set<(...args: any[]) => any>> = new Map();
+  private eventHandlers: Map<string, Set<(...args: unknown[]) => void>> =
+    new Map();
 
   // Backpressure management
   private sendQueue: Array<{ type: DataChannelType; data: Uint8Array }> = [];
@@ -207,7 +208,7 @@ export class WebRTCPeerEnhanced {
     }
   }
 
-  private handleInitializationError(error: any): void {
+  private handleInitializationError(error: unknown): void {
     if (!IS_TEST) console.error("Failed to initialize peer connection:", error);
     this.emit("error", {
       type: "initialization",
@@ -322,7 +323,7 @@ export class WebRTCPeerEnhanced {
     };
   }
 
-  private handleMessage(type: DataChannelType, data: any): void {
+  private handleMessage(type: DataChannelType, data: unknown): void {
     try {
       let payload: Uint8Array;
 
@@ -868,6 +869,7 @@ export class WebRTCPeerEnhanced {
     }
 
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       channel.send(data as any);
       this.emit("message-sent", { type, size: data.byteLength });
     } catch (error) {
@@ -897,6 +899,7 @@ export class WebRTCPeerEnhanced {
       this.sendQueue.shift();
 
       try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         channel.send(item.data as any);
         this.emit("message-sent", {
           type: item.type,
@@ -968,7 +971,7 @@ export class WebRTCPeerEnhanced {
     }, this.config.metricsInterval);
 
     try {
-      (this.metricsTimer as any)?.unref?.();
+      (this.metricsTimer as unknown as { unref?: () => void })?.unref?.();
     } catch (e) {
       // Ignore in browser environments where unref not available
     }
@@ -1027,21 +1030,21 @@ export class WebRTCPeerEnhanced {
   // Event System
   // ============================================================================
 
-  on(event: string, handler: (...args: any[]) => any): void {
+  on(event: string, handler: (...args: unknown[]) => void): void {
     if (!this.eventHandlers.has(event)) {
       this.eventHandlers.set(event, new Set());
     }
     this.eventHandlers.get(event)!.add(handler);
   }
 
-  off(event: string, handler: (...args: any[]) => any): void {
+  off(event: string, handler: (...args: unknown[]) => void): void {
     const handlers = this.eventHandlers.get(event);
     if (handlers) {
       handlers.delete(handler);
     }
   }
 
-  private emit(event: string, data: any): void {
+  private emit(event: string, data: unknown): void {
     const handlers = this.eventHandlers.get(event);
     if (handlers) {
       handlers.forEach((handler) => {
@@ -1079,7 +1082,8 @@ export class WebRTCPeerEnhanced {
 export class WebRTCConnectionPool {
   private peers: Map<string, WebRTCPeerEnhanced> = new Map();
   private config: Partial<WebRTCConfig>;
-  private eventHandlers: Map<string, Set<(...args: any[]) => any>> = new Map();
+  private eventHandlers: Map<string, Set<(...args: unknown[]) => void>> =
+    new Map();
 
   constructor(config: Partial<WebRTCConfig> = {}) {
     this.config = config;
@@ -1125,8 +1129,8 @@ export class WebRTCConnectionPool {
     ];
 
     events.forEach((event) => {
-      peer.on(event, (data: any) => {
-        this.emit(event, { ...data, peerId });
+      peer.on(event, (data: unknown) => {
+        this.emit(event, { ...(data as object), peerId });
       });
     });
   }
@@ -1200,21 +1204,21 @@ export class WebRTCConnectionPool {
     };
   }
 
-  on(event: string, handler: (...args: any[]) => any): void {
+  on(event: string, handler: (...args: unknown[]) => void): void {
     if (!this.eventHandlers.has(event)) {
       this.eventHandlers.set(event, new Set());
     }
     this.eventHandlers.get(event)!.add(handler);
   }
 
-  off(event: string, handler: (...args: any[]) => any): void {
+  off(event: string, handler: (...args: unknown[]) => void): void {
     const handlers = this.eventHandlers.get(event);
     if (handlers) {
       handlers.delete(handler);
     }
   }
 
-  private emit(event: string, data: any): void {
+  private emit(event: string, data: unknown): void {
     const handlers = this.eventHandlers.get(event);
     if (handlers) {
       handlers.forEach((handler) => {
