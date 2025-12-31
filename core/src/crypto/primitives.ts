@@ -10,6 +10,7 @@ import { sha256, sha512 } from "@noble/hashes/sha2.js";
 export { sha256, sha512 };
 import { xchacha20poly1305 } from "@noble/ciphers/chacha.js";
 import { hkdf } from "@noble/hashes/hkdf.js";
+export { hkdf };
 
 // --- Types ---
 

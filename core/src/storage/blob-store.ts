@@ -64,9 +64,13 @@ export class BlobStore {
 
     // Check if blob already exists (avoid double-counting size)
     const existingBlob = this.memoryStore.get(hash);
-    if (!existingBlob) {
-      this.currentTotalSize += blobSize;
+    if (existingBlob) {
+      // Blob already exists with same content, no size change needed
+      return hash;
     }
+
+    // Add to total size since this is a new blob
+    this.currentTotalSize += blobSize;
 
     // Store in memory
     this.memoryStore.set(hash, data);

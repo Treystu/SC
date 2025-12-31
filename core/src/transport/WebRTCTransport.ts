@@ -56,6 +56,7 @@ interface PeerConnectionWrapper {
   lastSeen: number;
   lastRTT: number; // Last measured round-trip time in ms
   pingTimestamp: number; // Timestamp when last PING was sent
+  rttTimeoutId: NodeJS.Timeout | number | null; // Timeout ID for RTT measurement
 }
 
 /**
@@ -288,11 +289,21 @@ export class WebRTCTransport implements Transport {
       let rtt = 0;
 
       stats.forEach((report) => {
-        // Look for candidate-pair statistics which contain RTT info
+        // Look for the active candidate-pair statistics which contain RTT info
         if (report.type === "candidate-pair" && report.state === "succeeded") {
+          const candidatePair = report as any;
+          
+          // Verify this is the active/selected candidate pair
+          const isSelected =
+            candidatePair.selected === true || candidatePair.nominated === true;
+
+          if (!isSelected) {
+            return; // Skip non-selected candidate pairs
+          }
+
           // currentRoundTripTime is in seconds, convert to milliseconds
-          if (report.currentRoundTripTime !== undefined) {
-            rtt = report.currentRoundTripTime * 1000;
+          if (candidatePair.currentRoundTripTime !== undefined) {
+            rtt = candidatePair.currentRoundTripTime * 1000;
           }
         }
       });
@@ -320,12 +331,21 @@ export class WebRTCTransport implements Transport {
 
       // Schedule next measurement if peer still connected
       if (this.peers.has(peerId) && this.isRunning) {
-        setTimeout(measureAndUpdate, 5000);
+        const timeoutId = setTimeout(measureAndUpdate, 5000);
+        // Update the timeout ID in the wrapper for cleanup
+        const updatedWrapper = this.peers.get(peerId);
+        if (updatedWrapper) {
+          updatedWrapper.rttTimeoutId = timeoutId;
+        }
       }
     };
 
     // Start first measurement after 1 second to allow connection to stabilize
-    setTimeout(measureAndUpdate, 1000);
+    const initialTimeoutId = setTimeout(measureAndUpdate, 1000);
+    const wrapper = this.peers.get(peerId);
+    if (wrapper) {
+      wrapper.rttTimeoutId = initialTimeoutId;
+    }
   }
 
   /**
@@ -360,6 +380,12 @@ export class WebRTCTransport implements Transport {
   ): void {
     const wrapper = this.peers.get(peerId);
     if (!wrapper) return;
+
+    // Clear RTT measurement timeout
+    if (wrapper.rttTimeoutId !== null) {
+      clearTimeout(wrapper.rttTimeoutId as any);
+      wrapper.rttTimeoutId = null;
+    }
 
     // Close channels
     wrapper.reliableChannel?.close();
@@ -413,6 +439,7 @@ export class WebRTCTransport implements Transport {
       lastSeen: Date.now(),
       lastRTT: 0,
       pingTimestamp: 0,
+      rttTimeoutId: null,
     };
     this.peers.set(peerId, wrapper);
 
@@ -536,6 +563,7 @@ export class WebRTCTransport implements Transport {
           lastSeen: Date.now(),
           lastRTT: 0,
           pingTimestamp: 0,
+          rttTimeoutId: null,
         };
         this.peers.set(peerId, wrapper);
         this.events?.onStateChange?.(peerId, "connecting");
@@ -613,6 +641,7 @@ export class WebRTCTransport implements Transport {
         lastSeen: Date.now(),
         lastRTT: 0,
         pingTimestamp: 0,
+        rttTimeoutId: null,
       };
       this.peers.set(peerId, wrapper);
 

@@ -116,29 +116,27 @@ export class DHT {
       return false;
     }
 
-    // Check if updating existing key
+    // Check if updating existing key - if so, we need to account for size difference
     const existingPeer = this.keyToPeer.get(key);
-    let existingSize = 0;
-    if (existingPeer === peerId) {
-      // Updating own key - will replace, so subtract old size
-      // For simplicity, we'll just allow updates without size tracking
-      // In production, store size per key
+    if (existingPeer === peerId && quota.keys.has(key)) {
+      // Peer is updating their own key - this is allowed without counting against quota
+      // Size adjustment happens in the store operation itself
+      quota.storeCount++;
+      return true;
     }
 
-    // Check storage quota
+    // Check storage quota for new key
     const newUsage = quota.used + valueSize;
-    if (newUsage > this.maxStoragePerPeer && !quota.keys.has(key)) {
+    if (newUsage > this.maxStoragePerPeer) {
       console.warn(`Storage quota exceeded for peer ${peerId}: ${newUsage} bytes`);
       return false;
     }
 
-    // Update quota
+    // Update quota for new key
     quota.storeCount++;
-    if (!quota.keys.has(key)) {
-      quota.used += valueSize;
-      quota.keys.add(key);
-      this.keyToPeer.set(key, peerId);
-    }
+    quota.used += valueSize;
+    quota.keys.add(key);
+    this.keyToPeer.set(key, peerId);
 
     return true;
   }
@@ -146,13 +144,22 @@ export class DHT {
   /**
    * Remove a key from peer quota tracking
    */
-  private removePeerQuota(key: string, valueSize: number): void {
+  private async removePeerQuota(key: string): Promise<void> {
     const peerId = this.keyToPeer.get(key);
     if (!peerId) return;
 
     const quota = this.peerQuotas.get(peerId);
     if (quota) {
-      quota.used = Math.max(0, quota.used - valueSize);
+      // Get the actual stored value to determine its size
+      try {
+        const storedValue = await this.storage.get(key);
+        if (storedValue) {
+          const valueSize = JSON.stringify(Array.from(storedValue)).length;
+          quota.used = Math.max(0, quota.used - valueSize);
+        }
+      } catch (e) {
+        console.error(`Failed to retrieve stored value for quota cleanup: ${e}`);
+      }
       quota.keys.delete(key);
     }
     this.keyToPeer.delete(key);
@@ -340,7 +347,7 @@ export class DHT {
       }
 
       // Store the value
-      this.handleStoreAsync(key, value, senderId, valueSize);
+      this.handleStoreAsync(key, value, senderId);
     } catch (e) {
       console.error("Error handling STORE:", e);
     }
@@ -350,14 +357,13 @@ export class DHT {
     key: string,
     value: any,
     senderId: string,
-    valueSize: number,
   ): Promise<void> {
     try {
       await this.storage.store(key, new Uint8Array(value));
     } catch (e) {
       console.error("Failed to store value in DHT adapter", e);
       // Remove from quota tracking if store failed
-      this.removePeerQuota(key, valueSize);
+      await this.removePeerQuota(key);
     }
   }
 
