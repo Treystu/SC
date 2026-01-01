@@ -41,6 +41,10 @@ export enum MessageType {
   // Peer management
   PEER_DISCOVERY = 0x20,
   PEER_INTRODUCTION = 0x21,
+
+  // Batching
+  BATCH = 0x90,
+
   // Cryptographic
   KEY_EXCHANGE = 0x30,
   SESSION_KEY = 0x31,

@@ -7,7 +7,7 @@ import { Message, MessageType, encodeMessage } from "../protocol/message.js";
 import { RoutingTable, Peer, createPeer, PeerState } from "./routing.js";
 import { MessageRelay } from "./relay.js";
 import { TransportManager, Transport } from "./transport/Transport.js";
-import { WebRTCTransport } from "./transport/WebRTCTransport.js";
+import { WebRTCTransport } from "../transport/WebRTCTransport.js";
 import {
   generateIdentity,
   IdentityKeyPair,
@@ -21,11 +21,14 @@ import {
   DiscoveryPeer,
   DiscoveryProvider,
 } from "./discovery.js";
+import { KademliaRoutingTable, hexToNodeId } from "./dht/index.js";
 import { HttpBootstrapProvider } from "../discovery/http-bootstrap.js";
 import { StorageAdapter } from "./dht/storage/StorageAdapter.js";
 import { RendezvousManager } from "./rendezvous.js";
 import { BlobStore } from "../storage/blob-store.js";
 import { SocialRecoveryManager } from "../recovery/social-recovery.js";
+import { TransferManager } from "../transfer/TransferManager.js";
+import { RoutingMode } from "./routing.js";
 
 export interface MeshNetworkConfig {
   identity?: IdentityKeyPair;
@@ -61,6 +64,7 @@ export class MeshNetwork {
   public discovery: DiscoveryManager;
   public blobStore: BlobStore;
   public socialRecovery: SocialRecoveryManager;
+  public transferManager: TransferManager;
 
   // Callbacks
   private messageListeners: Set<(message: Message) => void> = new Set();
@@ -112,7 +116,13 @@ export class MeshNetwork {
     this.maxPeers = config.maxPeers || 50;
 
     // Initialize components
-    this.routingTable = new RoutingTable(this.localPeerId);
+    const dhtNodeId = hexToNodeId(this.localPeerId);
+    const dhtRoutingTable = new KademliaRoutingTable(dhtNodeId);
+
+    this.routingTable = new RoutingTable(this.localPeerId, {
+      mode: RoutingMode.HYBRID, // Default to Hybrid (DHT + Flood)
+      dhtRoutingTable,
+    });
     this.messageRelay = new MessageRelay(
       this.localPeerId,
       this.routingTable,
@@ -156,7 +166,7 @@ export class MeshNetwork {
       if (this.outboundTransportCallback) {
         // Send signal via external transport (RoomClient in web app)
         this.outboundTransportCallback(peerId, new Uint8Array()).catch((err) =>
-          console.error("Failed to send signal via outbound transport:", err)
+          console.error("Failed to send signal via outbound transport:", err),
         );
       } else {
         // Fallback: try mesh signaling (may fail if no direct connection exists)
@@ -166,7 +176,12 @@ export class MeshNetwork {
             type: "SIGNAL",
             signal,
           }),
-        ).catch((err) => console.debug("Mesh signaling failed (expected for new connections):", err.message));
+        ).catch((err) =>
+          console.debug(
+            "Mesh signaling failed (expected for new connections):",
+            err.message,
+          ),
+        );
       }
     });
 
@@ -261,7 +276,10 @@ export class MeshNetwork {
             try {
               await this.outboundTransportCallback(peerId, encodedMessage);
             } catch (err) {
-              console.warn(`[Rendezvous] Failed to deliver to ${peerId} via outboundTransportCallback.`, err);
+              console.warn(
+                `[Rendezvous] Failed to deliver to ${peerId} via outboundTransportCallback.`,
+                err,
+              );
             }
           } else {
             console.warn(`[Rendezvous] Failed to send to ${peerId}`, e);
@@ -275,6 +293,9 @@ export class MeshNetwork {
 
     // Initialize Social Recovery
     this.socialRecovery = new SocialRecoveryManager(this);
+
+    // Initialize Transfer Manager
+    this.transferManager = new TransferManager(this);
 
     this.setupMessageHandlers();
   }
@@ -300,6 +321,18 @@ export class MeshNetwork {
       // Handle Control Messages
       if (message.header.type === MessageType.CONTROL_PING) {
         this.sendPong(message.header.senderId, message.header.timestamp);
+        return;
+      }
+
+      // Handle File Transfer Messages
+      if (
+        message.header.type === MessageType.FILE_METADATA ||
+        message.header.type === MessageType.FILE_CHUNK
+      ) {
+        this.transferManager.handleMessage(
+          message.header.type,
+          message.payload,
+        );
         return;
       }
 
@@ -460,10 +493,15 @@ export class MeshNetwork {
       this.broadcastPing();
     }, intervalMs);
     try {
-      if (this.heartbeatInterval && typeof (this.heartbeatInterval as any).unref === 'function') {
+      if (
+        this.heartbeatInterval &&
+        typeof (this.heartbeatInterval as any).unref === "function"
+      ) {
         (this.heartbeatInterval as any).unref();
       }
-    } catch (e) { /* no-op */ }
+    } catch (e) {
+      /* no-op */
+    }
 
     // Also start health check loop
     if (this.healthCheckInterval) clearInterval(this.healthCheckInterval);
@@ -471,10 +509,15 @@ export class MeshNetwork {
       this.monitorConnectionHealth();
     }, 5000); // Check every 5 seconds
     try {
-      if (this.healthCheckInterval && typeof (this.healthCheckInterval as any).unref === 'function') {
+      if (
+        this.healthCheckInterval &&
+        typeof (this.healthCheckInterval as any).unref === "function"
+      ) {
         (this.healthCheckInterval as any).unref();
       }
-    } catch (e) { /* no-op */ }
+    } catch (e) {
+      /* no-op */
+    }
   }
 
   /**
@@ -618,9 +661,11 @@ export class MeshNetwork {
    */
   async connectToPeer(peerId: string): Promise<void> {
     console.log(`[MeshNetwork] connectToPeer called for ${peerId}`);
-    
+
     if (this.routingTable.getAllPeers().length >= this.maxPeers) {
-      console.warn(`[MeshNetwork] Max peers reached (${this.maxPeers}), cannot connect to ${peerId}`);
+      console.warn(
+        `[MeshNetwork] Max peers reached (${this.maxPeers}), cannot connect to ${peerId}`,
+      );
       throw new Error("Maximum number of peers reached");
     }
 
@@ -631,17 +676,24 @@ export class MeshNetwork {
       return;
     }
 
-    console.log(`[MeshNetwork] Initiating connection to ${peerId} via WebRTC...`);
-    
+    console.log(
+      `[MeshNetwork] Initiating connection to ${peerId} via WebRTC...`,
+    );
+
     // Use TransportManager to connect
     // Currently defaults to WebRTC as it's the only registered transport
     // but in future will try multiple
-    return this.transportManager.connect(peerId, "webrtc").then(() => {
-      console.log(`[MeshNetwork] Connection initiated to ${peerId}, waiting for signaling...`);
-    }).catch((err) => {
-      console.error(`[MeshNetwork] Failed to connect to ${peerId}:`, err);
-      throw err;
-    });
+    return this.transportManager
+      .connect(peerId, "webrtc")
+      .then(() => {
+        console.log(
+          `[MeshNetwork] Connection initiated to ${peerId}, waiting for signaling...`,
+        );
+      })
+      .catch((err) => {
+        console.error(`[MeshNetwork] Failed to connect to ${peerId}:`, err);
+        throw err;
+      });
   }
 
   /**
@@ -686,8 +738,10 @@ export class MeshNetwork {
     content: string,
     type: MessageType = MessageType.TEXT,
   ): Promise<void> {
-    console.log(`[MeshNetwork] sendMessage to ${recipientId}, type=${MessageType[type]}`);
-    
+    console.log(
+      `[MeshNetwork] sendMessage to ${recipientId}, type=${MessageType[type]}`,
+    );
+
     const payload = new TextEncoder().encode(
       JSON.stringify({
         text: content,
@@ -719,24 +773,33 @@ export class MeshNetwork {
     const encodedMessage = encodeMessage(message);
     const nextHop = this.routingTable.getNextHop(recipientId);
 
-    console.log(`[MeshNetwork] Route lookup: nextHop=${nextHop || 'none'}, connectedPeers=${this.routingTable.getAllPeers().filter(p => p.state === 'connected').length}`);
+    console.log(
+      `[MeshNetwork] Route lookup: nextHop=${nextHop || "none"}, connectedPeers=${this.routingTable.getAllPeers().filter((p) => p.state === "connected").length}`,
+    );
 
     if (nextHop) {
       // Direct route available
       console.log(`[MeshNetwork] Sending directly to nextHop=${nextHop}`);
       this.transportManager.send(nextHop, encodedMessage).catch((err) => {
-        console.error(`[MeshNetwork] Failed to send to next hop ${nextHop}:`, err);
+        console.error(
+          `[MeshNetwork] Failed to send to next hop ${nextHop}:`,
+          err,
+        );
       });
     } else {
       // Check if we have any connected peers at all
-      const connectedPeers = this.routingTable.getAllPeers().filter(
-        (p) => p.state === "connected" && p.id !== this.localPeerId
+      const connectedPeers = this.routingTable
+        .getAllPeers()
+        .filter((p) => p.state === "connected" && p.id !== this.localPeerId);
+
+      console.log(
+        `[MeshNetwork] No direct route. Connected peers: ${connectedPeers.length}`,
       );
-      
-      console.log(`[MeshNetwork] No direct route. Connected peers: ${connectedPeers.length}`);
-      
+
       if (connectedPeers.length === 0) {
-        console.warn(`[MeshNetwork] No connected peers! Queuing message for ${recipientId} until connection established.`);
+        console.warn(
+          `[MeshNetwork] No connected peers! Queuing message for ${recipientId} until connection established.`,
+        );
         // Queue the message for later delivery instead of throwing an error
         const queuedMessage = {
           recipientId,
@@ -744,18 +807,20 @@ export class MeshNetwork {
           type,
           timestamp: Date.now(),
         };
-        
+
         // Store in offline queue for retry when peer connects
-        if (typeof (this as any).offlineQueue !== 'undefined') {
+        if (typeof (this as any).offlineQueue !== "undefined") {
           (this as any).offlineQueue.enqueue(queuedMessage);
         } else {
           // Fallback: store in localStorage for persistence
           try {
-            const queued = JSON.parse(localStorage.getItem('sc_queued_messages') || '[]');
+            const queued = JSON.parse(
+              localStorage.getItem("sc_queued_messages") || "[]",
+            );
             queued.push(queuedMessage);
-            localStorage.setItem('sc_queued_messages', JSON.stringify(queued));
+            localStorage.setItem("sc_queued_messages", JSON.stringify(queued));
           } catch (e) {
-            console.error('[MeshNetwork] Failed to queue message:', e);
+            console.error("[MeshNetwork] Failed to queue message:", e);
           }
         }
         return; // Don't throw, just return
@@ -776,7 +841,9 @@ export class MeshNetwork {
           const foundPeers = await this.dht.findNode(recipientId);
           const targetPeer = foundPeers.find((p) => p.id === recipientId);
           if (targetPeer) {
-            console.log(`[MeshNetwork] Found ${recipientId} in DHT, attempting connection...`);
+            console.log(
+              `[MeshNetwork] Found ${recipientId} in DHT, attempting connection...`,
+            );
             await this.connectToPeer(recipientId);
           }
         } catch (e) {
@@ -1492,5 +1559,12 @@ export class MeshNetwork {
   async dhtFindNode(nodeId: string): Promise<Peer | undefined> {
     const peers = await this.dht.findNode(nodeId);
     return peers.find((p) => p.id === nodeId);
+  }
+
+  /**
+   * Send a file to a peer
+   */
+  async sendFile(peerId: string, file: File | Uint8Array): Promise<string> {
+    return this.transferManager.sendFile(peerId, file);
   }
 }

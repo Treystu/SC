@@ -57,6 +57,10 @@ interface PeerConnectionWrapper {
   lastRTT: number; // Last measured round-trip time in ms
   pingTimestamp: number; // Timestamp when last PING was sent
   rttTimeoutId: NodeJS.Timeout | number | null; // Timeout ID for RTT measurement
+  // Batching
+  batchBuffer: Uint8Array[];
+  batchBufferLength: number;
+  batchTimeoutId: NodeJS.Timeout | number | null;
 }
 
 /**
@@ -73,6 +77,13 @@ export class WebRTCTransport implements Transport {
   private isRunning = false;
   private pendingIceCandidates: Map<TransportPeerId, RTCIceCandidateInit[]> =
     new Map();
+  private pruneIntervalId: NodeJS.Timeout | null = null;
+  private onSignalCallback?: (peerId: string, signal: any) => void;
+  private onTrackCallback?: (
+    peerId: string,
+    track: MediaStreamTrack,
+    stream: MediaStream,
+  ) => void;
 
   constructor(
     localPeerId: TransportPeerId,
@@ -162,13 +173,10 @@ export class WebRTCTransport implements Transport {
     // ICE candidate handling
     connection.onicecandidate = (event) => {
       if (event.candidate) {
-        // ICE candidates need to be sent via signaling
-        // The signaling mechanism is external to this transport
-        // Emit a custom event that can be captured for signaling
-        console.debug(
-          `ICE candidate generated for ${peerId}:`,
-          event.candidate.toJSON(),
-        );
+        this.onSignalCallback?.(peerId, {
+          type: "candidate",
+          candidate: event.candidate.toJSON(),
+        });
       }
     };
 
@@ -180,7 +188,7 @@ export class WebRTCTransport implements Transport {
     // Handle incoming tracks
     connection.ontrack = (event) => {
       if (event.streams && event.streams[0]) {
-        this.events?.onTrack?.(peerId, event.track, event.streams[0]);
+        this.onTrackCallback?.(peerId, event.track, event.streams[0]);
       }
     };
 
@@ -242,14 +250,47 @@ export class WebRTCTransport implements Transport {
       wrapper.bytesReceived += payload.length;
       wrapper.lastSeen = Date.now();
 
-      const message: TransportMessage = {
-        from: peerId,
-        to: this.localPeerId,
-        payload,
-        timestamp: Date.now(),
-      };
+      // Check for Batch Magic Byte (0xBB)
+      if (payload.length > 0 && payload[0] === 0xbb) {
+        // Unpack Batch
+        try {
+          const view = new DataView(
+            payload.buffer,
+            payload.byteOffset,
+            payload.byteLength,
+          );
+          let offset = 1; // Skip Magic
 
-      this.events?.onMessage(message);
+          while (offset < payload.byteLength) {
+            const len = view.getUint32(offset);
+            offset += 4;
+            const chunk = payload.slice(offset, offset + len);
+            offset += len;
+
+            const message: TransportMessage = {
+              from: peerId,
+              to: this.localPeerId,
+              payload: chunk,
+              timestamp: Date.now(),
+            };
+            this.events?.onMessage(message);
+          }
+        } catch (e) {
+          console.error(
+            `[WebRTCTransport] Failed to unpack batch from ${peerId}`,
+            e,
+          );
+        }
+      } else {
+        // Single Message (Legacy or unbatched)
+        const message: TransportMessage = {
+          from: peerId,
+          to: this.localPeerId,
+          payload,
+          timestamp: Date.now(),
+        };
+        this.events?.onMessage(message);
+      }
     };
   }
 
@@ -292,7 +333,7 @@ export class WebRTCTransport implements Transport {
         // Look for the active candidate-pair statistics which contain RTT info
         if (report.type === "candidate-pair" && report.state === "succeeded") {
           const candidatePair = report as any;
-          
+
           // Verify this is the active/selected candidate pair
           const isSelected =
             candidatePair.selected === true || candidatePair.nominated === true;
@@ -398,13 +439,175 @@ export class WebRTCTransport implements Transport {
     this.events?.onPeerDisconnected?.(peerId, reason);
   }
 
+  /**
+   * Compatibility shim for MeshNetwork
+   */
+  getPool() {
+    return {
+      getOrCreatePeer: (id: string) => {
+        if (!this.peers.has(id)) {
+          this.connect(id).catch(console.error);
+        }
+        const wrapper = this.peers.get(id);
+        if (!wrapper) throw new Error(`Failed to create peer ${id}`);
+
+        const peerShim = {
+          ...wrapper,
+          addTrack: (track: MediaStreamTrack, stream: MediaStream) =>
+            wrapper.connection.addTrack(track, stream),
+          createOffer: async () => {
+            const offer = await wrapper.connection.createOffer();
+            await wrapper.connection.setLocalDescription(offer);
+            return offer;
+          },
+          createAnswer: async (options?: any) => {
+            const answer = await wrapper.connection.createAnswer(options);
+            await wrapper.connection.setLocalDescription(answer);
+            return answer;
+          },
+          setRemoteAnswer: (answer: RTCSessionDescriptionInit) =>
+            wrapper.connection.setRemoteDescription(answer),
+          setRemoteDescription: (desc: RTCSessionDescriptionInit) =>
+            wrapper.connection.setRemoteDescription(desc),
+          getState: () => wrapper.state,
+          connection: wrapper.connection,
+          createDataChannel: (config: any) => {
+            return wrapper.connection.createDataChannel(config.label, config);
+          },
+          onStateChange: (cb: (state: string) => void) => {
+            wrapper.connection.onconnectionstatechange = () => {
+              cb(wrapper.connection.connectionState);
+            };
+          },
+          waitForIceGathering: async () => {
+            if (wrapper.connection.iceGatheringState === "complete") return;
+            return new Promise<void>((resolve) => {
+              const check = () => {
+                if (wrapper.connection.iceGatheringState === "complete") {
+                  wrapper.connection.removeEventListener(
+                    "icegatheringstatechange",
+                    check,
+                  );
+                  resolve();
+                }
+              };
+              wrapper.connection.addEventListener(
+                "icegatheringstatechange",
+                check,
+              );
+            });
+          },
+          getLocalDescription: () => wrapper.connection.localDescription,
+        };
+        return peerShim;
+      },
+      getPeer: (id: string) => {
+        // Reuse getOrCreatePeer logic but return undefined if missing?
+        // Actually simpler to just duplicate shim creation logic or extract it.
+        // For now, duplicate for safety.
+        const wrapper = this.peers.get(id);
+        if (!wrapper) return undefined;
+        return {
+          ...wrapper,
+          addTrack: (track: MediaStreamTrack, stream: MediaStream) =>
+            wrapper.connection.addTrack(track, stream),
+          createOffer: async () => {
+            const offer = await wrapper.connection.createOffer();
+            await wrapper.connection.setLocalDescription(offer);
+            return offer;
+          },
+          createAnswer: async (options?: any) => {
+            const answer = await wrapper.connection.createAnswer(options);
+            await wrapper.connection.setLocalDescription(answer);
+            return answer;
+          },
+          setRemoteAnswer: (answer: RTCSessionDescriptionInit) =>
+            wrapper.connection.setRemoteDescription(answer),
+          setRemoteDescription: (desc: RTCSessionDescriptionInit) =>
+            wrapper.connection.setRemoteDescription(desc),
+          getState: () => wrapper.state,
+          connection: wrapper.connection,
+          createDataChannel: (config: any) => {
+            return wrapper.connection.createDataChannel(config.label, config);
+          },
+          onStateChange: (cb: (state: string) => void) => {
+            wrapper.connection.onconnectionstatechange = () => {
+              cb(wrapper.connection.connectionState);
+            };
+          },
+          waitForIceGathering: async () => {
+            if (wrapper.connection.iceGatheringState === "complete") return;
+            return new Promise<void>((resolve) => {
+              const check = () => {
+                if (wrapper.connection.iceGatheringState === "complete") {
+                  wrapper.connection.removeEventListener(
+                    "icegatheringstatechange",
+                    check,
+                  );
+                  resolve();
+                }
+              };
+              wrapper.connection.addEventListener(
+                "icegatheringstatechange",
+                check,
+              );
+            });
+          },
+          getLocalDescription: () => wrapper.connection.localDescription,
+        };
+      },
+      onSignal: (cb: (peerId: string, signal: any) => void) => {
+        this.onSignalCallback = cb;
+      },
+      onTrack: (
+        cb: (
+          peerId: string,
+          track: MediaStreamTrack,
+          stream: MediaStream,
+        ) => void,
+      ) => {
+        this.onTrackCallback = cb;
+      },
+      has: (id: string) => this.peers.has(id),
+      get: (id: string) => this.peers.get(id),
+      getAllPeers: () => Array.from(this.peers.values()),
+      getStats: () => ({ size: this.peers.size }),
+      removePeer: (id: string) => this.disconnect(id),
+    };
+  }
+
   async start(events: TransportEvents): Promise<void> {
     this.events = events;
     this.isRunning = true;
+
+    // Start pruning loop
+    this.pruneIntervalId = setInterval(
+      () => this.pruneIdleConnections(),
+      60000,
+    );
+  }
+
+  /**
+   * Prune idle connections
+   */
+  private pruneIdleConnections() {
+    const now = Date.now();
+    for (const [peerId, wrapper] of this.peers.entries()) {
+      // Prune if inactive > 60s and not connecting
+      if (wrapper.state === "connected" && now - wrapper.lastSeen > 60000) {
+        console.log(`[WebRTCTransport] Pruning idle peer ${peerId}`);
+        this.disconnect(peerId).catch(console.error);
+      }
+    }
   }
 
   async stop(): Promise<void> {
     this.isRunning = false;
+
+    if (this.pruneIntervalId) {
+      clearInterval(this.pruneIntervalId);
+      this.pruneIntervalId = null;
+    }
 
     // Disconnect all peers
     for (const peerId of Array.from(this.peers.keys())) {
@@ -440,6 +643,9 @@ export class WebRTCTransport implements Transport {
       lastRTT: 0,
       pingTimestamp: 0,
       rttTimeoutId: null,
+      batchBuffer: [],
+      batchBufferLength: 0,
+      batchTimeoutId: null,
     };
     this.peers.set(peerId, wrapper);
 
@@ -477,12 +683,69 @@ export class WebRTCTransport implements Transport {
       throw new Error(`Data channel to ${peerId} is not ready`);
     }
 
-    // WebRTC's send() accepts ArrayBuffer, Blob, or ArrayBufferView.
-    // TypeScript's strict checking has issues with Uint8Array as ArrayBufferView
-    // in some configurations, so we use a type assertion here.
-    // This is safe because Uint8Array is a valid ArrayBufferView.
-    (channel as RTCDataChannel).send(payload as unknown as ArrayBuffer);
-    wrapper.bytesSent += payload.length;
+    // Batching Logic
+    // We use Nagle-like algorithm: Buffer small messages, send if buffer full or timeout
+
+    wrapper.batchBuffer.push(payload);
+    wrapper.batchBufferLength += payload.length;
+
+    // Flush threshold (e.g. 16KB or instant if payload is large)
+    if (wrapper.batchBufferLength >= 16 * 1024 || payload.length > 8000) {
+      this.flushBatch(peerId);
+    } else if (!wrapper.batchTimeoutId) {
+      // Schedule flush
+      wrapper.batchTimeoutId = setTimeout(() => {
+        wrapper.batchTimeoutId = null;
+        this.flushBatch(peerId);
+      }, 10); // 10ms delay
+    }
+  }
+
+  /**
+   * Flush pending batch
+   */
+  private flushBatch(peerId: TransportPeerId): void {
+    const wrapper = this.peers.get(peerId);
+    if (!wrapper || wrapper.batchBuffer.length === 0) return;
+
+    const channel = wrapper.reliableChannel;
+    if (!channel || channel.readyState !== "open") return;
+
+    // Construct Batch: [Magic: 0xBB][Len1:4][Data1]...
+    // Note: If buffer has only 1 item and it's large, we might skip batch overhead?
+    // But for consistency, let's batch everything or use a flag.
+    // Actually, to keep it simple and compatible with the "Magic Byte" check:
+    // We ALWAYS use batch format if we went through the buffer.
+
+    const totalSize =
+      1 + 4 * wrapper.batchBuffer.length + wrapper.batchBufferLength;
+    const batch = new Uint8Array(totalSize);
+    const view = new DataView(batch.buffer);
+
+    batch[0] = 0xbb; // Magic
+    let offset = 1;
+
+    for (const chunk of wrapper.batchBuffer) {
+      view.setUint32(offset, chunk.length);
+      offset += 4;
+      batch.set(chunk, offset);
+      offset += chunk.length;
+    }
+
+    // Reset buffer
+    wrapper.batchBuffer = [];
+    wrapper.batchBufferLength = 0;
+    if (wrapper.batchTimeoutId) {
+      clearTimeout(wrapper.batchTimeoutId as any);
+      wrapper.batchTimeoutId = null;
+    }
+
+    try {
+      (channel as RTCDataChannel).send(batch as unknown as ArrayBuffer);
+      wrapper.bytesSent += totalSize;
+    } catch (e) {
+      console.error(`[WebRTCTransport] Failed to send batch to ${peerId}`, e);
+    }
   }
 
   async broadcast(
@@ -517,9 +780,10 @@ export class WebRTCTransport implements Transport {
     // Calculate connection quality based on RTT
     // Quality formula: 100 - (RTT / 10)
     // Examples: 0ms = 100, 100ms = 90, 500ms = 50, 1000ms+ = 0
-    const quality = wrapper.lastRTT > 0
-      ? Math.max(0, Math.min(100, 100 - wrapper.lastRTT / 10))
-      : 100; // Default to 100 if RTT not yet measured
+    const quality =
+      wrapper.lastRTT > 0
+        ? Math.max(0, Math.min(100, 100 - wrapper.lastRTT / 10))
+        : 100; // Default to 100 if RTT not yet measured
 
     return {
       peerId,
@@ -564,6 +828,9 @@ export class WebRTCTransport implements Transport {
           lastRTT: 0,
           pingTimestamp: 0,
           rttTimeoutId: null,
+          batchBuffer: [],
+          batchBufferLength: 0,
+          batchTimeoutId: null,
         };
         this.peers.set(peerId, wrapper);
         this.events?.onStateChange?.(peerId, "connecting");
@@ -642,6 +909,9 @@ export class WebRTCTransport implements Transport {
         lastRTT: 0,
         pingTimestamp: 0,
         rttTimeoutId: null,
+        batchBuffer: [],
+        batchBufferLength: 0,
+        batchTimeoutId: null,
       };
       this.peers.set(peerId, wrapper);
 
