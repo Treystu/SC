@@ -14,6 +14,7 @@ export interface GossipConfig {
   maxMessageAge: number; // Max age of messages to gossip (default: 60000)
   pruneInterval: number; // How often to prune old messages (default: 30000)
   pushPullRatio: number; // Ratio of push vs pull (0-1, default: 0.7)
+  maxDigestSize: number; // Maximum number of message hashes in digest (default: 50)
 }
 
 interface GossipMessage {
@@ -58,6 +59,7 @@ export class GossipProtocol {
       maxMessageAge: config?.maxMessageAge ?? 60000, // 1 minute
       pruneInterval: config?.pruneInterval ?? 30000, // 30 seconds
       pushPullRatio: config?.pushPullRatio ?? 0.7, // 70% push, 30% pull
+      maxDigestSize: config?.maxDigestSize ?? 50, // Limit digest to 50 messages
     };
   }
 
@@ -272,8 +274,8 @@ export class GossipProtocol {
       }
     }
 
-    // Limit number of missing messages to request (prevent overwhelming)
-    return missing.slice(0, 50);
+    // Limit number of missing messages to request (configurable to prevent overwhelming)
+    return missing.slice(0, this.config.maxDigestSize);
   }
 
   /**
@@ -318,7 +320,12 @@ export class GossipProtocol {
 
           // Add the received messages to our store
           for (const message of missingMessages) {
-            this.receiveMessage(message, peer.id);
+            try {
+              this.receiveMessage(message, peer.id);
+            } catch (error) {
+              console.error(`Failed to process gossip message from peer ${peer.id}:`, error);
+              // Continue processing remaining messages even if one fails
+            }
           }
         }
       } catch (error) {
