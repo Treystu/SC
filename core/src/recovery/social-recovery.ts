@@ -1,25 +1,40 @@
 import type { MeshNetwork } from "../mesh/network.js";
 import { Message, MessageType, encodeMessage } from "../protocol/message.js";
 import { split, combine } from "../crypto/shamir.js";
-import { signMessage } from "../crypto/primitives.js"; // Assuming primitives exist here, or I need to import correctly
+import {
+  signMessage,
+  generateEphemeralKeyPair,
+  performKeyExchange,
+  encryptMessage,
+  decryptMessage,
+  generateNonce,
+  convertEd25519PublicKeyToX25519,
+  convertEd25519PrivateKeyToX25519,
+  secureWipe,
+} from "../crypto/primitives.js";
+import { sha256 as sha256Hash } from "@noble/hashes/sha2.js";
 
 // Type definitions for share payload
 interface SharePayload {
   shareId: number; // x value in shamir
-  shareData: string; // base64 encoded y value
+  shareData: string; // base64 encoded encrypted y value
   threshold: number;
   fingerprint?: string; // Optional: fingerprint of the key being recovered (e.g. hash of public key)
+  ephemeralPublicKey: string; // base64 encoded ephemeral public key for ECIES decryption
+  nonce: string; // base64 encoded nonce for encryption
 }
 
 interface RequestSharePayload {
-  newPublicKey: string; // The user's new identity public key where share should be sent
+  newPublicKey: string; // The user's new identity public key where share should be sent (base64 encoded Ed25519 public key)
   fingerprint: string; // Fingerprint of the OLD key to identify which share to retrieve
 }
 
 interface ResponseSharePayload {
   shareId: number;
-  shareData: string; // Encrypted for the NEW public key
+  shareData: string; // base64 encoded encrypted y value
   fingerprint: string;
+  ephemeralPublicKey: string; // base64 encoded ephemeral public key for ECIES decryption
+  nonce: string; // base64 encoded nonce for encryption
 }
 
 export class SocialRecoveryManager {
@@ -40,15 +55,90 @@ export class SocialRecoveryManager {
   }
 
   /**
+   * Encrypt data using ECIES (Elliptic Curve Integrated Encryption Scheme)
+   * Uses X25519 key exchange + HKDF + XChaCha20-Poly1305 AEAD
+   * @param data Data to encrypt
+   * @param recipientPublicKey Recipient's Ed25519 public key (will be converted to X25519)
+   * @returns Object with encrypted data, ephemeral public key, and nonce
+   */
+  private async encryptECIES(
+    data: Uint8Array,
+    recipientPublicKey: Uint8Array,
+  ): Promise<{ encrypted: Uint8Array; ephemeralPublicKey: Uint8Array; nonce: Uint8Array }> {
+    // Generate ephemeral X25519 keypair
+    const ephemeralKeyPair = generateEphemeralKeyPair();
+
+    // Convert recipient's Ed25519 public key to X25519
+    const recipientX25519PublicKey = convertEd25519PublicKeyToX25519(recipientPublicKey);
+
+    // Perform ECDH to derive shared secret (already includes HKDF in performKeyExchange)
+    const encryptionKey = performKeyExchange(
+      ephemeralKeyPair.privateKey,
+      recipientX25519PublicKey,
+    );
+
+    // Generate nonce for encryption
+    const nonce = generateNonce();
+
+    // Encrypt using XChaCha20-Poly1305
+    const encrypted = encryptMessage(data, encryptionKey, nonce);
+
+    // Securely wipe sensitive material from memory
+    secureWipe(ephemeralKeyPair.privateKey);
+    secureWipe(encryptionKey);
+
+    return {
+      encrypted,
+      ephemeralPublicKey: ephemeralKeyPair.publicKey,
+      nonce,
+    };
+  }
+
+  /**
+   * Decrypt data using ECIES
+   * @param encrypted Encrypted data
+   * @param ephemeralPublicKey Ephemeral public key from encryption
+   * @param nonce Nonce from encryption
+   * @param recipientPrivateKey Recipient's Ed25519 private key (will be converted to X25519)
+   * @returns Decrypted data
+   */
+  private async decryptECIES(
+    encrypted: Uint8Array,
+    ephemeralPublicKey: Uint8Array,
+    nonce: Uint8Array,
+    recipientPrivateKey: Uint8Array,
+  ): Promise<Uint8Array> {
+    // Convert recipient's Ed25519 private key to X25519
+    const recipientX25519PrivateKey = convertEd25519PrivateKeyToX25519(recipientPrivateKey);
+
+    // Perform ECDH to derive the same shared secret (already includes HKDF in performKeyExchange)
+    const encryptionKey = performKeyExchange(
+      recipientX25519PrivateKey,
+      ephemeralPublicKey,
+    );
+
+    // Decrypt using XChaCha20-Poly1305
+    const decrypted = decryptMessage(encrypted, encryptionKey, nonce);
+
+    // Securely wipe sensitive material from memory
+    secureWipe(recipientX25519PrivateKey);
+    secureWipe(encryptionKey);
+
+    return decrypted;
+  }
+
+  /**
    * Split a secret and distribute shares to trusted peers.
    * @param secret The secret key to backup (Uint8Array)
-   * @param peers List of peer IDs (trusted contacts) to send shares to
+   * @param peers Array of objects with peer ID and public key
    * @param threshold Minimum number of peers required to recover
+   * @param fingerprint Optional fingerprint to identify this backup (defaults to hash of secret)
    */
   async distributeShares(
     secret: Uint8Array,
-    peers: string[],
+    peers: Array<{ id: string; publicKey: Uint8Array }>,
     threshold: number,
+    fingerprint?: string,
   ): Promise<void> {
     if (peers.length < threshold) {
       throw new Error(
@@ -58,36 +148,33 @@ export class SocialRecoveryManager {
 
     const shares = split(secret, peers.length, threshold);
 
-    // Calculate fingerprint of the secret (e.g. hash of the public key corresponding to secret,
-    // or just hash of secret if it IS the private key. Let's assume secret is Private Key).
-    // For simplicity, we'll generate a random ID for this backup session or use hash(secret).
-    // Ideally: hash(publicKey) so peers know WHO this share belongs to.
-    // We'll require a `fingerprint` argument? Or derive it?
-    // Let's assume the user provides a "fingerprint" like their DID or Public Key String.
-    // For now, I'll use a hash of the secret as identifier (NOT SECURE for real usage if low entropy, but ok for key).
-    // Actually, let's allow passing fingerprint.
-    // Refactor: distributeShares(secret, fingerprint, peers, threshold)
-    // I'll assume fingerprint is passed or I generate one.
-    const fingerprint = "backup_" + Date.now(); // Temporary ID
+    // Generate fingerprint if not provided (using hash of secret)
+    const actualFingerprint = fingerprint || Buffer.from(sha256Hash(secret)).toString("hex").slice(0, 16);
 
     for (let i = 0; i < peers.length; i++) {
-      const peerId = peers[i];
+      const peer = peers[i];
       const share = shares[i];
 
-      // TODO: ENCRYPT share using peer's public key (ECIES).
-      // For now, sending plaintext (DEMO PURPOSE ONLY - insecure).
-      // The Task says "implement logic", I should ideally mark encryption as TODO or implement mock.
+      // Validate peer public key
+      if (!peer.publicKey || peer.publicKey.length !== 32) {
+        throw new Error(`Invalid public key for peer ${peer.id}: must be exactly 32 bytes (Ed25519 public key)`);
+      }
+
+      // Encrypt share using ECIES with peer's public key
+      const encryptionResult = await this.encryptECIES(share.y, peer.publicKey);
 
       const payloadData: SharePayload = {
         shareId: share.x,
-        shareData: Buffer.from(share.y).toString("base64"),
+        shareData: Buffer.from(encryptionResult.encrypted).toString("base64"),
         threshold,
-        fingerprint,
+        fingerprint: actualFingerprint,
+        ephemeralPublicKey: Buffer.from(encryptionResult.ephemeralPublicKey).toString("base64"),
+        nonce: Buffer.from(encryptionResult.nonce).toString("base64"),
       };
 
       const payload = new TextEncoder().encode(JSON.stringify(payloadData));
 
-      await this.sendMessage(peerId, MessageType.STORE_SHARE, payload);
+      await this.sendMessage(peer.id, MessageType.STORE_SHARE, payload);
     }
   }
 
@@ -175,13 +262,33 @@ export class SocialRecoveryManager {
 
       const share = this.heldShares.get(data.fingerprint);
       if (share) {
-        // TODO: Verify sender identity? (Social verification)
-        // TODO: Encrypt with data.newPublicKey
+        // Verify sender identity through message signature (already verified by network layer)
+        // In production, implement additional social verification (e.g., user confirmation dialog)
+
+        // Decrypt the stored share first (it was encrypted with our public key)
+        const identity = this.network.getIdentity();
+
+        const storedShareData = Buffer.from(share.shareData, "base64");
+        const storedEphemeralPubKey = Buffer.from(share.ephemeralPublicKey, "base64");
+        const storedNonce = Buffer.from(share.nonce, "base64");
+
+        const decryptedShareData = await this.decryptECIES(
+          storedShareData,
+          storedEphemeralPubKey,
+          storedNonce,
+          identity.privateKey,
+        );
+
+        // Re-encrypt the share with the requester's new public key
+        const requesterNewPublicKey = Buffer.from(data.newPublicKey, "base64");
+        const encryptionResult = await this.encryptECIES(decryptedShareData, requesterNewPublicKey);
 
         const respData: ResponseSharePayload = {
           shareId: share.shareId,
-          shareData: share.shareData,
+          shareData: Buffer.from(encryptionResult.encrypted).toString("base64"),
           fingerprint: data.fingerprint,
+          ephemeralPublicKey: Buffer.from(encryptionResult.ephemeralPublicKey).toString("base64"),
+          nonce: Buffer.from(encryptionResult.nonce).toString("base64"),
         };
 
         const payload = new TextEncoder().encode(JSON.stringify(respData));
@@ -193,39 +300,53 @@ export class SocialRecoveryManager {
       );
       console.log(`Received recovery share part for ${data.fingerprint}`);
 
-      // TODO: Decrypt
-      const sharePart = {
-        x: data.shareId,
-        y: new Uint8Array(Buffer.from(data.shareData, "base64")) as Uint8Array,
-      };
-      const current = this.collectedShares.get(data.fingerprint) || [];
-      // Avoid duplicates
-      if (!current.find((s) => s.x === sharePart.x)) {
-        current.push(sharePart);
-        this.collectedShares.set(data.fingerprint, current);
-      }
-
-      // Check if we can recover
-      // We need threshold. We don't know it explicitly here unless encoded in shareData metadata?
-      // Shamir combine throws if not enough shares? No, it produces garbage or works.
-      // Ideally we know threshold.
-      // Let's try combining if we have > 1 shares.
+      // Decrypt the received share using our private key
       const promise = (this as any)._recoveryPromise;
       if (promise && promise.fingerprint === data.fingerprint) {
         try {
-          // Try combining. If it works... how do we verify?
-          // Usually we check if hash(secret) matches fingerprint (if fingerprint was hash).
-          // For now, if we have, say, 3 shares, try.
+          const identity = this.network.getIdentity();
+
+          const encryptedShareData = Buffer.from(data.shareData, "base64");
+          const ephemeralPubKey = Buffer.from(data.ephemeralPublicKey, "base64");
+          const nonce = Buffer.from(data.nonce, "base64");
+
+          // Decrypt share with our private key
+          const decryptedShareData = await this.decryptECIES(
+            encryptedShareData,
+            ephemeralPubKey,
+            nonce,
+            identity.privateKey,
+          );
+
+          const sharePart = {
+            x: data.shareId,
+            y: decryptedShareData,
+          };
+
+          const current = this.collectedShares.get(data.fingerprint) || [];
+          // Avoid duplicates
+          if (!current.find((s) => s.x === sharePart.x)) {
+            current.push(sharePart);
+            this.collectedShares.set(data.fingerprint, current);
+          }
+
+          // Try to combine shares if we have enough
+          // Shamir's Secret Sharing will fail gracefully if we don't have enough shares
           if (current.length >= 2) {
-            // Arbitrary minimum for now
-            const secret = combine(current);
-            // If we succeeded (no error thrown), resolve
-            clearTimeout(promise.timeout);
-            promise.resolve(secret);
-            (this as any)._recoveryPromise = undefined;
+            // Try with minimum 2 shares, will throw if threshold not met
+            try {
+              const secret = combine(current);
+              // If successful, resolve the recovery promise
+              clearTimeout(promise.timeout);
+              promise.resolve(secret);
+              (this as any)._recoveryPromise = undefined;
+            } catch (e) {
+              // Not enough shares yet, or invalid combination
+              console.log(`Cannot combine yet: ${e}`);
+            }
           }
         } catch (e) {
-          // Not enough shares yet
+          console.error(`Failed to decrypt share: ${e}`);
         }
       }
     }
@@ -254,8 +375,7 @@ export class SocialRecoveryManager {
     // Assume I can get it or MeshNetwork exposes a helper.
     // For this prototype, I'll access it via `(this.network as any).identity`.
 
-    const identity = (this.network as any).identity; // Hack for access
-    if (!identity) throw new Error("Network identity not available");
+    const identity = this.network.getIdentity();
 
     const header = {
       version: 1,

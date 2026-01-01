@@ -14,6 +14,7 @@ export interface GossipConfig {
   maxMessageAge: number; // Max age of messages to gossip (default: 60000)
   pruneInterval: number; // How often to prune old messages (default: 30000)
   pushPullRatio: number; // Ratio of push vs pull (0-1, default: 0.7)
+  maxDigestSize: number; // Maximum number of message hashes in digest (default: 50)
 }
 
 interface GossipMessage {
@@ -48,6 +49,8 @@ export class GossipProtocol {
   // Callbacks
   private onMessageReceived: ((message: Message, fromPeer: string) => void) | null = null;
   private onMessageForward: ((message: Message, toPeers: string[]) => Promise<void>) | null = null;
+  private onDigestRequest: ((peerId: string, digest: string[]) => Promise<string[]>) | null = null;
+  private onDigestResponse: ((peerId: string, missingHashes: string[]) => Promise<Message[]>) | null = null;
 
   constructor(config?: Partial<GossipConfig>) {
     this.config = {
@@ -56,6 +59,7 @@ export class GossipProtocol {
       maxMessageAge: config?.maxMessageAge ?? 60000, // 1 minute
       pruneInterval: config?.pruneInterval ?? 30000, // 30 seconds
       pushPullRatio: config?.pushPullRatio ?? 0.7, // 70% push, 30% pull
+      maxDigestSize: config?.maxDigestSize ?? 50, // Limit digest to 50 messages
     };
   }
 
@@ -111,6 +115,18 @@ export class GossipProtocol {
    */
   onForward(callback: (message: Message, toPeers: string[]) => Promise<void>): void {
     this.onMessageForward = callback;
+  }
+
+  /**
+   * Register a callback for digest exchange (pull gossip)
+   * The callback should return message hashes that the peer is missing
+   */
+  onDigestExchange(
+    requestCallback: (peerId: string, digest: string[]) => Promise<string[]>,
+    responseCallback: (peerId: string, missingHashes: string[]) => Promise<Message[]>,
+  ): void {
+    this.onDigestRequest = requestCallback;
+    this.onDigestResponse = responseCallback;
   }
 
   /**
@@ -190,9 +206,14 @@ export class GossipProtocol {
     // Select random peers for this round (fanout)
     const selectedPeers = this.selectRandomPeers(activePeers, this.config.fanout);
 
-    // For now, only use push gossip (pull is TODO)
-    // TODO: Implement pull gossip with digest exchange
-    await this.pushGossip(selectedPeers);
+    // Hybrid push-pull: Use ratio to determine which operation to perform
+    // Push gossip is good for fast dissemination of new messages
+    // Pull gossip is good for anti-entropy (recovering missed messages)
+    if (Math.random() < this.config.pushPullRatio) {
+      await this.pushGossip(selectedPeers);
+    } else {
+      await this.pullGossip(selectedPeers);
+    }
   }
 
   /**
@@ -223,16 +244,94 @@ export class GossipProtocol {
   }
 
   /**
-   * Pull gossip: Request messages we might have missed
-   * In a real implementation, this would send digest requests to peers
+   * Create a digest of our recent messages (list of hashes)
+   * Used for pull gossip to determine what messages we're missing
    */
-  private async pullGossip(_peers: GossipPeer[]): Promise<void> {
-    // TODO: Implement pull gossip with digest exchange
-    // For now, this is a placeholder
-    // In a full implementation:
-    // 1. Send digest (list of message hashes we have) to peers
-    // 2. Peers respond with messages we're missing
-    // 3. We request and receive those messages
+  private createDigest(): string[] {
+    const now = Date.now();
+    const digest: string[] = [];
+
+    for (const [hash, gossipMsg] of this.messages.entries()) {
+      // Only include recent messages in digest
+      if (now - gossipMsg.received < this.config.maxMessageAge) {
+        digest.push(hash);
+      }
+    }
+
+    return digest;
+  }
+
+  /**
+   * Handle digest from peer and return hashes we're missing
+   * Used in pull gossip to identify messages to request
+   */
+  handleDigest(peerDigest: string[]): string[] {
+    const missing: string[] = [];
+
+    for (const hash of peerDigest) {
+      if (!this.messagesSeen.has(hash)) {
+        missing.push(hash);
+      }
+    }
+
+    // Limit number of missing messages to request (configurable to prevent overwhelming)
+    return missing.slice(0, this.config.maxDigestSize);
+  }
+
+  /**
+   * Get messages by their hashes
+   * Used to respond to pull gossip requests
+   */
+  getMessagesByHashes(hashes: string[]): Message[] {
+    const messages: Message[] = [];
+
+    for (const hash of hashes) {
+      const gossipMsg = this.messages.get(hash);
+      if (gossipMsg) {
+        messages.push(gossipMsg.message);
+      }
+    }
+
+    return messages;
+  }
+
+  /**
+   * Pull gossip: Request messages we might have missed
+   * Uses digest exchange to sync with peers
+   */
+  private async pullGossip(peers: GossipPeer[]): Promise<void> {
+    if (!this.onDigestRequest || !this.onDigestResponse) {
+      // Callbacks not registered, skip pull gossip
+      return;
+    }
+
+    // Create digest of our current messages
+    const ourDigest = this.createDigest();
+
+    // For each selected peer, exchange digests
+    for (const peer of peers) {
+      try {
+        // Send our digest and get missing hashes from peer
+        const missingHashes = await this.onDigestRequest(peer.id, ourDigest);
+
+        if (missingHashes.length > 0) {
+          // Request the missing messages
+          const missingMessages = await this.onDigestResponse(peer.id, missingHashes);
+
+          // Add the received messages to our store
+          for (const message of missingMessages) {
+            try {
+              this.receiveMessage(message, peer.id);
+            } catch (error) {
+              console.error(`Failed to process gossip message from peer ${peer.id}:`, error);
+              // Continue processing remaining messages even if one fails
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`Pull gossip failed with peer ${peer.id}:`, error);
+      }
+    }
   }
 
   /**

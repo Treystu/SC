@@ -648,10 +648,17 @@ export class MeshNetwork {
    * Handle peer connected
    */
   private handlePeerConnected(peerId: string): void {
+    // Get transport type - if it's not one of the known types, default to "webrtc"
+    const transportName = this.webrtcTransport.name;
+    const validTransportTypes = ["webrtc", "bluetooth", "local"] as const;
+    const transportType = validTransportTypes.includes(transportName as any)
+      ? (transportName as "webrtc" | "bluetooth" | "local")
+      : "webrtc"; // Safe default fallback
+
     const peer = createPeer(
       peerId,
       new Uint8Array(32), // Would be obtained during handshake
-      "webrtc", // Using WebRTC transport (webrtcTransport.name)
+      transportType,
     );
 
     this.routingTable.addPeer(peer);
