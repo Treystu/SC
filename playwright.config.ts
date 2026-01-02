@@ -87,7 +87,9 @@ export default defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: 'npm run dev -- --port 3001 --strictPort',
+    command: process.env.CI
+      ? 'npx serve -s web/dist -l 3001'
+      : 'npm run dev -- --port 3001 --strictPort',
     url: 'http://localhost:3001',
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,
