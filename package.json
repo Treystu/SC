@@ -52,7 +52,9 @@
   },
   "homepage": "https://github.com/Treystu/SC#readme",
   "devDependencies": {
+    "@babel/core": "^7.28.5",
     "@babel/plugin-transform-runtime": "^7.28.5",
+    "@babel/preset-env": "^7.28.5",
     "@babel/runtime": "^7.28.4",
     "@playwright/test": "^1.57.0",
     "@stryker-mutator/core": "^8.0.0",

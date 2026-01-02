@@ -21,7 +21,7 @@ import {
   DiscoveryPeer,
   DiscoveryProvider,
 } from "./discovery.js";
-import { KademliaRoutingTable, hexToNodeId } from "./dht/index.js";
+import { KademliaRoutingTable, hexToNodeId, publicKeyToNodeId } from "./dht/index.js";
 import { HttpBootstrapProvider } from "../discovery/http-bootstrap.js";
 import { StorageAdapter } from "./dht/storage/StorageAdapter.js";
 import { RendezvousManager } from "./rendezvous.js";
@@ -126,7 +126,8 @@ export class MeshNetwork {
     this.maxPeers = config.maxPeers || 50;
 
     // Initialize components
-    const dhtNodeId = hexToNodeId(this.localPeerId);
+    // Derive DHT node ID from public key (not from hex peer ID which is 64 chars)
+    const dhtNodeId = publicKeyToNodeId(this.identity.publicKey);
     const dhtRoutingTable = new KademliaRoutingTable(dhtNodeId);
 
     this.routingTable = new RoutingTable(this.localPeerId, {
