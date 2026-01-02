@@ -88,7 +88,7 @@ export default defineConfig({
   /* Run your local dev server before starting the tests */
   webServer: {
     command: process.env.CI
-      ? 'npx serve -s web/dist -l 3001'
+      ? 'npx vite preview --outDir web/dist --port 3001 --strictPort'
       : 'npm run dev -- --port 3001 --strictPort',
     url: 'http://localhost:3001',
     reuseExistingServer: !process.env.CI,
