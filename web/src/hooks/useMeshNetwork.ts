@@ -93,7 +93,7 @@ export function useMeshNetwork() {
       try {
         const network = await getMeshNetwork();
         const db = getDatabase();
-        network.startHeartbeat();
+        await network.start();
         meshNetworkRef.current = network;
         connectionMonitorRef.current = new ConnectionMonitor();
 
@@ -345,6 +345,15 @@ export function useMeshNetwork() {
             if (prev.includes(peer.id)) return prev;
             return [...prev, peer.id];
           });
+        });
+
+        // Handle session invalidation (single-session enforcement)
+        network.onSessionInvalidated(() => {
+          useMeshNetworkLogger.warn("Session invalidated: Another session with this identity has been detected.");
+          // Show alert to user
+          if (window.confirm("Your session has been invalidated because this identity was logged in elsewhere. Click OK to reload.")) {
+            window.location.reload();
+          }
         });
 
         const updatePeerStatus = () => {

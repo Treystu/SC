@@ -842,6 +842,59 @@ export class DatabaseManager {
     });
   }
 
+  // ===== SETTINGS OPERATIONS =====
+
+  /**
+   * Get a setting by key
+   */
+  async getSetting<T = any>(key: string): Promise<T | null> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(["settings"], "readonly");
+      const store = transaction.objectStore("settings");
+      const request = store.get(key);
+
+      request.onsuccess = () => {
+        const result = request.result;
+        resolve(result ? result.value : null);
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  /**
+   * Set a setting
+   */
+  async setSetting<T = any>(key: string, value: T): Promise<void> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(["settings"], "readwrite");
+      const store = transaction.objectStore("settings");
+      const request = store.put({ key, value });
+
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  /**
+   * Delete a setting
+   */
+  async deleteSetting(key: string): Promise<void> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(["settings"], "readwrite");
+      const store = transaction.objectStore("settings");
+      const request = store.delete(key);
+
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+
   // ===== PEER PERSISTENCE OPERATIONS (V1 Persistence) =====
 
   /**

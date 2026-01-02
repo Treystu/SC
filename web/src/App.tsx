@@ -99,6 +99,26 @@ function App() {
     sendVoice,
   } = useMeshNetwork();
 
+  // Check onboarding completion status from IndexedDB
+  useEffect(() => {
+    if (isE2E) return; // Skip in E2E mode
+
+    const checkOnboardingStatus = async () => {
+      try {
+        const db = getDatabase();
+        await db.init();
+        const onboardingComplete = await db.getSetting<boolean>("onboarding-complete");
+        if (onboardingComplete === true) {
+          setShowOnboarding(false);
+        }
+      } catch (error) {
+        console.error('Failed to check onboarding status:', error);
+      }
+    };
+
+    checkOnboardingStatus();
+  }, [isE2E]);
+
   // Setup logger
   useEffect(() => {
     console.log('[App] useEffect: Setup logger starting');

@@ -9,7 +9,7 @@ export interface Migration {
   down: (db: IDBDatabase) => Promise<void>;
 }
 
-export const CURRENT_SCHEMA_VERSION = 4;
+export const CURRENT_SCHEMA_VERSION = 5;
 
 export const migrations: Migration[] = [
   {
@@ -157,6 +157,20 @@ export const migrations: Migration[] = [
     down: async (db) => {
       if (db.objectStoreNames.contains("offline-queue")) {
         db.deleteObjectStore("offline-queue");
+      }
+    },
+  },
+  {
+    version: 5,
+    up: async (db) => {
+      // Add settings object store for app-level configuration
+      if (!db.objectStoreNames.contains("settings")) {
+        db.createObjectStore("settings", { keyPath: "key" });
+      }
+    },
+    down: async (db) => {
+      if (db.objectStoreNames.contains("settings")) {
+        db.deleteObjectStore("settings");
       }
     },
   },

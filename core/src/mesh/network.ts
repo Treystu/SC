@@ -97,6 +97,12 @@ export class MeshNetwork {
     }
   > = new Map();
 
+  // Session enforcement (single-session per identity)
+  private sessionId: string;
+  private sessionTimestamp: number;
+  private sessionPresenceInterval: any;
+  private onSessionInvalidatedCallback?: () => void;
+
   // Metrics tracking
   private messagesSent = 0;
   private messagesReceived = 0;
@@ -110,6 +116,10 @@ export class MeshNetwork {
     // Peer IDs across the codebase are expected to be the hex-encoded public key.
     this.localPeerId =
       config.peerId || Buffer.from(this.identity.publicKey).toString("hex");
+
+    // Initialize session for single-session enforcement
+    this.sessionId = this.generateSessionId();
+    this.sessionTimestamp = Date.now();
 
     // Configuration
     this.defaultTTL = config.defaultTTL || 10;
@@ -384,6 +394,12 @@ export class MeshNetwork {
         } catch (e) {
           // Ignore malformed PONG
         }
+        return;
+      }
+
+      // Handle Session Presence (Single-Session Enforcement)
+      if (message.header.type === MessageType.SESSION_PRESENCE) {
+        this.handleSessionPresence(senderId, message.payload);
         return;
       }
 
@@ -1189,6 +1205,110 @@ export class MeshNetwork {
     };
   }
 
+  // ===== SESSION MANAGEMENT (Single-Session Enforcement) =====
+
+  /**
+   * Generate a unique session ID
+   */
+  private generateSessionId(): string {
+    const randomBytes = new Uint8Array(16);
+    crypto.getRandomValues(randomBytes);
+    return Array.from(randomBytes)
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+  }
+
+  /**
+   * Start broadcasting session presence
+   */
+  private startSessionPresence(): void {
+    // Broadcast immediately
+    this.broadcastSessionPresence();
+
+    // Then broadcast every 30 seconds
+    this.sessionPresenceInterval = setInterval(() => {
+      this.broadcastSessionPresence();
+    }, 30000);
+  }
+
+  /**
+   * Stop broadcasting session presence
+   */
+  private stopSessionPresence(): void {
+    if (this.sessionPresenceInterval) {
+      clearInterval(this.sessionPresenceInterval);
+      this.sessionPresenceInterval = null;
+    }
+  }
+
+  /**
+   * Broadcast session presence to all connected peers
+   */
+  private async broadcastSessionPresence(): Promise<void> {
+    try {
+      const payload = JSON.stringify({
+        sessionId: this.sessionId,
+        timestamp: this.sessionTimestamp,
+        identityFingerprint: Buffer.from(this.identity.publicKey).toString("hex"),
+      });
+
+      // Broadcast to all connected peers
+      await this.broadcastMessage(payload, MessageType.SESSION_PRESENCE);
+    } catch (error) {
+      console.error("Failed to broadcast session presence:", error);
+    }
+  }
+
+  /**
+   * Handle incoming session presence message
+   */
+  private handleSessionPresence(fromPeerId: string, payload: any): void {
+    try {
+      const data = JSON.parse(new TextDecoder().decode(payload));
+      const { sessionId, timestamp, identityFingerprint } = data;
+
+      // Get our own identity fingerprint
+      const ourFingerprint = Buffer.from(this.identity.publicKey).toString("hex");
+
+      // Check if this is a duplicate session of our identity
+      if (identityFingerprint === ourFingerprint && sessionId !== this.sessionId) {
+        // Another session with our identity exists!
+        // If their timestamp is newer, we should invalidate this session
+        if (timestamp > this.sessionTimestamp) {
+          console.warn(
+            `Detected newer session for our identity. Invalidating this session.
+            Our session: ${this.sessionId} (${new Date(this.sessionTimestamp).toISOString()})
+            New session: ${sessionId} (${new Date(timestamp).toISOString()})`
+          );
+
+          // Call the invalidation callback
+          if (this.onSessionInvalidatedCallback) {
+            this.onSessionInvalidatedCallback();
+          }
+
+          // Shutdown this instance
+          this.shutdown();
+        } else {
+          // Our session is newer - the other session should invalidate itself
+          console.info(
+            `Detected older session for our identity. Our session is newer - keeping it.
+            Our session: ${this.sessionId} (${new Date(this.sessionTimestamp).toISOString()})
+            Old session: ${sessionId} (${new Date(timestamp).toISOString()})`
+          );
+        }
+      }
+    } catch (error) {
+      console.error("Failed to handle session presence:", error);
+    }
+  }
+
+  /**
+   * Register callback for session invalidation
+   */
+  onSessionInvalidated(callback: () => void): void {
+    this.onSessionInvalidatedCallback = callback;
+  }
+
   /**
    * Disconnect from all peers and shut down
    */
@@ -1198,6 +1318,7 @@ export class MeshNetwork {
       this.routingTable.removePeer(peer.id);
     });
     this.stopHeartbeat();
+    this.stopSessionPresence();
   } /**
    * Get local identity
    */
@@ -1387,6 +1508,7 @@ export class MeshNetwork {
   async start(): Promise<void> {
     await this.transportManager.start();
     this.startHeartbeat();
+    this.startSessionPresence();
   }
 
   /**

@@ -49,19 +49,9 @@ export const getMeshNetwork = async (): Promise<MeshNetwork> => {
       try {
         console.log('[MeshNetworkService] Loading primary identity from DB...');
         const storedIdentity = await db.getPrimaryIdentity();
-        const displayName = localStorage.getItem("sc-display-name");
 
         if (storedIdentity) {
           console.log('[MeshNetworkService] Loaded persisted identity:', storedIdentity.fingerprint, storedIdentity.id);
-
-          if (displayName && storedIdentity.displayName !== displayName) {
-            console.log('[MeshNetworkService] Updating displayName in DB:', displayName);
-            await db.saveIdentity({
-              ...storedIdentity,
-              displayName: displayName,
-            });
-            storedIdentity.displayName = displayName;
-          }
 
           const normalize = (v: any) => {
             if (v instanceof Uint8Array) return v;
@@ -110,12 +100,12 @@ export const getMeshNetwork = async (): Promise<MeshNetwork> => {
             createdAt: Date.now(),
             isPrimary: true,
             label: "Primary Identity",
-            displayName: displayName || undefined,
+            displayName: undefined,
           });
 
           identityKeyPair = {
             ...newIdentity,
-            displayName: displayName || undefined,
+            displayName: undefined,
           };
           peerId = newId;
           console.log('[MeshNetworkService] Generated and saved new identity:', { peerId, fingerprint });
@@ -129,7 +119,6 @@ export const getMeshNetwork = async (): Promise<MeshNetwork> => {
           const newIdentity = generateIdentity();
           const fingerprint = await generateFingerprint(newIdentity.publicKey);
           const newId = fingerprint.substring(0, 16);
-          const displayName = localStorage.getItem("sc-display-name");
           await db.saveIdentity({
             id: newId,
             publicKey: newIdentity.publicKey,
@@ -138,11 +127,11 @@ export const getMeshNetwork = async (): Promise<MeshNetwork> => {
             createdAt: Date.now(),
             isPrimary: true,
             label: "Primary Identity",
-            displayName: displayName || undefined,
+            displayName: undefined,
           });
           identityKeyPair = {
             ...newIdentity,
-            displayName: displayName || undefined,
+            displayName: undefined,
           };
           peerId = newId;
           console.log('[MeshNetworkService] Identity reset and saved:', { peerId, fingerprint });
