@@ -1252,8 +1252,36 @@ export class MeshNetwork {
         identityFingerprint: Buffer.from(this.identity.publicKey).toString("hex"),
       });
 
+      const payloadBytes = new TextEncoder().encode(payload);
+      const message: Message = {
+        header: {
+          version: 0x01,
+          type: MessageType.SESSION_PRESENCE,
+          ttl: this.defaultTTL,
+          timestamp: Date.now(),
+          senderId: this.identity.publicKey,
+          signature: new Uint8Array(64),
+        },
+        payload: payloadBytes,
+      };
+
+      // Sign and broadcast
+      const messageBytes = encodeMessage(message);
+      message.header.signature = signMessage(
+        messageBytes,
+        this.identity.privateKey,
+      );
+      const encodedMessage = encodeMessage(message);
+
       // Broadcast to all connected peers
-      await this.broadcastMessage(payload, MessageType.SESSION_PRESENCE);
+      this.routingTable.getAllPeers().forEach((peer) => {
+        if (
+          peer.state === PeerState.CONNECTED ||
+          peer.state === PeerState.DEGRADED
+        ) {
+          this.transportManager.send(peer.id, encodedMessage).catch(() => {});
+        }
+      });
     } catch (error) {
       console.error("Failed to broadcast session presence:", error);
     }
