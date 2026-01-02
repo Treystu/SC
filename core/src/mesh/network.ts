@@ -1222,6 +1222,9 @@ export class MeshNetwork {
    * Start broadcasting session presence
    */
   private startSessionPresence(): void {
+    // Clear existing interval if any
+    if (this.sessionPresenceInterval) clearInterval(this.sessionPresenceInterval);
+
     // Broadcast immediately
     this.broadcastSessionPresence();
 
@@ -1229,6 +1232,18 @@ export class MeshNetwork {
     this.sessionPresenceInterval = setInterval(() => {
       this.broadcastSessionPresence();
     }, 30000);
+
+    // Allow Node.js to exit cleanly
+    try {
+      if (
+        this.sessionPresenceInterval &&
+        typeof (this.sessionPresenceInterval as any).unref === "function"
+      ) {
+        (this.sessionPresenceInterval as any).unref();
+      }
+    } catch (e) {
+      /* no-op */
+    }
   }
 
   /**
@@ -1266,6 +1281,8 @@ export class MeshNetwork {
       };
 
       // Sign and broadcast
+      // Note: We encode twice because signature must be computed over the message
+      // without the signature field populated, then we set the signature and encode again
       const messageBytes = encodeMessage(message);
       message.header.signature = signMessage(
         messageBytes,
@@ -1301,8 +1318,19 @@ export class MeshNetwork {
       // Check if this is a duplicate session of our identity
       if (identityFingerprint === ourFingerprint && sessionId !== this.sessionId) {
         // Another session with our identity exists!
-        // If their timestamp is newer, we should invalidate this session
+        // Determine which session should be invalidated
+        let shouldInvalidate = false;
+
         if (timestamp > this.sessionTimestamp) {
+          // Their timestamp is newer - invalidate this session
+          shouldInvalidate = true;
+        } else if (timestamp === this.sessionTimestamp) {
+          // Race condition: same timestamp (e.g., simultaneous logins)
+          // Use sessionId lexicographic comparison as deterministic tie-breaker
+          shouldInvalidate = sessionId > this.sessionId;
+        }
+
+        if (shouldInvalidate) {
           console.warn(
             `Detected newer session for our identity. Invalidating this session.
             Our session: ${this.sessionId} (${new Date(this.sessionTimestamp).toISOString()})

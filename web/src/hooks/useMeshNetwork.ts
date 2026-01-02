@@ -350,10 +350,9 @@ export function useMeshNetwork() {
         // Handle session invalidation (single-session enforcement)
         network.onSessionInvalidated(() => {
           useMeshNetworkLogger.warn("Session invalidated: Another session with this identity has been detected.");
-          // Show alert to user
-          if (window.confirm("Your session has been invalidated because this identity was logged in elsewhere. Click OK to reload.")) {
-            window.location.reload();
-          }
+          // Alert user and force reload (no cancel option to prevent invalid session use)
+          alert("Your session has been invalidated because this identity was logged in elsewhere. The page will now reload.");
+          window.location.reload();
         });
 
         const updatePeerStatus = () => {

@@ -19,14 +19,23 @@ const getRelayUrl = () => {
     return import.meta.env.VITE_RELAY_URL;
   }
 
-  // Try Netlify functions (common pattern)
-  if (window.location.pathname.startsWith('/.netlify/') ||
-      document.querySelector('script[src*=".netlify"]')) {
+  // Defensive check for non-browser environments (SSR, tests, Node.js)
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return "";
+  }
+
+  // Detect Netlify deployment by hostname
+  const isNetlifyHost =
+    window.location.hostname.endsWith(".netlify.app") ||
+    window.location.hostname.endsWith(".netlify.com");
+
+  if (isNetlifyHost) {
     return window.location.origin + "/.netlify/functions/room";
   }
 
-  // Try standard /api endpoint
-  return window.location.origin + "/api/room";
+  // For other deployments, return empty string to allow P2P-only mode
+  // App.tsx checks for relayUrl before attempting to connect
+  return "";
 };
 
 export const config: AppConfig = {

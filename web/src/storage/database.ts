@@ -1519,8 +1519,13 @@ export class DatabaseManager {
       if (data.settings) {
         for (const [key, value] of Object.entries(data.settings)) {
           try {
-            await this.setSetting(key, value);
-            imported++;
+            const existing = await this.getSetting(key);
+            if (existing !== null && options.mergeStrategy === "skip-existing") {
+              skipped++;
+            } else {
+              await this.setSetting(key, value);
+              imported++;
+            }
           } catch (error) {
             errors.push(`Failed to import setting ${key}: ${error}`);
           }
@@ -1534,6 +1539,14 @@ export class DatabaseManager {
           const profile = (data as any).userProfile;
           if (profile.displayName) {
             await this.setSetting("displayName", profile.displayName);
+            // Also update the primary identity with displayName
+            const identity = await this.getPrimaryIdentity();
+            if (identity) {
+              await this.saveIdentity({
+                ...identity,
+                displayName: profile.displayName,
+              });
+            }
           }
           if (profile.avatar) {
             await this.setSetting("avatar", profile.avatar);

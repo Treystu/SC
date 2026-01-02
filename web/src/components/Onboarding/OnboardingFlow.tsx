@@ -49,19 +49,25 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       case "privacy":
         // Save onboarding completion flag and display name to IndexedDB
         (async () => {
-          const db = getDatabase();
-          await db.setSetting("onboarding-complete", true);
-          if (displayName) {
-            // Update the identity with the display name
-            const identity = await db.getPrimaryIdentity();
-            if (identity) {
-              await db.saveIdentity({
-                ...identity,
-                displayName: displayName,
-              });
+          try {
+            const db = getDatabase();
+            await db.setSetting("onboarding-complete", true);
+            if (displayName) {
+              // Update the identity with the display name
+              const identity = await db.getPrimaryIdentity();
+              if (identity) {
+                await db.saveIdentity({
+                  ...identity,
+                  displayName: displayName,
+                });
+              }
             }
+            onComplete();
+          } catch (error) {
+            console.error("Failed to complete onboarding:", error);
+            // Still call onComplete to not leave user stuck
+            onComplete();
           }
-          onComplete();
         })();
         break;
     }
