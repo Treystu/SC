@@ -1,37 +1,36 @@
 export interface AppConfig {
-  deploymentMode: "netlify" | "server" | "p2p-only";
   publicHub: boolean;
   relayUrl: string;
-  logUrl: string;
+  bootstrapEnabled: boolean;
 }
 
-const mode = import.meta.env.VITE_DEPLOYMENT_MODE || "netlify";
-const publicHub = import.meta.env.VITE_PUBLIC_HUB === "true";
+// All web deployments are equal - they can all:
+// 1. Act as full mesh nodes (P2P)
+// 2. Bootstrap new nodes
+// 3. Serve as public chat rooms
+// The only difference is whether a relay/room server is available
 
-// Determine the default relay URL based on deployment mode
+const publicHub = import.meta.env.VITE_PUBLIC_HUB !== "false"; // Default to true
+
+// Auto-detect relay URL - try common endpoints
 const getRelayUrl = () => {
-  if (mode === "netlify") {
-    return window.location.origin + "/.netlify/functions/room";
-  } else if (mode === "server") {
-    // In standalone server mode, the relay is on the same host/port but via WebSocket
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    return `${protocol}//${window.location.host}`;
+  // First check if explicitly configured
+  if (import.meta.env.VITE_RELAY_URL) {
+    return import.meta.env.VITE_RELAY_URL;
   }
-  return "";
-};
 
-const getLogUrl = () => {
-  if (mode === "netlify") {
-    // No remote logging for client app to ensure decentralization
-    return "";
+  // Try Netlify functions (common pattern)
+  if (window.location.pathname.startsWith('/.netlify/') ||
+      document.querySelector('script[src*=".netlify"]')) {
+    return window.location.origin + "/.netlify/functions/room";
   }
-  // For other modes, we might not have a remote logger, or it could be a specific endpoint
-  return "";
+
+  // Try standard /api endpoint
+  return window.location.origin + "/api/room";
 };
 
 export const config: AppConfig = {
-  deploymentMode: mode as AppConfig["deploymentMode"],
   publicHub,
   relayUrl: getRelayUrl(),
-  logUrl: getLogUrl(),
+  bootstrapEnabled: true, // All web nodes can bootstrap others
 };

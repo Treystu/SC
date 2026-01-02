@@ -14,8 +14,8 @@ publish = "web/dist"
 # Set node version and default env vars
 [build.environment]
 NODE_VERSION = "20"
-VITE_DEPLOYMENT_MODE = "netlify"
 VITE_PUBLIC_HUB = "true"
+# All web deployments are equal - no special "netlify" mode needed
 
 # Functions directory
 functions = "netlify/functions"

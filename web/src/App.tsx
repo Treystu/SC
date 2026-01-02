@@ -401,8 +401,8 @@ function App() {
 
       if (roomUrl) {
         attemptJoin(roomUrl);
-      } else if (config.publicHub || config.deploymentMode === "netlify") {
-        console.log(`Auto-joining room in ${config.deploymentMode} mode...`);
+      } else if (config.publicHub) {
+        console.log('Auto-joining public room...');
         // Use joinRoom directly to avoid setting selectedConversation (silent join)
         if (config.relayUrl) {
           attemptJoin(config.relayUrl);
