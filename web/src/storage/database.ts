@@ -842,6 +842,81 @@ export class DatabaseManager {
     });
   }
 
+  // ===== SETTINGS OPERATIONS =====
+
+  /**
+   * Get a setting by key
+   */
+  async getSetting<T = any>(key: string): Promise<T | null> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(["settings"], "readonly");
+      const store = transaction.objectStore("settings");
+      const request = store.get(key);
+
+      request.onsuccess = () => {
+        const result = request.result;
+        resolve(result ? result.value : null);
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  /**
+   * Set a setting
+   */
+  async setSetting<T = any>(key: string, value: T): Promise<void> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(["settings"], "readwrite");
+      const store = transaction.objectStore("settings");
+      const request = store.put({ key, value });
+
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  /**
+   * Delete a setting
+   */
+  async deleteSetting(key: string): Promise<void> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(["settings"], "readwrite");
+      const store = transaction.objectStore("settings");
+      const request = store.delete(key);
+
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  /**
+   * Get all settings as a key-value object
+   */
+  private async getAllSettings(): Promise<Record<string, any>> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(["settings"], "readonly");
+      const store = transaction.objectStore("settings");
+      const request = store.getAll();
+
+      request.onsuccess = () => {
+        const settings: Record<string, any> = {};
+        request.result.forEach((item: { key: string; value: any }) => {
+          settings[item.key] = item.value;
+        });
+        resolve(settings);
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
+
   // ===== PEER PERSISTENCE OPERATIONS (V1 Persistence) =====
 
   /**
@@ -1185,7 +1260,7 @@ export class DatabaseManager {
     peers?: PersistedPeer[];
     routes?: Route[];
     sessionKeys?: SessionKey[];
-    userProfile?: any;
+    settings?: Record<string, any>;
   }> {
     if (!this.db) await this.init();
 
@@ -1247,9 +1322,10 @@ export class DatabaseManager {
       exportedData.messages = messages;
     }
     if (exportOptions.includeSettings) {
-      const userProfile = localStorage.getItem("user_profile");
-      if (userProfile) {
-        exportedData.userProfile = JSON.parse(userProfile);
+      // Export all settings from IndexedDB (no more localStorage!)
+      const settings = await this.getAllSettings();
+      if (settings && Object.keys(settings).length > 0) {
+        exportedData.settings = settings;
       }
       exportedData.peers = peers;
       exportedData.routes = routes;
@@ -1306,6 +1382,7 @@ export class DatabaseManager {
       peers?: PersistedPeer[];
       routes?: Route[];
       sessionKeys?: SessionKey[];
+      settings?: Record<string, any>;
     },
     options: {
       mergeStrategy: "overwrite" | "merge" | "skip-existing";
@@ -1438,22 +1515,45 @@ export class DatabaseManager {
         }
       }
 
-      // Import user profile
+      // Import settings (replaces old userProfile localStorage approach)
+      if (data.settings) {
+        for (const [key, value] of Object.entries(data.settings)) {
+          try {
+            const existing = await this.getSetting(key);
+            if (existing !== null && options.mergeStrategy === "skip-existing") {
+              skipped++;
+            } else {
+              await this.setSetting(key, value);
+              imported++;
+            }
+          } catch (error) {
+            errors.push(`Failed to import setting ${key}: ${error}`);
+          }
+        }
+      }
+
+      // Legacy: Import old userProfile from localStorage-based backups
       if ((data as any).userProfile) {
         try {
-          localStorage.setItem(
-            "user_profile",
-            JSON.stringify((data as any).userProfile),
-          );
-          if ((data as any).userProfile.displayName) {
-            localStorage.setItem(
-              "sc-display-name",
-              (data as any).userProfile.displayName,
-            );
+          // Convert old userProfile to new settings format
+          const profile = (data as any).userProfile;
+          if (profile.displayName) {
+            await this.setSetting("displayName", profile.displayName);
+            // Also update the primary identity with displayName
+            const identity = await this.getPrimaryIdentity();
+            if (identity) {
+              await this.saveIdentity({
+                ...identity,
+                displayName: profile.displayName,
+              });
+            }
+          }
+          if (profile.avatar) {
+            await this.setSetting("avatar", profile.avatar);
           }
           imported++;
         } catch (error) {
-          errors.push(`Failed to import user profile: ${error}`);
+          errors.push(`Failed to import legacy user profile: ${error}`);
         }
       }
     } catch (error) {

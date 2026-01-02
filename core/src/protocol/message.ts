@@ -48,6 +48,7 @@ export enum MessageType {
   // Cryptographic
   KEY_EXCHANGE = 0x30,
   SESSION_KEY = 0x31,
+  SESSION_PRESENCE = 0x32,  // Session presence broadcast for single-session enforcement
   // DHT / Kademlia
   DHT_FIND_NODE = 0x40,
   DHT_FOUND_NODES = 0x41,
@@ -356,6 +357,7 @@ export function getMessageTypeName(type: number): string {
     [MessageType.PEER_INTRODUCTION]: "PEER_INTRODUCTION",
     [MessageType.KEY_EXCHANGE]: "KEY_EXCHANGE",
     [MessageType.SESSION_KEY]: "SESSION_KEY",
+    [MessageType.SESSION_PRESENCE]: "SESSION_PRESENCE",
     [MessageType.DHT_FIND_NODE]: "DHT_FIND_NODE",
     [MessageType.DHT_FOUND_NODES]: "DHT_FOUND_NODES",
     [MessageType.DHT_FIND_VALUE]: "DHT_FIND_VALUE",

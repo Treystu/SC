@@ -2,6 +2,7 @@ import React, { useState, useRef } from "react";
 import { useMeshNetwork } from "../../hooks/useMeshNetwork";
 import { QRCodeShare } from "../QRCodeShare";
 import { useBackup } from "../../hooks/useBackup";
+import { getDatabase } from "../../storage/database";
 import "./OnboardingFlow.css";
 
 interface OnboardingFlowProps {
@@ -46,12 +47,28 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         setCurrentStep("privacy");
         break;
       case "privacy":
-        // Save onboarding completion flag
-        localStorage.setItem("sc-onboarding-complete", "true");
-        if (displayName) {
-          localStorage.setItem("sc-display-name", displayName);
-        }
-        onComplete();
+        // Save onboarding completion flag and display name to IndexedDB
+        (async () => {
+          try {
+            const db = getDatabase();
+            await db.setSetting("onboarding-complete", true);
+            if (displayName) {
+              // Update the identity with the display name
+              const identity = await db.getPrimaryIdentity();
+              if (identity) {
+                await db.saveIdentity({
+                  ...identity,
+                  displayName: displayName,
+                });
+              }
+            }
+            onComplete();
+          } catch (error) {
+            console.error("Failed to complete onboarding:", error);
+            // Still call onComplete to not leave user stuck
+            onComplete();
+          }
+        })();
         break;
     }
   };
@@ -78,8 +95,9 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       setShowRestorePassword(true);
       // Clear error after a moment or let user see it
     } else if (result?.success) {
-      // Success!
-      localStorage.setItem("sc-onboarding-complete", "true");
+      // Success! Save onboarding completion to IndexedDB
+      const db = getDatabase();
+      await db.setSetting("onboarding-complete", true);
       setTimeout(() => {
         window.location.reload();
       }, 2000);
@@ -93,7 +111,8 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         restorePassword,
       );
       if (result?.success) {
-        localStorage.setItem("sc-onboarding-complete", "true");
+        const db = getDatabase();
+        await db.setSetting("onboarding-complete", true);
         setTimeout(() => {
           window.location.reload();
         }, 2000);

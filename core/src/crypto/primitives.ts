@@ -127,6 +127,8 @@ export const randomBytes = (n: number): Uint8Array => {
   // Node fallback if web crypto unavailable
   try {
     if (typeof process !== "undefined" && process?.versions?.node) {
+      // Dynamic import for Node.js crypto module
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const nodeCrypto = require("crypto");
       return new Uint8Array(nodeCrypto.randomBytes(n));
     }
@@ -355,7 +357,7 @@ export function deriveMessageKey(chainKey: Uint8Array): {
 
 export function initializeRatchet(
   sharedSecret: Uint8Array,
-  isAlice: boolean,
+  _isAlice: boolean,
 ): RatchetState {
   const root = ensureUint8Array(sharedSecret);
   return {

@@ -21,7 +21,7 @@ import {
   DiscoveryPeer,
   DiscoveryProvider,
 } from "./discovery.js";
-import { KademliaRoutingTable, hexToNodeId } from "./dht/index.js";
+import { KademliaRoutingTable, hexToNodeId, publicKeyToNodeId } from "./dht/index.js";
 import { HttpBootstrapProvider } from "../discovery/http-bootstrap.js";
 import { StorageAdapter } from "./dht/storage/StorageAdapter.js";
 import { RendezvousManager } from "./rendezvous.js";
@@ -97,6 +97,12 @@ export class MeshNetwork {
     }
   > = new Map();
 
+  // Session enforcement (single-session per identity)
+  private sessionId: string;
+  private sessionTimestamp: number;
+  private sessionPresenceInterval: any;
+  private onSessionInvalidatedCallback?: () => void;
+
   // Metrics tracking
   private messagesSent = 0;
   private messagesReceived = 0;
@@ -111,12 +117,17 @@ export class MeshNetwork {
     this.localPeerId =
       config.peerId || Buffer.from(this.identity.publicKey).toString("hex");
 
+    // Initialize session for single-session enforcement
+    this.sessionId = this.generateSessionId();
+    this.sessionTimestamp = Date.now();
+
     // Configuration
     this.defaultTTL = config.defaultTTL || 10;
     this.maxPeers = config.maxPeers || 50;
 
     // Initialize components
-    const dhtNodeId = hexToNodeId(this.localPeerId);
+    // Derive DHT node ID from public key (not from hex peer ID which is 64 chars)
+    const dhtNodeId = publicKeyToNodeId(this.identity.publicKey);
     const dhtRoutingTable = new KademliaRoutingTable(dhtNodeId);
 
     this.routingTable = new RoutingTable(this.localPeerId, {
@@ -384,6 +395,12 @@ export class MeshNetwork {
         } catch (e) {
           // Ignore malformed PONG
         }
+        return;
+      }
+
+      // Handle Session Presence (Single-Session Enforcement)
+      if (message.header.type === MessageType.SESSION_PRESENCE) {
+        this.handleSessionPresence(senderId, message.payload);
         return;
       }
 
@@ -1189,6 +1206,166 @@ export class MeshNetwork {
     };
   }
 
+  // ===== SESSION MANAGEMENT (Single-Session Enforcement) =====
+
+  /**
+   * Generate a unique session ID
+   */
+  private generateSessionId(): string {
+    const randomBytes = new Uint8Array(16);
+    crypto.getRandomValues(randomBytes);
+    return Array.from(randomBytes)
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+  }
+
+  /**
+   * Start broadcasting session presence
+   */
+  private startSessionPresence(): void {
+    // Clear existing interval if any
+    if (this.sessionPresenceInterval) clearInterval(this.sessionPresenceInterval);
+
+    // Broadcast immediately
+    this.broadcastSessionPresence();
+
+    // Then broadcast every 30 seconds
+    this.sessionPresenceInterval = setInterval(() => {
+      this.broadcastSessionPresence();
+    }, 30000);
+
+    // Allow Node.js to exit cleanly
+    try {
+      if (
+        this.sessionPresenceInterval &&
+        typeof (this.sessionPresenceInterval as any).unref === "function"
+      ) {
+        (this.sessionPresenceInterval as any).unref();
+      }
+    } catch (e) {
+      /* no-op */
+    }
+  }
+
+  /**
+   * Stop broadcasting session presence
+   */
+  private stopSessionPresence(): void {
+    if (this.sessionPresenceInterval) {
+      clearInterval(this.sessionPresenceInterval);
+      this.sessionPresenceInterval = null;
+    }
+  }
+
+  /**
+   * Broadcast session presence to all connected peers
+   */
+  private async broadcastSessionPresence(): Promise<void> {
+    try {
+      const payload = JSON.stringify({
+        sessionId: this.sessionId,
+        timestamp: this.sessionTimestamp,
+        identityFingerprint: Buffer.from(this.identity.publicKey).toString("hex"),
+      });
+
+      const payloadBytes = new TextEncoder().encode(payload);
+      const message: Message = {
+        header: {
+          version: 0x01,
+          type: MessageType.SESSION_PRESENCE,
+          ttl: this.defaultTTL,
+          timestamp: Date.now(),
+          senderId: this.identity.publicKey,
+          signature: new Uint8Array(64),
+        },
+        payload: payloadBytes,
+      };
+
+      // Sign and broadcast
+      // Note: We encode twice because signature must be computed over the message
+      // without the signature field populated, then we set the signature and encode again
+      const messageBytes = encodeMessage(message);
+      message.header.signature = signMessage(
+        messageBytes,
+        this.identity.privateKey,
+      );
+      const encodedMessage = encodeMessage(message);
+
+      // Broadcast to all connected peers
+      this.routingTable.getAllPeers().forEach((peer) => {
+        if (
+          peer.state === PeerState.CONNECTED ||
+          peer.state === PeerState.DEGRADED
+        ) {
+          this.transportManager.send(peer.id, encodedMessage).catch(() => {});
+        }
+      });
+    } catch (error) {
+      console.error("Failed to broadcast session presence:", error);
+    }
+  }
+
+  /**
+   * Handle incoming session presence message
+   */
+  private handleSessionPresence(fromPeerId: string, payload: any): void {
+    try {
+      const data = JSON.parse(new TextDecoder().decode(payload));
+      const { sessionId, timestamp, identityFingerprint } = data;
+
+      // Get our own identity fingerprint
+      const ourFingerprint = Buffer.from(this.identity.publicKey).toString("hex");
+
+      // Check if this is a duplicate session of our identity
+      if (identityFingerprint === ourFingerprint && sessionId !== this.sessionId) {
+        // Another session with our identity exists!
+        // Determine which session should be invalidated
+        let shouldInvalidate = false;
+
+        if (timestamp > this.sessionTimestamp) {
+          // Their timestamp is newer - invalidate this session
+          shouldInvalidate = true;
+        } else if (timestamp === this.sessionTimestamp) {
+          // Race condition: same timestamp (e.g., simultaneous logins)
+          // Use sessionId lexicographic comparison as deterministic tie-breaker
+          shouldInvalidate = sessionId > this.sessionId;
+        }
+
+        if (shouldInvalidate) {
+          console.warn(
+            `Detected newer session for our identity. Invalidating this session.
+            Our session: ${this.sessionId} (${new Date(this.sessionTimestamp).toISOString()})
+            New session: ${sessionId} (${new Date(timestamp).toISOString()})`
+          );
+
+          // Call the invalidation callback
+          if (this.onSessionInvalidatedCallback) {
+            this.onSessionInvalidatedCallback();
+          }
+
+          // Shutdown this instance
+          this.shutdown();
+        } else {
+          // Our session is newer - the other session should invalidate itself
+          console.info(
+            `Detected older session for our identity. Our session is newer - keeping it.
+            Our session: ${this.sessionId} (${new Date(this.sessionTimestamp).toISOString()})
+            Old session: ${sessionId} (${new Date(timestamp).toISOString()})`
+          );
+        }
+      }
+    } catch (error) {
+      console.error("Failed to handle session presence:", error);
+    }
+  }
+
+  /**
+   * Register callback for session invalidation
+   */
+  onSessionInvalidated(callback: () => void): void {
+    this.onSessionInvalidatedCallback = callback;
+  }
+
   /**
    * Disconnect from all peers and shut down
    */
@@ -1198,6 +1375,7 @@ export class MeshNetwork {
       this.routingTable.removePeer(peer.id);
     });
     this.stopHeartbeat();
+    this.stopSessionPresence();
   } /**
    * Get local identity
    */
@@ -1387,6 +1565,7 @@ export class MeshNetwork {
   async start(): Promise<void> {
     await this.transportManager.start();
     this.startHeartbeat();
+    this.startSessionPresence();
   }
 
   /**
