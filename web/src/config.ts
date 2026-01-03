@@ -2,6 +2,7 @@ export interface AppConfig {
   publicHub: boolean;
   relayUrl: string;
   bootstrapEnabled: boolean;
+  logUrl?: string; // Optional remote logging URL
 }
 
 // All web deployments are equal - they can all:

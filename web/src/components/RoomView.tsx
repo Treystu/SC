@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import "./RoomView.css";
 import { generateMobileBootstrapUrl } from "../utils/peerBootstrap";
+import { roomClientLogger } from "../utils/unifiedLogger";
 
 interface RoomViewProps {
   isOpen: boolean;
@@ -49,9 +50,13 @@ export function RoomView({
   };
 
   const handleConnectClick = async (peerId: string) => {
+    roomClientLogger.info(`User clicked Connect for peer ${peerId}`);
     setConnectingPeers((prev) => new Set(prev).add(peerId));
     try {
       await onConnect(peerId);
+      roomClientLogger.info(`Connect action completed for ${peerId}`);
+    } catch (e) {
+      roomClientLogger.error(`Connect action failed for ${peerId}`, e);
     } finally {
       setConnectingPeers((prev) => {
         const next = new Set(prev);
@@ -137,7 +142,11 @@ export function RoomView({
               >
                 📲 Get Mobile App
               </button>
-              <button className="close-btn" onClick={onClose} aria-label="Leave Room">
+              <button
+                className="close-btn"
+                onClick={onClose}
+                aria-label="Leave Room"
+              >
                 Leave Room
               </button>
             </>
@@ -149,12 +158,23 @@ export function RoomView({
           <div className="room-sidebar" aria-label="Peer Discovery Sidebar">
             <div className="peers-section" aria-label="Connected Peers">
               <h3>Connected Mesh ({uniqueConnected.length})</h3>
-              <div className="peers-list" role="list" aria-label="Connected Peers List">
+              <div
+                className="peers-list"
+                role="list"
+                aria-label="Connected Peers List"
+              >
                 {uniqueConnected.length === 0 && (
-                  <p className="empty-text" aria-live="polite">No active connections yet. Once you connect to a peer, they will appear here.</p>
+                  <p className="empty-text" aria-live="polite">
+                    No active connections yet. Once you connect to a peer, they
+                    will appear here.
+                  </p>
                 )}
                 {uniqueConnected.map((peerId) => (
-                  <div key={peerId} className="peer-item connected" role="listitem">
+                  <div
+                    key={peerId}
+                    className="peer-item connected"
+                    role="listitem"
+                  >
                     <div className="peer-avatar" aria-hidden="true">
                       {peerId.substring(0, 2).toUpperCase()}
                     </div>
@@ -171,19 +191,34 @@ export function RoomView({
 
             <div className="peers-section" aria-label="Discovered Peers">
               <h3>Discovered ({uniqueDiscovered.length})</h3>
-              <div className="peers-list" role="list" aria-label="Discovered Peers List">
+              <div
+                className="peers-list"
+                role="list"
+                aria-label="Discovered Peers List"
+              >
                 {uniqueDiscovered.length === 0 && (
                   <div className="empty-text" aria-live="polite">
                     <p>No peers discovered yet.</p>
                     <ul>
-                      <li>Make sure you and your friends are on the same Wi-Fi or local network.</li>
-                      <li>Try refreshing the page or toggling your device's Wi-Fi.</li>
-                      <li>Peers will appear here automatically when discovered.</li>
+                      <li>
+                        Make sure you and your friends are on the same Wi-Fi or
+                        local network.
+                      </li>
+                      <li>
+                        Try refreshing the page or toggling your device's Wi-Fi.
+                      </li>
+                      <li>
+                        Peers will appear here automatically when discovered.
+                      </li>
                     </ul>
                   </div>
                 )}
                 {uniqueDiscovered.map((peerId) => (
-                  <div key={peerId} className="peer-item discovered" role="listitem">
+                  <div
+                    key={peerId}
+                    className="peer-item discovered"
+                    role="listitem"
+                  >
                     <div className="peer-avatar" aria-hidden="true">
                       {peerId.substring(0, 2).toUpperCase()}
                     </div>
@@ -195,7 +230,11 @@ export function RoomView({
                         className="connect-btn"
                         onClick={() => handleConnectClick(peerId)}
                         disabled={connectingPeers.has(peerId)}
-                        aria-label={connectingPeers.has(peerId) ? `Connecting to peer ${peerId}` : `Connect to peer ${peerId}`}
+                        aria-label={
+                          connectingPeers.has(peerId)
+                            ? `Connecting to peer ${peerId}`
+                            : `Connect to peer ${peerId}`
+                        }
                       >
                         {connectingPeers.has(peerId)
                           ? "Connecting..."
@@ -219,8 +258,13 @@ export function RoomView({
                   </p>
                   <p>Connect with peers to start private, encrypted chats.</p>
                   <ul>
-                    <li>To connect, click "Connect" next to a discovered peer.</li>
-                    <li>Once connected, you can start a private chat from the Contacts list.</li>
+                    <li>
+                      To connect, click "Connect" next to a discovered peer.
+                    </li>
+                    <li>
+                      Once connected, you can start a private chat from the
+                      Contacts list.
+                    </li>
                     <li>Need help? See the Help section in the menu.</li>
                   </ul>
                 </div>
@@ -251,7 +295,11 @@ export function RoomView({
               <div ref={messagesEndRef} />
             </div>
 
-            <form className="chat-input-area" onSubmit={handleSend} aria-label="Send public message">
+            <form
+              className="chat-input-area"
+              onSubmit={handleSend}
+              aria-label="Send public message"
+            >
               <input
                 type="text"
                 value={message}

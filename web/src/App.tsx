@@ -39,7 +39,6 @@ import {
 // Initialize core database with web implementation
 setMockDatabase(getDatabase() as unknown as Database);
 import { parseConnectionOffer, hexToBytes } from "@sc/core";
-import { ProfileManager, UserProfile } from "./managers/ProfileManager";
 import { validateMessageContent } from "@sc/core";
 import { rateLimiter } from "@sc/core";
 import { config } from "./config";
@@ -49,10 +48,13 @@ import { saveBootstrapPeers } from "./utils/peerBootstrap";
 // before the app mounts. Do not initialize here to avoid races.
 
 function App() {
-    // Detect E2E/test mode for Playwright
-    const isE2E = typeof navigator !== "undefined" && navigator.webdriver === true;
+  // Detect E2E/test mode for Playwright
+  const isE2E =
+    typeof navigator !== "undefined" && navigator.webdriver === true;
   const [activeRoom, setActiveRoom] = useState<string | null>(null);
-  const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
+  const [selectedConversation, setSelectedConversation] = useState<
+    string | null
+  >(null);
   const [activeTab, setActiveTab] = useState<"chats" | "groups">("chats");
   const [showSettings, setShowSettings] = useState(false);
   // Force skip onboarding in E2E/test mode so main UI always renders
@@ -61,10 +63,13 @@ function App() {
   const [showDirectConnection, setShowDirectConnection] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
-  const [pendingInviteData, setPendingInviteData] = useState<{ code: string; inviterName: string | null } | null>(null);
-  const [toast, setToast] = useState<{ message: string; type: string } | null>(null);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [identityReady, setIdentityReady] = useState(false);
+  const [pendingInviteData, setPendingInviteData] = useState<{
+    code: string;
+    inviterName: string | null;
+  } | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: string } | null>(
+    null,
+  );
   const {
     contacts,
     addContact,
@@ -107,12 +112,14 @@ function App() {
       try {
         const db = getDatabase();
         await db.init();
-        const onboardingComplete = await db.getSetting<boolean>("onboarding-complete");
+        const onboardingComplete = await db.getSetting<boolean>(
+          "onboarding-complete",
+        );
         if (onboardingComplete === true) {
           setShowOnboarding(false);
         }
       } catch (error) {
-        console.error('Failed to check onboarding status:', error);
+        console.error("Failed to check onboarding status:", error);
       }
     };
 
@@ -121,7 +128,7 @@ function App() {
 
   // Setup logger
   useEffect(() => {
-    console.log('[App] useEffect: Setup logger starting');
+    console.log("[App] useEffect: Setup logger starting");
     try {
       if (config.logUrl) {
         logger.setRemoteUrl(config.logUrl);
@@ -157,34 +164,37 @@ function App() {
         );
       };
     } catch (error) {
-      console.error('[App] useEffect: Setup logger error:', error);
+      console.error("[App] useEffect: Setup logger error:", error);
     }
-    console.log('[App] useEffect: Setup logger completed');
+    console.log("[App] useEffect: Setup logger completed");
   }, []);
 
   // Update peer ID in logger
   useEffect(() => {
-    console.log('[App] useEffect: Update peer ID starting, localPeerId:', status.localPeerId);
+    console.log(
+      "[App] useEffect: Update peer ID starting, localPeerId:",
+      status.localPeerId,
+    );
     try {
       if (status.localPeerId) {
         logger.setPeerId(status.localPeerId);
       }
     } catch (error) {
-      console.error('[App] useEffect: Update peer ID error:', error);
+      console.error("[App] useEffect: Update peer ID error:", error);
     }
-    console.log('[App] useEffect: Update peer ID completed');
+    console.log("[App] useEffect: Update peer ID completed");
   }, [status.localPeerId]);
 
   // Persist identity for tests and offline access
   // Note: Identity is now primarily managed by mesh-network-service.ts
   // This effect ensures localStorage sync and handles legacy cases
   useEffect(() => {
-    console.log('[App] useEffect: Identity sync starting');
+    console.log("[App] useEffect: Identity sync starting");
     const syncIdentity = async () => {
       try {
         const db = getDatabase();
         const id = await db.getPrimaryIdentity();
-        
+
         if (id && id.publicKey) {
           const fingerprint = await generateFingerprint(id.publicKey);
           // Persist to localStorage in base64 for test compatibility and E2E selectors
@@ -202,15 +212,17 @@ function App() {
           );
           // Expose fingerprint for test selectors
           (window as any).__sc_identity_fingerprint = fingerprint;
-          console.log('[App] Identity synced, fingerprint:', fingerprint);
-          setIdentityReady(true);
+          console.log("[App] Identity synced, fingerprint:", fingerprint);
         } else {
           // No identity yet - mesh-network-service should create one
           // Wait a bit for it to initialize
-          console.log('[App] No identity found, waiting for mesh-network-service...');
+          console.log(
+            "[App] No identity found, waiting for mesh-network-service...",
+          );
           let attempts = 0;
-          while (attempts < 50) { // Wait up to 5 seconds
-            await new Promise(r => setTimeout(r, 100));
+          while (attempts < 50) {
+            // Wait up to 5 seconds
+            await new Promise((r) => setTimeout(r, 100));
             const retryId = await db.getPrimaryIdentity();
             if (retryId && retryId.publicKey) {
               const fp = await generateFingerprint(retryId.publicKey);
@@ -227,14 +239,15 @@ function App() {
                 }),
               );
               (window as any).__sc_identity_fingerprint = fp;
-              console.log('[App] Identity synced after wait, fingerprint:', fp);
-              setIdentityReady(true);
+              console.log("[App] Identity synced after wait, fingerprint:", fp);
               return;
             }
             attempts++;
           }
           // Fallback: generate identity if service did not
-          console.log("[App] Service did not create identity, generating fallback...");
+          console.log(
+            "[App] Service did not create identity, generating fallback...",
+          );
           const keypair = generateIdentity();
           const fingerprint = await generateFingerprint(keypair.publicKey);
           const newIdentity = {
@@ -259,22 +272,20 @@ function App() {
             }),
           );
           (window as any).__sc_identity_fingerprint = fingerprint;
-          setIdentityReady(true);
         }
       } catch (error) {
-        console.error('[App] useEffect: Identity sync error:', error);
-        setIdentityReady(true); // Still allow app to load
+        console.error("[App] useEffect: Identity sync error:", error);
       }
     };
     syncIdentity();
-    console.log('[App] useEffect: Identity sync completed');
+    console.log("[App] useEffect: Identity sync completed");
   }, []);
 
   // Note: identityReady is now managed by mesh-network-service
   // We don't block rendering with a conditional return to avoid React hooks violations
   // The loading state is shown inline in the UI below
   useEffect(() => {
-    console.log('[App] useEffect: Toast handler starting');
+    console.log("[App] useEffect: Toast handler starting");
     try {
       const handleToast = (event: Event) => {
         const detail = (event as CustomEvent<{ message: string; type: string }>)
@@ -284,16 +295,19 @@ function App() {
           setTimeout(() => setToast(null), 3000);
         }
       };
-      window.addEventListener("show-notification", handleToast as EventListener);
+      window.addEventListener(
+        "show-notification",
+        handleToast as EventListener,
+      );
       return () =>
         window.removeEventListener(
           "show-notification",
           handleToast as EventListener,
         );
     } catch (error) {
-      console.error('[App] useEffect: Toast handler error:', error);
+      console.error("[App] useEffect: Toast handler error:", error);
     }
-    console.log('[App] useEffect: Toast handler completed');
+    console.log("[App] useEffect: Toast handler completed");
   }, []);
   const autoJoinedRef = useRef(false);
 
@@ -302,9 +316,32 @@ function App() {
     status.localPeerId || "",
     identity?.publicKey || null,
     identity?.privateKey || null,
-    userProfile?.displayName || "User",
+    "User",
     discoveredPeers,
   );
+
+  // Listen for Peer Connections (initiated by us or them)
+  useEffect(() => {
+    const handlePeerConnected = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      console.log("Peer Connected Event:", detail);
+      const { peerId } = detail;
+
+      // Show notification
+      setToast({
+        message: `Connected to peer ${peerId.substring(0, 8)}...`,
+        type: "success",
+      });
+
+      // If we are in the Public Room and someone connects to us,
+      // we might want to highlight it.
+      // For now, the successful connection is enough feedback to check the list.
+    };
+
+    window.addEventListener("sc-peer-connected", handlePeerConnected);
+    return () =>
+      window.removeEventListener("sc-peer-connected", handlePeerConnected);
+  }, []);
 
   // Check for pending invite from join.html page
   const pendingInvite = usePendingInvite();
@@ -348,7 +385,7 @@ function App() {
     const urlParams = new URLSearchParams(window.location.search);
     const hash = window.location.hash;
 
-    if (urlParams.get('diagnostics') === 'true' || hash === '#diagnostics') {
+    if (urlParams.get("diagnostics") === "true" || hash === "#diagnostics") {
       setShowDiagnostics(true);
     }
   }, []);
@@ -369,7 +406,6 @@ function App() {
 
   // Auto-join public hub or URL room
   useEffect(() => {
-
     // Only skip auto-join for room, but always initialize mesh/identity for E2E
     if (isE2E) {
       // Do not auto-join room, but allow mesh/identity to initialize so peer ID is rendered for E2E
@@ -402,7 +438,7 @@ function App() {
       if (roomUrl) {
         attemptJoin(roomUrl);
       } else if (config.publicHub) {
-        console.log('Auto-joining public room...');
+        console.log("Auto-joining public room...");
         // Use joinRoom directly to avoid setting selectedConversation (silent join)
         if (config.relayUrl) {
           attemptJoin(config.relayUrl);
@@ -477,7 +513,7 @@ function App() {
         status.localPeerId,
         identity.publicKey,
         identity.privateKey,
-        userProfile?.displayName || "User",
+        "User",
       );
 
       // Redeem the invite
@@ -623,7 +659,7 @@ function App() {
           status.localPeerId,
           identity.publicKey,
           identity.privateKey,
-          userProfile?.displayName,
+          "User",
         );
 
         const result = await inviteManager.redeemInvite(
@@ -1008,372 +1044,392 @@ function App() {
   return (
     <>
       {isE2E && (
-        <div style={{ background: 'red', color: 'white', padding: 8, fontWeight: 'bold', zIndex: 9999, position: 'fixed', top: 0, left: 0, width: '100%' }} data-testid="e2e-debug-banner">
+        <div
+          style={{
+            background: "red",
+            color: "white",
+            padding: 8,
+            fontWeight: "bold",
+            zIndex: 9999,
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100%",
+          }}
+          data-testid="e2e-debug-banner"
+        >
           E2E MODE: React App Mounted
         </div>
       )}
-    <ErrorBoundary>
-      <ToastProvider>
-        <PWAInstall />
-        <UpdateNotification />
-        {/* Initialization Error Banner */}
-        {status.initializationError && (
-          <div className="error-banner" role="alert">
-            <div className="error-content">
-              <h3>⚠️ Startup Error</h3>
-              <p>{status.initializationError}</p>
-              <button
-                onClick={() =>
-                  navigator.clipboard.writeText(status.initializationError!)
-                }
-                className="copy-error-btn"
-              >
-                Copy Error
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Onboarding Flow */}
-        {showOnboarding && (
-          <OnboardingFlow onComplete={() => setShowOnboarding(false)} />
-        )}
-
-        {/* Share App Modal */}
-        {showShareApp && inviteData.invite && (
-          <QRCodeShare invite={inviteData.invite} onClose={handleCloseShareApp} />
-        )}
-
-        {/* Invite Acceptance Modal */}
-        {pendingInviteData && (
-          <InviteAcceptanceModal
-            inviterName={pendingInviteData.inviterName || "A friend"}
-            onAccept={handleAcceptInvite}
-            onDecline={handleDeclineInvite}
-          />
-        )}
-
-        {toast && (
-          <div
-            data-testid="notification-toast"
-            className="notification-toast"
-            role="status"
-          >
-            {toast.message}
-          </div>
-        )}
-
-        {/* Network Diagnostics Modal */}
-        {showDiagnostics && (
-          <div
-            className="modal-overlay"
-            onClick={() => setShowDiagnostics(false)}
-          >
-            <div
-              className="modal-content diagnostics-modal"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <button
-                className="modal-close"
-                onClick={() => setShowDiagnostics(false)}
-                aria-label="Close diagnostics"
-              >
-                ×
-              </button>
-              <NetworkDiagnostics />
-            </div>
-          </div>
-        )}
-
-        <div
-          className="app"
-          role="application"
-          aria-label="Sovereign Communications Messenger"
-        >
-          {/* Skip to main content link for keyboard navigation */}
-          <a href="#main-content" className="skip-link">
-            Skip to main content
-          </a>
-
-          <div className="app-header">
-            <h1>Sovereign Communications</h1>
-            <div className="header-controls" data-testid="connection-status">
-              <ConnectionStatus quality={status.connectionQuality} />
-              <span className="peer-count" data-testid="peer-count">
-                {status.peerCount}
-              </span>
-              <span
-                className="encryption-indicator"
-                data-testid="encryption-status"
-                aria-label="encrypted"
-              >
-                🔒 Encrypted
-              </span>
-            </div>
-          </div>
-
-          {!status.isConnected && (
-            <div className="offline-banner" data-testid="offline-indicator">
-              Offline - attempting to reconnect
+      <ErrorBoundary>
+        <ToastProvider>
+          <PWAInstall />
+          <UpdateNotification />
+          {/* Initialization Error Banner */}
+          {status.initializationError && (
+            <div className="error-banner" role="alert">
+              <div className="error-content">
+                <h3>⚠️ Startup Error</h3>
+                <p>{status.initializationError}</p>
+                <button
+                  onClick={() =>
+                    navigator.clipboard.writeText(status.initializationError!)
+                  }
+                  className="copy-error-btn"
+                >
+                  Copy Error
+                </button>
+              </div>
             </div>
           )}
 
-          {/* Only show main app UI if not onboarding */}
-          {!showOnboarding && (
-            <>
+          {/* Onboarding Flow */}
+          {showOnboarding && (
+            <OnboardingFlow onComplete={() => setShowOnboarding(false)} />
+          )}
+
+          {/* Share App Modal */}
+          {showShareApp && inviteData.invite && (
+            <QRCodeShare
+              invite={inviteData.invite}
+              onClose={handleCloseShareApp}
+            />
+          )}
+
+          {/* Invite Acceptance Modal */}
+          {pendingInviteData && (
+            <InviteAcceptanceModal
+              inviterName={pendingInviteData.inviterName || "A friend"}
+              onAccept={handleAcceptInvite}
+              onDecline={handleDeclineInvite}
+            />
+          )}
+
+          {toast && (
+            <div
+              data-testid="notification-toast"
+              className="notification-toast"
+              role="status"
+            >
+              {toast.message}
+            </div>
+          )}
+
+          {/* Network Diagnostics Modal */}
+          {showDiagnostics && (
+            <div
+              className="modal-overlay"
+              onClick={() => setShowDiagnostics(false)}
+            >
               <div
-                className={`main-layout ${selectedConversation ? "chat-active" : ""}`}
+                className="modal-content diagnostics-modal"
+                onClick={(e) => e.stopPropagation()}
               >
-                <div className="sidebar">
-                  <div className="sidebar-header">
-                    <div className="user-profile">
-                      <div className="avatar">
-                        {status.localPeerId.substring(0, 2).toUpperCase()}
-                      </div>
-                      <div className="user-info">
-                        <span className="username">Me</span>
-                        <span className="status-indicator online"></span>
-                      </div>
-                      <div className="header-controls">
-                        <button
-                          onClick={() => setShowDiagnostics(!showDiagnostics)}
-                          className="diagnostics-btn"
-                          aria-label="Network Diagnostics"
-                          title="Network Diagnostics"
-                        >
-                          📶
-                        </button>
-                        <button
-                          onClick={() => setShowHelp(true)}
-                          className="help-btn"
-                          aria-label="Help"
-                          title="Help & FAQ"
-                          style={{
-                            background: "none",
-                            border: "none",
-                            cursor: "pointer",
-                            fontSize: "1.2rem",
-                          }}
-                        >
-                          ❓
-                        </button>
-                        <button
-                          className="settings-btn"
-                          onClick={() => setShowSettings(true)}
-                          aria-label="Settings"
-                          data-testid="settings-btn"
-                        >
-                          ⚙️
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Tab Navigation */}
-                    <div className="flex border-b border-gray-200 mt-2">
-                      <button
-                        className={`flex-1 py-2 text-sm font-medium ${activeTab === "chats" ? "text-blue-600 border-b-2 border-blue-600" : "text-gray-500 hover:text-gray-700"}`}
-                        onClick={() => setActiveTab("chats")}
-                      >
-                        Chats
-                      </button>
-                      <button
-                        className={`flex-1 py-2 text-sm font-medium ${activeTab === "groups" ? "text-blue-600 border-b-2 border-blue-600" : "text-gray-500 hover:text-gray-700"}`}
-                        onClick={() => setActiveTab("groups")}
-                      >
-                        Groups
-                      </button>
-                    </div>
-                  </div>
-
-                  {activeTab === "chats" ? (
-                    <ConversationList
-                      conversations={allConversations}
-                      loading={contactsLoading || conversationsLoading}
-                      selectedId={selectedConversation}
-                      onSelect={handleSelectConversation}
-                      onDelete={handleDeleteConversation}
-                      onAddContact={handleAddContact}
-                      onImportContact={handleImportContact}
-                      onShareApp={handleShareApp}
-                      localPeerId={status.localPeerId}
-                      generateConnectionOffer={generateConnectionOffer}
-                      onJoinRoom={handleJoinRoom}
-                      onJoinRelay={joinRoom}
-                      onInitiateConnection={handleManualConnectionInitiated}
-                      connectionStatus={status.isConnected}
-                    />
-                  ) : (
-                    <GroupChat onSelectGroup={handleSelectConversation} />
-                  )}
-                </div>
-
-                <div
-                  className="content-area main-content"
-                  id="main-content"
-                  data-testid="main-content"
-                  tabIndex={-1}
-                  role="main"
+                <button
+                  className="modal-close"
+                  onClick={() => setShowDiagnostics(false)}
+                  aria-label="Close diagnostics"
                 >
-                  {selectedConversation ? (
-                    selectedConversation === "public-room" ? (
-                      <RoomView
-                        isOpen={true}
-                        onClose={() => setSelectedConversation(null)}
-                        discoveredPeers={discoveredPeers}
-                        connectedPeers={peers.map((p) => p.id)}
-                        roomMessages={roomMessages}
-                        onSendMessage={sendRoomMessage}
-                        onConnect={handleConnectToPeer}
+                  ×
+                </button>
+                <NetworkDiagnostics />
+              </div>
+            </div>
+          )}
+
+          <div
+            className="app"
+            role="application"
+            aria-label="Sovereign Communications Messenger"
+          >
+            {/* Skip to main content link for keyboard navigation */}
+            <a href="#main-content" className="skip-link">
+              Skip to main content
+            </a>
+
+            <div className="app-header">
+              <h1>Sovereign Communications</h1>
+              <div className="header-controls" data-testid="connection-status">
+                <ConnectionStatus quality={status.connectionQuality} />
+                <span className="peer-count" data-testid="peer-count">
+                  {status.peerCount}
+                </span>
+                <span
+                  className="encryption-indicator"
+                  data-testid="encryption-status"
+                  aria-label="encrypted"
+                >
+                  🔒 Encrypted
+                </span>
+              </div>
+            </div>
+
+            {!status.isConnected && (
+              <div className="offline-banner" data-testid="offline-indicator">
+                Offline - attempting to reconnect
+              </div>
+            )}
+
+            {/* Only show main app UI if not onboarding */}
+            {!showOnboarding && (
+              <>
+                <div
+                  className={`main-layout ${selectedConversation ? "chat-active" : ""}`}
+                >
+                  <div className="sidebar">
+                    <div className="sidebar-header">
+                      <div className="user-profile">
+                        <div className="avatar">
+                          {status.localPeerId.substring(0, 2).toUpperCase()}
+                        </div>
+                        <div className="user-info">
+                          <span className="username">Me</span>
+                          <span className="status-indicator online"></span>
+                        </div>
+                        <div className="header-controls">
+                          <button
+                            onClick={() => setShowDiagnostics(!showDiagnostics)}
+                            className="diagnostics-btn"
+                            aria-label="Network Diagnostics"
+                            title="Network Diagnostics"
+                          >
+                            📶
+                          </button>
+                          <button
+                            onClick={() => setShowHelp(true)}
+                            className="help-btn"
+                            aria-label="Help"
+                            title="Help & FAQ"
+                            style={{
+                              background: "none",
+                              border: "none",
+                              cursor: "pointer",
+                              fontSize: "1.2rem",
+                            }}
+                          >
+                            ❓
+                          </button>
+                          <button
+                            className="settings-btn"
+                            onClick={() => setShowSettings(true)}
+                            aria-label="Settings"
+                            data-testid="settings-btn"
+                          >
+                            ⚙️
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Tab Navigation */}
+                      <div className="flex border-b border-gray-200 mt-2">
+                        <button
+                          className={`flex-1 py-2 text-sm font-medium ${activeTab === "chats" ? "text-blue-600 border-b-2 border-blue-600" : "text-gray-500 hover:text-gray-700"}`}
+                          onClick={() => setActiveTab("chats")}
+                        >
+                          Chats
+                        </button>
+                        <button
+                          className={`flex-1 py-2 text-sm font-medium ${activeTab === "groups" ? "text-blue-600 border-b-2 border-blue-600" : "text-gray-500 hover:text-gray-700"}`}
+                          onClick={() => setActiveTab("groups")}
+                        >
+                          Groups
+                        </button>
+                      </div>
+                    </div>
+
+                    {activeTab === "chats" ? (
+                      <ConversationList
+                        conversations={allConversations}
+                        loading={contactsLoading || conversationsLoading}
+                        selectedId={selectedConversation}
+                        onSelect={handleSelectConversation}
+                        onDelete={handleDeleteConversation}
+                        onAddContact={handleAddContact}
+                        onImportContact={handleImportContact}
+                        onShareApp={handleShareApp}
                         localPeerId={status.localPeerId}
-                        embedded={true}
+                        generateConnectionOffer={generateConnectionOffer}
+                        onJoinRoom={handleJoinRoom}
+                        onJoinRelay={joinRoom}
+                        onInitiateConnection={handleManualConnectionInitiated}
+                        connectionStatus={status.isConnected}
                       />
                     ) : (
-                      <ChatView
-                        conversationId={selectedConversation}
-                        contactName={getContactName(selectedConversation)}
-                        isOnline={peers.some(
-                          (p) => p.id === selectedConversation,
-                        )} // Groups are always "online" effectively, or check if any member is online
-                        messages={messages}
-                        onSendMessage={handleSendMessage}
-                        onSendVoice={handleSendVoice}
-                        onReaction={handleReaction}
-                        isLoading={contactsLoading}
-                        onClose={() => setSelectedConversation(null)}
-                        onUpdateContact={refreshContacts}
-                      />
-                    )
-                  ) : (
-                    <div className="empty-state">
-                      <div className="empty-state-content">
-                        <div className="dashboard-header">
-                          <h2>Sovereign Communications</h2>
-                          <span className="version-badge">v1.0 Ready</span>
-                        </div>
+                      <GroupChat onSelectGroup={handleSelectConversation} />
+                    )}
+                  </div>
 
-                        <div className="dashboard-card user-card">
-                          <h3>Your Identity</h3>
-                          <div className="identity-display">
-                            <div className="avatar-large">
-                              {status.localPeerId
-                                ? status.localPeerId.charAt(0).toUpperCase()
-                                : "?"}
-                            </div>
-                            <div className="identity-details">
-                              <p className="peer-id-label">Peer ID</p>
-                              <code
-                                className="peer-id-code"
-                                data-testid="local-peer-id"
-                                onClick={() => {
-                                  navigator.clipboard.writeText(
-                                    status.localPeerId || "test-e2e-id"
-                                  );
-                                  alert("Peer ID copied to clipboard!");
-                                }}
-                                title="Click to copy"
-                              >
-                                {/* Always render a test value in E2E mode if not set */}
-                                {(status.localPeerId && status.localPeerId !== "")
-                                  ? status.localPeerId
-                                  : (typeof navigator !== "undefined" && navigator.webdriver === true)
-                                    ? "test-e2e-id"
-                                    : "Generating..."}
-                              </code>
-                              <div className="status-indicator">
-                                <span
-                                  className={`status-dot ${status.isConnected ? "online" : "offline"}`}
-                                ></span>
-                                {status.isConnected
-                                  ? `Online (${status.peerCount} peers)`
-                                  : "Connecting..."}
+                  <div
+                    className="content-area main-content"
+                    id="main-content"
+                    data-testid="main-content"
+                    tabIndex={-1}
+                    role="main"
+                  >
+                    {selectedConversation ? (
+                      selectedConversation === "public-room" ? (
+                        <RoomView
+                          isOpen={true}
+                          onClose={() => setSelectedConversation(null)}
+                          discoveredPeers={discoveredPeers}
+                          connectedPeers={peers.map((p) => p.id)}
+                          roomMessages={roomMessages}
+                          onSendMessage={sendRoomMessage}
+                          onConnect={handleConnectToPeer}
+                          localPeerId={status.localPeerId}
+                          embedded={true}
+                        />
+                      ) : (
+                        <ChatView
+                          conversationId={selectedConversation}
+                          contactName={getContactName(selectedConversation)}
+                          isOnline={peers.some(
+                            (p) => p.id === selectedConversation,
+                          )} // Groups are always "online" effectively, or check if any member is online
+                          messages={messages}
+                          onSendMessage={handleSendMessage}
+                          onSendVoice={handleSendVoice}
+                          onReaction={handleReaction}
+                          isLoading={contactsLoading}
+                          onClose={() => setSelectedConversation(null)}
+                          onUpdateContact={refreshContacts}
+                        />
+                      )
+                    ) : (
+                      <div className="empty-state">
+                        <div className="empty-state-content">
+                          <div className="dashboard-header">
+                            <h2>Sovereign Communications</h2>
+                            <span className="version-badge">v1.0 Ready</span>
+                          </div>
+
+                          <div className="dashboard-card user-card">
+                            <h3>Your Identity</h3>
+                            <div className="identity-display">
+                              <div className="avatar-large">
+                                {status.localPeerId
+                                  ? status.localPeerId.charAt(0).toUpperCase()
+                                  : "?"}
+                              </div>
+                              <div className="identity-details">
+                                <p className="peer-id-label">Peer ID</p>
+                                <code
+                                  className="peer-id-code"
+                                  data-testid="local-peer-id"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(
+                                      status.localPeerId || "test-e2e-id",
+                                    );
+                                    alert("Peer ID copied to clipboard!");
+                                  }}
+                                  title="Click to copy"
+                                >
+                                  {/* Always render a test value in E2E mode if not set */}
+                                  {status.localPeerId &&
+                                  status.localPeerId !== ""
+                                    ? status.localPeerId
+                                    : typeof navigator !== "undefined" &&
+                                        navigator.webdriver === true
+                                      ? "test-e2e-id"
+                                      : "Generating..."}
+                                </code>
+                                <div className="status-indicator">
+                                  <span
+                                    className={`status-dot ${status.isConnected ? "online" : "offline"}`}
+                                  ></span>
+                                  {status.isConnected
+                                    ? `Online (${status.peerCount} peers)`
+                                    : "Connecting..."}
+                                </div>
                               </div>
                             </div>
+                            <div className="dashboard-actions">
+                              <button
+                                className="btn btn-primary"
+                                onClick={() => setShowDirectConnection(true)}
+                              >
+                                🔗 Direct Connect
+                              </button>
+                            </div>
                           </div>
-                          <div className="dashboard-actions">
-                            <button
-                              className="btn btn-primary"
-                              onClick={() => setShowDirectConnection(true)}
-                            >
-                              🔗 Direct Connect
-                            </button>
-                          </div>
-                        </div>
 
-                        <div className="dashboard-grid">
-                          <div className="dashboard-card action-card">
-                            <div className="card-icon">👥</div>
-                            <h3>Connect</h3>
-                            <p>
-                              Use the <strong>+</strong> button in the sidebar
-                              to add friends.
-                            </p>
-                          </div>
-                          <div
-                            className="dashboard-card action-card"
-                            onClick={() =>
-                              window.open(
-                                "https://github.com/Treystu/SC",
-                                "_blank",
-                              )
-                            }
-                            style={{ cursor: "pointer" }}
-                          >
-                            <div className="card-icon">⭐</div>
-                            <h3>Star on GitHub</h3>
-                            <p>Support the project and get updates.</p>
+                          <div className="dashboard-grid">
+                            <div className="dashboard-card action-card">
+                              <div className="card-icon">👥</div>
+                              <h3>Connect</h3>
+                              <p>
+                                Use the <strong>+</strong> button in the sidebar
+                                to add friends.
+                              </p>
+                            </div>
+                            <div
+                              className="dashboard-card action-card"
+                              onClick={() =>
+                                window.open(
+                                  "https://github.com/Treystu/SC",
+                                  "_blank",
+                                )
+                              }
+                              style={{ cursor: "pointer" }}
+                            >
+                              <div className="card-icon">⭐</div>
+                              <h3>Star on GitHub</h3>
+                              <p>Support the project and get updates.</p>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Settings Modal */}
-              {showSettings && (
-                <div
-                  className="modal-overlay"
-                  onClick={() => setShowSettings(false)}
-                >
-                  <div
-                    className="modal-content settings-modal"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <button
-                      className="modal-close"
-                      onClick={() => setShowSettings(false)}
-                      aria-label="Close settings"
-                    >
-                      ×
-                    </button>
-                    <SettingsPanel />
+                    )}
                   </div>
                 </div>
-              )}
 
-              {/* Direct Connection QR Modal */}
-              {showDirectConnection && (
-                <DirectConnectionQR onClose={() => setShowDirectConnection(false)} />
-              )}
+                {/* Settings Modal */}
+                {showSettings && (
+                  <div
+                    className="modal-overlay"
+                    onClick={() => setShowSettings(false)}
+                  >
+                    <div
+                      className="modal-content settings-modal"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        className="modal-close"
+                        onClick={() => setShowSettings(false)}
+                        aria-label="Close settings"
+                      >
+                        ×
+                      </button>
+                      <SettingsPanel />
+                    </div>
+                  </div>
+                )}
 
-              {/* Room View Overlay - Only if activeRoom is explicitly set (legacy/URL) */}
-              <RoomView
-                isOpen={!!activeRoom}
-                onClose={handleLeaveRoom}
-                discoveredPeers={discoveredPeers}
-                connectedPeers={peers.map((p) => p.id)}
-                roomMessages={roomMessages}
-                onSendMessage={sendRoomMessage}
-                onConnect={handleConnectToPeer}
-                localPeerId={status.localPeerId}
-              />
-            </>
-          )}
-        </div>
+                {/* Direct Connection QR Modal */}
+                {showDirectConnection && (
+                  <DirectConnectionQR
+                    onClose={() => setShowDirectConnection(false)}
+                  />
+                )}
 
-        {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
-      </ToastProvider>
-    </ErrorBoundary>
+                {/* Room View Overlay - Only if activeRoom is explicitly set (legacy/URL) */}
+                <RoomView
+                  isOpen={!!activeRoom}
+                  onClose={handleLeaveRoom}
+                  discoveredPeers={discoveredPeers}
+                  connectedPeers={peers.map((p) => p.id)}
+                  roomMessages={roomMessages}
+                  onSendMessage={sendRoomMessage}
+                  onConnect={handleConnectToPeer}
+                  localPeerId={status.localPeerId}
+                />
+              </>
+            )}
+          </div>
+
+          {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
+        </ToastProvider>
+      </ErrorBoundary>
     </>
   );
 }

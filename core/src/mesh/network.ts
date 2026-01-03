@@ -21,7 +21,7 @@ import {
   DiscoveryPeer,
   DiscoveryProvider,
 } from "./discovery.js";
-import { KademliaRoutingTable, hexToNodeId, publicKeyToNodeId } from "./dht/index.js";
+import { KademliaRoutingTable, publicKeyToNodeId } from "./dht/index.js";
 import { HttpBootstrapProvider } from "../discovery/http-bootstrap.js";
 import { StorageAdapter } from "./dht/storage/StorageAdapter.js";
 import { RendezvousManager } from "./rendezvous.js";
@@ -1224,7 +1224,8 @@ export class MeshNetwork {
    */
   private startSessionPresence(): void {
     // Clear existing interval if any
-    if (this.sessionPresenceInterval) clearInterval(this.sessionPresenceInterval);
+    if (this.sessionPresenceInterval)
+      clearInterval(this.sessionPresenceInterval);
 
     // Broadcast immediately
     this.broadcastSessionPresence();
@@ -1265,7 +1266,9 @@ export class MeshNetwork {
       const payload = JSON.stringify({
         sessionId: this.sessionId,
         timestamp: this.sessionTimestamp,
-        identityFingerprint: Buffer.from(this.identity.publicKey).toString("hex"),
+        identityFingerprint: Buffer.from(this.identity.publicKey).toString(
+          "hex",
+        ),
       });
 
       const payloadBytes = new TextEncoder().encode(payload);
@@ -1314,10 +1317,15 @@ export class MeshNetwork {
       const { sessionId, timestamp, identityFingerprint } = data;
 
       // Get our own identity fingerprint
-      const ourFingerprint = Buffer.from(this.identity.publicKey).toString("hex");
+      const ourFingerprint = Buffer.from(this.identity.publicKey).toString(
+        "hex",
+      );
 
       // Check if this is a duplicate session of our identity
-      if (identityFingerprint === ourFingerprint && sessionId !== this.sessionId) {
+      if (
+        identityFingerprint === ourFingerprint &&
+        sessionId !== this.sessionId
+      ) {
         // Another session with our identity exists!
         // Determine which session should be invalidated
         let shouldInvalidate = false;
@@ -1335,7 +1343,7 @@ export class MeshNetwork {
           console.warn(
             `Detected newer session for our identity. Invalidating this session.
             Our session: ${this.sessionId} (${new Date(this.sessionTimestamp).toISOString()})
-            New session: ${sessionId} (${new Date(timestamp).toISOString()})`
+            New session: ${sessionId} (${new Date(timestamp).toISOString()})`,
           );
 
           // Call the invalidation callback
@@ -1350,7 +1358,7 @@ export class MeshNetwork {
           console.info(
             `Detected older session for our identity. Our session is newer - keeping it.
             Our session: ${this.sessionId} (${new Date(this.sessionTimestamp).toISOString()})
-            Old session: ${sessionId} (${new Date(timestamp).toISOString()})`
+            Old session: ${sessionId} (${new Date(timestamp).toISOString()})`,
           );
         }
       }
@@ -1669,8 +1677,11 @@ export class MeshNetwork {
     // Create peer connection
     const peer = this.webrtcTransport.getPool().getOrCreatePeer(peerId);
 
+    // Set remote description (Offer)
+    await peer.setRemoteDescription(sdp);
+
     // Create answer
-    await peer.createAnswer(sdp);
+    await peer.createAnswer();
 
     // Set up state change handler to ensure peer is registered when connected
     peer.onStateChange((state: string) => {
