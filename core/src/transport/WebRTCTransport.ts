@@ -572,7 +572,37 @@ export class WebRTCTransport implements Transport {
       has: (id: string) => this.peers.has(id),
       get: (id: string) => this.peers.get(id),
       getAllPeers: () => Array.from(this.peers.values()),
-      getStats: () => ({ size: this.peers.size }),
+      getStats: async () => {
+        const peers = Array.from(this.peers.values());
+        const peerStats = await Promise.all(
+          peers.map(async (wrapper) => {
+            const stats: any[] = [];
+            try {
+              if (wrapper.connection.connectionState !== "closed") {
+                const report = await wrapper.connection.getStats();
+                report.forEach((stat) => stats.push(stat));
+              }
+            } catch (e) {
+              console.warn(
+                `[WebRTCTransport] Failed to get stats for ${wrapper.peerId}`,
+                e,
+              );
+            }
+            return {
+              id: wrapper.peerId,
+              state: wrapper.state,
+              stats,
+            };
+          }),
+        );
+
+        return {
+          size: this.peers.size,
+          totalPeers: this.peers.size,
+          connectedPeers: peers.filter((p) => p.state === "connected").length,
+          peers: peerStats,
+        };
+      },
       removePeer: (id: string) => this.disconnect(id),
     };
   }

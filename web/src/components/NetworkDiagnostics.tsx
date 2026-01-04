@@ -81,7 +81,7 @@ export const NetworkDiagnostics: React.FC = () => {
         let maxLatency = 0;
         let webrtcConnections = 0;
 
-        newStats.peers.peers.forEach((peer) => {
+        newStats.peers.peers?.forEach((peer) => {
           if (peer.state === "connected") {
             webrtcConnections++;
             if (peer.stats) {
