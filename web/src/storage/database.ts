@@ -125,7 +125,10 @@ export interface SessionKey {
  * IndexedDB Database Manager
  */
 export class DatabaseManager {
-  private dbName = "sovereign-communications";
+  private dbName =
+    typeof window !== "undefined" && (window as any).__SC_DB_NAME__
+      ? (window as any).__SC_DB_NAME__
+      : "sovereign-communications";
   private version = CURRENT_SCHEMA_VERSION;
   private db: IDBDatabase | null = null;
   private initPromise: Promise<void> | null = null;
@@ -143,23 +146,31 @@ export class DatabaseManager {
    * Initialize database with timeout protection
    */
   async init(): Promise<void> {
+    if ((window as any).__IS_RESETTING__) {
+      // Halt initialization if resetting, to prevent blocking deletion
+      return new Promise(() => {});
+    }
     if (this.db) return;
     if (this.initPromise) return this.initPromise;
 
     // Track retry attempts for exponential backoff
     let retryCount = 0;
     const maxRetries = 3;
-    
+
     const attemptInit = async (): Promise<void> => {
       return new Promise((resolve, reject) => {
         // Exponential backoff: 2s, 4s, 8s
         const baseTimeout = Math.min(10000, 2000 * Math.pow(2, retryCount));
-        
+
         const timeoutId = setTimeout(() => {
-          console.warn(`DatabaseManager: Initialization attempt ${retryCount + 1} timed out after ${baseTimeout}ms`);
+          console.warn(
+            `DatabaseManager: Initialization attempt ${retryCount + 1} timed out after ${baseTimeout}ms`,
+          );
           if (retryCount < maxRetries) {
             retryCount++;
-            console.log(`DatabaseManager: Retrying initialization (attempt ${retryCount + 1}/${maxRetries + 1})...`);
+            console.log(
+              `DatabaseManager: Retrying initialization (attempt ${retryCount + 1}/${maxRetries + 1})...`,
+            );
             // Clean up and retry
             this.db = null;
             this.initPromise = null;
@@ -167,14 +178,20 @@ export class DatabaseManager {
           } else {
             console.error("DatabaseManager: Max retries exceeded, giving up");
             this.initPromise = null;
-            reject(new Error(`Database initialization failed after ${maxRetries + 1} attempts`));
+            reject(
+              new Error(
+                `Database initialization failed after ${maxRetries + 1} attempts`,
+              ),
+            );
           }
         }, baseTimeout);
 
         const request = indexedDB.open(this.dbName, this.version);
 
         request.onblocked = () => {
-          console.warn("DatabaseManager: Database upgrade blocked by another connection");
+          console.warn(
+            "DatabaseManager: Database upgrade blocked by another connection",
+          );
           clearTimeout(timeoutId);
           if (this.db) {
             this.db.close();
@@ -274,8 +291,8 @@ export class DatabaseManager {
       const store = transaction.objectStore("messages");
       const request = store.put(encryptedMessage);
 
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error || request.error);
     });
   }
 
@@ -742,7 +759,10 @@ export class DatabaseManager {
         "privateKey",
       ])) as Identity;
     } catch (e) {
-      console.warn("Failed to decrypt identity privateKey, attempting best-effort normalization:", e);
+      console.warn(
+        "Failed to decrypt identity privateKey, attempting best-effort normalization:",
+        e,
+      );
       decrypted = identity as any;
     }
 
@@ -804,7 +824,8 @@ export class DatabaseManager {
     return {
       ...primary,
       publicKey: normalizeKey((primary as any).publicKey) || primary.publicKey,
-      privateKey: normalizeKey((primary as any).privateKey) || primary.privateKey,
+      privateKey:
+        normalizeKey((primary as any).privateKey) || primary.privateKey,
     } as Identity;
   }
 
@@ -1520,7 +1541,10 @@ export class DatabaseManager {
         for (const [key, value] of Object.entries(data.settings)) {
           try {
             const existing = await this.getSetting(key);
-            if (existing !== null && options.mergeStrategy === "skip-existing") {
+            if (
+              existing !== null &&
+              options.mergeStrategy === "skip-existing"
+            ) {
               skipped++;
             } else {
               await this.setSetting(key, value);
@@ -1740,6 +1764,15 @@ export class DatabaseManager {
       },
     };
   }
+  /**
+   * Close the database connection
+   */
+  close(): void {
+    if (this.db) {
+      this.db.close();
+      this.db = null;
+    }
+  }
 }
 
 // Singleton instance
@@ -1750,4 +1783,36 @@ export function getDatabase(): DatabaseManager {
     dbInstance = new DatabaseManager();
   }
   return dbInstance;
+}
+
+// Helper for E2E testing to reset database
+export async function resetDatabaseForTest() {
+  (window as any).__IS_RESETTING__ = true;
+
+  if (navigator.serviceWorker) {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    for (const registration of registrations) {
+      await registration.unregister();
+    }
+  }
+
+  if (dbInstance) {
+    dbInstance.close();
+    dbInstance = null;
+  }
+
+  return new Promise<void>((resolve, reject) => {
+    const req = indexedDB.deleteDatabase("sovereign-communications");
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+    req.onblocked = () => {
+      console.warn("Database deletion blocked");
+      // We resolve anyway to avoid hanging, subsequent reloading might fix it
+      resolve();
+    };
+  });
+}
+
+if (typeof window !== "undefined") {
+  (window as any).resetDatabase = resetDatabaseForTest;
 }

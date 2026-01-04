@@ -16,7 +16,9 @@ if (typeof window !== "undefined") {
 } else {
   // In Node.js/test environments, try to use jsdom
   try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const createDOMPurify = require("dompurify");
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { JSDOM } = require("jsdom");
     const window = new JSDOM("").window;
     DOMPurify = createDOMPurify(window);

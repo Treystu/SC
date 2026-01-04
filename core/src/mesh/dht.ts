@@ -8,6 +8,7 @@ import { RoutingTable, Peer } from "./routing.js";
 import { xorDistance } from "./kademlia.js";
 import { StorageAdapter } from "./dht/storage/StorageAdapter.js";
 import { MemoryStorage } from "./dht/storage/MemoryStorage.js";
+import { bytesToHex } from "../utils/encoding.js";
 
 export interface DHTConfig {
   alpha?: number; // Concurrency parameter (default 3)
@@ -90,7 +91,11 @@ export class DHT {
    * Check and update peer quota
    * @returns true if store is allowed, false if quota exceeded
    */
-  private checkPeerQuota(peerId: string, key: string, valueSize: number): boolean {
+  private checkPeerQuota(
+    peerId: string,
+    key: string,
+    valueSize: number,
+  ): boolean {
     const now = Date.now();
     let quota = this.peerQuotas.get(peerId);
 
@@ -128,7 +133,9 @@ export class DHT {
     // Check storage quota for new key
     const newUsage = quota.used + valueSize;
     if (newUsage > this.maxStoragePerPeer) {
-      console.warn(`Storage quota exceeded for peer ${peerId}: ${newUsage} bytes`);
+      console.warn(
+        `Storage quota exceeded for peer ${peerId}: ${newUsage} bytes`,
+      );
       return false;
     }
 
@@ -158,7 +165,9 @@ export class DHT {
           quota.used = Math.max(0, quota.used - valueSize);
         }
       } catch (e) {
-        console.error(`Failed to retrieve stored value for quota cleanup: ${e}`);
+        console.error(
+          `Failed to retrieve stored value for quota cleanup: ${e}`,
+        );
       }
       quota.keys.delete(key);
     }
@@ -169,7 +178,7 @@ export class DHT {
    * Handle incoming DHT messages
    */
   async handleMessage(message: Message): Promise<void> {
-    const senderId = Buffer.from(message.header.senderId).toString("hex");
+    const senderId = bytesToHex(message.header.senderId);
 
     switch (message.header.type) {
       case MessageType.DHT_FIND_NODE:
@@ -342,7 +351,9 @@ export class DHT {
 
       // Check peer quota and rate limit
       if (!this.checkPeerQuota(senderId, key, valueSize)) {
-        console.warn(`Rejected STORE from ${senderId}: quota or rate limit exceeded`);
+        console.warn(
+          `Rejected STORE from ${senderId}: quota or rate limit exceeded`,
+        );
         return;
       }
 
@@ -356,7 +367,7 @@ export class DHT {
   private async handleStoreAsync(
     key: string,
     value: any,
-    senderId: string,
+    _senderId: string,
   ): Promise<void> {
     try {
       await this.storage.store(key, new Uint8Array(value));

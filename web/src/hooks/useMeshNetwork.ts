@@ -3,7 +3,12 @@ import { MeshNetwork, Message, MessageType, Peer } from "@sc/core";
 import { ConnectionMonitor, type ConnectionQuality } from "@sc/core";
 import { getDatabase } from "../storage/database";
 import { getMeshNetwork } from "../services/mesh-network-service";
-import { validateFileList, rateLimiter, performanceMonitor, offlineQueue } from "@sc/core";
+import {
+  validateFileList,
+  rateLimiter,
+  performanceMonitor,
+  offlineQueue,
+} from "@sc/core";
 import { RoomClient } from "../utils/RoomClient";
 import { useMeshNetworkLogger } from "../utils/unifiedLogger";
 
@@ -41,11 +46,11 @@ export function useMeshNetwork() {
   // Safe env accessor for both Vite (import.meta.env) and Jest/node (process.env)
   const getRuntimeEnv = () => {
     // In browser environments, use import.meta.env (Vite). In test/node environments use process.env.
-    if (typeof import.meta !== 'undefined' && import.meta.env) {
+    if (typeof import.meta !== "undefined" && import.meta.env) {
       return import.meta.env as Record<string, any>;
     }
     // Fallback for test/node environments
-    if (typeof process !== 'undefined' && process.env) {
+    if (typeof process !== "undefined" && process.env) {
       return process.env as Record<string, any>;
     }
     // Return empty object as last resort
@@ -81,7 +86,10 @@ export function useMeshNetwork() {
       if (!meshNetworkRef.current) return;
       await offlineQueue.processQueue(async (msg) => {
         try {
-          await meshNetworkRef.current!.sendMessage(msg.recipientId, msg.content);
+          await meshNetworkRef.current!.sendMessage(
+            msg.recipientId,
+            msg.content,
+          );
           return true;
         } catch (e) {
           return false;
@@ -93,17 +101,21 @@ export function useMeshNetwork() {
       try {
         const network = await getMeshNetwork();
         const db = getDatabase();
+        console.log("[useMeshNetwork] Starting network...");
         await network.start();
+        console.log("[useMeshNetwork] Network started.");
         meshNetworkRef.current = network;
         connectionMonitorRef.current = new ConnectionMonitor();
 
         try {
           const activePeers = await db.getActivePeers();
-          useMeshNetworkLogger.info(`Loaded ${activePeers.length} persisted peers`);
+          useMeshNetworkLogger.info(
+            `Loaded ${activePeers.length} persisted peers`,
+          );
           if (activePeers.length > 0) {
             useMeshNetworkLogger.debug(
               "Persisted peers available for reconnection:",
-              activePeers.map((p) => p.id.substring(0, 8)).join(", ")
+              activePeers.map((p) => p.id.substring(0, 8)).join(", "),
             );
           }
         } catch (error) {
@@ -112,7 +124,9 @@ export function useMeshNetwork() {
 
         try {
           const routes = await db.getAllRoutes();
-          useMeshNetworkLogger.debug(`Loaded ${routes.length} persisted routes`);
+          useMeshNetworkLogger.debug(
+            `Loaded ${routes.length} persisted routes`,
+          );
         } catch (error) {
           useMeshNetworkLogger.error("Failed to load routes:", error);
         }
@@ -138,22 +152,32 @@ export function useMeshNetwork() {
               return;
             }
 
-            const messageId = data.id || `${message.header.timestamp}-${senderId}`;
+            const messageId =
+              data.id || `${message.header.timestamp}-${senderId}`;
 
             if (seenMessageIdsRef.current.has(messageId)) {
-              useMeshNetworkLogger.debug("Duplicate message ignored (in-memory ref):", messageId);
+              useMeshNetworkLogger.debug(
+                "Duplicate message ignored (in-memory ref):",
+                messageId,
+              );
               return;
             }
 
             try {
               const existingMsg = await db.getMessage(messageId);
               if (existingMsg) {
-                useMeshNetworkLogger.debug("Message already exists in DB, ignoring:", messageId);
+                useMeshNetworkLogger.debug(
+                  "Message already exists in DB, ignoring:",
+                  messageId,
+                );
                 seenMessageIdsRef.current.add(messageId);
                 return;
               }
             } catch (dbError) {
-              useMeshNetworkLogger.warn("Error checking DB for message existence:", dbError);
+              useMeshNetworkLogger.warn(
+                "Error checking DB for message existence:",
+                dbError,
+              );
             }
 
             seenMessageIdsRef.current.add(messageId);
@@ -167,30 +191,45 @@ export function useMeshNetwork() {
               };
 
               try {
-                const targetMsg = await db.getMessage(reactionData.targetMessageId);
+                const targetMsg = await db.getMessage(
+                  reactionData.targetMessageId,
+                );
                 if (targetMsg) {
                   const reactions = targetMsg.reactions || [];
-                  const newReaction = { userId: senderId, emoji: reactionData.emoji };
+                  const newReaction = {
+                    userId: senderId,
+                    emoji: reactionData.emoji,
+                  };
                   const exists = reactions.some(
-                    (r) => r.userId === senderId && r.emoji === reactionData.emoji
+                    (r) =>
+                      r.userId === senderId && r.emoji === reactionData.emoji,
                   );
                   if (!exists) {
                     targetMsg.reactions = [...reactions, newReaction];
                     await db.saveMessage(targetMsg);
                     useMeshNetworkLogger.debug(
-                      `Added reaction ${reactionData.emoji} to ${reactionData.targetMessageId}`
+                      `Added reaction ${reactionData.emoji} to ${reactionData.targetMessageId}`,
                     );
                     setMessages((prev) =>
                       prev.map((m) => {
                         if (m.id === reactionData.targetMessageId) {
                           const currentReactions = m.reactions || [];
-                          if (currentReactions.some((r) => r.userId === senderId && r.emoji === reactionData.emoji)) {
+                          if (
+                            currentReactions.some(
+                              (r) =>
+                                r.userId === senderId &&
+                                r.emoji === reactionData.emoji,
+                            )
+                          ) {
                             return m;
                           }
-                          return { ...m, reactions: [...currentReactions, newReaction] };
+                          return {
+                            ...m,
+                            reactions: [...currentReactions, newReaction],
+                          };
                         }
                         return m;
-                      })
+                      }),
                     );
                   }
                 }
@@ -245,7 +284,9 @@ export function useMeshNetwork() {
                   });
                 }
               } else {
-                const conversation = await db.getConversation(receivedMessage.from);
+                const conversation = await db.getConversation(
+                  receivedMessage.from,
+                );
                 if (conversation) {
                   await db.saveConversation({
                     ...conversation,
@@ -280,7 +321,9 @@ export function useMeshNetwork() {
           try {
             const conversation = await db.getConversation(peerId);
             if (!conversation) {
-              useMeshNetworkLogger.debug(`Creating new conversation for connected peer: ${peerId}`);
+              useMeshNetworkLogger.debug(
+                `Creating new conversation for connected peer: ${peerId}`,
+              );
               await db.saveConversation({
                 id: peerId,
                 contactId: peerId,
@@ -290,16 +333,22 @@ export function useMeshNetwork() {
               });
               // Notify the UI that a new conversation was created
               // This will trigger the conversation list to refresh
-              const { notifyConversationsUpdated } = await import('./useConversations');
+              const { notifyConversationsUpdated } =
+                await import("./useConversations");
               notifyConversationsUpdated();
-              
+
               // Also dispatch a custom event for the chat popup
-              window.dispatchEvent(new CustomEvent('sc-peer-connected', {
-                detail: { peerId, timestamp: Date.now() }
-              }));
+              window.dispatchEvent(
+                new CustomEvent("sc-peer-connected", {
+                  detail: { peerId, timestamp: Date.now() },
+                }),
+              );
             }
           } catch (err) {
-            useMeshNetworkLogger.error("Error ensuring conversation exists:", err);
+            useMeshNetworkLogger.error(
+              "Error ensuring conversation exists:",
+              err,
+            );
           }
 
           try {
@@ -307,7 +356,9 @@ export function useMeshNetwork() {
               id: peerId,
               publicKey: network.getPeer(peerId)?.publicKey
                 ? Array.from(network.getPeer(peerId)!.publicKey)
-                    .map((b: unknown) => (b as number).toString(16).padStart(2, "0"))
+                    .map((b: unknown) =>
+                      (b as number).toString(16).padStart(2, "0"),
+                    )
                     .join("")
                 : "",
               transportType: "webrtc",
@@ -319,7 +370,9 @@ export function useMeshNetwork() {
               reputation: 50,
               isBlacklisted: false,
             });
-            useMeshNetworkLogger.debug("initMeshNetwork: triggering initial retry of queued messages");
+            useMeshNetworkLogger.debug(
+              "initMeshNetwork: triggering initial retry of queued messages",
+            );
           } catch (error) {
             useMeshNetworkLogger.error("Failed to persist peer:", error);
           }
@@ -335,12 +388,18 @@ export function useMeshNetwork() {
               await db.savePeer(peer);
             }
           } catch (error) {
-            useMeshNetworkLogger.error("Failed to update peer last seen:", error);
+            useMeshNetworkLogger.error(
+              "Failed to update peer last seen:",
+              error,
+            );
           }
         });
 
         network.discovery.onPeerDiscovered((peer) => {
-          useMeshNetworkLogger.debug("Discovered peer via Mesh Discovery:", peer);
+          useMeshNetworkLogger.debug(
+            "Discovered peer via Mesh Discovery:",
+            peer,
+          );
           setDiscoveredPeers((prev) => {
             if (prev.includes(peer.id)) return prev;
             return [...prev, peer.id];
@@ -349,9 +408,13 @@ export function useMeshNetwork() {
 
         // Handle session invalidation (single-session enforcement)
         network.onSessionInvalidated(() => {
-          useMeshNetworkLogger.warn("Session invalidated: Another session with this identity has been detected.");
+          useMeshNetworkLogger.warn(
+            "Session invalidated: Another session with this identity has been detected.",
+          );
           // Alert user and force reload (no cancel option to prevent invalid session use)
-          alert("Your session has been invalidated because this identity was logged in elsewhere. The page will now reload.");
+          alert(
+            "Your session has been invalidated because this identity was logged in elsewhere. The page will now reload.",
+          );
           window.location.reload();
         });
 
@@ -384,11 +447,16 @@ export function useMeshNetwork() {
             const idObj = network.getIdentity();
             if (idObj && idObj.publicKey) {
               const pk = idObj.publicKey as Uint8Array;
-              localId = Array.from(pk).slice(0, 8).map((b) => b.toString(16).padStart(2, "0")).join("");
+              localId = Array.from(pk)
+                .slice(0, 8)
+                .map((b) => b.toString(16).padStart(2, "0"))
+                .join("");
             }
           }
         } catch (e) {
-          useMeshNetworkLogger.debug("Could not derive local ID from identity fingerprint");
+          useMeshNetworkLogger.debug(
+            "Could not derive local ID from identity fingerprint",
+          );
         }
 
         setStatus({
@@ -402,7 +470,8 @@ export function useMeshNetwork() {
         useMeshNetworkLogger.error("Failed to initialize mesh network:", error);
         setStatus((prev) => ({
           ...prev,
-          initializationError: error instanceof Error ? error.message : String(error),
+          initializationError:
+            error instanceof Error ? error.message : String(error),
         }));
         return;
       }
@@ -418,13 +487,19 @@ export function useMeshNetwork() {
     };
 
     if (navigator.serviceWorker) {
-      navigator.serviceWorker.addEventListener("message", handleServiceWorkerMessage);
+      navigator.serviceWorker.addEventListener(
+        "message",
+        handleServiceWorkerMessage,
+      );
     }
 
     return () => {
       if (retryInterval) clearInterval(retryInterval);
       if (navigator.serviceWorker && handleServiceWorkerMessage) {
-        navigator.serviceWorker.removeEventListener("message", handleServiceWorkerMessage);
+        navigator.serviceWorker.removeEventListener(
+          "message",
+          handleServiceWorkerMessage,
+        );
       }
       if (meshNetworkRef.current) {
         meshNetworkRef.current.shutdown();
@@ -436,43 +511,124 @@ export function useMeshNetwork() {
     };
   }, []);
 
+  const connectToPeer = useCallback(async (peerId: string) => {
+    const endMeasure = performanceMonitor.startMeasure("connectToPeer");
+    useMeshNetworkLogger.info(`connectToPeer called for ${peerId}`);
+
+    if (!meshNetworkRef.current) {
+      useMeshNetworkLogger.error(
+        "connectToPeer failed: Mesh network not initialized",
+      );
+      throw new Error("Mesh network not initialized");
+    }
+
+    const alreadyConnected =
+      meshNetworkRef.current &&
+      typeof (meshNetworkRef.current as any).isConnectedToPeer === "function"
+        ? (meshNetworkRef.current as any).isConnectedToPeer(peerId)
+        : Boolean(
+            meshNetworkRef.current &&
+            meshNetworkRef.current.getConnectedPeers &&
+            meshNetworkRef.current
+              .getConnectedPeers()
+              .some((p: Peer) => p.id === peerId),
+          );
+
+    if (alreadyConnected) {
+      useMeshNetworkLogger.debug(`Already connected to ${peerId}`);
+      return;
+    }
+
+    try {
+      if (roomClientRef.current) {
+        useMeshNetworkLogger.info(
+          `Initiating connection to ${peerId} via Room Signaling...`,
+        );
+        const offerJson =
+          await meshNetworkRef.current.createManualConnection(peerId);
+        let offerData: any;
+        try {
+          offerData = JSON.parse(offerJson as string);
+        } catch (parseErr) {
+          // Accept raw strings from mocks
+          offerData = offerJson;
+        }
+        useMeshNetworkLogger.debug(
+          `Sending SDP offer to ${peerId} via Room...`,
+        );
+        await roomClientRef.current.signal(peerId, "offer", offerData);
+        useMeshNetworkLogger.debug("SDP offer sent via Room");
+      } else {
+        useMeshNetworkLogger.info(
+          `Initiating connection to ${peerId} via Mesh/Local...`,
+        );
+        await meshNetworkRef.current.connectToPeer(peerId);
+      }
+      endMeasure({ success: true });
+      useMeshNetworkLogger.info(
+        `Connection initiated to ${peerId}, waiting for peer to accept...`,
+      );
+    } catch (error) {
+      useMeshNetworkLogger.error(`Failed to connect to ${peerId}:`, error);
+      endMeasure({ success: false, error: (error as Error).message });
+      throw error;
+    }
+  }, []);
+
   const sendMessage = useCallback(
-    async (recipientId: string, content: string, attachments?: File[], groupId?: string) => {
+    async (
+      recipientId: string,
+      content: string,
+      attachments?: File[],
+      groupId?: string,
+    ) => {
       const endMeasure = performanceMonitor.startMeasure("sendMessage");
       if (!meshNetworkRef.current) {
-        useMeshNetworkLogger.error("sendMessage failed: Mesh network not initialized");
+        useMeshNetworkLogger.error(
+          "sendMessage failed: Mesh network not initialized",
+        );
         throw new Error("Mesh network not initialized");
       }
 
-      useMeshNetworkLogger.info(`sendMessage to ${recipientId}: "${content.substring(0, 50)}${content.length > 50 ? '...' : ''}"`);
+      useMeshNetworkLogger.info(
+        `sendMessage to ${recipientId}: "${content.substring(0, 50)}${content.length > 50 ? "..." : ""}"`,
+      );
 
-      const isConnected =
-        meshNetworkRef.current && typeof (meshNetworkRef.current as any).isConnectedToPeer === "function"
-          ? (meshNetworkRef.current as any).isConnectedToPeer(recipientId)
-          : Boolean(meshNetworkRef.current && meshNetworkRef.current.getConnectedPeers && meshNetworkRef.current.getConnectedPeers().some((p: Peer) => p.id === recipientId));
-      useMeshNetworkLogger.debug(`Connected to ${recipientId}: ${isConnected}`);
-
-      if (!isConnected) {
-        useMeshNetworkLogger.warn(`Not connected to ${recipientId}. Attempting to connect...`);
-        try {
-          await connectToPeer(recipientId);
-          useMeshNetworkLogger.debug(`Connection initiated to ${recipientId}`);
-        } catch (err) {
-          useMeshNetworkLogger.error(`Failed to connect to ${recipientId}:`, err);
-        }
-      }
-
-      let messageStatus: "sent" | "queued" = "sent";
-
+      // Handle File Attachments separately for now (keeping original logic for files, can optimize later)
       if (attachments && attachments.length > 0) {
+        let messageStatus: "sent" | "queued" = "sent";
         const validationResult = validateFileList(attachments);
         if (!validationResult.valid) {
           throw new Error(validationResult.error || "Invalid file");
         }
 
-        const fileRateLimitResult = rateLimiter.canSendFile(meshNetworkRef.current.getLocalPeerId());
+        const fileRateLimitResult = rateLimiter.canSendFile(
+          meshNetworkRef.current.getLocalPeerId(),
+        );
         if (!fileRateLimitResult.allowed) {
           throw new Error(fileRateLimitResult.reason);
+        }
+
+        // Connect if needed (blocking for files currently - acceptable)
+        const isConnected =
+          meshNetworkRef.current &&
+          typeof (meshNetworkRef.current as any).isConnectedToPeer ===
+            "function"
+            ? (meshNetworkRef.current as any).isConnectedToPeer(recipientId)
+            : Boolean(
+                meshNetworkRef.current &&
+                meshNetworkRef.current.getConnectedPeers &&
+                meshNetworkRef.current
+                  .getConnectedPeers()
+                  .some((p: Peer) => p.id === recipientId),
+              );
+
+        if (!isConnected) {
+          try {
+            await connectToPeer(recipientId);
+          } catch (e) {
+            useMeshNetworkLogger.warn("Connect failed for file transfer", e);
+          }
         }
 
         for (const file of attachments) {
@@ -487,25 +643,35 @@ export function useMeshNetwork() {
           };
 
           try {
-            const payload = JSON.stringify({ type: "file_start", metadata: fileMetadata });
+            const payload = JSON.stringify({
+              type: "file_start",
+              metadata: fileMetadata,
+            });
             await meshNetworkRef.current.sendMessage(recipientId, payload);
 
             const CHUNK_SIZE = 16 * 1024;
             const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-            const fileIdBytes = new TextEncoder().encode(fileId.padEnd(36, " ").substring(0, 36));
+            const fileIdBytes = new TextEncoder().encode(
+              fileId.padEnd(36, " ").substring(0, 36),
+            );
             const buffer = await file.arrayBuffer();
 
             for (let i = 0; i < totalChunks; i++) {
               const start = i * CHUNK_SIZE;
               const end = Math.min(start + CHUNK_SIZE, file.size);
               const chunkData = new Uint8Array(buffer.slice(start, end));
-              const chunkPayload = new Uint8Array(36 + 4 + 4 + chunkData.length);
+              const chunkPayload = new Uint8Array(
+                36 + 4 + 4 + chunkData.length,
+              );
               const view = new DataView(chunkPayload.buffer);
               chunkPayload.set(fileIdBytes, 0);
               view.setUint32(36, i, false);
               view.setUint32(40, totalChunks, false);
               chunkPayload.set(chunkData, 44);
-              await meshNetworkRef.current.sendBinaryMessage(recipientId, chunkPayload);
+              await meshNetworkRef.current.sendBinaryMessage(
+                recipientId,
+                chunkPayload,
+              );
               if (i % 10 === 0) await new Promise((r) => setTimeout(r, 10));
             }
           } catch (error) {
@@ -537,55 +703,53 @@ export function useMeshNetwork() {
               recipientId,
               type: "file",
               status: messageStatus,
-              metadata: { fileName: file.name, fileSize: file.size, fileType: file.type, groupId },
+              metadata: {
+                fileName: file.name,
+                fileSize: file.size,
+                fileType: file.type,
+                groupId,
+              },
             });
           } catch (error) {
-            useMeshNetworkLogger.error("Failed to persist file message:", error);
+            useMeshNetworkLogger.error(
+              "Failed to persist file message:",
+              error,
+            );
           }
         }
         return;
       }
 
-      const rateLimitResult = rateLimiter.canSendMessage(meshNetworkRef.current.getLocalPeerId());
-      if (!rateLimitResult.allowed) {
-        throw new Error(rateLimitResult.reason);
-      }
+      // --- OPTIMISTIC TEXT MESSAGE HANDLING ---
 
-      try {
-        const payload = JSON.stringify({ text: content, timestamp: Date.now(), groupId });
-        await meshNetworkRef.current.sendMessage(recipientId, payload);
-        endMeasure({ success: true });
-      } catch (error) {
-        useMeshNetworkLogger.error("Failed to send message to network:", error);
-        await offlineQueue.enqueue({ recipientId, content, timestamp: Date.now() });
-        messageStatus = "queued";
-        endMeasure({ success: false, error: (error as Error).message });
-      }
-
+      // 1. Prepare message object immediately
+      const tempId = `${Date.now()}-${Math.random()}`;
       const localMessage: ReceivedMessage = {
-        id: `${Date.now()}-${Math.random()}`,
+        id: tempId,
         from: "me",
         to: recipientId,
         conversationId: groupId || recipientId,
-        content,
+        content: content,
         timestamp: Date.now(),
         type: MessageType.TEXT,
-        status: messageStatus,
+        status: "pending",
       };
 
+      // 2. Immediate Optimistic Update
       setMessages((prev: ReceivedMessage[]) => [...prev, localMessage]);
 
+      // Optimistic persistence
       try {
         const db = getDatabase();
         await db.saveMessage({
           id: localMessage.id,
-          conversationId: groupId || recipientId,
+          conversationId: localMessage.conversationId!,
           content: localMessage.content,
           timestamp: localMessage.timestamp,
           senderId: meshNetworkRef.current!.getLocalPeerId(),
           recipientId,
           type: "text",
-          status: messageStatus,
+          status: "pending",
         });
 
         const convId = groupId || recipientId;
@@ -606,58 +770,79 @@ export function useMeshNetwork() {
             createdAt: Date.now(),
           });
         }
+      } catch (dbErr) {
+        useMeshNetworkLogger.warn("Failed to save optimistic message:", dbErr);
+      }
+
+      // 3. Network Logic
+      let finalStatus: "sent" | "queued" = "sent";
+      try {
+        const isConnected =
+          meshNetworkRef.current &&
+          typeof (meshNetworkRef.current as any).isConnectedToPeer ===
+            "function"
+            ? (meshNetworkRef.current as any).isConnectedToPeer(recipientId)
+            : Boolean(
+                meshNetworkRef.current &&
+                meshNetworkRef.current.getConnectedPeers &&
+                meshNetworkRef.current
+                  .getConnectedPeers()
+                  .some((p: Peer) => p.id === recipientId),
+              );
+
+        if (!isConnected) {
+          useMeshNetworkLogger.warn(
+            `Not connected to ${recipientId}. Attempting to connect...`,
+          );
+          // Timeout connection attempt to avoid hanging
+          const connectPromise = connectToPeer(recipientId);
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Connection timeout")), 5000),
+          );
+          await Promise.race([connectPromise, timeoutPromise]);
+        }
+
+        const rateLimitResult = rateLimiter.canSendMessage(
+          meshNetworkRef.current.getLocalPeerId(),
+        );
+        if (!rateLimitResult.allowed) {
+          throw new Error(rateLimitResult.reason);
+        }
+
+        const payload = JSON.stringify({
+          text: content,
+          timestamp: Date.now(),
+          groupId,
+        });
+        await meshNetworkRef.current.sendMessage(recipientId, payload);
+        endMeasure({ success: true });
       } catch (error) {
-        useMeshNetworkLogger.error("Failed to persist sent message:", error);
+        useMeshNetworkLogger.error("Failed to send message to network:", error);
+        await offlineQueue.enqueue({
+          recipientId,
+          content,
+          timestamp: Date.now(),
+        });
+        finalStatus = "queued";
+        endMeasure({ success: false, error: (error as Error).message });
+      }
+
+      // 4. Update Status
+      try {
+        const db = getDatabase();
+        // We need to re-fetch to ensure we don't overwrite if it changed?
+        // Actually we just update status field.
+        const msg = await db.getMessage(tempId);
+        if (msg) {
+          msg.status = finalStatus;
+          await db.saveMessage(msg);
+        }
+      } catch (e) {
+        useMeshNetworkLogger.error("Failed to update message status:", e);
       }
     },
-    []
+    [connectToPeer],
   );
-
-  const connectToPeer = useCallback(async (peerId: string) => {
-    const endMeasure = performanceMonitor.startMeasure("connectToPeer");
-    useMeshNetworkLogger.info(`connectToPeer called for ${peerId}`);
-
-    if (!meshNetworkRef.current) {
-      useMeshNetworkLogger.error("connectToPeer failed: Mesh network not initialized");
-      throw new Error("Mesh network not initialized");
-    }
-
-    const alreadyConnected =
-      meshNetworkRef.current && typeof (meshNetworkRef.current as any).isConnectedToPeer === "function"
-        ? (meshNetworkRef.current as any).isConnectedToPeer(peerId)
-        : Boolean(meshNetworkRef.current && meshNetworkRef.current.getConnectedPeers && meshNetworkRef.current.getConnectedPeers().some((p: Peer) => p.id === peerId));
-
-    if (alreadyConnected) {
-      useMeshNetworkLogger.debug(`Already connected to ${peerId}`);
-      return;
-    }
-
-    try {
-      if (roomClientRef.current) {
-        useMeshNetworkLogger.info(`Initiating connection to ${peerId} via Room Signaling...`);
-        const offerJson = await meshNetworkRef.current.createManualConnection(peerId);
-        let offerData: any;
-        try {
-          offerData = JSON.parse(offerJson as string);
-        } catch (parseErr) {
-          // Accept raw strings from mocks
-          offerData = offerJson;
-        }
-        useMeshNetworkLogger.debug(`Sending SDP offer to ${peerId} via Room...`);
-        await roomClientRef.current.signal(peerId, "offer", offerData);
-        useMeshNetworkLogger.debug("SDP offer sent via Room");
-      } else {
-        useMeshNetworkLogger.info(`Initiating connection to ${peerId} via Mesh/Local...`);
-        await meshNetworkRef.current.connectToPeer(peerId);
-      }
-      endMeasure({ success: true });
-      useMeshNetworkLogger.info(`Connection initiated to ${peerId}, waiting for peer to accept...`);
-    } catch (error) {
-      useMeshNetworkLogger.error(`Failed to connect to ${peerId}:`, error);
-      endMeasure({ success: false, error: (error as Error).message });
-      throw error;
-    }
-  }, []);
 
   const getStats = useCallback(async () => {
     if (!meshNetworkRef.current) return null;
@@ -665,7 +850,9 @@ export function useMeshNetwork() {
   }, []);
 
   const generateConnectionOffer = useCallback(async (): Promise<string> => {
-    const endMeasure = performanceMonitor.startMeasure("generateConnectionOffer");
+    const endMeasure = performanceMonitor.startMeasure(
+      "generateConnectionOffer",
+    );
     if (!meshNetworkRef.current) {
       throw new Error("Mesh network not initialized");
     }
@@ -674,7 +861,9 @@ export function useMeshNetwork() {
     const offerPayload = {
       peerId: meshNetworkRef.current.getLocalPeerId(),
       publicKey: identity
-        ? Array.from(identity.publicKey).map((b) => b.toString(16).padStart(2, "0")).join("")
+        ? Array.from(identity.publicKey)
+            .map((b) => b.toString(16).padStart(2, "0"))
+            .join("")
         : undefined,
       displayName: identity?.displayName,
     };
@@ -684,7 +873,9 @@ export function useMeshNetwork() {
 
   const acceptConnectionOffer = useCallback(
     async (offer: string): Promise<string> => {
-      const endMeasure = performanceMonitor.startMeasure("acceptConnectionOffer");
+      const endMeasure = performanceMonitor.startMeasure(
+        "acceptConnectionOffer",
+      );
       if (!meshNetworkRef.current) {
         throw new Error("Mesh network not initialized");
       }
@@ -708,7 +899,9 @@ export function useMeshNetwork() {
                 blocked: false,
                 endpoints: [],
               });
-              useMeshNetworkLogger.debug(`Saved contact from QR: ${offerData.displayName}`);
+              useMeshNetworkLogger.debug(
+                `Saved contact from QR: ${offerData.displayName}`,
+              );
             }
           } catch (e) {
             useMeshNetworkLogger.error("Error saving QR contact:", e);
@@ -723,42 +916,76 @@ export function useMeshNetwork() {
         throw error;
       }
     },
-    [connectToPeer]
+    [connectToPeer],
   );
 
-  const createManualOffer = useCallback(async (peerId: string): Promise<string> => {
-    if (!meshNetworkRef.current) throw new Error("Mesh network not initialized");
-    return await meshNetworkRef.current.createManualConnection(peerId);
-  }, []);
+  const createManualOffer = useCallback(
+    async (peerId: string): Promise<string> => {
+      if (!meshNetworkRef.current)
+        throw new Error("Mesh network not initialized");
+      return await meshNetworkRef.current.createManualConnection(peerId);
+    },
+    [],
+  );
 
-  const acceptManualOffer = useCallback(async (offerData: string): Promise<string> => {
-    if (!meshNetworkRef.current) throw new Error("Mesh network not initialized");
-    return await meshNetworkRef.current.acceptManualConnection(offerData);
-  }, []);
+  const acceptManualOffer = useCallback(
+    async (offerData: string): Promise<string> => {
+      if (!meshNetworkRef.current)
+        throw new Error("Mesh network not initialized");
+      return await meshNetworkRef.current.acceptManualConnection(offerData);
+    },
+    [],
+  );
 
-  const finalizeManualConnection = useCallback(async (answerData: string): Promise<void> => {
-    if (!meshNetworkRef.current) throw new Error("Mesh network not initialized");
-    await meshNetworkRef.current.finalizeManualConnection(answerData);
-    const connectedPeers = meshNetworkRef.current.getConnectedPeers();
-    setPeers(connectedPeers);
-    setStatus((prev: MeshStatus) => ({
-      ...prev,
-      peerCount: connectedPeers.length,
-      isConnected: connectedPeers.length > 0,
-    }));
-  }, []);
+  const finalizeManualConnection = useCallback(
+    async (answerData: string): Promise<void> => {
+      if (!meshNetworkRef.current)
+        throw new Error("Mesh network not initialized");
+      await meshNetworkRef.current.finalizeManualConnection(answerData);
+      const connectedPeers = meshNetworkRef.current.getConnectedPeers();
+      setPeers(connectedPeers);
+      setStatus((prev: MeshStatus) => ({
+        ...prev,
+        peerCount: connectedPeers.length,
+        isConnected: connectedPeers.length > 0,
+      }));
+    },
+    [],
+  );
 
   const sendReaction = useCallback(
-    async (targetMessageId: string, emoji: string, recipientId: string, groupId?: string) => {
-      if (!meshNetworkRef.current) throw new Error("Mesh network not initialized");
-      const payload = JSON.stringify({ targetMessageId, emoji, groupId, timestamp: Date.now() });
-      await meshNetworkRef.current.sendMessage(recipientId, payload, 0x05 as MessageType);
+    async (
+      targetMessageId: string,
+      emoji: string,
+      recipientId: string,
+      groupId?: string,
+    ) => {
+      if (!meshNetworkRef.current)
+        throw new Error("Mesh network not initialized");
+      const payload = JSON.stringify({
+        targetMessageId,
+        emoji,
+        groupId,
+        timestamp: Date.now(),
+      });
+      await meshNetworkRef.current.sendMessage(
+        recipientId,
+        payload,
+        0x05 as MessageType,
+      );
       const db = getDatabase();
       const targetMsg = await db.getMessage(targetMessageId);
       if (targetMsg) {
         const reactions = targetMsg.reactions || [];
-        const newReaction = { userId: meshNetworkRef.current.getLocalPeerId(), emoji };
-        if (!reactions.some((r) => r.userId === newReaction.userId && r.emoji === emoji)) {
+        const newReaction = {
+          userId: meshNetworkRef.current.getLocalPeerId(),
+          emoji,
+        };
+        if (
+          !reactions.some(
+            (r) => r.userId === newReaction.userId && r.emoji === emoji,
+          )
+        ) {
           targetMsg.reactions = [...reactions, newReaction];
           await db.saveMessage(targetMsg);
           setMessages((prev) =>
@@ -768,20 +995,30 @@ export function useMeshNetwork() {
                 return { ...m, reactions: [...currentReactions, newReaction] };
               }
               return m;
-            })
+            }),
           );
         }
       }
     },
-    []
+    [],
   );
 
   const sendVoice = useCallback(
-    async (recipientId: string, audioBlob: Blob, duration?: number, groupId?: string) => {
-      if (!meshNetworkRef.current) throw new Error("Mesh network not initialized");
+    async (
+      recipientId: string,
+      audioBlob: Blob,
+      duration?: number,
+      groupId?: string,
+    ) => {
+      if (!meshNetworkRef.current)
+        throw new Error("Mesh network not initialized");
       const buffer = await audioBlob.arrayBuffer();
       const data = new Uint8Array(buffer);
-      await meshNetworkRef.current.sendBinaryMessage(recipientId, data, 0x04 as MessageType);
+      await meshNetworkRef.current.sendBinaryMessage(
+        recipientId,
+        data,
+        0x04 as MessageType,
+      );
       const db = getDatabase();
       const messageId = `msg-voice-${Date.now()}`;
       const newMessage: any = {
@@ -801,19 +1038,35 @@ export function useMeshNetwork() {
         const convId = groupId || recipientId;
         const conversation = await db.getConversation(convId);
         if (conversation) {
-          await db.saveConversation({ ...conversation, lastMessageTimestamp: newMessage.timestamp, lastMessageId: newMessage.id });
+          await db.saveConversation({
+            ...conversation,
+            lastMessageTimestamp: newMessage.timestamp,
+            lastMessageId: newMessage.id,
+          });
         } else {
-          await db.saveConversation({ id: convId, contactId: convId, lastMessageTimestamp: newMessage.timestamp, lastMessageId: newMessage.id, unreadCount: 0, createdAt: Date.now() });
+          await db.saveConversation({
+            id: convId,
+            contactId: convId,
+            lastMessageTimestamp: newMessage.timestamp,
+            lastMessageId: newMessage.id,
+            unreadCount: 0,
+            createdAt: Date.now(),
+          });
         }
         setMessages((prev) => [
           ...prev,
-          { ...newMessage, from: newMessage.senderId, to: newMessage.recipientId, type: 0x04 as MessageType },
+          {
+            ...newMessage,
+            from: newMessage.senderId,
+            to: newMessage.recipientId,
+            type: 0x04 as MessageType,
+          },
         ]);
       } catch (err) {
         useMeshNetworkLogger.error("Failed to save local voice message:", err);
       }
     },
-    []
+    [],
   );
 
   const [joinError, setJoinError] = useState<string | null>(null);
@@ -823,7 +1076,8 @@ export function useMeshNetwork() {
 
   const joinRoom = useCallback(
     async (url: string): Promise<void> => {
-      if (!meshNetworkRef.current) throw new Error("Mesh network not initialized");
+      if (!meshNetworkRef.current)
+        throw new Error("Mesh network not initialized");
       const localPeerId = meshNetworkRef.current.getLocalPeerId();
       setJoinError(null);
       setRoomMessages([]);
@@ -832,22 +1086,36 @@ export function useMeshNetwork() {
       try {
         const roomClient = new RoomClient(url, localPeerId);
         roomClientRef.current = roomClient;
-        if (meshNetworkRef.current && meshNetworkRef.current.discovery && typeof meshNetworkRef.current.discovery.registerProvider === 'function') {
+        if (
+          meshNetworkRef.current &&
+          meshNetworkRef.current.discovery &&
+          typeof meshNetworkRef.current.discovery.registerProvider ===
+            "function"
+        ) {
           try {
-            meshNetworkRef.current.discovery.registerProvider(roomClient as any);
-            useMeshNetworkLogger.info('Registered room discovery provider');
-            if (typeof meshNetworkRef.current.discovery.start === 'function') {
+            meshNetworkRef.current.discovery.registerProvider(
+              roomClient as any,
+            );
+            useMeshNetworkLogger.info("Registered room discovery provider");
+            if (typeof meshNetworkRef.current.discovery.start === "function") {
               meshNetworkRef.current.discovery.start();
-              useMeshNetworkLogger.info('Started room discovery provider');
+              useMeshNetworkLogger.info("Started room discovery provider");
             }
           } catch (e) {
-            useMeshNetworkLogger.warn('Failed to register/start room discovery provider:', e);
+            useMeshNetworkLogger.warn(
+              "Failed to register/start room discovery provider:",
+              e,
+            );
           }
         }
         const db = getDatabase();
         const identity = await db.getPrimaryIdentity();
         const metadata = {
-          publicKey: identity ? Array.from(identity.publicKey).map((b) => (b as number).toString(16).padStart(2, "0")).join("") : undefined,
+          publicKey: identity
+            ? Array.from(identity.publicKey)
+                .map((b) => (b as number).toString(16).padStart(2, "0"))
+                .join("")
+            : undefined,
           displayName: identity?.displayName || "Unknown User",
           userAgent: navigator.userAgent,
         };
@@ -856,7 +1124,9 @@ export function useMeshNetwork() {
         useMeshNetworkLogger.info(`Joined room, active peers: ${peers.length}`);
 
         setDiscoveredPeers((prev) => {
-          const newPeers = peers.map((p) => p._id).filter((id) => !prev.includes(id) && id !== localPeerId);
+          const newPeers = peers
+            .map((p) => p._id)
+            .filter((id) => !prev.includes(id) && id !== localPeerId);
           return [...prev, ...newPeers];
         });
 
@@ -867,23 +1137,32 @@ export function useMeshNetwork() {
 
           try {
             const peerCount =
-              meshNetworkRef.current && typeof (meshNetworkRef.current as any).getPeerCount === "function"
+              meshNetworkRef.current &&
+              typeof (meshNetworkRef.current as any).getPeerCount === "function"
                 ? (meshNetworkRef.current as any).getPeerCount()
-                : meshNetworkRef.current && meshNetworkRef.current.getConnectedPeers
-                ? meshNetworkRef.current.getConnectedPeers().length
-                : 0;
-            const nextDelay = peerCount < 3 ? 3000 : peerCount < 10 ? 15000 : 60000;
+                : meshNetworkRef.current &&
+                    meshNetworkRef.current.getConnectedPeers
+                  ? meshNetworkRef.current.getConnectedPeers().length
+                  : 0;
+            const nextDelay =
+              peerCount < 3 ? 3000 : peerCount < 10 ? 15000 : 60000;
 
-            const { signals, messages, peers } = await roomClientRef.current.poll();
+            const { signals, messages, peers } =
+              await roomClientRef.current.poll();
 
             if (peers && peers.length > 0) {
               const db = getDatabase();
               for (const p of peers) {
                 if (p.metadata && p._id !== localPeerId) {
                   try {
-                    const existing = typeof db.getContact === "function" ? await db.getContact(p._id) : null;
+                    const existing =
+                      typeof db.getContact === "function"
+                        ? await db.getContact(p._id)
+                        : null;
                     if (!existing && p.metadata.displayName) {
-                      useMeshNetworkLogger.debug(`Discovered new peer ${p.metadata.displayName} (${p._id})`);
+                      useMeshNetworkLogger.debug(
+                        `Discovered new peer ${p.metadata.displayName} (${p._id})`,
+                      );
                       if (typeof db.saveContact === "function") {
                         await db.saveContact({
                           id: p._id,
@@ -899,58 +1178,105 @@ export function useMeshNetwork() {
                       }
                     }
 
-                    if (meshNetworkRef.current && meshNetworkRef.current.getConnectedPeers) {
-                      const connected = meshNetworkRef.current.getConnectedPeers();
+                    if (
+                      meshNetworkRef.current &&
+                      meshNetworkRef.current.getConnectedPeers
+                    ) {
+                      const connected =
+                        meshNetworkRef.current.getConnectedPeers();
                       if (!connected.some((cp) => cp.id === p._id)) {
-                        useMeshNetworkLogger.debug(`[Room Bootstrap] Auto-connecting to discovered room peer: ${p._id}`);
-                        meshNetworkRef.current.connectToPeer(p._id).catch((err) => {
-                          useMeshNetworkLogger.debug(`[Room Bootstrap] Failed to connect to ${p._id}:`, err);
-                        });
+                        useMeshNetworkLogger.debug(
+                          `[Room Bootstrap] Auto-connecting to discovered room peer: ${p._id}`,
+                        );
+                        meshNetworkRef.current
+                          .connectToPeer(p._id)
+                          .catch((err) => {
+                            useMeshNetworkLogger.debug(
+                              `[Room Bootstrap] Failed to connect to ${p._id}:`,
+                              err,
+                            );
+                          });
                       }
                     }
                   } catch (err) {
-                    useMeshNetworkLogger.error("Error saving discovered peer contact:", err);
+                    useMeshNetworkLogger.error(
+                      "Error saving discovered peer contact:",
+                      err,
+                    );
                   }
                 }
               }
             }
-            
 
             if (messages && messages.length > 0) {
               setRoomMessages((prev) => {
-                const newMsgs = messages.filter((m) => !prev.some((existing) => existing.id === m.id));
+                const newMsgs = messages.filter(
+                  (m) => !prev.some((existing) => existing.id === m.id),
+                );
                 if (newMsgs.length === 0) return prev;
                 return [...prev, ...newMsgs];
               });
             }
 
             if (signals && signals.length > 0) {
-              useMeshNetworkLogger.info(`Received ${signals.length} signals from Room`);
+              useMeshNetworkLogger.info(
+                `Received ${signals.length} signals from Room`,
+              );
               for (const sig of signals) {
                 try {
-                  const signalData = typeof sig.signal === "string" ? JSON.parse(sig.signal) : sig.signal;
+                  const signalData =
+                    typeof sig.signal === "string"
+                      ? JSON.parse(sig.signal)
+                      : sig.signal;
 
                   if (sig.type === "offer" || signalData.type === "offer") {
-                    useMeshNetworkLogger.info(`📥 Received OFFER from ${sig.from}`, { signalType: signalData.type, hasSdp: !!signalData.sdp });
-
-                    const answerJson = await meshNetworkRef.current!.acceptManualConnection(
-                      JSON.stringify({ peerId: sig.from, sdp: signalData.sdp || signalData })
+                    useMeshNetworkLogger.info(
+                      `📥 Received OFFER from ${sig.from}`,
+                      { signalType: signalData.type, hasSdp: !!signalData.sdp },
                     );
+
+                    const answerJson =
+                      await meshNetworkRef.current!.acceptManualConnection(
+                        JSON.stringify({
+                          peerId: sig.from,
+                          sdp: signalData.sdp || signalData,
+                        }),
+                      );
                     const answerData = JSON.parse(answerJson);
 
-                    useMeshNetworkLogger.info(`📤 Sending ANSWER to ${sig.from}`, { answerSdp: !!answerData.sdp });
-                    await roomClientRef.current!.signal(sig.from, "answer", { type: "answer", sdp: answerData.sdp });
+                    useMeshNetworkLogger.info(
+                      `📤 Sending ANSWER to ${sig.from}`,
+                      { answerSdp: !!answerData.sdp },
+                    );
+                    await roomClientRef.current!.signal(sig.from, "answer", {
+                      type: "answer",
+                      sdp: answerData.sdp,
+                    });
                     useMeshNetworkLogger.info(`Answer sent to ${sig.from}`);
-                  } else if (sig.type === "answer" || signalData.type === "answer") {
-                    useMeshNetworkLogger.info(`📥 Received ANSWER from ${sig.from}`, { signalType: signalData.type, hasSdp: !!signalData.sdp });
+                  } else if (
+                    sig.type === "answer" ||
+                    signalData.type === "answer"
+                  ) {
+                    useMeshNetworkLogger.info(
+                      `📥 Received ANSWER from ${sig.from}`,
+                      { signalType: signalData.type, hasSdp: !!signalData.sdp },
+                    );
 
                     await meshNetworkRef.current!.finalizeManualConnection(
-                      JSON.stringify({ peerId: sig.from, sdp: signalData.sdp || signalData })
+                      JSON.stringify({
+                        peerId: sig.from,
+                        sdp: signalData.sdp || signalData,
+                      }),
                     );
-                    useMeshNetworkLogger.info(`Connection finalized with ${sig.from}`);
+                    useMeshNetworkLogger.info(
+                      `Connection finalized with ${sig.from}`,
+                    );
                   }
                 } catch (e) {
-                  useMeshNetworkLogger.error(`Error processing signal from ${sig.from}:`, e);
+                  useMeshNetworkLogger.error(
+                    `Error processing signal from ${sig.from}:`,
+                    e,
+                  );
                 }
               }
             }
@@ -970,7 +1296,7 @@ export function useMeshNetwork() {
         throw error;
       }
     },
-    [setJoinError, setRoomMessages, setDiscoveredPeers, setIsJoinedToRoom]
+    [setJoinError, setRoomMessages, setDiscoveredPeers, setIsJoinedToRoom],
   );
 
   const leaveRoom = useCallback(() => {
@@ -1000,17 +1326,28 @@ export function useMeshNetwork() {
     await roomClientRef.current.message(content);
   }, []);
 
-  const addStreamToPeer = useCallback(async (peerId: string, stream: MediaStream) => {
-    if (!meshNetworkRef.current) throw new Error("Mesh network not initialized");
-    await meshNetworkRef.current.addStreamToPeer(peerId, stream);
-  }, []);
+  const addStreamToPeer = useCallback(
+    async (peerId: string, stream: MediaStream) => {
+      if (!meshNetworkRef.current)
+        throw new Error("Mesh network not initialized");
+      await meshNetworkRef.current.addStreamToPeer(peerId, stream);
+    },
+    [],
+  );
 
   const onPeerTrack = useCallback(
-    (callback: (peerId: string, track: MediaStreamTrack, stream: MediaStream) => void) => {
-      if (!meshNetworkRef.current) throw new Error("Mesh network not initialized");
+    (
+      callback: (
+        peerId: string,
+        track: MediaStreamTrack,
+        stream: MediaStream,
+      ) => void,
+    ) => {
+      if (!meshNetworkRef.current)
+        throw new Error("Mesh network not initialized");
       meshNetworkRef.current.onPeerTrack(callback);
     },
-    []
+    [],
   );
 
   useEffect(() => {
@@ -1018,14 +1355,19 @@ export function useMeshNetwork() {
     const shouldSkipAutoJoin =
       env.MODE === "test" ||
       env.VITE_E2E === "true" ||
-      (typeof navigator !== "undefined" && "webdriver" in navigator && navigator.webdriver === true);
+      (typeof navigator !== "undefined" &&
+        "webdriver" in navigator &&
+        navigator.webdriver === true);
 
     if (shouldSkipAutoJoin) return;
 
     if (status.isConnected && !isJoinedToRoom) {
       const ROOM_URL = "/.netlify/functions/room";
       joinRoom(ROOM_URL).catch((err) => {
-        useMeshNetworkLogger.error("Failed to auto-join public room on init:", err);
+        useMeshNetworkLogger.error(
+          "Failed to auto-join public room on init:",
+          err,
+        );
       });
     }
   }, [status.isConnected, isJoinedToRoom, joinRoom]);
@@ -1034,17 +1376,29 @@ export function useMeshNetwork() {
     const connectToKnownPeers = async () => {
       if (!meshNetworkRef.current) return;
       const db = getDatabase();
-      const conversations = typeof db.getConversations === "function" ? await db.getConversations() : [];
+      const conversations =
+        typeof db.getConversations === "function"
+          ? await db.getConversations()
+          : [];
       const knownPeerIds = (conversations || []).map((c: any) => c.contactId);
 
       for (const peerId of discoveredPeers) {
         const alreadyConnected =
-          typeof (meshNetworkRef.current as any).isConnectedToPeer === "function"
+          typeof (meshNetworkRef.current as any).isConnectedToPeer ===
+          "function"
             ? (meshNetworkRef.current as any).isConnectedToPeer(peerId)
-            : Boolean(meshNetworkRef.current && meshNetworkRef.current.getConnectedPeers && meshNetworkRef.current.getConnectedPeers().some((p: Peer) => p.id === peerId));
+            : Boolean(
+                meshNetworkRef.current &&
+                meshNetworkRef.current.getConnectedPeers &&
+                meshNetworkRef.current
+                  .getConnectedPeers()
+                  .some((p: Peer) => p.id === peerId),
+              );
 
         if (knownPeerIds.includes(peerId) && !alreadyConnected) {
-          useMeshNetworkLogger.debug(`Auto-connecting to known peer from Room: ${peerId}`);
+          useMeshNetworkLogger.debug(
+            `Auto-connecting to known peer from Room: ${peerId}`,
+          );
           connectToPeer(peerId).catch(console.warn);
         }
       }
@@ -1057,7 +1411,9 @@ export function useMeshNetwork() {
   useEffect(() => {
     if (status.peerCount > 0 && !hasBootstrapped && meshNetworkRef.current) {
       const timer = setTimeout(() => {
-        useMeshNetworkLogger.info(`Peers connected (count: ${status.peerCount}), starting DHT bootstrap...`);
+        useMeshNetworkLogger.info(
+          `Peers connected (count: ${status.peerCount}), starting DHT bootstrap...`,
+        );
         meshNetworkRef.current
           ?.bootstrap()
           .then(() => {
@@ -1121,6 +1477,6 @@ export function useMeshNetwork() {
       identity,
       sendReaction,
       sendVoice,
-    ]
+    ],
   );
 }

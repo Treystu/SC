@@ -49,8 +49,11 @@ import { saveBootstrapPeers } from "./utils/peerBootstrap";
 
 function App() {
   // Detect E2E/test mode for Playwright
+  // Note: navigator.webdriver is read-only in Safari, so we supports window.__E2E__ override
   const isE2E =
-    typeof navigator !== "undefined" && navigator.webdriver === true;
+    (typeof navigator !== "undefined" && navigator.webdriver === true) ||
+    (typeof window !== "undefined" && (window as any).__E2E__ === true);
+
   const [activeRoom, setActiveRoom] = useState<string | null>(null);
   const [selectedConversation, setSelectedConversation] = useState<
     string | null
@@ -103,6 +106,11 @@ function App() {
     sendReaction,
     sendVoice,
   } = useMeshNetwork();
+
+  // Check onboarding completion status from IndexedDB
+  // For E2E tests, we generally want to see the real status, but we might want to ensure
+  // the ID is consistent. For now, let's keep status honest so tests wait for actual initialization.
+  const displayStatus = status;
 
   // Check onboarding completion status from IndexedDB
   useEffect(() => {
@@ -168,6 +176,46 @@ function App() {
     }
     console.log("[App] useEffect: Setup logger completed");
   }, []);
+
+  // Expose helpers for E2E tests
+  useEffect(() => {
+    // Always expose in non-production or if E2E is detected
+    if (isE2E || import.meta.env.MODE === "development") {
+      console.log("[App] Exposing E2E helpers");
+      (window as any).generateConnectionOffer = generateConnectionOffer;
+      (window as any).acceptConnectionOffer = acceptConnectionOffer;
+      (window as any).connectToPeer = connectToPeer;
+      (window as any).sendMessage = sendMessage;
+      (window as any).getDatabase = getDatabase;
+      (window as any).peers = peers;
+      (window as any).messages = messages;
+      (window as any).__SC_STATUS__ = status;
+    }
+    if (isE2E) {
+      // Expose helpers for Playwright
+      (window as any).addContact = (id: string, name: string) => {
+        addContact(id, name, "manual");
+      };
+      (window as any).resetState = async () => {
+        /* Clear DBs/Storage logic if needed */
+      };
+      // Expose status for tests to check connectivity
+      (window as any).__SC_STATUS__ = displayStatus;
+      console.log(
+        "[App] Exposing E2E helpers, status.localPeerId:",
+        displayStatus.localPeerId,
+      );
+    }
+  }, [
+    isE2E,
+    generateConnectionOffer,
+    acceptConnectionOffer,
+    connectToPeer,
+    sendMessage,
+    peers,
+    messages,
+    status,
+  ]);
 
   // Update peer ID in logger
   useEffect(() => {
@@ -645,6 +693,12 @@ function App() {
     let finalPublicKeyHex = publicKeyHex;
     let finalPeerId = peerId;
     let finalName = name;
+
+    console.log("[App] handleAddContact called", {
+      peerId,
+      name,
+      publicKeyHex,
+    });
 
     // Check if peerId is a Stateless Invite Code (contains dot and likely long)
     if (
@@ -1149,10 +1203,11 @@ function App() {
 
             <div className="app-header">
               <h1>Sovereign Communications</h1>
+              <h1>Sovereign Communications</h1>
               <div className="header-controls" data-testid="connection-status">
-                <ConnectionStatus quality={status.connectionQuality} />
+                <ConnectionStatus quality={displayStatus.connectionQuality} />
                 <span className="peer-count" data-testid="peer-count">
-                  {status.peerCount}
+                  {displayStatus.peerCount}
                 </span>
                 <span
                   className="encryption-indicator"
@@ -1164,7 +1219,7 @@ function App() {
               </div>
             </div>
 
-            {!status.isConnected && (
+            {!displayStatus.isConnected && (
               <div className="offline-banner" data-testid="offline-indicator">
                 Offline - attempting to reconnect
               </div>
@@ -1180,7 +1235,9 @@ function App() {
                     <div className="sidebar-header">
                       <div className="user-profile">
                         <div className="avatar">
-                          {status.localPeerId.substring(0, 2).toUpperCase()}
+                          {displayStatus.localPeerId
+                            .substring(0, 2)
+                            .toUpperCase()}
                         </div>
                         <div className="user-info">
                           <span className="username">Me</span>
@@ -1252,7 +1309,7 @@ function App() {
                         onJoinRoom={handleJoinRoom}
                         onJoinRelay={joinRoom}
                         onInitiateConnection={handleManualConnectionInitiated}
-                        connectionStatus={status.isConnected}
+                        connectionStatus={displayStatus.isConnected}
                       />
                     ) : (
                       <GroupChat onSelectGroup={handleSelectConversation} />

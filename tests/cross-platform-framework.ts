@@ -3,11 +3,15 @@
  * Coordinates testing across Web, Android, and iOS platforms
  */
 
-import { Page, Browser } from '@playwright/test';
-import { remote, RemoteOptions, Browser as WebdriverBrowser } from 'webdriverio';
-import { config } from '../appium.config';
+import { Page, Browser } from "@playwright/test";
+import {
+  remote,
+  RemoteOptions,
+  Browser as WebdriverBrowser,
+} from "webdriverio";
+import { config } from "../appium.config";
 
-export type Platform = 'web' | 'android' | 'ios';
+export type Platform = "web" | "android" | "ios";
 
 export interface ClientOptions {
   platform: Platform;
@@ -38,19 +42,25 @@ export abstract class PlatformClient {
   abstract waitForMessage(message: string, timeout?: number): Promise<boolean>;
   abstract addContact(name: string, publicKey: string): Promise<void>;
   abstract getPeerCount(): Promise<number>;
-  abstract waitForPeerConnection(expectedCount: number, timeout?: number): Promise<void>;
+  abstract waitForPeerConnection(
+    expectedCount: number,
+    timeout?: number,
+  ): Promise<void>;
   abstract getPublicKey(): Promise<string>;
   abstract takeScreenshot(name: string): Promise<void>;
   abstract goOffline(): Promise<void>;
   abstract goOnline(): Promise<void>;
-  
+
   // Group messaging methods (with default implementations that can be overridden)
   async sendMessageToGroup(message: string): Promise<void> {
-    throw new Error('sendMessageToGroup not implemented for this platform');
+    throw new Error("sendMessageToGroup not implemented for this platform");
   }
-  
-  async waitForGroupMessage(message: string, timeout?: number): Promise<boolean> {
-    throw new Error('waitForGroupMessage not implemented for this platform');
+
+  async waitForGroupMessage(
+    message: string,
+    timeout?: number,
+  ): Promise<boolean> {
+    throw new Error("waitForGroupMessage not implemented for this platform");
   }
 
   getId(): string {
@@ -70,14 +80,40 @@ export class WebClient extends PlatformClient {
   private browser: Browser;
 
   constructor(clientId: string, page: Page, browser: Browser) {
-    super(clientId, 'web');
+    super(clientId, "web");
     this.page = page;
     this.browser = browser;
   }
 
   async initialize(): Promise<void> {
-    await this.page.goto('/');
-    await this.page.waitForLoadState('networkidle');
+    // Navigate to page
+    await this.page.goto("/");
+
+    // Clear storage to ensure fresh state
+    await this.page.evaluate(() => {
+      localStorage.clear();
+      // Remove any previously created databases for this test client
+      // Note: we can't easily delete IndexedDB here without potentially blocking,
+      // but the unique DB name approach in tests handles this.
+    });
+
+    // Ensure E2E mode and unique DB if not already set
+    // Using a consistent DB name based on clientId for this test run
+    const uniqueDbName = `sc_e2e_${this.clientId}_${Date.now()}`;
+    await this.page.addInitScript((dbName) => {
+      (window as any).__E2E__ = true;
+      (window as any).__SC_DB_NAME__ = dbName;
+    }, uniqueDbName);
+
+    // Reload to apply init script
+    await this.page.reload();
+    await this.page.waitForLoadState("networkidle");
+
+    // Wait for mesh status to be exposed
+    await this.page.waitForFunction(() => {
+      const s = (window as any).__SC_STATUS__;
+      return !!s;
+    });
   }
 
   async cleanup(): Promise<void> {
@@ -108,32 +144,37 @@ export class WebClient extends PlatformClient {
   }
 
   async getPeerCount(): Promise<number> {
-    const peerCountText = await this.page.textContent('[data-testid="peer-count"]');
-    return parseInt(peerCountText || '0', 10);
+    const peerCountText = await this.page.textContent(
+      '[data-testid="peer-count"]',
+    );
+    return parseInt(peerCountText || "0", 10);
   }
 
-  async waitForPeerConnection(expectedCount: number, timeout = 10000): Promise<void> {
+  async waitForPeerConnection(
+    expectedCount: number,
+    timeout = 10000,
+  ): Promise<void> {
     await this.page.waitForFunction(
       (count) => {
         const elem = document.querySelector('[data-testid="peer-count"]');
-        return elem && parseInt(elem.textContent || '0', 10) >= count;
+        return elem && parseInt(elem.textContent || "0", 10) >= count;
       },
       expectedCount,
-      { timeout }
+      { timeout },
     );
   }
 
   async getPublicKey(): Promise<string> {
     return await this.page.evaluate(() => {
-      const identity = JSON.parse(localStorage.getItem('identity') || '{}');
-      return identity.publicKey || '';
+      const identity = JSON.parse(localStorage.getItem("identity") || "{}");
+      return identity.publicKey || "";
     });
   }
 
   async takeScreenshot(name: string): Promise<void> {
-    await this.page.screenshot({ 
-      path: `screenshots/${this.platform}-${this.clientId}-${name}.png`, 
-      fullPage: true 
+    await this.page.screenshot({
+      path: `screenshots/${this.platform}-${this.clientId}-${name}.png`,
+      fullPage: true,
     });
   }
 
@@ -150,9 +191,15 @@ export class WebClient extends PlatformClient {
     await this.page.click('[data-testid="send-group-message-btn"]');
   }
 
-  async waitForGroupMessage(message: string, timeout = 10000): Promise<boolean> {
+  async waitForGroupMessage(
+    message: string,
+    timeout = 10000,
+  ): Promise<boolean> {
     try {
-      await this.page.waitForSelector(`[data-testid="group-message"]:has-text("${message}")`, { timeout });
+      await this.page.waitForSelector(
+        `[data-testid="group-message"]:has-text("${message}")`,
+        { timeout },
+      );
       return true;
     } catch {
       return false;
@@ -167,7 +214,7 @@ export class AndroidClient extends PlatformClient {
   private driver?: WebdriverBrowser;
 
   constructor(clientId: string) {
-    super(clientId, 'android');
+    super(clientId, "android");
   }
 
   async initialize(): Promise<void> {
@@ -176,7 +223,7 @@ export class AndroidClient extends PlatformClient {
     const appiumCaps: Record<string, any> = {};
     for (const [key, value] of Object.entries(config.android)) {
       // Only allow W3C top-level keys
-      if (key === 'platformName' || key === 'browserName') {
+      if (key === "platformName" || key === "browserName") {
         w3cCaps[key] = value;
       } else {
         appiumCaps[key] = value;
@@ -184,9 +231,9 @@ export class AndroidClient extends PlatformClient {
     }
     // Override deviceName for parallelization
     appiumCaps.deviceName = `${config.android.deviceName}-${this.clientId}`;
-    const capabilities: RemoteOptions['capabilities'] = {
+    const capabilities: RemoteOptions["capabilities"] = {
       ...w3cCaps,
-      'appium:options': appiumCaps,
+      "appium:options": appiumCaps,
     };
 
     this.driver = await remote({
@@ -208,26 +255,34 @@ export class AndroidClient extends PlatformClient {
   }
 
   async sendMessage(contactName: string, message: string): Promise<void> {
-    if (!this.driver) throw new Error('Driver not initialized');
-    
+    if (!this.driver) throw new Error("Driver not initialized");
+
     // Click on contact
-    const contact = await this.driver.$(`android=new UiSelector().text("${contactName}")`);
+    const contact = await this.driver.$(
+      `android=new UiSelector().text("${contactName}")`,
+    );
     await contact.click();
-    
+
     // Type message
-    const messageInput = await this.driver.$('android=new UiSelector().resourceId("message_input")');
+    const messageInput = await this.driver.$(
+      'android=new UiSelector().resourceId("message_input")',
+    );
     await messageInput.setValue(message);
-    
+
     // Send
-    const sendButton = await this.driver.$('android=new UiSelector().resourceId("send_button")');
+    const sendButton = await this.driver.$(
+      'android=new UiSelector().resourceId("send_button")',
+    );
     await sendButton.click();
   }
 
   async waitForMessage(message: string, timeout = 10000): Promise<boolean> {
-    if (!this.driver) throw new Error('Driver not initialized');
-    
+    if (!this.driver) throw new Error("Driver not initialized");
+
     try {
-      const messageElement = await this.driver.$(`android=new UiSelector().textContains("${message}")`);
+      const messageElement = await this.driver.$(
+        `android=new UiSelector().textContains("${message}")`,
+      );
       await messageElement.waitForExist({ timeout });
       return true;
     } catch {
@@ -236,32 +291,45 @@ export class AndroidClient extends PlatformClient {
   }
 
   async addContact(name: string, publicKey: string): Promise<void> {
-    if (!this.driver) throw new Error('Driver not initialized');
-    
-    const addButton = await this.driver.$('android=new UiSelector().resourceId("add_contact_button")');
+    if (!this.driver) throw new Error("Driver not initialized");
+
+    const addButton = await this.driver.$(
+      'android=new UiSelector().resourceId("add_contact_button")',
+    );
     await addButton.click();
-    
-    const nameInput = await this.driver.$('android=new UiSelector().resourceId("contact_name_input")');
+
+    const nameInput = await this.driver.$(
+      'android=new UiSelector().resourceId("contact_name_input")',
+    );
     await nameInput.setValue(name);
-    
-    const keyInput = await this.driver.$('android=new UiSelector().resourceId("contact_key_input")');
+
+    const keyInput = await this.driver.$(
+      'android=new UiSelector().resourceId("contact_key_input")',
+    );
     await keyInput.setValue(publicKey);
-    
-    const saveButton = await this.driver.$('android=new UiSelector().resourceId("save_contact_button")');
+
+    const saveButton = await this.driver.$(
+      'android=new UiSelector().resourceId("save_contact_button")',
+    );
     await saveButton.click();
   }
 
   async getPeerCount(): Promise<number> {
-    if (!this.driver) throw new Error('Driver not initialized');
-    
-    const peerCountElement = await this.driver.$('android=new UiSelector().resourceId("peer_count")');
+    if (!this.driver) throw new Error("Driver not initialized");
+
+    const peerCountElement = await this.driver.$(
+      'android=new UiSelector().resourceId("peer_count")',
+    );
     const text = await peerCountElement.getText();
-    return parseInt(text || '0', 10);
+    return parseInt(text || "0", 10);
   }
 
-  async waitForPeerConnection(expectedCount: number, timeout = 10000): Promise<void> {
-    if (!this.driver) throw new Error('Driver not initialized');
-    
+  async waitForPeerConnection(
+    expectedCount: number,
+    timeout = 10000,
+  ): Promise<void> {
+    if (!this.driver) throw new Error("Driver not initialized");
+
     const startTime = Date.now();
     while (Date.now() - startTime < timeout) {
       const count = await this.getPeerCount();
@@ -272,57 +340,72 @@ export class AndroidClient extends PlatformClient {
   }
 
   async getPublicKey(): Promise<string> {
-    if (!this.driver) throw new Error('Driver not initialized');
-    
+    if (!this.driver) throw new Error("Driver not initialized");
+
     // Navigate to settings
-    const settingsButton = await this.driver.$('android=new UiSelector().resourceId("settings_button")');
+    const settingsButton = await this.driver.$(
+      'android=new UiSelector().resourceId("settings_button")',
+    );
     await settingsButton.click();
-    
+
     // Get public key from identity section
-    const publicKeyElement = await this.driver.$('android=new UiSelector().resourceId("public_key_text")');
+    const publicKeyElement = await this.driver.$(
+      'android=new UiSelector().resourceId("public_key_text")',
+    );
     const publicKey = await publicKeyElement.getText();
-    
+
     // Navigate back
     await this.driver.back();
-    
+
     return publicKey;
   }
 
   async takeScreenshot(name: string): Promise<void> {
-    if (!this.driver) throw new Error('Driver not initialized');
-    await this.driver.saveScreenshot(`screenshots/${this.platform}-${this.clientId}-${name}.png`);
+    if (!this.driver) throw new Error("Driver not initialized");
+    await this.driver.saveScreenshot(
+      `screenshots/${this.platform}-${this.clientId}-${name}.png`,
+    );
   }
 
   async goOffline(): Promise<void> {
-    if (!this.driver) throw new Error('Driver not initialized');
+    if (!this.driver) throw new Error("Driver not initialized");
     // Toggle airplane mode
-    await this.driver.execute('mobile: shell', {
-      command: 'cmd connectivity airplane-mode enable',
+    await this.driver.execute("mobile: shell", {
+      command: "cmd connectivity airplane-mode enable",
     });
   }
 
   async goOnline(): Promise<void> {
-    if (!this.driver) throw new Error('Driver not initialized');
-    await this.driver.execute('mobile: shell', {
-      command: 'cmd connectivity airplane-mode disable',
+    if (!this.driver) throw new Error("Driver not initialized");
+    await this.driver.execute("mobile: shell", {
+      command: "cmd connectivity airplane-mode disable",
     });
   }
 
   async sendMessageToGroup(message: string): Promise<void> {
-    if (!this.driver) throw new Error('Driver not initialized');
-    
-    const messageInput = await this.driver.$('android=new UiSelector().resourceId("group_message_input")');
+    if (!this.driver) throw new Error("Driver not initialized");
+
+    const messageInput = await this.driver.$(
+      'android=new UiSelector().resourceId("group_message_input")',
+    );
     await messageInput.setValue(message);
-    
-    const sendButton = await this.driver.$('android=new UiSelector().resourceId("send_group_button")');
+
+    const sendButton = await this.driver.$(
+      'android=new UiSelector().resourceId("send_group_button")',
+    );
     await sendButton.click();
   }
 
-  async waitForGroupMessage(message: string, timeout = 10000): Promise<boolean> {
-    if (!this.driver) throw new Error('Driver not initialized');
-    
+  async waitForGroupMessage(
+    message: string,
+    timeout = 10000,
+  ): Promise<boolean> {
+    if (!this.driver) throw new Error("Driver not initialized");
+
     try {
-      const messageElement = await this.driver.$(`android=new UiSelector().resourceId("group_message").textContains("${message}")`);
+      const messageElement = await this.driver.$(
+        `android=new UiSelector().resourceId("group_message").textContains("${message}")`,
+      );
       await messageElement.waitForExist({ timeout });
       return true;
     } catch {
@@ -338,7 +421,7 @@ export class iOSClient extends PlatformClient {
   private driver?: WebdriverBrowser;
 
   constructor(clientId: string) {
-    super(clientId, 'ios');
+    super(clientId, "ios");
   }
 
   async initialize(): Promise<void> {
@@ -347,7 +430,7 @@ export class iOSClient extends PlatformClient {
     const appiumCaps: Record<string, any> = {};
     for (const [key, value] of Object.entries(config.ios)) {
       // Only allow W3C top-level keys
-      if (key === 'platformName' || key === 'browserName') {
+      if (key === "platformName" || key === "browserName") {
         w3cCaps[key] = value;
       } else {
         appiumCaps[key] = value;
@@ -355,9 +438,9 @@ export class iOSClient extends PlatformClient {
     }
     // Override deviceName for parallelization
     appiumCaps.deviceName = `${config.ios.deviceName}-${this.clientId}`;
-    const capabilities: RemoteOptions['capabilities'] = {
+    const capabilities: RemoteOptions["capabilities"] = {
       ...w3cCaps,
-      'appium:options': appiumCaps,
+      "appium:options": appiumCaps,
     };
 
     this.driver = await remote({
@@ -379,23 +462,25 @@ export class iOSClient extends PlatformClient {
   }
 
   async sendMessage(contactName: string, message: string): Promise<void> {
-    if (!this.driver) throw new Error('Driver not initialized');
-    
+    if (!this.driver) throw new Error("Driver not initialized");
+
     const contact = await this.driver.$(`~contact-${contactName}`);
     await contact.click();
-    
-    const messageInput = await this.driver.$('~message-input');
+
+    const messageInput = await this.driver.$("~message-input");
     await messageInput.setValue(message);
-    
-    const sendButton = await this.driver.$('~send-button');
+
+    const sendButton = await this.driver.$("~send-button");
     await sendButton.click();
   }
 
   async waitForMessage(message: string, timeout = 10000): Promise<boolean> {
-    if (!this.driver) throw new Error('Driver not initialized');
-    
+    if (!this.driver) throw new Error("Driver not initialized");
+
     try {
-      const messageElement = await this.driver.$(`-ios predicate string:label CONTAINS "${message}"`);
+      const messageElement = await this.driver.$(
+        `-ios predicate string:label CONTAINS "${message}"`,
+      );
       await messageElement.waitForExist({ timeout });
       return true;
     } catch {
@@ -404,32 +489,35 @@ export class iOSClient extends PlatformClient {
   }
 
   async addContact(name: string, publicKey: string): Promise<void> {
-    if (!this.driver) throw new Error('Driver not initialized');
-    
-    const addButton = await this.driver.$('~add-contact-button');
+    if (!this.driver) throw new Error("Driver not initialized");
+
+    const addButton = await this.driver.$("~add-contact-button");
     await addButton.click();
-    
-    const nameInput = await this.driver.$('~contact-name-input');
+
+    const nameInput = await this.driver.$("~contact-name-input");
     await nameInput.setValue(name);
-    
-    const keyInput = await this.driver.$('~contact-key-input');
+
+    const keyInput = await this.driver.$("~contact-key-input");
     await keyInput.setValue(publicKey);
-    
-    const saveButton = await this.driver.$('~save-contact-button');
+
+    const saveButton = await this.driver.$("~save-contact-button");
     await saveButton.click();
   }
 
   async getPeerCount(): Promise<number> {
-    if (!this.driver) throw new Error('Driver not initialized');
-    
-    const peerCountElement = await this.driver.$('~peer-count');
+    if (!this.driver) throw new Error("Driver not initialized");
+
+    const peerCountElement = await this.driver.$("~peer-count");
     const text = await peerCountElement.getText();
-    return parseInt(text || '0', 10);
+    return parseInt(text || "0", 10);
   }
 
-  async waitForPeerConnection(expectedCount: number, timeout = 10000): Promise<void> {
-    if (!this.driver) throw new Error('Driver not initialized');
-    
+  async waitForPeerConnection(
+    expectedCount: number,
+    timeout = 10000,
+  ): Promise<void> {
+    if (!this.driver) throw new Error("Driver not initialized");
+
     const startTime = Date.now();
     while (Date.now() - startTime < timeout) {
       const count = await this.getPeerCount();
@@ -440,51 +528,58 @@ export class iOSClient extends PlatformClient {
   }
 
   async getPublicKey(): Promise<string> {
-    if (!this.driver) throw new Error('Driver not initialized');
-    
-    const settingsButton = await this.driver.$('~settings-button');
+    if (!this.driver) throw new Error("Driver not initialized");
+
+    const settingsButton = await this.driver.$("~settings-button");
     await settingsButton.click();
-    
-    const publicKeyElement = await this.driver.$('~public-key-text');
+
+    const publicKeyElement = await this.driver.$("~public-key-text");
     const publicKey = await publicKeyElement.getText();
-    
+
     await this.driver.back();
-    
+
     return publicKey;
   }
 
   async takeScreenshot(name: string): Promise<void> {
-    if (!this.driver) throw new Error('Driver not initialized');
-    await this.driver.saveScreenshot(`screenshots/${this.platform}-${this.clientId}-${name}.png`);
+    if (!this.driver) throw new Error("Driver not initialized");
+    await this.driver.saveScreenshot(
+      `screenshots/${this.platform}-${this.clientId}-${name}.png`,
+    );
   }
 
   async goOffline(): Promise<void> {
-    if (!this.driver) throw new Error('Driver not initialized');
+    if (!this.driver) throw new Error("Driver not initialized");
     // iOS doesn't allow programmatic control of airplane mode in simulator
     // This is a limitation of iOS testing
-    console.warn('iOS offline mode not supported in simulator');
+    console.warn("iOS offline mode not supported in simulator");
   }
 
   async goOnline(): Promise<void> {
-    if (!this.driver) throw new Error('Driver not initialized');
-    console.warn('iOS online mode not supported in simulator');
+    if (!this.driver) throw new Error("Driver not initialized");
+    console.warn("iOS online mode not supported in simulator");
   }
 
   async sendMessageToGroup(message: string): Promise<void> {
-    if (!this.driver) throw new Error('Driver not initialized');
-    
-    const messageInput = await this.driver.$('~group-message-input');
+    if (!this.driver) throw new Error("Driver not initialized");
+
+    const messageInput = await this.driver.$("~group-message-input");
     await messageInput.setValue(message);
-    
-    const sendButton = await this.driver.$('~send-group-button');
+
+    const sendButton = await this.driver.$("~send-group-button");
     await sendButton.click();
   }
 
-  async waitForGroupMessage(message: string, timeout = 10000): Promise<boolean> {
-    if (!this.driver) throw new Error('Driver not initialized');
-    
+  async waitForGroupMessage(
+    message: string,
+    timeout = 10000,
+  ): Promise<boolean> {
+    if (!this.driver) throw new Error("Driver not initialized");
+
     try {
-      const messageElement = await this.driver.$(`-ios predicate string:name == "group-message" AND label CONTAINS "${message}"`);
+      const messageElement = await this.driver.$(
+        `-ios predicate string:name == "group-message" AND label CONTAINS "${message}"`,
+      );
       await messageElement.waitForExist({ timeout });
       return true;
     } catch {
@@ -503,21 +598,25 @@ export class CrossPlatformTestCoordinator {
   /**
    * Create a new client instance
    */
-  async createClient(options: ClientOptions, page?: Page, browser?: Browser): Promise<PlatformClient> {
+  async createClient(
+    options: ClientOptions,
+    page?: Page,
+    browser?: Browser,
+  ): Promise<PlatformClient> {
     const clientId = options.name || `client-${++this.clientCounter}`;
     let client: PlatformClient;
 
     switch (options.platform) {
-      case 'web':
+      case "web":
         if (!page || !browser) {
-          throw new Error('Page and browser required for web client');
+          throw new Error("Page and browser required for web client");
         }
         client = new WebClient(clientId, page, browser);
         break;
-      case 'android':
+      case "android":
         client = new AndroidClient(clientId);
         break;
-      case 'ios':
+      case "ios":
         client = new iOSClient(clientId);
         break;
       default:
@@ -546,7 +645,10 @@ export class CrossPlatformTestCoordinator {
   /**
    * Exchange contact information between two clients
    */
-  async connectClients(client1: PlatformClient, client2: PlatformClient): Promise<void> {
+  async connectClients(
+    client1: PlatformClient,
+    client2: PlatformClient,
+  ): Promise<void> {
     const publicKey1 = await client1.getPublicKey();
     const publicKey2 = await client2.getPublicKey();
 
@@ -571,9 +673,12 @@ export class CrossPlatformTestCoordinator {
   /**
    * Wait for all clients to establish peer connections
    */
-  async waitForMeshNetwork(expectedPeerCount = 1, timeout = 30000): Promise<void> {
-    const promises = this.getAllClients().map(client =>
-      client.waitForPeerConnection(expectedPeerCount, timeout)
+  async waitForMeshNetwork(
+    expectedPeerCount = 1,
+    timeout = 30000,
+  ): Promise<void> {
+    const promises = this.getAllClients().map((client) =>
+      client.waitForPeerConnection(expectedPeerCount, timeout),
     );
     await Promise.all(promises);
   }
@@ -585,7 +690,7 @@ export class CrossPlatformTestCoordinator {
     sender: PlatformClient,
     receiver: PlatformClient,
     message: string,
-    timeout = 10000
+    timeout = 10000,
   ): Promise<boolean> {
     await sender.sendMessage(receiver.getId(), message);
     return await receiver.waitForMessage(message, timeout);
@@ -595,8 +700,8 @@ export class CrossPlatformTestCoordinator {
    * Take screenshots of all clients
    */
   async takeScreenshotAll(name: string): Promise<void> {
-    const promises = this.getAllClients().map(client =>
-      client.takeScreenshot(name)
+    const promises = this.getAllClients().map((client) =>
+      client.takeScreenshot(name),
     );
     await Promise.all(promises);
   }
@@ -605,8 +710,8 @@ export class CrossPlatformTestCoordinator {
    * Cleanup all clients
    */
   async cleanup(): Promise<void> {
-    const promises = Array.from(this.clients.values()).map(client =>
-      client.cleanup()
+    const promises = Array.from(this.clients.values()).map((client) =>
+      client.cleanup(),
     );
     await Promise.all(promises);
     this.clients.clear();
@@ -620,14 +725,14 @@ export class CrossPlatformTestCoordinator {
 export async function waitForCondition(
   condition: () => Promise<boolean>,
   timeout = 10000,
-  interval = 500
+  interval = 500,
 ): Promise<void> {
   const startTime = Date.now();
   while (Date.now() - startTime < timeout) {
     if (await condition()) return;
-    await new Promise(resolve => setTimeout(resolve, interval));
+    await new Promise((resolve) => setTimeout(resolve, interval));
   }
-  throw new Error('Timeout waiting for condition');
+  throw new Error("Timeout waiting for condition");
 }
 
 /**

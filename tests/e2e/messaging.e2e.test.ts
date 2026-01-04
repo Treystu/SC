@@ -5,13 +5,14 @@ import { test, expect, Page } from "@playwright/test";
 
 test.describe("Messaging Interface", () => {
   test.beforeEach(async ({ page }) => {
-    // Clear DB to ensure fresh state
-    await page.addInitScript(async () => {
-      const dbs = await window.indexedDB.databases();
-      for (const db of dbs) {
-        if (db.name) window.indexedDB.deleteDatabase(db.name);
-      }
-    });
+    // Force E2E mode via window.__E2E__ and use unique DB to avoid locks
+    const uniqueDbName = `sc_e2e_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    await page.addInitScript((dbName) => {
+      (window as any).__E2E__ = true;
+      (window as any).__SC_DB_NAME__ = dbName;
+    }, uniqueDbName);
+
+    page.on("console", (msg) => console.log(`BROWSER LOG: ${msg.text()}`));
 
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
@@ -44,7 +45,15 @@ test.describe("Messaging Interface", () => {
 
   test("should show chat view area", async ({ page }) => {
     const mainContent = page.locator(".main-content");
-    await expect(mainContent).toBeVisible();
+    const viewportSize = page.viewportSize();
+    const isMobile = viewportSize && viewportSize.width < 768;
+
+    if (isMobile) {
+      // On mobile, chat view is hidden by default (list view active)
+      await expect(mainContent).toBeHidden();
+    } else {
+      await expect(mainContent).toBeVisible();
+    }
   });
 
   test("should display welcome message with features", async ({ page }) => {
@@ -63,20 +72,14 @@ test.describe("Messaging Interface", () => {
 
 test.describe("Connection Status", () => {
   test.beforeEach(async ({ page }) => {
-    // Clear DB to ensure fresh state
-    await page.addInitScript(async () => {
-      const dbs = await window.indexedDB.databases();
-      for (const db of dbs) {
-        if (db.name) {
-          await new Promise((resolve) => {
-            const req = window.indexedDB.deleteDatabase(db.name);
-            req.onsuccess = resolve;
-            req.onerror = resolve;
-            req.onblocked = resolve;
-          });
-        }
-      }
-    });
+    page.on("console", (msg) => console.log(`BROWSER LOG: ${msg.text()}`));
+
+    // Force E2E mode via window.__E2E__ and use unique DB
+    const uniqueDbName = `sc_e2e_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    await page.addInitScript((dbName) => {
+      (window as any).__E2E__ = true;
+      (window as any).__SC_DB_NAME__ = dbName;
+    }, uniqueDbName);
 
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
@@ -84,15 +87,51 @@ test.describe("Connection Status", () => {
   });
 
   test("should display peer information", async ({ page }) => {
-    // New UI uses dashboard-card user-card
-    const peerInfo = page.locator(".dashboard-card.user-card");
+    // Debug: Check strict hierarchy
+    // Handle potential Onboarding appearance if isE2E detection fails (e.g. Safari)
+    const sidebar = page.locator(".sidebar");
+    const onboarding = page.locator(".onboarding-container");
 
-    // Wait for peer info to appear
-    if ((await peerInfo.count()) > 0) {
-      await expect(peerInfo).toBeVisible();
-      await expect(peerInfo).toContainText(/Peer ID/i);
-      await expect(peerInfo).toContainText(/Online/i);
+    // Wait for either
+    try {
+      await Promise.race([
+        sidebar.waitFor({ state: "visible", timeout: 5000 }),
+        onboarding.waitFor({ state: "visible", timeout: 5000 }),
+      ]);
+    } catch (e) {
+      // Ignore timeout, assertions below will catch failure
     }
+
+    if (await onboarding.isVisible()) {
+      console.log("Onboarding detected, bypassing...");
+      await page.locator("text=Get Started").click();
+      await page
+        .locator("text=Skip")
+        .click()
+        .catch(() => {}); // Optional skip if present
+      await expect(sidebar).toBeVisible();
+    } else {
+      await expect(sidebar).toBeVisible();
+    }
+
+    const sidebarHeader = sidebar.locator(".sidebar-header");
+    await expect(sidebarHeader).toBeVisible();
+
+    const peerInfo = sidebarHeader.locator(".user-profile");
+    // Verify it exists in DOM first
+    await expect(peerInfo).toBeAttached();
+
+    // Then check visibility
+    await expect(peerInfo).toBeVisible();
+
+    // Check for username "Me"
+    await expect(peerInfo).toContainText(/Me/i);
+
+    // Check for Online status (visual indicator)
+    const onlineIndicator = peerInfo.locator(".status-indicator.online");
+    // Check attached instead of visible to avoid 0-size visibility issues in some renderers
+    await expect(onlineIndicator).toBeAttached();
+    await expect(onlineIndicator).toHaveClass(/online/);
   });
 
   test("should show connection status in header", async ({ page }) => {
@@ -106,20 +145,13 @@ test.describe("Connection Status", () => {
 
 test.describe("Conversation List", () => {
   test.beforeEach(async ({ page }) => {
-    // Clear DB to ensure fresh state
-    await page.addInitScript(async () => {
-      const dbs = await window.indexedDB.databases();
-      for (const db of dbs) {
-        if (db.name) {
-          await new Promise((resolve) => {
-            const req = window.indexedDB.deleteDatabase(db.name);
-            req.onsuccess = resolve;
-            req.onerror = resolve;
-            req.onblocked = resolve;
-          });
-        }
-      }
-    });
+    // Force E2E mode via window.__E2E__ and use unique DB
+    const uniqueDbName = `sc_e2e_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    await page.addInitScript((dbName) => {
+      (window as any).__E2E__ = true;
+      (window as any).__SC_DB_NAME__ = dbName;
+    }, uniqueDbName);
+
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
     await expect(page.locator(".loading-state")).toBeHidden();
@@ -149,6 +181,19 @@ test.describe("Conversation List", () => {
 
 // Helper to create a conversation for tests
 async function createConversation(page: Page) {
+  // Wait for mesh network to be ready (look for localPeerId which confirms initialization)
+  await page.waitForFunction(() => {
+    const s = (window as any).__SC_STATUS__;
+    if (s?.initializationError) return true; // Fail fast
+    return !!s?.localPeerId;
+  });
+
+  // Check if we failed
+  const error = await page.evaluate(
+    () => (window as any).__SC_STATUS__?.initializationError,
+  );
+  if (error) throw new Error(`Mesh initialization failed: ${error}`);
+
   const addContactBtn = page.locator('[data-testid="add-contact-btn"]');
   await addContactBtn.click();
 
@@ -158,24 +203,24 @@ async function createConversation(page: Page) {
 
   // Wait for conversation to be selected (message input visible)
   await expect(page.locator('[data-testid="message-input"]')).toBeVisible();
+
+  // Wait for contact name to resolve (contacts loaded)
+  await expect(page.locator(".chat-header h3")).toContainText("Test Peer", {
+    timeout: 10000,
+  });
 }
 
 test.describe("Message Sending", () => {
   test.beforeEach(async ({ page }) => {
-    // Clear DB to ensure fresh state
-    await page.addInitScript(async () => {
-      const dbs = await window.indexedDB.databases();
-      for (const db of dbs) {
-        if (db.name) {
-          await new Promise((resolve) => {
-            const req = window.indexedDB.deleteDatabase(db.name);
-            req.onsuccess = resolve;
-            req.onerror = resolve;
-            req.onblocked = resolve;
-          });
-        }
-      }
-    });
+    // Force E2E mode via window.__E2E__ and use unique DB
+    const uniqueDbName = `sc_e2e_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    await page.addInitScript((dbName) => {
+      (window as any).__E2E__ = true;
+      (window as any).__SC_DB_NAME__ = dbName;
+    }, uniqueDbName);
+
+    page.on("console", (msg) => console.log(`BROWSER LOG: ${msg.text()}`));
+
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
     await expect(page.locator(".loading-state")).toBeHidden();
@@ -253,20 +298,13 @@ test.describe("Message Sending", () => {
 
 test.describe("Message History", () => {
   test.beforeEach(async ({ page }) => {
-    // Clear DB to ensure fresh state
-    await page.addInitScript(async () => {
-      const dbs = await window.indexedDB.databases();
-      for (const db of dbs) {
-        if (db.name) {
-          await new Promise((resolve) => {
-            const req = window.indexedDB.deleteDatabase(db.name);
-            req.onsuccess = resolve;
-            req.onerror = resolve;
-            req.onblocked = resolve;
-          });
-        }
-      }
-    });
+    // Force E2E mode via window.__E2E__ and use unique DB
+    const uniqueDbName = `sc_e2e_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    await page.addInitScript((dbName) => {
+      (window as any).__E2E__ = true;
+      (window as any).__SC_DB_NAME__ = dbName;
+    }, uniqueDbName);
+
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
     await expect(page.locator(".loading-state")).toBeHidden();
@@ -280,9 +318,13 @@ test.describe("Message History", () => {
     await messageInput.fill("Persistent message");
     await page.locator('[data-testid="send-message-btn"]').click();
 
-    // Wait for message to be status (sent OR queued)
+    // Wait for message to be status (sent OR queued OR pending)
     const status = page.locator('[data-testid^="message-status-"]').first();
     await expect(status).toBeVisible({ timeout: 15000 });
+
+    // Allow strict persistence time for IndexedDB before reload
+    // (Optimistic updates are instant, but DB writes are async)
+    await page.waitForTimeout(1000);
 
     // Reload page
     await page.reload();
@@ -316,20 +358,13 @@ test.describe("Message History", () => {
 
 test.describe("Contact Management", () => {
   test.beforeEach(async ({ page }) => {
-    // Clear DB to ensure fresh state
-    await page.addInitScript(async () => {
-      const dbs = await window.indexedDB.databases();
-      for (const db of dbs) {
-        if (db.name) {
-          await new Promise((resolve) => {
-            const req = window.indexedDB.deleteDatabase(db.name);
-            req.onsuccess = resolve;
-            req.onerror = resolve;
-            req.onblocked = resolve;
-          });
-        }
-      }
-    });
+    // Force E2E mode via window.__E2E__ and use unique DB
+    const uniqueDbName = `sc_e2e_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    await page.addInitScript((dbName) => {
+      (window as any).__E2E__ = true;
+      (window as any).__SC_DB_NAME__ = dbName;
+    }, uniqueDbName);
+
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
     await expect(page.locator(".loading-state")).toBeHidden();

@@ -3,6 +3,7 @@
  * Orchestrates routing, relay, and transport connections
  */
 
+import { bytesToHex, bytesToBase64, base64ToBytes } from "../utils/encoding.js";
 import { Message, MessageType, encodeMessage } from "../protocol/message.js";
 import { RoutingTable, Peer, createPeer, PeerState } from "./routing.js";
 import { MessageRelay } from "./relay.js";
@@ -1026,7 +1027,7 @@ export class MeshNetwork {
   // --- Blob Handlers ---
 
   private async handleBlobMessage(message: Message): Promise<void> {
-    const senderId = Buffer.from(message.header.senderId).toString("hex");
+    const senderId = bytesToHex(message.header.senderId);
 
     if (message.header.type === MessageType.REQUEST_BLOB) {
       try {
@@ -1040,7 +1041,7 @@ export class MeshNetwork {
             JSON.stringify({
               hash,
               requestId,
-              blob: Buffer.from(blob).toString("base64"),
+              blob: bytesToBase64(blob),
               recipient: senderId, // Add recipient for relay routing
             }),
           );
@@ -1075,7 +1076,7 @@ export class MeshNetwork {
 
         const pending = this.pendingBlobRequests.get(requestId);
         if (pending) {
-          const blobBuffer = Buffer.from(blob, "base64");
+          const blobBuffer = base64ToBytes(blob);
           // Verify hash? Ideally yes.
           pending.resolve(blobBuffer);
           clearTimeout(pending.timeout);
@@ -1266,9 +1267,7 @@ export class MeshNetwork {
       const payload = JSON.stringify({
         sessionId: this.sessionId,
         timestamp: this.sessionTimestamp,
-        identityFingerprint: Buffer.from(this.identity.publicKey).toString(
-          "hex",
-        ),
+        identityFingerprint: bytesToHex(this.identity.publicKey),
       });
 
       const payloadBytes = new TextEncoder().encode(payload);
@@ -1317,9 +1316,7 @@ export class MeshNetwork {
       const { sessionId, timestamp, identityFingerprint } = data;
 
       // Get our own identity fingerprint
-      const ourFingerprint = Buffer.from(this.identity.publicKey).toString(
-        "hex",
-      );
+      const ourFingerprint = bytesToHex(this.identity.publicKey);
 
       // Check if this is a duplicate session of our identity
       if (

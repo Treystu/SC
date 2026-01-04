@@ -120,7 +120,8 @@ export class WebRTCTransport implements Transport {
             ]
           : []),
         // Alternative TURN server
-        ...(process.env.TURN_SERVER_ALT &&
+        ...(typeof process !== "undefined" &&
+        process.env.TURN_SERVER_ALT &&
         process.env.TURN_USERNAME_ALT &&
         process.env.TURN_PASSWORD_ALT
           ? [
