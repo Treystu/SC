@@ -16,6 +16,7 @@ interface Conversation {
   unreadCount: number;
   verified?: boolean;
   online?: boolean;
+  isRequest?: boolean;
 }
 
 interface ConversationListProps {
@@ -87,6 +88,16 @@ const ConversationItem = memo(
       </div>
       {conv.unreadCount > 0 && (
         <div className="unread-badge">{conv.unreadCount}</div>
+      )}
+      {conv.isRequest && (
+        <div className="request-badge" title="Pending Request" style={{
+          background: 'var(--accent-warning)',
+          color: 'var(--text-on-accent)',
+          borderRadius: '4px',
+          padding: '2px 6px',
+          fontSize: '0.7rem',
+          marginLeft: '4px'
+        }}>Request</div>
       )}
       {conv.verified && (
         <span

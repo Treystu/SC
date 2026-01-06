@@ -193,8 +193,16 @@ function App() {
     }
     if (isE2E) {
       // Expose helpers for Playwright
-      (window as any).addContact = (id: string, name: string) => {
-        addContact(id, name, "manual");
+      (window as any).addContact = async (id: string, name: string) => {
+        // Construct a partial contact object for testing
+        await addContact({
+          id,
+          publicKey: "test-key", 
+          displayName: name,
+          createdAt: Date.now(),
+          lastSeen: Date.now(),
+          verified: false
+        } as any);
       };
       (window as any).resetState = async () => {
         /* Clear DBs/Storage logic if needed */
@@ -1040,6 +1048,7 @@ function App() {
       unreadCount: conv.unreadCount,
       verified: contact?.verified ?? false,
       online: peers.some((p) => p.id === conv.id),
+      isRequest: conv.metadata?.isRequest && conv.metadata?.requestStatus === 'pending',
     };
   });
 
@@ -1093,6 +1102,36 @@ function App() {
       await handleAddContact(peerId, `Peer ${peerId.slice(0, 6)}`);
     }
     setSelectedConversation(peerId);
+  };
+
+  const handleAcceptRequest = async (conversationId: string) => {
+    const db = getDatabase();
+    const conversation = await db.getConversation(conversationId);
+    if (conversation) {
+      await db.saveConversation({
+        ...conversation,
+        metadata: {
+          ...conversation.metadata,
+          requestStatus: 'accepted'
+        }
+      });
+      
+      // Auto-add as contact if not already
+      if (!contacts.some(c => c.id === conversationId)) {
+        await handleAddContact(conversationId, `Peer ${conversationId.slice(0, 6)}`);
+      }
+      
+      announce.message("Conversation accepted", "polite");
+    }
+  };
+
+  const handleIgnoreRequest = async (conversationId: string) => {
+    if (confirm("Block and delete this conversation?")) {
+      const db = getDatabase();
+      await db.deleteConversation(conversationId);
+      setSelectedConversation(null);
+      announce.message("Conversation blocked", "polite");
+    }
   };
 
   return (
@@ -1350,6 +1389,11 @@ function App() {
                           isLoading={contactsLoading}
                           onClose={() => setSelectedConversation(null)}
                           onUpdateContact={refreshContacts}
+                          requestStatus={
+                            storedConversations.find(c => c.id === selectedConversation)?.metadata?.requestStatus
+                          }
+                          onAcceptRequest={() => handleAcceptRequest(selectedConversation)}
+                          onIgnoreRequest={() => handleIgnoreRequest(selectedConversation)}
                         />
                       )
                     ) : (

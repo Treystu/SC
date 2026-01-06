@@ -31,6 +31,9 @@ interface ChatViewProps {
   isLoading?: boolean;
   onClose?: () => void;
   onUpdateContact?: () => void;
+  requestStatus?: 'pending' | 'accepted' | 'ignored' | 'blocked';
+  onAcceptRequest?: () => void;
+  onIgnoreRequest?: () => void;
 }
 
 function ChatView({
@@ -44,6 +47,9 @@ function ChatView({
   messages: liveMessages = [], // Live messages from useMeshNetwork
   onClose,
   onUpdateContact,
+  requestStatus,
+  onAcceptRequest,
+  onIgnoreRequest,
 }: ChatViewProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -260,26 +266,59 @@ function ChatView({
       </div>
 
       <div className="chat-input-container">
-        {error && <div className="error-message">{error}</div>}
-        <MessageInput
-          onSendMessage={(content, attachments) => {
-            if (onSendMessage) {
-              if (attachments) {
-                const result = validateFileList(attachments);
-                if (!result.valid) {
-                  setError(result.error || "Invalid file");
-                  return;
+        {requestStatus === 'pending' ? (
+          <div className="message-request-banner" style={{
+            padding: '1rem',
+            background: 'var(--bg-secondary)',
+            borderTop: '1px solid var(--border-color)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1rem',
+            alignItems: 'center',
+            textAlign: 'center'
+          }}>
+            <p><strong>{contactName}</strong> wants to send you a message.</p>
+            <p className="text-sm text-gray-500">Do you want to accept this request? They won't know you've read it until you accept.</p>
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <button 
+                onClick={onAcceptRequest}
+                className="btn-primary"
+                style={{ padding: '0.5rem 1.5rem' }}
+              >
+                Accept
+              </button>
+              <button 
+                onClick={onIgnoreRequest}
+                className="btn-danger"
+                style={{ padding: '0.5rem 1.5rem' }}
+              >
+                Block & Delete
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {error && <div className="error-message">{error}</div>}
+            <MessageInput
+              onSendMessage={(content, attachments) => {
+                if (onSendMessage) {
+                  if (attachments) {
+                    const result = validateFileList(attachments);
+                    if (!result.valid) {
+                      setError(result.error || "Invalid file");
+                      return;
+                    }
+                  }
+                  setError(null);
+                  onSendMessage(content, attachments);
                 }
-              }
-              setError(null);
-              onSendMessage(content, attachments);
-            }
-          }}
-          onSendVoice={onSendVoice}
-          onTyping={() => {}}
-          disabled={isLoading || !conversationId}
-          placeholder={`Message ${contactName}...`}
-        />
+              }}
+              onSendVoice={onSendVoice}
+              onTyping={() => {}}
+              disabled={isLoading || !conversationId}
+            />
+          </>
+        )}
       </div>
 
       {showProfile && (

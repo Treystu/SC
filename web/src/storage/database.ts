@@ -46,6 +46,11 @@ export interface StoredConversation {
   lastMessageTimestamp: number;
   unreadCount: number;
   createdAt: number;
+  metadata?: {
+    isRequest?: boolean;
+    requestStatus?: 'pending' | 'accepted' | 'ignored' | 'blocked';
+    [key: string]: any;
+  };
 }
 
 export interface StoredGroup {
@@ -566,6 +571,34 @@ export class DatabaseManager {
 
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
+    });
+  }
+
+  async deleteConversation(id: string): Promise<void> {
+    if (!this.db) await this.init();
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(
+        ["conversations", "messages"],
+        "readwrite",
+      );
+      
+      const convStore = transaction.objectStore("conversations");
+      convStore.delete(id);
+      
+      // Also delete messages for this conversation
+      const msgStore = transaction.objectStore("messages");
+      const index = msgStore.index("conversationId");
+      const request = index.getAllKeys(id);
+      
+      request.onsuccess = () => {
+        const keys = request.result;
+        keys.forEach(key => {
+          msgStore.delete(key);
+        });
+      };
+      
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
     });
   }
 
@@ -1752,6 +1785,15 @@ export class DatabaseManager {
     };
   }
 
+  /**
+   * Close the database connection
+   */
+  close(): void {
+    if (this.db) {
+      this.db.close();
+      this.db = null;
+    }
+  }
 }
 
 // Singleton instance
