@@ -1629,19 +1629,6 @@ export class DatabaseManager {
   }
 
   /**
-   * Close database
-   */
-  /**
-   * Close database
-   */
-  close(): void {
-    if (this.db) {
-      this.db.close();
-      this.db = null;
-    }
-  }
-
-  /**
    * Offline Queue Adapter for Core Library
    */
   get offlineQueue() {
@@ -1764,15 +1751,7 @@ export class DatabaseManager {
       },
     };
   }
-  /**
-   * Close the database connection
-   */
-  close(): void {
-    if (this.db) {
-      this.db.close();
-      this.db = null;
-    }
-  }
+
 }
 
 // Singleton instance

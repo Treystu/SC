@@ -1,5 +1,14 @@
 import { sha256 } from "@noble/hashes/sha2.js";
-import { PersistenceAdapter } from "../mesh/relay.js";
+
+export interface BlobPersistenceAdapter {
+  put(hash: string, data: Uint8Array): Promise<void>;
+  get(hash: string): Promise<Uint8Array | null>;
+  has(hash: string): Promise<boolean>;
+  delete(hash: string): Promise<void>;
+  clear(): Promise<void>;
+  getAll(): Promise<Map<string, Uint8Array>>;
+  getSize(): Promise<number>;
+}
 
 function hashData(data: Uint8Array): string {
   const hash = sha256(data);
@@ -23,7 +32,7 @@ function hashData(data: Uint8Array): string {
  * V2 TODO: Implement persistent blob storage adapter
  */
 export class BlobStore {
-  private persistence?: PersistenceAdapter;
+  private persistence?: BlobPersistenceAdapter;
   private memoryStore: Map<string, Uint8Array> = new Map();
 
   // Size limits for memory safety
@@ -31,7 +40,7 @@ export class BlobStore {
   private readonly MAX_TOTAL_SIZE = 100 * 1024 * 1024; // 100MB total
   private currentTotalSize = 0;
 
-  constructor(persistence?: PersistenceAdapter) {
+  constructor(persistence?: BlobPersistenceAdapter) {
     this.persistence = persistence;
   }
 
@@ -72,12 +81,20 @@ export class BlobStore {
     // Add to total size since this is a new blob
     this.currentTotalSize += blobSize;
 
-    // Store in memory
+    // Store in memory first (for fast access)
     this.memoryStore.set(hash, data);
 
-    // V1: Memory-only storage
-    // V2 TODO: Implement persistent storage adapter (IndexedDB, FileSystem, etc.)
-    // if (this.persistence) { ... }
+    // Store persistently if adapter is available
+    if (this.persistence) {
+      try {
+        await this.persistence.put(hash, data);
+      } catch (error) {
+        // If persistent storage fails, remove from memory store to maintain consistency
+        this.memoryStore.delete(hash);
+        this.currentTotalSize -= blobSize;
+        throw new Error(`Failed to persist blob: ${error}`);
+      }
+    }
 
     return hash;
   }
@@ -86,14 +103,36 @@ export class BlobStore {
    * Retrieve data by hash
    */
   async get(hash: string): Promise<Uint8Array | undefined> {
-    return this.memoryStore.get(hash);
+    let data = this.memoryStore.get(hash);
+    
+    if (data) {
+      return data;
+    }
+
+    if (this.persistence) {
+      const persistedData = await this.persistence.get(hash);
+      if (persistedData) {
+        this.memoryStore.set(hash, persistedData);
+        return persistedData;
+      }
+    }
+
+    return undefined;
   }
 
   /**
    * Check if we have the blob
    */
   async has(hash: string): Promise<boolean> {
-    return this.memoryStore.has(hash);
+    if (this.memoryStore.has(hash)) {
+      return true;
+    }
+
+    if (this.persistence) {
+      return await this.persistence.has(hash);
+    }
+
+    return false;
   }
 
   /**
@@ -123,5 +162,147 @@ export class BlobStore {
   clear(): void {
     this.memoryStore.clear();
     this.currentTotalSize = 0;
+  }
+}
+
+/**
+ * IndexedDB implementation of BlobPersistenceAdapter for web browsers
+ */
+export class IndexedDBBlobAdapter implements BlobPersistenceAdapter {
+  private dbName = 'BlobStorage';
+  private storeName = 'blobs';
+  private db: IDBDatabase | null = null;
+  private version = 1;
+
+  async init(): Promise<void> {
+    if (this.db) return;
+
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(this.dbName, this.version);
+      
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        this.db = request.result;
+        resolve();
+      };
+      
+      request.onupgradeneeded = (event) => {
+        const db = (event.target as IDBOpenDBRequest).result;
+        if (!db.objectStoreNames.contains(this.storeName)) {
+          db.createObjectStore(this.storeName);
+        }
+      };
+    });
+  }
+
+  private async ensureInit(): Promise<void> {
+    if (!this.db) {
+      await this.init();
+    }
+  }
+
+  async put(hash: string, data: Uint8Array): Promise<void> {
+    await this.ensureInit();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction([this.storeName], 'readwrite');
+      const store = transaction.objectStore(this.storeName);
+      const request = store.put(data, hash);
+      
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve();
+    });
+  }
+
+  async get(hash: string): Promise<Uint8Array | null> {
+    await this.ensureInit();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction([this.storeName], 'readonly');
+      const store = transaction.objectStore(this.storeName);
+      const request = store.get(hash);
+      
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const result = request.result;
+        resolve(result ? new Uint8Array(result) : null);
+      };
+    });
+  }
+
+  async has(hash: string): Promise<boolean> {
+    await this.ensureInit();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction([this.storeName], 'readonly');
+      const store = transaction.objectStore(this.storeName);
+      const request = store.count(hash);
+      
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result > 0);
+    });
+  }
+
+  async delete(hash: string): Promise<void> {
+    await this.ensureInit();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction([this.storeName], 'readwrite');
+      const store = transaction.objectStore(this.storeName);
+      const request = store.delete(hash);
+      
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve();
+    });
+  }
+
+  async clear(): Promise<void> {
+    await this.ensureInit();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction([this.storeName], 'readwrite');
+      const store = transaction.objectStore(this.storeName);
+      const request = store.clear();
+      
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve();
+    });
+  }
+
+async getAll(): Promise<Map<string, Uint8Array>> {
+    await this.ensureInit();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction([this.storeName], 'readonly');
+      const store = transaction.objectStore(this.storeName);
+      const map = new Map<string, Uint8Array>();
+      
+      const request = store.openCursor();
+      request.onerror = () => reject(request.error);
+      request.onsuccess = (event) => {
+        const cursor = (event.target as IDBRequest).result;
+        if (cursor) {
+          const key = String(cursor.key);
+          const data = new Uint8Array(cursor.value);
+          map.set(key, data);
+          cursor.continue();
+        } else {
+          resolve(map);
+        }
+      };
+});
+   }
+
+  async getSize(): Promise<number> {
+    await this.ensureInit();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction([this.storeName], 'readonly');
+      const store = transaction.objectStore(this.storeName);
+      const request = store.count();
+      
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
   }
 }

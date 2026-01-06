@@ -200,3 +200,6 @@ logs/
 
 # Mobile bundle output
 mobile-bundle/
+
+# Auto Claude data directory
+.auto-claude/

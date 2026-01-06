@@ -1,0 +1,34 @@
+{
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true
+  },
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Read(./**)",
+      "Write(./**)",
+      "Edit(./**)",
+      "Glob(./**)",
+      "Grep(./**)",
+      "Read(/Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/**)",
+      "Write(/Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/**)",
+      "Edit(/Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/**)",
+      "Glob(/Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/**)",
+      "Grep(/Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/**)",
+      "Read(/Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/.auto-claude/specs/001-complete-the-app-ensure-all-deliverables-are-imple/**)",
+      "Write(/Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/.auto-claude/specs/001-complete-the-app-ensure-all-deliverables-are-imple/**)",
+      "Edit(/Users/christymaxwell/Desktop/Luke_Stuff/GitHub/SC/.auto-claude/specs/001-complete-the-app-ensure-all-deliverables-are-imple/**)",
+      "Bash(*)",
+      "WebFetch(*)",
+      "WebSearch(*)",
+      "mcp__context7__resolve-library-id(*)",
+      "mcp__context7__get-library-docs(*)",
+      "mcp__graphiti-memory__search_nodes(*)",
+      "mcp__graphiti-memory__search_facts(*)",
+      "mcp__graphiti-memory__add_episode(*)",
+      "mcp__graphiti-memory__get_episodes(*)",
+      "mcp__graphiti-memory__get_entity_edge(*)"
+    ]
+  }
+}
