@@ -1,4 +1,4 @@
-import { MeshNetwork, IndexedDBStorage, Message } from "@sc/core";
+import { MeshNetwork, IndexedDBStorage, Message, MessageType } from "@sc/core";
 import { WebPersistenceAdapter } from "../utils/WebPersistenceAdapter";
 import { getDatabase } from "../storage/database";
 

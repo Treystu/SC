@@ -1121,6 +1121,7 @@ function App() {
         await handleAddContact(conversationId, `Peer ${conversationId.slice(0, 6)}`);
       }
       
+      refreshConversations();
       announce.message("Conversation accepted", "polite");
     }
   };
@@ -1129,6 +1130,7 @@ function App() {
     if (confirm("Block and delete this conversation?")) {
       const db = getDatabase();
       await db.deleteConversation(conversationId);
+      refreshConversations();
       setSelectedConversation(null);
       announce.message("Conversation blocked", "polite");
     }

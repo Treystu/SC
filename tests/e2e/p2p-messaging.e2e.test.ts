@@ -23,17 +23,17 @@ test.describe("P2P Messaging", () => {
 
     // Wait for E2E helpers to be exposed and identity to be ready
     await Promise.all([
-      page1.waitForFunction(() => (window as any).status?.localPeerId),
-      page2.waitForFunction(() => (window as any).status?.localPeerId),
+      page1.waitForFunction(() => (window as any).__SC_STATUS__?.localPeerId),
+      page2.waitForFunction(() => (window as any).__SC_STATUS__?.localPeerId),
     ]);
 
     // Get peer IDs from both pages
     const peerId1 = await page1.evaluate(() => {
-      return (window as any).status?.localPeerId;
+      return (window as any).__SC_STATUS__?.localPeerId;
     });
 
     const peerId2 = await page2.evaluate(() => {
-      return (window as any).status?.localPeerId;
+      return (window as any).__SC_STATUS__?.localPeerId;
     });
 
     console.log("Peer 1 ID:", peerId1);
