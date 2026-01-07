@@ -1202,9 +1202,23 @@ export class MeshNetwork {
       localPeerId: this.localPeerId,
       routing: this.routingTable.getStats(),
       relay: this.messageRelay.getStats(),
-      // Use WebRTC specific stats for now as it's the primary transport
       peers: await this.webrtcTransport.getPool().getStats(),
     };
+  }
+
+  async handleIceCandidate(peerId: string, candidate: RTCIceCandidateInit): Promise<void> {
+    try {
+      const signalingData = {
+        type: "candidate" as const,
+        data: candidate,
+        from: peerId,
+        to: this.localPeerId,
+      };
+      
+      await this.webrtcTransport.handleSignaling(signalingData);
+    } catch (error) {
+      console.warn(`[MeshNetwork] Failed to process ICE candidate for ${peerId}:`, error);
+    }
   }
 
   // ===== SESSION MANAGEMENT (Single-Session Enforcement) =====

@@ -1144,14 +1144,37 @@ export function useMeshNetwork() {
                     meshNetworkRef.current.getConnectedPeers
                   ? meshNetworkRef.current.getConnectedPeers().length
                   : 0;
-            const nextDelay =
-              peerCount < 3 ? 3000 : peerCount < 10 ? 15000 : 60000;
+            
+            const discoveredCount = discoveredPeers.length;
+            const pendingConnections = discoveredCount - peerCount;
+            const hasPendingConnections = pendingConnections > 0;
+            
+            let nextDelay: number;
+            if (hasPendingConnections) {
+              nextDelay = 1000;
+            } else if (peerCount < 3) {
+              nextDelay = 2000;
+            } else if (peerCount < 10) {
+              nextDelay = 10000;
+            } else {
+              nextDelay = 30000;
+            }
 
             const { signals, messages, peers } =
               await roomClientRef.current.poll();
 
             if (peers && peers.length > 0) {
               const db = getDatabase();
+              
+              const newPeerIds = peers
+                .filter((p) => p._id !== localPeerId)
+                .map((p) => p._id);
+              
+              setDiscoveredPeers((prev) => {
+                const combined = new Set([...prev, ...newPeerIds]);
+                return Array.from(combined);
+              });
+              
               for (const p of peers) {
                 if (p.metadata && p._id !== localPeerId) {
                   try {
@@ -1188,8 +1211,23 @@ export function useMeshNetwork() {
                         useMeshNetworkLogger.debug(
                           `[Room Bootstrap] Auto-connecting to discovered room peer: ${p._id}`,
                         );
-                        meshNetworkRef.current
-                          .connectToPeer(p._id)
+                        
+                        const connectWithTimeout = async (peerId: string, timeoutMs: number = 10000): Promise<void> => {
+                          const timeoutPromise = new Promise<never>((_, reject) => {
+                            setTimeout(() => reject(new Error(`Connection timeout after ${timeoutMs}ms`)), timeoutMs);
+                          });
+                          
+                          const connectPromise = meshNetworkRef.current!.connectToPeer(peerId);
+                          
+                          return Promise.race([connectPromise, timeoutPromise]);
+                        };
+                        
+                        connectWithTimeout(p._id, 10000)
+                          .then(() => {
+                            useMeshNetworkLogger.info(
+                              `[Room Bootstrap] Successfully connected to ${p._id}`,
+                            );
+                          })
                           .catch((err) => {
                             useMeshNetworkLogger.debug(
                               `[Room Bootstrap] Failed to connect to ${p._id}:`,
@@ -1271,6 +1309,22 @@ export function useMeshNetwork() {
                     useMeshNetworkLogger.info(
                       `Connection finalized with ${sig.from}`,
                     );
+                  } else if (
+                    sig.type === "candidate" ||
+                    signalData.type === "candidate" ||
+                    signalData.candidate
+                  ) {
+                    useMeshNetworkLogger.debug(
+                      `📥 Received ICE candidate from ${sig.from}`,
+                    );
+                    
+                    if (meshNetworkRef.current && 
+                        typeof (meshNetworkRef.current as any).handleIceCandidate === "function") {
+                      await (meshNetworkRef.current as any).handleIceCandidate(
+                        sig.from,
+                        signalData.candidate || signalData,
+                      );
+                    }
                   }
                 } catch (e) {
                   useMeshNetworkLogger.error(
