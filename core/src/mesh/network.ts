@@ -556,35 +556,47 @@ export class MeshNetwork {
   }
 
   private async broadcastPing(): Promise<void> {
-    const message: Message = {
-      header: {
-        version: 0x01,
-        type: MessageType.CONTROL_PING,
-        ttl: 1, // Only neighbors
-        timestamp: Date.now(),
-        senderId: this.identity.publicKey,
-        signature: new Uint8Array(64),
-      },
-      payload: new Uint8Array(0),
-    };
-
-    // Sign and broadcast
-    const messageBytes = encodeMessage(message);
-    message.header.signature = signMessage(
-      messageBytes,
-      this.identity.privateKey,
-    );
-    const encodedMessage = encodeMessage(message);
-
-    // Broadcast manually to all connected peers
-    this.routingTable.getAllPeers().forEach((peer) => {
-      if (
-        peer.state === PeerState.CONNECTED ||
-        peer.state === PeerState.DEGRADED
-      ) {
-        this.transportManager.send(peer.id, encodedMessage).catch(() => {});
+    try {
+      // Validate identity keys before signing
+      if (!this.identity?.privateKey || this.identity.privateKey.length !== 32) {
+        console.warn('[MeshNetwork] broadcastPing skipped: invalid private key');
+        return;
       }
-    });
+      if (!this.identity?.publicKey || this.identity.publicKey.length !== 32) {
+        console.warn('[MeshNetwork] broadcastPing skipped: invalid public key');
+        return;
+      }
+
+      const message: Message = {
+        header: {
+          version: 0x01,
+          type: MessageType.CONTROL_PING,
+          ttl: 1,
+          timestamp: Date.now(),
+          senderId: this.identity.publicKey,
+          signature: new Uint8Array(64),
+        },
+        payload: new Uint8Array(0),
+      };
+
+      const messageBytes = encodeMessage(message);
+      message.header.signature = signMessage(
+        messageBytes,
+        this.identity.privateKey,
+      );
+      const encodedMessage = encodeMessage(message);
+
+      this.routingTable.getAllPeers().forEach((peer) => {
+        if (
+          peer.state === PeerState.CONNECTED ||
+          peer.state === PeerState.DEGRADED
+        ) {
+          this.transportManager.send(peer.id, encodedMessage).catch(() => {});
+        }
+      });
+    } catch (error) {
+      console.error('[MeshNetwork] broadcastPing failed:', error);
+    }
   }
 
   private async sendPong(

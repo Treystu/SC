@@ -20,8 +20,10 @@ fun MainScreen(
     onInviteHandled: () -> Unit = {},
 ) {
     var selectedTab by remember { mutableStateOf(0) }
-    var currentScreen by remember { mutableStateOf<String?>(null) } // null = Main Tabs, "sharing" = Sharing Screen, "qr_display" = QR Display
+    var currentScreen by remember { mutableStateOf<String?>(null) }
     var qrPayload by remember { mutableStateOf("") }
+    var selectedConversation by remember { mutableStateOf<ConversationItem?>(null) }
+    var selectedContact by remember { mutableStateOf<ContactItem?>(null) }
 
     // Handle deep link invite
     if (initialInviteCode != null) {
@@ -48,18 +50,53 @@ fun MainScreen(
         )
     }
 
+    // Handle chat screen navigation
+    if (selectedConversation != null) {
+        ChatScreen(
+            contactName = selectedConversation!!.displayName,
+            contactId = selectedConversation!!.id,
+            onNavigateBack = { selectedConversation = null }
+        )
+        return
+    }
+
+    // Handle contact detail navigation
+    if (selectedContact != null) {
+        ContactDetailScreen(
+            contactId = selectedContact!!.id,
+            contactName = selectedContact!!.displayName,
+            peerId = selectedContact!!.id,
+            publicKey = selectedContact!!.publicKey,
+            isVerified = selectedContact!!.isVerified,
+            isBlocked = false,
+            lastSeen = null,
+            onVerifyToggle = { },
+            onBlock = { },
+            onDelete = { selectedContact = null },
+            onNavigateBack = { selectedContact = null },
+            onNavigateToChat = {
+                selectedConversation = ConversationItem(
+                    id = selectedContact!!.id,
+                    displayName = selectedContact!!.displayName,
+                    lastMessage = "",
+                    timestamp = System.currentTimeMillis()
+                )
+                selectedContact = null
+            }
+        )
+        return
+    }
+
     // Handle overlay screens (Sharing, QR, etc)
     if (currentScreen != null) {
         when (currentScreen) {
             "sharing" -> {
                 val app = com.sovereign.communications.SCApplication.instance
+                val prefs = app.applicationContext.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
                 SharingScreen(
                     peerId = app.localPeerId ?: "Unknown",
                     publicKey = app.localPeerIdBytes ?: ByteArray(32),
-                    displayName =
-                        androidx.preference.PreferenceManager
-                            .getDefaultSharedPreferences(app.applicationContext)
-                            .getString("display_name", "Me") ?: "Me",
+                    displayName = prefs.getString("display_name", "Me") ?: "Me",
                     onNavigateBack = { currentScreen = null },
                     onNavigateToQRScanner = {
                         android.widget.Toast
@@ -121,12 +158,20 @@ fun MainScreen(
         Box(modifier = Modifier.padding(paddingValues)) {
             when (selectedTab) {
                 0 -> {
-                    ConversationListScreen()
+                    ConversationListScreen(
+                        onSelectConversation = { conversation ->
+                            selectedConversation = conversation
+                        },
+                        onAddContact = { currentScreen = "sharing" }
+                    )
                 }
 
                 1 -> {
                     ContactListScreen(
                         onAddContact = { currentScreen = "sharing" },
+                        onSelectContact = { contact ->
+                            selectedContact = contact
+                        }
                     )
                 }
 

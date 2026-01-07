@@ -16,8 +16,30 @@ import androidx.compose.ui.unit.dp
  * Task 78: Implement contact list UI
  */
 @Composable
-fun ContactListScreen(onAddContact: () -> Unit) {
+fun ContactListScreen(
+    onAddContact: () -> Unit,
+    onSelectContact: (ContactItem) -> Unit = {}
+) {
     var contacts by remember { mutableStateOf<List<ContactItem>>(emptyList()) }
+
+    val app = com.sovereign.communications.SCApplication.instance
+    LaunchedEffect(Unit) {
+        try {
+            val dao = app.database.contactDao()
+            dao.getAllContacts().collect { contactList ->
+                contacts = contactList.map { entity ->
+                    ContactItem(
+                        id = entity.id,
+                        displayName = entity.displayName ?: entity.id.take(8),
+                        publicKey = entity.publicKey,
+                        isVerified = entity.isVerified
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("ContactListScreen", "Failed to load contacts", e)
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         if (contacts.isEmpty()) {
@@ -28,7 +50,10 @@ fun ContactListScreen(onAddContact: () -> Unit) {
                 contentPadding = PaddingValues(vertical = 8.dp),
             ) {
                 items(contacts.size) { index ->
-                    ContactItemRow(contacts[index])
+                    ContactItemRow(
+                        item = contacts[index],
+                        onClick = { onSelectContact(contacts[index]) }
+                    )
                 }
             }
         }
@@ -72,9 +97,12 @@ private fun EmptyContactsPlaceholder() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ContactItemRow(item: ContactItem) {
+private fun ContactItemRow(
+    item: ContactItem,
+    onClick: () -> Unit
+) {
     Card(
-        onClick = { /* Navigate to contact details */ },
+        onClick = onClick,
         modifier =
             Modifier
                 .fillMaxWidth()

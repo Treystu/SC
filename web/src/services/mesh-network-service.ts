@@ -54,31 +54,60 @@ export const getMeshNetwork = async (): Promise<MeshNetwork> => {
         if (storedIdentity) {
           console.log('[MeshNetworkService] Loaded persisted identity:', storedIdentity.fingerprint, storedIdentity.id);
 
-          const normalize = (v: any) => {
+          const normalize = (v: any): Uint8Array | undefined => {
             if (v instanceof Uint8Array) return v;
+            
             if (typeof v === "string") {
               try {
-                return new Uint8Array(
+                const bytes = new Uint8Array(
                   atob(v)
                     .split("")
                     .map((c) => c.charCodeAt(0)),
                 );
+                return bytes.length === 32 ? bytes : undefined;
               } catch {
                 return undefined;
               }
             }
+            
+            if (v && typeof v === "object" && !Array.isArray(v)) {
+              try {
+                const keys = Object.keys(v);
+                if (keys.length === 32 && keys.every((k, i) => k === String(i))) {
+                  const bytes = new Uint8Array(32);
+                  for (let i = 0; i < 32; i++) {
+                    bytes[i] = v[i];
+                  }
+                  return bytes;
+                }
+              } catch {
+                return undefined;
+              }
+            }
+            
+            if (Array.isArray(v) && v.length === 32) {
+              return new Uint8Array(v);
+            }
+            
             return undefined;
           };
 
+          const pubKey = normalize(storedIdentity.publicKey) || (storedIdentity.publicKey as any);
+          const privKey = normalize(storedIdentity.privateKey) || (storedIdentity.privateKey as any);
+          
+          // Validate key lengths to prevent crypto errors
+          if (!pubKey || pubKey.length !== 32 || !privKey || privKey.length !== 32) {
+            console.error('[MeshNetworkService] Invalid stored identity key lengths, regenerating...');
+            throw new Error('Invalid key lengths');
+          }
+          
           identityKeyPair = {
-            publicKey:
-              normalize(storedIdentity.publicKey) || (storedIdentity.publicKey as any),
-            privateKey:
-              normalize(storedIdentity.privateKey) || (storedIdentity.privateKey as any),
+            publicKey: pubKey,
+            privateKey: privKey,
             displayName: storedIdentity.displayName,
           };
           peerId = storedIdentity.id.replace(/\s/g, "");
-          console.log('[MeshNetworkService] Identity ready:', { peerId, fingerprint: storedIdentity.fingerprint });
+          console.log('[MeshNetworkService] Identity ready:', { peerId, fingerprint: storedIdentity.fingerprint, pubKeyLen: pubKey.length, privKeyLen: privKey.length });
         } else {
           console.log('[MeshNetworkService] No persisted identity found, generating new one...');
           try {

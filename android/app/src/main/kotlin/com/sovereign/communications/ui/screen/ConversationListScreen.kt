@@ -10,14 +10,39 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.collect
 
 /**
  * Conversation list screen
  * Task 74: Implement conversation list UI (RecyclerView/LazyColumn)
  */
 @Composable
-fun ConversationListScreen() {
+fun ConversationListScreen(
+    onSelectConversation: (ConversationItem) -> Unit = {},
+    onAddContact: () -> Unit = {}
+) {
     var conversations by remember { mutableStateOf<List<ConversationItem>>(emptyList()) }
+    
+    // Load conversations from database
+    val app = com.sovereign.communications.SCApplication.instance
+    LaunchedEffect(Unit) {
+        try {
+            val dao = app.database.conversationDao()
+            dao.getAllConversations().collect { convList ->
+                conversations = convList.map { entity ->
+                    ConversationItem(
+                        id = entity.id,
+                        displayName = entity.contactId.take(8),
+                        lastMessage = entity.lastMessageContent ?: "Start a conversation",
+                        timestamp = entity.lastMessageTimestamp ?: System.currentTimeMillis(),
+                        unreadCount = entity.unreadCount
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("ConversationListScreen", "Failed to load conversations", e)
+        }
+    }
     
     Box(modifier = Modifier.fillMaxSize()) {
         if (conversations.isEmpty()) {
@@ -28,13 +53,16 @@ fun ConversationListScreen() {
                 contentPadding = PaddingValues(vertical = 8.dp)
             ) {
                 items(conversations.size) { index ->
-                    ConversationItemRow(conversations[index])
+                    ConversationItemRow(
+                        item = conversations[index],
+                        onClick = { onSelectConversation(conversations[index]) }
+                    )
                 }
             }
         }
         
         FloatingActionButton(
-            onClick = { /* Navigate to add contact */ },
+            onClick = onAddContact,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(16.dp)
@@ -70,9 +98,12 @@ private fun EmptyConversationsPlaceholder() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ConversationItemRow(item: ConversationItem) {
+private fun ConversationItemRow(
+    item: ConversationItem,
+    onClick: () -> Unit
+) {
     Card(
-        onClick = { /* Navigate to chat */ },
+        onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp)
