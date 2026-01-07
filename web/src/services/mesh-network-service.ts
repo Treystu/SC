@@ -1,6 +1,7 @@
 import { MeshNetwork, IndexedDBStorage, Message, MessageType } from "@sc/core";
 import { WebPersistenceAdapter } from "../utils/WebPersistenceAdapter";
 import { getDatabase } from "../storage/database";
+import { config } from "../config";
 
 let meshNetworkInstance: MeshNetwork | null = null;
 
@@ -163,6 +164,7 @@ export const getMeshNetwork = async (): Promise<MeshNetwork> => {
         identity: identityKeyPair,
         peerId: peerId,
         dhtStorage: dhtStorage,
+        bootstrapUrl: config.relayUrl || undefined,
       });
 
 // Set up message event handlers
