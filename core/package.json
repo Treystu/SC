@@ -37,6 +37,6 @@
     "jsdom": "^27.2.0",
     "ts-jest": "^29.4.6",
     "typescript": "^5.3.0",
-    "why-is-node-running": "^2.2.0"
+    "why-is-node-running": "^3.2.2"
   }
 }
