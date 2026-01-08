@@ -161,8 +161,9 @@ export class WebRTCTransport implements Transport {
       this.events?.onStateChange?.(peerId, state);
 
       if (state === "connected") {
-        this.handlePeerConnected(peerId);
       } else if (
+
+
         state === "disconnected" ||
         state === "failed" ||
         state === "closed"
@@ -233,9 +234,12 @@ export class WebRTCTransport implements Transport {
     channel.onopen = () => {
       console.debug(`Data channel ${channel.label} opened for ${peerId}`);
       // If reliable channel is open, consider peer fully connected
-      if (isReliable && wrapper.state !== "connected") {
-        wrapper.state = "connected";
-        this.handlePeerConnected(peerId);
+      if (isReliable) {
+        if (wrapper.state !== "connected") {
+          wrapper.state = "connected";
+          this.handlePeerConnected(peerId);
+        }
+        this.flushBatch(peerId);
       }
     };
 
@@ -732,7 +736,7 @@ export class WebRTCTransport implements Transport {
     }
 
     const channel = wrapper.reliableChannel;
-    if (!channel || channel.readyState !== "open") {
+    if (!channel || (channel.readyState !== "open" && channel.readyState !== "connecting")) {
       throw new Error(`Data channel to ${peerId} is not ready`);
     }
 

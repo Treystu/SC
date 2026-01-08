@@ -109,68 +109,15 @@ export const getMeshNetwork = async (): Promise<MeshNetwork> => {
           peerId = storedIdentity.id.replace(/\s/g, "");
           console.log('[MeshNetworkService] Identity ready:', { peerId, fingerprint: storedIdentity.fingerprint, pubKeyLen: pubKey.length, privKeyLen: privKey.length });
         } else {
-          console.log('[MeshNetworkService] No persisted identity found, generating new one...');
-          try {
-            await db.clearAllData();
-            console.log('[MeshNetworkService] Cleared old data before identity generation');
-          } catch (e) {
-            console.warn('[MeshNetworkService] Failed to clear old data during identity generation:', e);
-          }
-
-          const { generateIdentity, generateFingerprint } = await import("@sc/core");
-          const newIdentity = generateIdentity();
-          const fingerprint = await generateFingerprint(newIdentity.publicKey);
-          const newId = fingerprint.substring(0, 16);
-
-          await db.saveIdentity({
-            id: newId,
-            publicKey: newIdentity.publicKey,
-            privateKey: newIdentity.privateKey,
-            fingerprint: fingerprint,
-            createdAt: Date.now(),
-            isPrimary: true,
-            label: "Primary Identity",
-            displayName: undefined,
-          });
-
-          identityKeyPair = {
-            ...newIdentity,
-            displayName: undefined,
-          };
-          peerId = newId;
-          console.log('[MeshNetworkService] Generated and saved new identity:', { peerId, fingerprint });
+          console.log('[MeshNetworkService] No persisted identity found. Waiting for onboarding...');
+          throw new Error("NO_IDENTITY");
         }
       } catch (error) {
-        console.error('[MeshNetworkService] Failed to load identity (corruption/decryption error). Resetting DB...', error);
-        try {
-          await db.clearAllData();
-          console.log('[MeshNetworkService] Cleared corrupted data');
-          const { generateIdentity, generateFingerprint } = await import("@sc/core");
-          const newIdentity = generateIdentity();
-          const fingerprint = await generateFingerprint(newIdentity.publicKey);
-          const newId = fingerprint.substring(0, 16);
-          await db.saveIdentity({
-            id: newId,
-            publicKey: newIdentity.publicKey,
-            privateKey: newIdentity.privateKey,
-            fingerprint: fingerprint,
-            createdAt: Date.now(),
-            isPrimary: true,
-            label: "Primary Identity",
-            displayName: undefined,
-          });
-          identityKeyPair = {
-            ...newIdentity,
-            displayName: undefined,
-          };
-          peerId = newId;
-          console.log('[MeshNetworkService] Identity reset and saved:', { peerId, fingerprint });
-        } catch (resetError) {
-          console.error('[MeshNetworkService] Failed to reset identity:', resetError);
-          const { generateIdentity } = await import("@sc/core");
-          identityKeyPair = generateIdentity();
-          console.log('[MeshNetworkService] Using temporary identity');
+        if ((error as Error).message === "NO_IDENTITY") {
+          throw error;
         }
+        console.error('[MeshNetworkService] Failed to load identity (corruption/decryption error).', error);
+        throw new Error("IDENTITY_CORRUPTED");
       }
 
       console.log('[MeshNetworkService] Creating MeshNetwork instance...');
@@ -208,3 +155,42 @@ export const getMeshNetwork = async (): Promise<MeshNetwork> => {
 
   return initializationPromise;
 };
+
+export const generateNewIdentity = async (displayName: string) => {
+  console.log('[MeshNetworkService] Generating new identity for:', displayName);
+  
+  initializationPromise = null;
+  if (meshNetworkInstance) {
+    try {
+      await meshNetworkInstance.stop();
+    } catch (e) { console.warn('Error stopping old mesh', e); }
+    meshNetworkInstance = null;
+  }
+
+  const db = getDatabase();
+  await db.init();
+  await db.clearAllData();
+
+  const { generateIdentity, generateFingerprint } = await import("@sc/core");
+  const newIdentity = generateIdentity();
+  const fingerprint = await generateFingerprint(newIdentity.publicKey);
+  const newId = fingerprint.substring(0, 16);
+
+  await db.saveIdentity({
+    id: newId,
+    publicKey: newIdentity.publicKey,
+    privateKey: newIdentity.privateKey,
+    fingerprint: fingerprint,
+    createdAt: Date.now(),
+    isPrimary: true,
+    label: "Primary Identity",
+    displayName: displayName,
+  });
+
+  await db.setSetting("onboarding-complete", true);
+
+  console.log('[MeshNetworkService] Identity generated. Re-initializing mesh...');
+  
+  return await getMeshNetwork();
+};
+

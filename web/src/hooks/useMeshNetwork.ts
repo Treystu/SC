@@ -436,6 +436,10 @@ export function useMeshNetwork() {
           initializationError: undefined,
         });
       } catch (error) {
+        if ((error as Error).message === "NO_IDENTITY") {
+          useMeshNetworkLogger.info("No identity found, waiting for onboarding.");
+          return;
+        }
         useMeshNetworkLogger.error("Failed to initialize mesh network:", error);
         setStatus((prev) => ({
           ...prev,

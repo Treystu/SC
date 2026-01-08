@@ -1,5 +1,6 @@
 import React, { useState, useRef } from "react";
 import { useMeshNetwork } from "../../hooks/useMeshNetwork";
+import { generateNewIdentity } from "../../services/mesh-network-service";
 import { QRCodeShare } from "../QRCodeShare";
 import { useBackup } from "../../hooks/useBackup";
 import { getDatabase } from "../../storage/database";
@@ -36,32 +37,26 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       case "identity":
         if (displayName.trim()) {
           setIsGenerating(true);
-          // Simulate identity generation delay
-          setTimeout(() => {
-            setIsGenerating(false);
-            setCurrentStep("add-contact");
-          }, 1500);
+          generateNewIdentity(displayName)
+            .then(() => {
+              setIsGenerating(false);
+              setCurrentStep("add-contact");
+            })
+            .catch((err) => {
+              console.error("Failed to generate identity:", err);
+              setIsGenerating(false);
+              alert("Failed to generate identity. Please try again.");
+            });
         }
         break;
       case "add-contact":
         setCurrentStep("privacy");
         break;
       case "privacy":
-        // Save onboarding completion flag and display name to IndexedDB
         (async () => {
           try {
             const db = getDatabase();
             await db.setSetting("onboarding-complete", true);
-            if (displayName) {
-              // Update the identity with the display name
-              const identity = await db.getPrimaryIdentity();
-              if (identity) {
-                await db.saveIdentity({
-                  ...identity,
-                  displayName: displayName,
-                });
-              }
-            }
             onComplete();
           } catch (error) {
             console.error("Failed to complete onboarding:", error);

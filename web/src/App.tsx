@@ -29,7 +29,6 @@ import { getDatabase } from "./storage/database";
 import { setMockDatabase } from "@sc/core";
 import {
   generateFingerprint,
-  generateIdentity,
   publicKeyToBase64,
   isValidPublicKey,
   logger,
@@ -270,64 +269,7 @@ function App() {
           (window as any).__sc_identity_fingerprint = fingerprint;
           console.log("[App] Identity synced, fingerprint:", fingerprint);
         } else {
-          // No identity yet - mesh-network-service should create one
-          // Wait a bit for it to initialize
-          console.log(
-            "[App] No identity found, waiting for mesh-network-service...",
-          );
-          let attempts = 0;
-          while (attempts < 50) {
-            // Wait up to 5 seconds
-            await new Promise((r) => setTimeout(r, 100));
-            const retryId = await db.getPrimaryIdentity();
-            if (retryId && retryId.publicKey) {
-              const fp = await generateFingerprint(retryId.publicKey);
-              const toBase64 = (bytes: Uint8Array) =>
-                typeof Buffer !== "undefined"
-                  ? Buffer.from(bytes).toString("base64")
-                  : btoa(String.fromCharCode(...Array.from(bytes)));
-              localStorage.setItem(
-                "identity",
-                JSON.stringify({
-                  publicKey: toBase64(retryId.publicKey),
-                  privateKey: toBase64(retryId.privateKey),
-                  fingerprint: fp,
-                }),
-              );
-              (window as any).__sc_identity_fingerprint = fp;
-              console.log("[App] Identity synced after wait, fingerprint:", fp);
-              return;
-            }
-            attempts++;
-          }
-          // Fallback: generate identity if service did not
-          console.log(
-            "[App] Service did not create identity, generating fallback...",
-          );
-          const keypair = generateIdentity();
-          const fingerprint = await generateFingerprint(keypair.publicKey);
-          const newIdentity = {
-            id: fingerprint.substring(0, 16),
-            publicKey: keypair.publicKey,
-            privateKey: keypair.privateKey,
-            fingerprint,
-            createdAt: Date.now(),
-            isPrimary: true,
-          };
-          await db.saveIdentity(newIdentity);
-          const toBase64 = (bytes: Uint8Array) =>
-            typeof Buffer !== "undefined"
-              ? Buffer.from(bytes).toString("base64")
-              : btoa(String.fromCharCode(...Array.from(bytes)));
-          localStorage.setItem(
-            "identity",
-            JSON.stringify({
-              publicKey: toBase64(keypair.publicKey),
-              privateKey: toBase64(keypair.privateKey),
-              fingerprint,
-            }),
-          );
-          (window as any).__sc_identity_fingerprint = fingerprint;
+          console.log("[App] No identity found. Waiting for onboarding.");
         }
       } catch (error) {
         console.error("[App] useEffect: Identity sync error:", error);
@@ -1211,7 +1153,12 @@ function App() {
 
           {/* Onboarding Flow */}
           {showOnboarding && (
-            <OnboardingFlow onComplete={() => setShowOnboarding(false)} />
+            <OnboardingFlow
+              onComplete={() => {
+                setShowOnboarding(false);
+                window.location.reload();
+              }}
+            />
           )}
 
           {/* Share App Modal */}
