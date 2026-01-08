@@ -161,6 +161,7 @@ export class WebRTCTransport implements Transport {
       this.events?.onStateChange?.(peerId, state);
 
       if (state === "connected") {
+        // Connection established - no additional action needed here
       } else if (
 
 

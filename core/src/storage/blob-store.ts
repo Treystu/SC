@@ -103,7 +103,7 @@ export class BlobStore {
    * Retrieve data by hash
    */
   async get(hash: string): Promise<Uint8Array | undefined> {
-    let data = this.memoryStore.get(hash);
+    const data = this.memoryStore.get(hash);
     
     if (data) {
       return data;

@@ -69,15 +69,12 @@ export class MeshNetwork {
 
   // Callbacks
   private messageListeners: Set<(message: Message) => void> = new Set();
-  private onPeerConnectedCallback?: (peerId: string) => void;
-
-  private onPeerDisconnectedCallback?: (peerId: string) => void;
-  private onPeerTrackCallback?: (
-    peerId: string,
-    track: MediaStreamTrack,
-    stream: MediaStream,
-  ) => void;
-  private onDiscoveryUpdateCallback?: (peers: string[]) => void;
+  private peerConnectedListeners: Set<(peerId: string) => void> = new Set();
+  private peerDisconnectedListeners: Set<(peerId: string) => void> = new Set();
+  private peerTrackListeners: Set<
+    (peerId: string, track: MediaStreamTrack, stream: MediaStream) => void
+  > = new Set();
+  private discoveryUpdateListeners: Set<(peers: string[]) => void> = new Set();
 
   // Replaced by Transport Registration (Legacy Support)
   private outboundTransportCallback?: (
@@ -189,7 +186,13 @@ export class MeshNetwork {
     });
 
     this.webrtcTransport.getPool().onTrack((peerId, track, stream) => {
-      this.onPeerTrackCallback?.(peerId, track, stream);
+      this.peerTrackListeners.forEach((listener) => {
+        try {
+          listener(peerId, track, stream);
+        } catch (e) {
+          console.error("Error in peer track listener:", e);
+        }
+      });
     });
 
     // Initialize DHT
@@ -697,6 +700,15 @@ export class MeshNetwork {
       return;
     }
 
+    const webrtcTransport = this.transportManager.getTransport("webrtc");
+    if (webrtcTransport) {
+      const state = webrtcTransport.getConnectionState(peerId);
+      if (state === "connecting" || state === "connected") {
+        console.log(`[MeshNetwork] Connection to ${peerId} is already in state: ${state}, skipping`);
+        return;
+      }
+    }
+
     console.log(
       `[MeshNetwork] Initiating connection to ${peerId} via WebRTC...`,
     );
@@ -736,7 +748,13 @@ export class MeshNetwork {
 
     this.routingTable.addPeer(peer);
     this.peerMonitors.set(peerId, new ConnectionMonitor()); // Start monitoring
-    this.onPeerConnectedCallback?.(peerId);
+    this.peerConnectedListeners.forEach((listener) => {
+      try {
+        listener(peerId);
+      } catch (e) {
+        console.error("Error in peer connected listener:", e);
+      }
+    });
 
     // Send peer announcement
     this.sendPeerAnnouncement();
@@ -748,7 +766,13 @@ export class MeshNetwork {
   private handlePeerDisconnected(peerId: string): void {
     this.routingTable.removePeer(peerId);
     this.peerMonitors.delete(peerId); // Stop monitoring
-    this.onPeerDisconnectedCallback?.(peerId);
+    this.peerDisconnectedListeners.forEach((listener) => {
+      try {
+        listener(peerId);
+      } catch (e) {
+        console.error("Error in peer disconnected listener:", e);
+      }
+    });
   }
 
   /**
@@ -934,9 +958,8 @@ export class MeshNetwork {
     });
   }
 
-  /**
-   * Register callback for incoming messages
-   */
+
+
   onMessage(callback: (message: Message) => void): void {
     this.messageListeners.add(callback);
   }
@@ -994,21 +1017,41 @@ export class MeshNetwork {
     }
 
     // Notify listeners
-    this.onDiscoveryUpdateCallback?.(Array.from(this.discoveredPeers));
+    this.discoveryUpdateListeners.forEach((listener) => {
+      try {
+        listener(Array.from(this.discoveredPeers));
+      } catch (e) {
+        console.error("Error in discovery update listener:", e);
+      }
+    });
   }
 
   /**
    * Register callback for peer connected events
    */
   onPeerConnected(callback: (peerId: string) => void): void {
-    this.onPeerConnectedCallback = callback;
+    this.peerConnectedListeners.add(callback);
+  }
+
+  /**
+   * Unregister callback for peer connected events
+   */
+  offPeerConnected(callback: (peerId: string) => void): void {
+    this.peerConnectedListeners.delete(callback);
   }
 
   /**
    * Register callback for peer disconnected events
    */
   onPeerDisconnected(callback: (peerId: string) => void): void {
-    this.onPeerDisconnectedCallback = callback;
+    this.peerDisconnectedListeners.add(callback);
+  }
+
+  /**
+   * Unregister callback for peer disconnected events
+   */
+  offPeerDisconnected(callback: (peerId: string) => void): void {
+    this.peerDisconnectedListeners.delete(callback);
   }
 
   /**
@@ -1024,7 +1067,17 @@ export class MeshNetwork {
       stream: MediaStream,
     ) => void,
   ): void {
-    this.onPeerTrackCallback = callback;
+    this.peerTrackListeners.add(callback);
+  }
+
+  offPeerTrack(
+    callback: (
+      peerId: string,
+      track: MediaStreamTrack,
+      stream: MediaStream,
+    ) => void,
+  ): void {
+    this.peerTrackListeners.delete(callback);
   }
 
   // --- Blob Handlers ---
@@ -1150,7 +1203,14 @@ export class MeshNetwork {
    * Register callback for discovery updates
    */
   onDiscoveryUpdate(callback: (peers: string[]) => void): void {
-    this.onDiscoveryUpdateCallback = callback;
+    this.discoveryUpdateListeners.add(callback);
+  }
+
+  /**
+   * Unregister callback for discovery updates
+   */
+  offDiscoveryUpdate(callback: (peers: string[]) => void): void {
+    this.discoveryUpdateListeners.delete(callback);
   }
 
   /**
@@ -1655,15 +1715,6 @@ export class MeshNetwork {
     callback: (peerId: string, data: Uint8Array) => Promise<void>,
   ): void {
     this.outboundTransportCallback = callback;
-  }
-
-  registerSignalingCallback(
-    callback: (
-      peerId: string,
-      signal: { type: string; candidate?: RTCIceCandidateInit; sdp?: RTCSessionDescriptionInit },
-    ) => Promise<void>
-  ): void {
-    this.signalingCallback = callback;
   }
 
   /**
