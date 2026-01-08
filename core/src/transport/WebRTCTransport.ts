@@ -193,6 +193,21 @@ export class WebRTCTransport implements Transport {
       }
     };
 
+    connection.onnegotiationneeded = async () => {
+      try {
+        const offer = await connection.createOffer();
+        await connection.setLocalDescription(offer);
+        if (this.onSignalCallback) {
+          this.onSignalCallback(peerId, {
+            type: "offer",
+            sdp: offer,
+          });
+        }
+      } catch (err) {
+        console.error(`Error renegotiating with ${peerId}:`, err);
+      }
+    };
+
     return connection;
   }
 
@@ -692,6 +707,13 @@ export class WebRTCTransport implements Transport {
       // Otherwise, create an offer
       const offer = await connection.createOffer();
       await connection.setLocalDescription(offer);
+
+      if (this.onSignalCallback) {
+        this.onSignalCallback(peerId, {
+          type: "offer",
+          sdp: offer,
+        });
+      }
     }
   }
 

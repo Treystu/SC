@@ -1,4 +1,4 @@
-import { MeshNetwork, IndexedDBStorage, Message, MessageType } from "@sc/core";
+import { MeshNetwork, IndexedDBStorage } from "@sc/core";
 import { WebPersistenceAdapter } from "../utils/WebPersistenceAdapter";
 import { getDatabase } from "../storage/database";
 import { config } from "../config";
@@ -196,78 +196,8 @@ export const getMeshNetwork = async (): Promise<MeshNetwork> => {
         bootstrapUrl: config.relayUrl || undefined,
       });
 
-// Set up message event handlers
-      network.onMessage((message: Message) => {
-        console.log('[MeshNetworkService] Received message type:', message.header.type);
-        
-        // Simple handling for text messages
-        let content = '';
-        
-        if (message.header.type === MessageType.TEXT && message.payload.length > 0) {
-          try {
-            content = new TextDecoder().decode(message.payload);
-            console.log('[MeshNetworkService] Text message content:', content);
-          } catch (e) {
-            console.error('[MeshNetworkService] Failed to decode message:', e);
-            content = '[Message decode error]';
-          }
-        }
-        
-        // Process message asynchronously with delay
-        setTimeout(async () => {
-          const db = getDatabase();
-          // Extract sender ID securely from message header
-          const senderId = message.header.senderId ? btoa(String.fromCharCode(...Array.from(message.header.senderId).slice(0, 8))) : 'unknown';
-          const conversationId = senderId;
-          
-          try {
-            // Check if contact exists to determine message status
-            const contact = await db.getContact(senderId);
-            const isKnownContact = !!contact;
-            
-            const existingConversation = await db.getConversation(conversationId);
-            
-            // If contact is unknown and no conversation exists, mark as pending request
-            // We use a special metadata flag 'isRequest' in the conversation
-            if (!existingConversation) {
-              await db.saveConversation({
-                id: conversationId,
-                contactId: conversationId,
-                lastMessageTimestamp: message.header.timestamp,
-                unreadCount: 1,
-                createdAt: message.header.timestamp,
-                metadata: {
-                  isRequest: !isKnownContact, // It's a request if contact is unknown
-                  requestStatus: !isKnownContact ? 'pending' : 'accepted'
-                }
-              });
-            } else if (!isKnownContact && existingConversation.metadata?.requestStatus === 'pending') {
-              // Existing pending request, keep it pending
-            }
-            
-            // Save message
-            await db.saveMessage({
-              id: Date.now().toString(),
-              senderId: senderId,
-              recipientId: '',
-              conversationId: conversationId,
-              content: content,
-              timestamp: message.header.timestamp,
-              type: "text",
-              status: 'delivered'
-            });
-            
-            // Trigger conversation update event to refresh UI
-            window.dispatchEvent(new CustomEvent('sc_conversations_updated'));
-            
-          } catch (e) {
-            console.warn('[MeshNetworkService] Failed to process incoming message:', e);
-          }
-        }, 0);
-      });
-
       meshNetworkInstance = network;
-      console.log('[MeshNetworkService] MeshNetwork instance created and ready');
+      console.log('[MeshNetworkService] MeshNetwork initialized');
       return network;
     } catch (error) {
       // On timeout or error, clear the promise so we can retry

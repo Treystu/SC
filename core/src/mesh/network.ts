@@ -85,6 +85,11 @@ export class MeshNetwork {
     data: Uint8Array,
   ) => Promise<void>;
 
+  private signalingCallback?: (
+    peerId: string,
+    signal: { type: string; candidate?: RTCIceCandidateInit; sdp?: RTCSessionDescriptionInit },
+  ) => Promise<void>;
+
   // State
   private discoveredPeers: Set<string> = new Set();
   private peerMonitors: Map<string, ConnectionMonitor> = new Map();
@@ -169,31 +174,17 @@ export class MeshNetwork {
       this.handlePeerDisconnected(peerId);
     });
 
-    // Special Hook: WebRTC Signaling via Mesh
-    // Since WebRTC needs to send signals over the existing mesh (if available), we hook into the pool.
-    // In the future, this should be event-driven from the Transport itself.
-    // NOTE: For direct P2P connections, signaling should go through RoomClient, not mesh.
-    // The outboundTransportCallback will be set by the UI layer (useMeshNetwork) to use RoomClient.
     this.webrtcTransport.getPool().onSignal((peerId, signal) => {
-      if (this.outboundTransportCallback) {
-        // Send signal via external transport (RoomClient in web app)
+      if (this.signalingCallback) {
+        this.signalingCallback(peerId, signal).catch((err) =>
+          console.error("[MeshNetwork] Failed to send signal via callback:", err),
+        );
+      } else if (this.outboundTransportCallback) {
         this.outboundTransportCallback(peerId, new Uint8Array()).catch((err) =>
-          console.error("Failed to send signal via outbound transport:", err),
+          console.error("[MeshNetwork] Failed to send signal via outbound transport:", err),
         );
       } else {
-        // Fallback: try mesh signaling (may fail if no direct connection exists)
-        this.sendMessage(
-          peerId,
-          JSON.stringify({
-            type: "SIGNAL",
-            signal,
-          }),
-        ).catch((err) =>
-          console.debug(
-            "Mesh signaling failed (expected for new connections):",
-            err.message,
-          ),
-        );
+        console.debug("[MeshNetwork] No signaling callback registered, ICE candidate dropped for:", peerId);
       }
     });
 
@@ -1664,6 +1655,15 @@ export class MeshNetwork {
     callback: (peerId: string, data: Uint8Array) => Promise<void>,
   ): void {
     this.outboundTransportCallback = callback;
+  }
+
+  registerSignalingCallback(
+    callback: (
+      peerId: string,
+      signal: { type: string; candidate?: RTCIceCandidateInit; sdp?: RTCSessionDescriptionInit },
+    ) => Promise<void>
+  ): void {
+    this.signalingCallback = callback;
   }
 
   /**

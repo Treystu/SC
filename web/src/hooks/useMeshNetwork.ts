@@ -1086,6 +1086,18 @@ export function useMeshNetwork() {
       try {
         const roomClient = new RoomClient(url, localPeerId);
         roomClientRef.current = roomClient;
+
+        // Wire up WebRTC signaling to Room signalling path
+        if (
+          meshNetworkRef.current &&
+          typeof (meshNetworkRef.current as any).registerSignalingCallback === "function"
+        ) {
+          (meshNetworkRef.current as any).registerSignalingCallback(async (peerId: string, signal: any) => {
+            if (roomClientRef.current) {
+              await roomClientRef.current.signal(peerId, signal.type, signal);
+            }
+          });
+        }
         if (
           meshNetworkRef.current &&
           meshNetworkRef.current.discovery &&
