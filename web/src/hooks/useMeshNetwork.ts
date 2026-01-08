@@ -19,6 +19,7 @@ export interface MeshStatus {
   connectionQuality: ConnectionQuality;
   initializationError?: string;
   joinError?: string | null;
+  isSessionInvalidated?: boolean;
 }
 
 export interface ReceivedMessage {
@@ -41,6 +42,7 @@ export function useMeshNetwork() {
     localPeerId: "",
     connectionQuality: "offline",
     initializationError: undefined,
+    isSessionInvalidated: false,
   });
 
   // Safe env accessor for both Vite (import.meta.env) and Jest/node (process.env)
@@ -295,6 +297,9 @@ export function useMeshNetwork() {
                     lastMessageId: receivedMessage.id,
                   });
                 } else {
+                  const contact = await db.getContact(receivedMessage.from);
+                  const isUnknown = !contact || !contact.verified;
+
                   await db.saveConversation({
                     id: receivedMessage.from,
                     contactId: receivedMessage.from,
@@ -302,6 +307,7 @@ export function useMeshNetwork() {
                     unreadCount: 1,
                     createdAt: Date.now(),
                     lastMessageId: receivedMessage.id,
+                    metadata: isUnknown ? { requestStatus: 'pending', isRequest: true } : undefined
                   });
                 }
               }
@@ -317,39 +323,6 @@ export function useMeshNetwork() {
           useMeshNetworkLogger.info("Peer connected:", peerId);
           updatePeerStatus();
           retryQueuedMessages();
-
-          try {
-            const conversation = await db.getConversation(peerId);
-            if (!conversation) {
-              useMeshNetworkLogger.debug(
-                `Creating new conversation for connected peer: ${peerId}`,
-              );
-              await db.saveConversation({
-                id: peerId,
-                contactId: peerId,
-                lastMessageTimestamp: Date.now(),
-                unreadCount: 0,
-                createdAt: Date.now(),
-              });
-              // Notify the UI that a new conversation was created
-              // This will trigger the conversation list to refresh
-              const { notifyConversationsUpdated } =
-                await import("./useConversations");
-              notifyConversationsUpdated();
-
-              // Also dispatch a custom event for the chat popup
-              window.dispatchEvent(
-                new CustomEvent("sc-peer-connected", {
-                  detail: { peerId, timestamp: Date.now() },
-                }),
-              );
-            }
-          } catch (err) {
-            useMeshNetworkLogger.error(
-              "Error ensuring conversation exists:",
-              err,
-            );
-          }
 
           try {
             await db.savePeer({
@@ -411,11 +384,7 @@ export function useMeshNetwork() {
           useMeshNetworkLogger.warn(
             "Session invalidated: Another session with this identity has been detected.",
           );
-          // Alert user and force reload (no cancel option to prevent invalid session use)
-          alert(
-            "Your session has been invalidated because this identity was logged in elsewhere. The page will now reload.",
-          );
-          window.location.reload();
+          setStatus((prev) => ({ ...prev, isSessionInvalidated: true }));
         });
 
         const updatePeerStatus = () => {
@@ -1359,7 +1328,6 @@ export function useMeshNetwork() {
         useMeshNetworkLogger.error("Failed to join room:", error);
         setJoinError(error instanceof Error ? error.message : String(error));
         setIsJoinedToRoom(false);
-        throw error;
       }
     },
     [setJoinError, setRoomMessages, setDiscoveredPeers, setIsJoinedToRoom],

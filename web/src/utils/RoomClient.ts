@@ -56,7 +56,16 @@ export class RoomClient {
 
       return await response.json();
     } catch (error) {
-      console.error(`RoomClient ${action} error:`, error);
+      const isNetworkError =
+        error instanceof TypeError && error.message === "Failed to fetch";
+      if (isNetworkError) {
+        console.warn(
+          `RoomClient ${action} network error (offline or server down):`,
+          error,
+        );
+      } else {
+        console.error(`RoomClient ${action} error:`, error);
+      }
       throw error;
     }
   }

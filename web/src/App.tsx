@@ -1178,6 +1178,37 @@ function App() {
             </div>
           )}
 
+          {status.isSessionInvalidated && (
+            <div
+              className="error-banner"
+              role="alert"
+              style={{
+                backgroundColor: "var(--accent-warning)",
+                color: "black",
+                zIndex: 10000,
+              }}
+            >
+              <div className="error-content">
+                <h3>⚠️ Session Active Elsewhere</h3>
+                <p>
+                  Your identity is active in another tab or window. This session
+                  has been paused to prevent conflicts.
+                </p>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="btn btn-primary"
+                  style={{
+                    backgroundColor: "black",
+                    color: "white",
+                    border: "none",
+                  }}
+                >
+                  Use Here Instead
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Onboarding Flow */}
           {showOnboarding && (
             <OnboardingFlow onComplete={() => setShowOnboarding(false)} />
