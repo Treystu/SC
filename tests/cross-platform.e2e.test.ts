@@ -2,13 +2,28 @@ import { test, expect } from '@playwright/test';
 import { AppiumDriver } from './appium-driver';
 import { PlaywrightDriver } from './playwright-driver';
 
+const isAppiumAvailable = async (): Promise<boolean> => {
+  try {
+    const response = await fetch('http://localhost:4723/status', { method: 'GET' });
+    return response.ok;
+  } catch {
+    return false;
+  }
+};
+
 test.describe('Cross-Platform E2E Tests', () => {
   let androidDriver: AppiumDriver;
   let iosDriver: AppiumDriver;
   let webDriver: PlaywrightDriver;
+  let skipTests = false;
 
   test.beforeAll(async ({ playwright }) => {
-    // Appium capabilities for Android and iOS
+    skipTests = !(await isAppiumAvailable());
+    if (skipTests) {
+      console.log('Appium not available - skipping cross-platform mobile tests');
+      return;
+    }
+
     const androidCaps = {
       platformName: 'Android',
       'appium:automationName': 'UiAutomator2',
@@ -28,12 +43,14 @@ test.describe('Cross-Platform E2E Tests', () => {
   });
 
   test.afterAll(async () => {
-    await androidDriver.quit();
-    await iosDriver.quit();
-    await webDriver.quit();
+    if (skipTests) return;
+    await androidDriver?.quit();
+    await iosDriver?.quit();
+    await webDriver?.quit();
   });
 
   test('should deliver queued offline message from Android to iOS', async () => {
+    test.skip(skipTests, 'Appium not available');
     // 1. Set Android to offline mode
     await androidDriver.setNetworkConnection(1); // Airplane mode
 
@@ -52,7 +69,7 @@ test.describe('Cross-Platform E2E Tests', () => {
   });
 
   test('should transfer data from Web to Android via Sneakernet', async () => {
-    // 1. Export data from Web
+    test.skip(skipTests, 'Appium not available');
     const backupFile = await webDriver.exportData();
 
     // 2. Transfer file to Android device

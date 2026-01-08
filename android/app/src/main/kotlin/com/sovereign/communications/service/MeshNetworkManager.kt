@@ -19,6 +19,7 @@ import com.sovereign.communications.webrtc.WebRTCManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.DataInputStream
 import java.io.DataOutputStream
@@ -188,7 +189,7 @@ class MeshNetworkManager(
                 // Initial join
                 roomClient.join(localPeerId)
 
-                while (kotlinx.coroutines.isActive) {
+                while (isActive) {
                     try {
                         val (signals, peers) = roomClient.poll(localPeerId)
 
@@ -389,7 +390,7 @@ class MeshNetworkManager(
                         timestamp = timestamp,
                         status = com.sovereign.communications.data.entity.MessageStatus.DELIVERED,
                         type = com.sovereign.communications.data.entity.MessageType.TEXT,
-                        timestampReceived = System.currentTimeMillis(),
+                        deliveredAt = System.currentTimeMillis(),
                     )
 
                 database.messageDao().insert(entity)

@@ -14,6 +14,7 @@ import org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters
 import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters
 import org.bouncycastle.crypto.signers.Ed25519Signer
 import java.security.KeyStore
+import java.security.MessageDigest
 import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -21,34 +22,21 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /**
- * Unified Identity Manager for Android
- *
- * Stores Ed25519 keypair securely using Android Keystore
- * Compatible with Web (IndexedDB) and iOS (Keychain) implementations
- *
- * Storage Strategy:
- * - Private key: Encrypted in Android Keystore (most secure)
- * - Public key: Base64 in EncryptedSharedPreferences (for quick access)
- * - Display name: EncryptedSharedPreferences
- * - Fingerprint: SHA-256 of public key, stored in EncryptedSharedPreferences
+ * Manages Ed25519 identity keys for Sovereign Communications.
+ * 
+ * Keys are stored encrypted using Android Keystore-backed AES-256-GCM.
+ * Uses BouncyCastle for Ed25519 key generation, signing, and verification.
  */
-class IdentityManager(
-    private val context: Context,
-) {
-    private val masterKey =
-        MasterKey
-            .Builder(context)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
+class IdentityManager(private val context: Context) {
+    private val masterKey = MasterKey.Builder(context)
+        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+        .build()
 
-    private val sharedPrefs: SharedPreferences =
-        EncryptedSharedPreferences.create(
-            context,
-            PREFS_NAME,
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
-        )
+    private val sharedPrefs: SharedPreferences = EncryptedSharedPreferences.create(
+        context, PREFS_NAME, masterKey,
+        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+    )
 
     companion object {
         private const val TAG = "IdentityManager"
@@ -59,14 +47,15 @@ class IdentityManager(
         private const val KEY_FINGERPRINT = "identity_fingerprint"
         private const val KEY_CREATED_AT = "identity_created_at"
         private const val KEY_IS_PRIMARY = "identity_is_primary"
-
         private const val KEYSTORE_ALIAS = "sc_identity_key"
         private const val KEYSTORE_PROVIDER = "AndroidKeyStore"
+        
+        // Ed25519 key sizes
+        private const val ED25519_PUBLIC_KEY_SIZE = 32
+        private const val ED25519_PRIVATE_KEY_SIZE = 32
+        private const val ED25519_SIGNATURE_SIZE = 64
     }
 
-    /**
-     * Identity data class matching core interface
-     */
     data class Identity(
         val publicKey: ByteArray,
         val privateKey: ByteArray,
@@ -79,30 +68,13 @@ class IdentityManager(
             if (this === other) return true
             if (javaClass != other?.javaClass) return false
             other as Identity
-            if (!publicKey.contentEquals(other.publicKey)) return false
-            if (!privateKey.contentEquals(other.privateKey)) return false
-            if (fingerprint != other.fingerprint) return false
-            return true
+            return publicKey.contentEquals(other.publicKey) && privateKey.contentEquals(other.privateKey)
         }
-
-        override fun hashCode(): Int {
-            var result = publicKey.contentHashCode()
-            result = 31 * result + privateKey.contentHashCode()
-            result = 31 * result + fingerprint.hashCode()
-            return result
-        }
+        override fun hashCode(): Int = publicKey.contentHashCode() * 31 + privateKey.contentHashCode()
     }
 
-    /**
-     * Check if an identity exists
-     */
-    fun hasIdentity(): Boolean =
-        sharedPrefs.contains(KEY_PUBLIC_KEY) &&
-            sharedPrefs.contains(KEY_PRIVATE_KEY_ENCRYPTED)
+    fun hasIdentity(): Boolean = sharedPrefs.contains(KEY_PUBLIC_KEY) && sharedPrefs.contains(KEY_PRIVATE_KEY_ENCRYPTED)
 
-    /**
-     * Get the primary identity (loads from secure storage)
-     */
     fun getIdentity(): Identity? {
         try {
             val publicKeyBase64 = sharedPrefs.getString(KEY_PUBLIC_KEY, null) ?: return null
@@ -111,17 +83,10 @@ class IdentityManager(
             val displayName = sharedPrefs.getString(KEY_DISPLAY_NAME, null)
             val createdAt = sharedPrefs.getLong(KEY_CREATED_AT, System.currentTimeMillis())
             val isPrimary = sharedPrefs.getBoolean(KEY_IS_PRIMARY, true)
-
-            val publicKey = Base64.decode(publicKeyBase64, Base64.NO_WRAP)
-            val privateKey = decryptPrivateKey(privateKeyEncrypted)
-
             return Identity(
-                publicKey = publicKey,
-                privateKey = privateKey,
-                fingerprint = fingerprint,
-                displayName = displayName,
-                createdAt = createdAt,
-                isPrimary = isPrimary,
+                Base64.decode(publicKeyBase64, Base64.NO_WRAP),
+                decryptPrivateKey(privateKeyEncrypted),
+                fingerprint, displayName, createdAt, isPrimary
             )
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load identity", e)
@@ -129,202 +94,158 @@ class IdentityManager(
         }
     }
 
-    /**
-     * Save an identity securely
-     */
     fun saveIdentity(identity: Identity) {
-        try {
-            // Encrypt private key using Android Keystore
-            val privateKeyEncrypted = encryptPrivateKey(identity.privateKey)
-
-            // Store in EncryptedSharedPreferences
-            sharedPrefs.edit().apply {
-                putString(KEY_PUBLIC_KEY, Base64.encodeToString(identity.publicKey, Base64.NO_WRAP))
-                putString(KEY_PRIVATE_KEY_ENCRYPTED, privateKeyEncrypted)
-                putString(KEY_FINGERPRINT, identity.fingerprint)
-                putString(KEY_DISPLAY_NAME, identity.displayName)
-                putLong(KEY_CREATED_AT, identity.createdAt)
-                putBoolean(KEY_IS_PRIMARY, identity.isPrimary)
-                apply()
-            }
-
-            Log.d(TAG, "Identity saved successfully")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to save identity", e)
-            throw e
+        sharedPrefs.edit().apply {
+            putString(KEY_PUBLIC_KEY, Base64.encodeToString(identity.publicKey, Base64.NO_WRAP))
+            putString(KEY_PRIVATE_KEY_ENCRYPTED, encryptPrivateKey(identity.privateKey))
+            putString(KEY_FINGERPRINT, identity.fingerprint)
+            putString(KEY_DISPLAY_NAME, identity.displayName)
+            putLong(KEY_CREATED_AT, identity.createdAt)
+            putBoolean(KEY_IS_PRIMARY, identity.isPrimary)
+            apply()
         }
     }
 
-    /**
-     * Update display name only
-     */
     fun updateDisplayName(displayName: String) {
         sharedPrefs.edit().putString(KEY_DISPLAY_NAME, displayName).apply()
     }
 
-    /**
-     * Get public key ID (Base64 for consistency across platforms)
-     */
     fun getPublicKeyId(): String? = sharedPrefs.getString(KEY_PUBLIC_KEY, null)
-
-    /**
-     * Get fingerprint
-     */
     fun getFingerprint(): String? = sharedPrefs.getString(KEY_FINGERPRINT, null)
 
-    /**
-     * Delete identity (for testing or reset)
-     */
     fun deleteIdentity() {
         sharedPrefs.edit().clear().apply()
-
-        // Also remove keystore key
         try {
-            val keyStore = KeyStore.getInstance(KEYSTORE_PROVIDER)
-            keyStore.load(null)
-            keyStore.deleteEntry(KEYSTORE_ALIAS)
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to delete keystore entry", e)
-        }
+            KeyStore.getInstance(KEYSTORE_PROVIDER).apply { load(null); deleteEntry(KEYSTORE_ALIAS) }
+        } catch (e: Exception) { Log.w(TAG, "Failed to delete keystore entry", e) }
     }
 
-    /**
-     * Encrypt private key using Android Keystore
-     */
     private fun encryptPrivateKey(privateKey: ByteArray): String {
-        val cipher = getCipher()
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, getOrCreateSecretKey())
-
-        val encryptedBytes = cipher.doFinal(privateKey)
-        val iv = cipher.iv
-
-        // Combine IV and encrypted data
-        val combined = ByteArray(iv.size + encryptedBytes.size)
-        System.arraycopy(iv, 0, combined, 0, iv.size)
-        System.arraycopy(encryptedBytes, 0, combined, iv.size, encryptedBytes.size)
-
+        val encrypted = cipher.doFinal(privateKey)
+        val combined = cipher.iv + encrypted
         return Base64.encodeToString(combined, Base64.NO_WRAP)
     }
 
-    /**
-     * Decrypt private key using Android Keystore
-     */
     private fun decryptPrivateKey(encryptedData: String): ByteArray {
         val combined = Base64.decode(encryptedData, Base64.NO_WRAP)
-
-        // Extract IV and encrypted data
-        val iv = ByteArray(12) // GCM standard IV size
-        val encryptedBytes = ByteArray(combined.size - 12)
-        System.arraycopy(combined, 0, iv, 0, 12)
-        System.arraycopy(combined, 12, encryptedBytes, 0, encryptedBytes.size)
-
-        val cipher = getCipher()
+        val iv = combined.copyOfRange(0, 12)
+        val encrypted = combined.copyOfRange(12, combined.size)
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, getOrCreateSecretKey(), GCMParameterSpec(128, iv))
-
-        return cipher.doFinal(encryptedBytes)
+        return cipher.doFinal(encrypted)
     }
 
-    /**
-     * Get or create AES key in Android Keystore
-     */
     private fun getOrCreateSecretKey(): SecretKey {
-        val keyStore = KeyStore.getInstance(KEYSTORE_PROVIDER)
-        keyStore.load(null)
-
+        val keyStore = KeyStore.getInstance(KEYSTORE_PROVIDER).apply { load(null) }
         if (keyStore.containsAlias(KEYSTORE_ALIAS)) {
             return keyStore.getKey(KEYSTORE_ALIAS, null) as SecretKey
         }
-
-        // Generate new key
-        val keyGenerator =
-            KeyGenerator.getInstance(
-                KeyProperties.KEY_ALGORITHM_AES,
-                KEYSTORE_PROVIDER,
-            )
-
-        val keyGenParameterSpec =
-            KeyGenParameterSpec
-                .Builder(
-                    KEYSTORE_ALIAS,
-                    KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
-                ).setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+        return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KEYSTORE_PROVIDER).apply {
+            init(KeyGenParameterSpec.Builder(KEYSTORE_ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
                 .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
                 .setKeySize(256)
-                .setUserAuthenticationRequired(false)
-                .build()
-
-        keyGenerator.init(keyGenParameterSpec)
-        return keyGenerator.generateKey()
+                .build())
+        }.generateKey()
     }
 
     /**
-     * Generate a new Ed25519 identity using BouncyCastle
+     * Generate a new Ed25519 identity using BouncyCastle.
+     * The private key (seed) is stored encrypted, public key is stored in base64.
      */
     fun generateNewIdentity(displayName: String? = null): Identity {
-        val random = SecureRandom()
+        // Generate Ed25519 key pair using BouncyCastle
         val keyPairGenerator = Ed25519KeyPairGenerator()
-        keyPairGenerator.init(Ed25519KeyGenerationParameters(random))
-
+        keyPairGenerator.init(Ed25519KeyGenerationParameters(SecureRandom()))
         val keyPair = keyPairGenerator.generateKeyPair()
+        
         val privateKeyParams = keyPair.private as Ed25519PrivateKeyParameters
         val publicKeyParams = keyPair.public as Ed25519PublicKeyParameters
-
-        val privateKey = privateKeyParams.encoded
-        val publicKey = publicKeyParams.encoded
-
-        // Generate fingerprint (SHA-256 of public key)
-        val md = java.security.MessageDigest.getInstance("SHA-256")
-        val fingerprintBytes = md.digest(publicKey)
-        val fingerprint = Base64.encodeToString(fingerprintBytes, Base64.NO_WRAP)
-
-        val identity =
-            Identity(
-                publicKey = publicKey,
-                privateKey = privateKey,
-                fingerprint = fingerprint,
-                displayName = displayName,
-            )
-
+        
+        val privateKey = privateKeyParams.encoded  // 32-byte seed
+        val publicKey = publicKeyParams.encoded    // 32-byte public key
+        
+        // Generate fingerprint from SHA-256 of public key
+        val fingerprint = Base64.encodeToString(
+            MessageDigest.getInstance("SHA-256").digest(publicKey), 
+            Base64.NO_WRAP
+        )
+        
+        val identity = Identity(publicKey, privateKey, fingerprint, displayName)
         saveIdentity(identity)
+        
+        Log.d(TAG, "Generated new Ed25519 identity with fingerprint: $fingerprint")
         return identity
     }
 
     /**
-     * Sign data using the stored private key
+     * Sign data using the stored Ed25519 private key.
+     * Returns a 64-byte Ed25519 signature.
      */
     fun sign(data: ByteArray): ByteArray {
         val identity = getIdentity() ?: throw IllegalStateException("No identity found")
-
-        val signer = Ed25519Signer()
+        
+        // Reconstruct Ed25519 private key from stored seed
         val privateKeyParams = Ed25519PrivateKeyParameters(identity.privateKey, 0)
+        
+        // Sign using Ed25519Signer
+        val signer = Ed25519Signer()
         signer.init(true, privateKeyParams)
         signer.update(data, 0, data.size)
-
-        return signer.generateSignature()
+        
+        val signature = signer.generateSignature()
+        
+        require(signature.size == ED25519_SIGNATURE_SIZE) {
+            "Invalid signature size: ${signature.size}, expected $ED25519_SIGNATURE_SIZE"
+        }
+        
+        return signature
     }
 
     /**
-     * Verify signature using the public key
+     * Verify an Ed25519 signature against data and public key.
+     * 
+     * @param data The data that was signed
+     * @param signature 64-byte Ed25519 signature
+     * @param publicKey 32-byte Ed25519 public key
+     * @return true if signature is valid
      */
-    fun verify(
-        data: ByteArray,
-        signature: ByteArray,
-        publicKey: ByteArray,
-    ): Boolean {
-        try {
-            val verifier = Ed25519Signer()
+    fun verify(data: ByteArray, signature: ByteArray, publicKey: ByteArray): Boolean {
+        return try {
+            // Validate input sizes
+            if (signature.size != ED25519_SIGNATURE_SIZE) {
+                Log.w(TAG, "Invalid signature size: ${signature.size}")
+                return false
+            }
+            if (publicKey.size != ED25519_PUBLIC_KEY_SIZE) {
+                Log.w(TAG, "Invalid public key size: ${publicKey.size}")
+                return false
+            }
+            
+            // Reconstruct public key from bytes
             val publicKeyParams = Ed25519PublicKeyParameters(publicKey, 0)
+            
+            // Verify using Ed25519Signer
+            val verifier = Ed25519Signer()
             verifier.init(false, publicKeyParams)
             verifier.update(data, 0, data.size)
-            return verifier.verifySignature(signature)
+            
+            verifier.verifySignature(signature)
         } catch (e: Exception) {
             Log.e(TAG, "Signature verification failed", e)
-            return false
+            false
         }
     }
-
+    
     /**
-     * Get cipher for encryption/decryption
+     * Sign data and return signature along with public key for verification.
+     * Convenience method for message signing.
      */
-    private fun getCipher(): Cipher = Cipher.getInstance("AES/GCM/NoPadding")
+    fun signWithPublicKey(data: ByteArray): Pair<ByteArray, ByteArray> {
+        val identity = getIdentity() ?: throw IllegalStateException("No identity found")
+        val signature = sign(data)
+        return Pair(signature, identity.publicKey)
+    }
 }

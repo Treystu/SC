@@ -1,8 +1,3 @@
-/**
- * Cross-Platform E2E Tests: Web to Android Messaging
- * Tests messaging workflows between web and Android clients
- */
-
 import { test, expect } from "@playwright/test";
 import {
   CrossPlatformTestCoordinator,
@@ -10,22 +5,45 @@ import {
   AndroidClient,
 } from "../../../cross-platform-framework";
 
+async function isAppiumAvailable(): Promise<boolean> {
+  try {
+    const response = await fetch('http://localhost:4723/status', {
+      method: 'GET',
+      signal: AbortSignal.timeout(2000),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+test.beforeAll(async () => {
+  const available = await isAppiumAvailable();
+  if (!available) {
+    test.skip();
+  }
+});
+
 test.describe("Web to Android Cross-Platform Tests", () => {
   let coordinator: CrossPlatformTestCoordinator;
   let webClient: WebClient;
   let androidClient: AndroidClient;
+  let appiumAvailable: boolean;
 
   test.beforeEach(async ({ browser, page }) => {
+    appiumAvailable = await isAppiumAvailable();
+    if (!appiumAvailable) {
+      return;
+    }
+
     coordinator = new CrossPlatformTestCoordinator();
 
-    // Create web client
     webClient = (await coordinator.createClient(
       { platform: "web", name: "web-client" },
       page,
       browser,
     )) as WebClient;
 
-    // Create Android client
     androidClient = (await coordinator.createClient({
       platform: "android",
       name: "android-client",
@@ -33,7 +51,9 @@ test.describe("Web to Android Cross-Platform Tests", () => {
   });
 
   test.afterEach(async () => {
-    await coordinator.cleanup();
+    if (coordinator) {
+      await coordinator.cleanup();
+    }
   });
 
   test("should send message from web to Android", async () => {

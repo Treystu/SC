@@ -44,12 +44,6 @@ module.exports = {
       '/tests/scripts/',
     ],
   extensionsToTreatAsEsm: ['.ts', '.tsx', '.test.ts'],
-  globals: {
-    'ts-jest': {
-      useESM: true,
-      tsconfig: '<rootDir>/tsconfig.test.json',
-    }
-  },
   setupFilesAfterEnv: ['<rootDir>/jest.setup.cjs'],
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
@@ -60,7 +54,10 @@ module.exports = {
   modulePathIgnorePatterns: ['<rootDir>/dist/'],
   preset: 'ts-jest/presets/default-esm',
   transform: {
-    '^.+\\.(ts|tsx)$': ['ts-jest', { useESM: true }],
+    '^.+\\.(ts|tsx)$': ['ts-jest', { 
+      useESM: true,
+      tsconfig: '<rootDir>/tsconfig.test.json'
+    }],
     '^.+\\.(js|mjs)$': [
       'babel-jest',
       { configFile: './babel.config.cjs' }

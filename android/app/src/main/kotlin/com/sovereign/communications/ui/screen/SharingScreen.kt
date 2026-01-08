@@ -40,7 +40,7 @@ fun SharingScreen(
     val shareManager = remember { ShareManager(context) }
     val nfcManager =
         remember {
-            if (context is Activity) NFCShareManager(context) else null
+            if (context is Activity) NFCShareManager(context, app.identityManager) else null
         }
     val nearbyManager = remember { NearbyShareManager(context) }
     val apkExtractor = remember { APKExtractor(context) }

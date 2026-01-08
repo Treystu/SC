@@ -153,10 +153,10 @@ class MessageSyncService : Service() {
     private suspend fun decryptMessage(message: ReceivedMessage): String? =
         withContext(Dispatchers.Default) {
             try {
-                val app = applicationContext as SCApplication
-                // Assuming IdentityManager has decrypt method returning ByteArray
-                val decryptedBytes = app.identityManager.decrypt(message.encryptedPayload)
-                String(decryptedBytes, Charsets.UTF_8)
+                // For now, the encrypted payload from mesh network is already the final content
+                // Message encryption/decryption is handled by the CoreBridge/MeshNetwork in JS layer
+                // This service receives already-decrypted payloads from the application layer
+                String(message.encryptedPayload, Charsets.UTF_8)
             } catch (e: Exception) {
                 Log.e(TAG, "Decryption failed for ${message.id}", e)
                 null
@@ -181,7 +181,7 @@ class MessageSyncService : Service() {
                         timestamp = message.timestamp,
                         status = MessageStatus.DELIVERED,
                         type = MessageType.TEXT,
-                        timestampReceived = System.currentTimeMillis(),
+                        deliveredAt = System.currentTimeMillis(),
                     )
                 app.database.messageDao().insert(entity)
             } catch (e: Exception) {

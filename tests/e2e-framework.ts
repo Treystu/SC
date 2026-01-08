@@ -23,21 +23,20 @@ export class E2ETestFramework {
     // Wait for menu to appear
     await this.page.waitForTimeout(300);
 
-    // Try Quick Add first (for demo/testing) - this auto-creates conversation
-    const quickAdd = this.page.locator('[data-testid="quick-add-btn"]');
-    if (await quickAdd.isVisible()) {
-      await quickAdd.click();
-      // Wait for conversation to be created
-      await this.page.waitForTimeout(500);
-      return;
+    const isDemoContact = name.toLowerCase() === 'demo' && publicKey.toLowerCase() === 'demo';
+    if (isDemoContact) {
+      const quickAdd = this.page.locator('[data-testid="quick-add-btn"]');
+      if (await quickAdd.isVisible({ timeout: 2000 })) {
+        await quickAdd.click();
+        await this.page.waitForTimeout(500);
+        return;
+      }
     }
 
-    // Fall back to manual add
     const addByIdBtn = this.page.locator('[data-testid="add-by-id-btn"]');
-    if (await addByIdBtn.isVisible()) {
-      await addByIdBtn.click();
-      await this.page.waitForTimeout(300);
-    }
+    await addByIdBtn.waitFor({ state: 'visible', timeout: 5000 });
+    await addByIdBtn.click();
+    await this.page.waitForTimeout(300);
 
     await this.page.fill('[data-testid="contact-name-input"]', name);
     await this.page.fill('[data-testid="contact-publickey-input"]', publicKey);
@@ -48,18 +47,14 @@ export class E2ETestFramework {
   }
 
   async sendMessage(contactName: string, message: string) {
-    // Click on the contact to open chat
-    await this.page.click(`[data-testid="contact-${contactName}"]`);
+    const actualContactName = contactName.toLowerCase() === 'demo' ? 'Test Peer' : contactName;
     
-    // Wait for chat to load
+    await this.page.click(`[data-testid="contact-${actualContactName}"]`);
     await this.page.waitForSelector('[data-testid="chat-container"]', { timeout: 5000 });
     await this.page.waitForTimeout(300);
     
-    // Type and send message
     await this.page.fill('[data-testid="message-input"]', message);
     await this.page.click('[data-testid="send-message-btn"]');
-    
-    // Wait for message to appear
     await this.page.waitForTimeout(500);
   }
 

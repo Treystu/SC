@@ -1,20 +1,40 @@
-/**
- * Cross-Platform E2E Tests: Multi-platform Messaging
- * Tests messaging workflows between web, Android, and iOS clients
- */
-
 import { test, expect, Browser, Page } from '@playwright/test';
-import { CrossPlatformTestCoordinator, WebClient, AndroidClient, IOSClient } from '../../cross-platform-framework';
+import { CrossPlatformTestCoordinator, WebClient, AndroidClient, iOSClient } from '../../cross-platform-framework';
+
+async function isAppiumAvailable(): Promise<boolean> {
+  try {
+    const response = await fetch('http://localhost:4723/status', {
+      method: 'GET',
+      signal: AbortSignal.timeout(2000),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+test.beforeAll(async () => {
+  const available = await isAppiumAvailable();
+  if (!available) {
+    test.skip();
+  }
+});
 
 test.describe('Multi-platform Cross-Platform Tests', () => {
   let coordinator: CrossPlatformTestCoordinator;
   let webClient: WebClient;
   let androidClient: AndroidClient;
-  let iosClient: IOSClient;
+  let iosClient: iOSClient;
   let browser1: Browser;
   let page1: Page;
+  let appiumAvailable: boolean;
 
   test.beforeEach(async ({ browser, context }) => {
+    appiumAvailable = await isAppiumAvailable();
+    if (!appiumAvailable) {
+      return;
+    }
+    
     coordinator = new CrossPlatformTestCoordinator();
 
     const context1 = await browser.newContext();
@@ -32,11 +52,13 @@ test.describe('Multi-platform Cross-Platform Tests', () => {
     
     iosClient = await coordinator.createClient(
         { platform: 'ios', name: 'ios-charlie' }
-    ) as IOSClient;
+    ) as iOSClient;
   });
 
   test.afterEach(async () => {
-    await coordinator.cleanup();
+    if (coordinator) {
+      await coordinator.cleanup();
+    }
   });
 
   test('should send a message from web to mobile and receive it', async () => {
