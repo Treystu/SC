@@ -107,7 +107,8 @@ export const getMeshNetwork = async (): Promise<MeshNetwork> => {
             privateKey: privKey,
             displayName: storedIdentity.displayName,
           };
-          peerId = storedIdentity.id.replace(/\s/g, "");
+          // Ensure consistent ID format: no spaces, uppercase
+          peerId = storedIdentity.id.replace(/\s/g, "").toUpperCase();
           console.log('[MeshNetworkService] Identity ready:', { peerId, fingerprint: storedIdentity.fingerprint, pubKeyLen: pubKey.length, privKeyLen: privKey.length });
         } else {
           console.log('[MeshNetworkService] No persisted identity found. Waiting for onboarding...');
@@ -183,10 +184,13 @@ export const generateNewIdentity = async (displayName: string) => {
   await db.init();
   await db.clearAllData();
 
-  const { generateIdentity, generateFingerprint } = await import("@sc/core");
+  const { generateIdentity } = await import("@sc/core");
+  const { generateFingerprint } = await import("@sc/core");
   const newIdentity = generateIdentity();
   const fingerprint = await generateFingerprint(newIdentity.publicKey);
-  const newId = fingerprint.substring(0, 16);
+  // Remove spaces and use consistent 16-char uppercase hex ID
+  const cleanFingerprint = fingerprint.replace(/\s/g, "").toUpperCase();
+  const newId = cleanFingerprint.substring(0, 16);
 
   await db.saveIdentity({
     id: newId,

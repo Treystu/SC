@@ -93,7 +93,8 @@ export const handler: Handler = async (event, context) => {
     let { peerId } = body;
 
     if (peerId) {
-      peerId = peerId.replace(/\s/g, "");
+      // Normalize ID: no spaces, uppercase for consistency
+      peerId = peerId.replace(/\s/g, "").toUpperCase();
     }
     console.log(`[${requestId}] Action: ${action}, PeerId: ${peerId}`);
 
@@ -156,8 +157,8 @@ export const handler: Handler = async (event, context) => {
         let { to } = payload;
         if (!to || !type || !signal) throw new Error("Invalid signal payload");
 
-        // Sanitize recipient ID to match the sanitized peerId validation
-        to = to.replace(/\s/g, "");
+        // Normalize recipient ID: no spaces, uppercase for consistency
+        to = to.replace(/\s/g, "").toUpperCase();
 
         console.log(
           `[${requestId}] Processing signal from ${peerId} to ${to} (${type}) - Length: ${JSON.stringify(signal).length} chars`,

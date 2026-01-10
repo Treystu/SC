@@ -25,7 +25,8 @@ export class RoomClient {
 
   constructor(url: string, peerId: string) {
     this.url = url;
-    this.peerId = peerId.replace(/\s/g, "");
+    // Ensure consistent ID format: no spaces, uppercase
+    this.peerId = peerId.replace(/\s/g, "").toUpperCase();
   }
 
   private async request(action: string, payload: any = {}) {
