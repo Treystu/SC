@@ -1379,19 +1379,43 @@ export function useMeshNetwork() {
 
                   if (sig.type === "offer" || signalData.type === "offer") {
                     console.log('[useMeshNetwork] 📥 Processing OFFER from', sig.from);
+                    
+                    // Extract the actual SDP - it could be nested in signalData.sdp or be signalData itself
+                    let sdpOffer = signalData.sdp || signalData;
+                    
+                    // Ensure the SDP has the correct type field
+                    if (typeof sdpOffer === 'object' && !sdpOffer.type) {
+                      sdpOffer = { ...sdpOffer, type: 'offer' };
+                    } else if (typeof sdpOffer === 'string') {
+                      // If it's just an SDP string, wrap it
+                      sdpOffer = { type: 'offer', sdp: sdpOffer };
+                    }
+                    
+                    console.log('[useMeshNetwork] SDP Offer to process:', {
+                      type: sdpOffer.type,
+                      hasSdp: !!sdpOffer.sdp,
+                      sdpLength: sdpOffer.sdp?.length || 0
+                    });
+                    
                     useMeshNetworkLogger.info(
                       `📥 Received OFFER from ${sig.from}`,
-                      { signalType: signalData.type, hasSdp: !!signalData.sdp },
+                      { signalType: sdpOffer.type, hasSdp: !!sdpOffer.sdp },
                     );
 
                     const answerJson =
                       await meshNetworkRef.current!.acceptManualConnection(
                         JSON.stringify({
                           peerId: sig.from,
-                          sdp: signalData.sdp || signalData,
+                          sdp: sdpOffer,
                         }),
                       );
                     const answerData = JSON.parse(answerJson);
+                    
+                    console.log('[useMeshNetwork] 📤 Answer created:', {
+                      type: answerData.type,
+                      hasSdp: !!answerData.sdp,
+                      peerId: answerData.peerId
+                    });
 
                     useMeshNetworkLogger.info(
                       `📤 Sending ANSWER to ${sig.from}`,
@@ -1401,22 +1425,43 @@ export function useMeshNetwork() {
                       type: "answer",
                       sdp: answerData.sdp,
                     });
+                    console.log('[useMeshNetwork] ✅ Answer sent to', sig.from);
                     useMeshNetworkLogger.info(`Answer sent to ${sig.from}`);
                   } else if (
                     sig.type === "answer" ||
                     signalData.type === "answer"
                   ) {
+                    console.log('[useMeshNetwork] 📥 Processing ANSWER from', sig.from);
+                    
+                    // Extract the actual SDP - it could be nested in signalData.sdp or be signalData itself
+                    let sdpAnswer = signalData.sdp || signalData;
+                    
+                    // Ensure the SDP has the correct type field
+                    if (typeof sdpAnswer === 'object' && !sdpAnswer.type) {
+                      sdpAnswer = { ...sdpAnswer, type: 'answer' };
+                    } else if (typeof sdpAnswer === 'string') {
+                      // If it's just an SDP string, wrap it
+                      sdpAnswer = { type: 'answer', sdp: sdpAnswer };
+                    }
+                    
+                    console.log('[useMeshNetwork] SDP Answer to process:', {
+                      type: sdpAnswer.type,
+                      hasSdp: !!sdpAnswer.sdp,
+                      sdpLength: sdpAnswer.sdp?.length || 0
+                    });
+                    
                     useMeshNetworkLogger.info(
                       `📥 Received ANSWER from ${sig.from}`,
-                      { signalType: signalData.type, hasSdp: !!signalData.sdp },
+                      { signalType: sdpAnswer.type, hasSdp: !!sdpAnswer.sdp },
                     );
 
                     await meshNetworkRef.current!.finalizeManualConnection(
                       JSON.stringify({
                         peerId: sig.from,
-                        sdp: signalData.sdp || signalData,
+                        sdp: sdpAnswer,
                       }),
                     );
+                    console.log('[useMeshNetwork] ✅ Connection finalized with', sig.from);
                     useMeshNetworkLogger.info(
                       `Connection finalized with ${sig.from}`,
                     );
