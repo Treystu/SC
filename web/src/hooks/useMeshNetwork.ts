@@ -101,13 +101,21 @@ export function useMeshNetwork() {
 
     const initMeshNetwork = async () => {
       try {
+        console.log('[useMeshNetwork] ========== MESH NETWORK INITIALIZATION START ==========');
+        console.log('[useMeshNetwork] Step 1: Getting mesh network instance...');
         const network = await getMeshNetwork();
+        console.log('[useMeshNetwork] Step 2: Mesh network instance obtained:', !!network);
+        
         const db = getDatabase();
-        console.log("[useMeshNetwork] Starting network...");
+        console.log('[useMeshNetwork] Step 3: Starting network...');
         await network.start();
-        console.log("[useMeshNetwork] Network started.");
+        console.log('[useMeshNetwork] Step 4: Network started successfully');
+        
         meshNetworkRef.current = network;
+        console.log('[useMeshNetwork] Step 5: meshNetworkRef.current set:', !!meshNetworkRef.current);
+        
         connectionMonitorRef.current = new ConnectionMonitor();
+        console.log('[useMeshNetwork] Step 6: Connection monitor created');
 
         try {
           const activePeers = await db.getActivePeers();
@@ -428,6 +436,7 @@ export function useMeshNetwork() {
           );
         }
 
+        console.log('[useMeshNetwork] Step 7: Setting status with localPeerId:', localId);
         setStatus({
           isConnected: true,
           peerCount: 0,
@@ -435,14 +444,31 @@ export function useMeshNetwork() {
           connectionQuality: "good",
           initializationError: undefined,
         });
+        console.log('[useMeshNetwork] ========== MESH NETWORK INITIALIZATION COMPLETE ==========');
+        console.log('[useMeshNetwork] Final check - meshNetworkRef.current:', !!meshNetworkRef.current);
+        console.log('[useMeshNetwork] Final check - localPeerId:', localId);
       } catch (error) {
+        console.error('[useMeshNetwork] ========== MESH NETWORK INITIALIZATION FAILED ==========');
+        console.error('[useMeshNetwork] Error:', error);
+        console.error('[useMeshNetwork] Error message:', (error as Error).message);
+        console.error('[useMeshNetwork] Error stack:', (error as Error).stack);
+        
         if ((error as Error).message === "NO_IDENTITY") {
+          console.log('[useMeshNetwork] No identity found - user needs to complete onboarding');
           useMeshNetworkLogger.info("No identity found, waiting for onboarding.");
+          setStatus((prev) => ({
+            ...prev,
+            isConnected: false,
+            initializationError: "Please complete onboarding to create your identity",
+          }));
           return;
         }
+        
+        console.error('[useMeshNetwork] Initialization failed with error:', error);
         useMeshNetworkLogger.error("Failed to initialize mesh network:", error);
         setStatus((prev) => ({
           ...prev,
+          isConnected: false,
           initializationError:
             error instanceof Error ? error.message : String(error),
         }));
