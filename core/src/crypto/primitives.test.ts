@@ -170,11 +170,11 @@ describe("Cryptographic Primitives", () => {
       expect(fp1).not.toBe(fp2);
     });
 
-    it("should format fingerprint with spaces", () => {
+    it("should format fingerprint as 16-char uppercase hex", () => {
       const identity = generateIdentity();
       const fingerprint = generateFingerprint(identity.publicKey);
-      expect(fingerprint).toMatch(/^[0-9a-f ]+$/);
-      expect(fingerprint).toContain(" ");
+      expect(fingerprint).toMatch(/^[0-9A-F]{16}$/);
+      expect(fingerprint.length).toBe(16);
     });
   });
 

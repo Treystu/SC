@@ -421,10 +421,12 @@ export function secureWipe(data: Uint8Array): void {
 
 export function generateFingerprint(publicKey: Uint8Array): string {
   const hash = sha256(ensureUint8Array(publicKey));
+  // Return 16-char uppercase hex without spaces for consistent ID format
   return Array.from(hash)
-    .slice(0, 16)
+    .slice(0, 8)
     .map((b) => b.toString(16).padStart(2, "0"))
-    .join(" ");
+    .join("")
+    .toUpperCase();
 }
 
 /**
