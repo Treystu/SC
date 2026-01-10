@@ -379,7 +379,9 @@ export class RoutingTable {
    * Get next hop for a destination
    */
   getNextHop(destination: string): string | undefined {
-    const route = this.routes.get(destination);
+    // Normalize destination ID for consistent lookup
+    const normalizedDest = destination.replace(/\s/g, "").toUpperCase();
+    const route = this.routes.get(normalizedDest) || this.routes.get(destination);
     return route?.nextHop;
   }
 

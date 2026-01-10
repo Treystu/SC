@@ -320,8 +320,16 @@ export class MessageRelay {
       const payloadStr = new TextDecoder().decode(message.payload);
       const data = JSON.parse(payloadStr);
 
-      if (data.recipient && data.recipient === this.localPeerId) {
-        return true;
+      if (data.recipient) {
+        // Normalize both IDs to uppercase for comparison
+        const normalizedRecipient = data.recipient.replace(/\s/g, "").toUpperCase();
+        const normalizedLocalId = this.localPeerId.replace(/\s/g, "").toUpperCase();
+        
+        console.log(`[MessageRelay] Checking recipient: ${normalizedRecipient} vs localPeerId: ${normalizedLocalId}`);
+        
+        if (normalizedRecipient === normalizedLocalId) {
+          return true;
+        }
       }
     } catch (e) {
       // Ignore parsing errors, assume not for us if we can't read it
