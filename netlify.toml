@@ -29,10 +29,12 @@ status = 200
 force = true
 
 # Redirect all other requests to index.html for SPA routing
+# BUT exclude static assets (js, css, images, etc.)
 [[redirects]]
 from = "/*"
 to = "/index.html"
 status = 200
+force = false
 
 # Security headers
 [[headers]]
@@ -58,6 +60,20 @@ Referrer-Policy = "strict-origin-when-cross-origin"
 
 # Permissions policy
 Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+
+# JavaScript files
+[[headers]]
+for = "/*.js"
+[headers.values]
+Content-Type = "application/javascript; charset=utf-8"
+Cache-Control = "public, max-age=31536000, immutable"
+
+# CSS files
+[[headers]]
+for = "/*.css"
+[headers.values]
+Content-Type = "text/css; charset=utf-8"
+Cache-Control = "public, max-age=31536000, immutable"
 
 # Cache static assets
 [[headers]]
