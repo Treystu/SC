@@ -3,6 +3,8 @@ import { MeshNetwork, Message, MessageType, Peer } from "@sc/core";
 import { ConnectionMonitor, type ConnectionQuality } from "@sc/core";
 import { getDatabase } from "../storage/database";
 import { getMeshNetwork } from "../services/mesh-network-service";
+import { notifyConversationsUpdated } from "./useConversations";
+import { notificationManager } from "../notifications";
 import {
   validateFileList,
   rateLimiter,
@@ -304,9 +306,29 @@ export function useMeshNetwork() {
                     unreadCount: conversation.unreadCount + 1,
                     lastMessageId: receivedMessage.id,
                   });
+
+                  // Notify UI of conversation update
+                  notifyConversationsUpdated();
+
+                  // Show browser notification for existing conversation
+                  const contact = await db.getContact(receivedMessage.from);
+                  const senderName = contact?.displayName || `Peer ${receivedMessage.from.slice(0, 8)}`;
+                  notificationManager.showMessageNotification(
+                    senderName,
+                    receivedMessage.content,
+                    receivedMessage.from
+                  );
                 } else {
+                  // NEW CONVERSATION from unknown sender - create with pending request status
                   const contact = await db.getContact(receivedMessage.from);
                   const isUnknown = !contact || !contact.verified;
+
+                  console.log('[useMeshNetwork] Creating NEW conversation from incoming message:', {
+                    from: receivedMessage.from,
+                    isUnknown,
+                    hasContact: !!contact,
+                    contactVerified: contact?.verified
+                  });
 
                   await db.saveConversation({
                     id: receivedMessage.from,
@@ -317,6 +339,26 @@ export function useMeshNetwork() {
                     lastMessageId: receivedMessage.id,
                     metadata: isUnknown ? { requestStatus: 'pending', isRequest: true } : undefined
                   });
+
+                  // CRITICAL: Notify UI to refresh conversation list
+                  console.log('[useMeshNetwork] Notifying UI of new conversation');
+                  notifyConversationsUpdated();
+
+                  // Show in-app toast notification for new message request
+                  const senderName = contact?.displayName || `Peer ${receivedMessage.from.slice(0, 8)}`;
+                  window.dispatchEvent(new CustomEvent('show-notification', {
+                    detail: {
+                      message: `New message request from ${senderName}`,
+                      type: 'info'
+                    }
+                  }));
+
+                  // Show browser notification
+                  notificationManager.showMessageNotification(
+                    senderName,
+                    receivedMessage.content,
+                    receivedMessage.from
+                  );
                 }
               }
             } catch (error) {
