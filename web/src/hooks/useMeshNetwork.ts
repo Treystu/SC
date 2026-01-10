@@ -382,6 +382,9 @@ export function useMeshNetwork() {
         });
 
         network.onPeerConnected(async (peerId: string) => {
+          console.log('[useMeshNetwork] ========== PEER CONNECTED ==========');
+          console.log('[useMeshNetwork] Peer ID:', peerId);
+          console.log('[useMeshNetwork] Total connected peers:', network.getConnectedPeers().length);
           useMeshNetworkLogger.info("Peer connected:", peerId);
           updatePeerStatus();
           retryQueuedMessages();
@@ -414,6 +417,9 @@ export function useMeshNetwork() {
         });
 
         network.onPeerDisconnected(async (peerId: string) => {
+          console.log('[useMeshNetwork] ========== PEER DISCONNECTED ==========');
+          console.log('[useMeshNetwork] Peer ID:', peerId);
+          console.log('[useMeshNetwork] Remaining connected peers:', network.getConnectedPeers().length);
           useMeshNetworkLogger.info("Peer disconnected:", peerId);
           updatePeerStatus();
           try {
