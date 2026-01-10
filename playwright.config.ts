@@ -93,9 +93,9 @@ export default defineConfig({
   webServer: {
     command: process.env.CI
       ? "npx vite preview --outDir web/dist --port 3001 --strictPort"
-      : "npm run dev -- --port 3001 --strictPort",
+      : "cd web && npx vite --port 3001 --strictPort",
     url: "http://127.0.0.1:3001",
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: true,
     timeout: 120 * 1000,
   },
 });
