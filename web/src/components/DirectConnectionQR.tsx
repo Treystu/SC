@@ -22,7 +22,6 @@ export const DirectConnectionQR: React.FC<DirectConnectionQRProps> = ({
 }) => {
   const {
     generateConnectionOffer,
-    acceptConnectionOffer,
     status,
   } = useMeshNetwork();
 
@@ -73,10 +72,18 @@ export const DirectConnectionQR: React.FC<DirectConnectionQRProps> = ({
     }
   }, [generateConnectionOffer]);
 
-  // Generate on mount
+  // Generate on mount - but only after mesh network is initialized
   useEffect(() => {
-    generateQR();
-  }, [generateQR]);
+    if (status.isConnected && status.localPeerId) {
+      console.log('[DirectConnectionQR] Mesh network ready, generating QR...');
+      generateQR();
+    } else {
+      console.log('[DirectConnectionQR] Waiting for mesh network initialization...', {
+        isConnected: status.isConnected,
+        localPeerId: status.localPeerId
+      });
+    }
+  }, [status.isConnected, status.localPeerId, generateQR]);
 
   // Copy offer to clipboard
   const handleCopy = async () => {
@@ -100,6 +107,22 @@ export const DirectConnectionQR: React.FC<DirectConnectionQRProps> = ({
     link.click();
   };
 
+  // Show loading state if mesh network not ready
+  if (!status.isConnected || !status.localPeerId) {
+    return (
+      <div className="direct-connection-qr-container">
+        {!embedded && <h2>Direct P2P Connection</h2>}
+        <div className="qr-loading">
+          <div className="spinner"></div>
+          <p>Initializing mesh network...</p>
+          {status.initializationError && (
+            <p className="error-text">Error: {status.initializationError}</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   const content = (
     <div className="direct-connection-qr-container">
       {!embedded && <h2>Direct P2P Connection</h2>}
@@ -108,7 +131,7 @@ export const DirectConnectionQR: React.FC<DirectConnectionQRProps> = ({
       <div className="peer-info">
         <p>
           <strong>Your Peer ID:</strong>{" "}
-          <code>{status.localPeerId || "Generating..."}</code>
+          <code>{status.localPeerId}</code>
         </p>
         <p className="peer-info-hint">
           Share this QR code to enable direct peer-to-peer connection
