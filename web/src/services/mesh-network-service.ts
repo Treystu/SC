@@ -2,6 +2,7 @@ import { MeshNetwork, IndexedDBStorage } from "@sc/core";
 import { WebPersistenceAdapter } from "../utils/WebPersistenceAdapter";
 import { getDatabase } from "../storage/database";
 import { config } from "../config";
+import { initializeBootstrap } from "./bootstrap-service";
 
 let meshNetworkInstance: MeshNetwork | null = null;
 
@@ -145,6 +146,17 @@ export const getMeshNetwork = async (): Promise<MeshNetwork> => {
 
       meshNetworkInstance = network;
       console.log('[MeshNetworkService] MeshNetwork initialized');
+      
+      // Initialize bootstrap to connect to supernodes
+      try {
+        console.log('[MeshNetworkService] Initializing bootstrap...');
+        await initializeBootstrap(network);
+        console.log('[MeshNetworkService] Bootstrap initialized successfully');
+      } catch (error) {
+        console.warn('[MeshNetworkService] Bootstrap initialization failed (non-critical):', error);
+        // Non-critical - network can still function without bootstrap
+      }
+      
       return network;
     } catch (error) {
       // On timeout or error, clear the promise so we can retry

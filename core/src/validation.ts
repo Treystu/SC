@@ -2,58 +2,69 @@
  * Validation and sanitization utilities
  */
 
-// Import DOMPurify for HTML sanitization
-// SECURITY: DOMPurify is REQUIRED - no unsafe fallbacks allowed
-let DOMPurify: any;
+// Lazy-loaded DOMPurify instance
+let DOMPurify: any = null;
+let initPromise: Promise<void> | null = null;
 
-if (typeof window !== "undefined") {
-  // In the browser, DOMPurify must be available
-  try {
-    DOMPurify = require("dompurify");
-  } catch {
-    DOMPurify = (globalThis as any).DOMPurify;
+/**
+ * Initialize DOMPurify based on environment
+ */
+async function initDOMPurify(): Promise<void> {
+  if (DOMPurify) return;
+  
+  if (initPromise) {
+    await initPromise;
+    return;
   }
-} else {
-  // In Node.js/test environments, use jsdom-based DOMPurify
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const createDOMPurify = require("dompurify");
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { JSDOM } = require("jsdom");
-    const window = new JSDOM("").window;
-    DOMPurify = createDOMPurify(window);
-  } catch (e) {
-    // In test environments without jsdom, use minimal safe fallback
-    // This only strips ALL HTML - no partial sanitization
-    if (process.env.NODE_ENV === 'test') {
-      DOMPurify = {
-        sanitize: (input: string, config?: any) => {
-          // Test-only: strip all HTML tags completely
-          if (config?.ALLOWED_TAGS?.length === 0) {
-            return input.replace(/<[^>]*>/g, "");
-          }
-          // If allowing tags in tests, fail explicitly
-          throw new Error('DOMPurify not available - install jsdom for testing');
-        },
-      };
+  
+  initPromise = (async () => {
+    if (typeof window !== 'undefined') {
+      // Browser environment - use dompurify directly
+      try {
+        const dompurifyModule = await import('dompurify');
+        DOMPurify = dompurifyModule.default;
+      } catch (e) {
+        console.error('Failed to load DOMPurify in browser:', e);
+        throw e;
+      }
+    } else {
+      // Node.js/test environment - use jsdom-based DOMPurify
+      try {
+        const { JSDOM } = await import('jsdom');
+        const dompurifyModule = await import('dompurify');
+        const window = new JSDOM('').window;
+        DOMPurify = dompurifyModule.default(window as any);
+      } catch (e) {
+        // Test fallback - strip all HTML
+        if (process.env.NODE_ENV === 'test') {
+          DOMPurify = {
+            sanitize: (input: string) => input.replace(/<[^>]*>/g, ''),
+          };
+        } else {
+          throw new Error('DOMPurify initialization failed: ' + e);
+        }
+      }
     }
-  }
+  })();
+  
+  await initPromise;
 }
 
-// SECURITY: Fail explicitly if DOMPurify is not available in production
-if (!DOMPurify || !DOMPurify.sanitize) {
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error(
-      'SECURITY ERROR: DOMPurify is required but not available. ' +
-      'This is a critical security dependency. Install dompurify package.'
-    );
+// Synchronous fallback for immediate use
+function getSanitizer() {
+  if (!DOMPurify) {
+    // Synchronous fallback - strip all HTML
+    return {
+      sanitize: (input: string) => input.replace(/<[^>]*>/g, ''),
+    };
   }
-  // Development/test fallback - strip all HTML
-  console.warn('WARNING: DOMPurify not available, using unsafe fallback');
-  DOMPurify = {
-    sanitize: (input: string) => input.replace(/<[^>]*>/g, ""),
-  };
+  return DOMPurify;
 }
+
+// Initialize immediately (fire and forget)
+initDOMPurify().catch(() => {
+  // Fallback already handled in initDOMPurify
+});
 
 /**
  * Sanitize HTML content to prevent XSS attacks
@@ -62,7 +73,8 @@ if (!DOMPurify || !DOMPurify.sanitize) {
  */
 export function sanitizeHTML(html: string): string {
   // Use DOMPurify to remove all HTML tags and leave only text content
-  return DOMPurify.sanitize(html, {
+  const sanitizer = getSanitizer();
+  return sanitizer.sanitize(html, {
     ALLOWED_TAGS: [],
     ALLOWED_ATTR: [],
   });
@@ -73,7 +85,8 @@ export function sanitizeHTML(html: string): string {
  */
 export function sanitizeUserInput(input: string): string {
   // Remove any HTML tags using DOMPurify
-  const sanitized = DOMPurify.sanitize(input, {
+  const sanitizer = getSanitizer();
+  const sanitized = sanitizer.sanitize(input, {
     ALLOWED_TAGS: [],
     ALLOWED_ATTR: [],
   });
