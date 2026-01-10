@@ -565,15 +565,19 @@ export function useMeshNetwork() {
   }, []);
 
   const connectToPeer = useCallback(async (peerId: string) => {
+    console.log('[useMeshNetwork] ========== CONNECT TO PEER START ==========');
+    console.log('[useMeshNetwork] Target Peer ID:', peerId);
+    
     const endMeasure = performanceMonitor.startMeasure("connectToPeer");
     useMeshNetworkLogger.info(`connectToPeer called for ${peerId}`);
 
     if (!meshNetworkRef.current) {
-      useMeshNetworkLogger.error(
-        "connectToPeer failed: Mesh network not initialized",
-      );
+      console.error('[useMeshNetwork] CONNECT FAILED: Mesh network not initialized');
       throw new Error("Mesh network not initialized");
     }
+    
+    console.log('[useMeshNetwork] Mesh network ref exists:', !!meshNetworkRef.current);
+    console.log('[useMeshNetwork] Room client ref exists:', !!roomClientRef.current);
 
     const alreadyConnected =
       meshNetworkRef.current &&
@@ -586,42 +590,54 @@ export function useMeshNetwork() {
               .getConnectedPeers()
               .some((p: Peer) => p.id === peerId),
           );
+    
+    console.log('[useMeshNetwork] Already connected:', alreadyConnected);
 
     if (alreadyConnected) {
-      useMeshNetworkLogger.debug(`Already connected to ${peerId}`);
+      console.log('[useMeshNetwork] Skipping - already connected to', peerId);
       return;
     }
 
     try {
       if (roomClientRef.current) {
+        console.log('[useMeshNetwork] Using Room Signaling for connection...');
         useMeshNetworkLogger.info(
           `Initiating connection to ${peerId} via Room Signaling...`,
         );
+        
+        console.log('[useMeshNetwork] Creating manual connection (SDP offer)...');
         const offerJson =
           await meshNetworkRef.current.createManualConnection(peerId);
+        console.log('[useMeshNetwork] SDP offer created:', typeof offerJson, offerJson ? 'has content' : 'empty');
+        
         let offerData: any;
         try {
           offerData = JSON.parse(offerJson as string);
+          console.log('[useMeshNetwork] Parsed offer data:', Object.keys(offerData));
         } catch (parseErr) {
-          // Accept raw strings from mocks
+          console.log('[useMeshNetwork] Could not parse offer as JSON, using raw');
           offerData = offerJson;
         }
-        useMeshNetworkLogger.debug(
-          `Sending SDP offer to ${peerId} via Room...`,
-        );
+        
+        console.log('[useMeshNetwork] Sending SDP offer via Room to', peerId);
         await roomClientRef.current.signal(peerId, "offer", offerData);
-        useMeshNetworkLogger.debug("SDP offer sent via Room");
+        console.log('[useMeshNetwork] SDP offer sent successfully via Room');
       } else {
+        console.log('[useMeshNetwork] No room client, using direct Mesh connection...');
         useMeshNetworkLogger.info(
           `Initiating connection to ${peerId} via Mesh/Local...`,
         );
         await meshNetworkRef.current.connectToPeer(peerId);
+        console.log('[useMeshNetwork] Direct mesh connection initiated');
       }
       endMeasure({ success: true });
+      console.log('[useMeshNetwork] ========== CONNECTION INITIATED ==========');
       useMeshNetworkLogger.info(
         `Connection initiated to ${peerId}, waiting for peer to accept...`,
       );
     } catch (error) {
+      console.error('[useMeshNetwork] ========== CONNECTION FAILED ==========');
+      console.error('[useMeshNetwork] Error:', error);
       useMeshNetworkLogger.error(`Failed to connect to ${peerId}:`, error);
       endMeasure({ success: false, error: (error as Error).message });
       throw error;
