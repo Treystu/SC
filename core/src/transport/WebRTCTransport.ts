@@ -503,7 +503,10 @@ export class WebRTCTransport implements Transport {
           getState: () => wrapper.state,
           connection: wrapper.connection,
           createDataChannel: (config: any) => {
-            return wrapper.connection.createDataChannel(config.label, config);
+            const channel = wrapper.connection.createDataChannel(config.label, config);
+            // Wire up the data channel handlers so peer gets marked as connected
+            this.setupDataChannel(id, channel);
+            return channel;
           },
           onStateChange: (cb: (state: string) => void) => {
             wrapper.connection.onconnectionstatechange = () => {
@@ -559,7 +562,10 @@ export class WebRTCTransport implements Transport {
           getState: () => wrapper.state,
           connection: wrapper.connection,
           createDataChannel: (config: any) => {
-            return wrapper.connection.createDataChannel(config.label, config);
+            const channel = wrapper.connection.createDataChannel(config.label, config);
+            // Wire up the data channel handlers so peer gets marked as connected
+            this.setupDataChannel(id, channel);
+            return channel;
           },
           onStateChange: (cb: (state: string) => void) => {
             wrapper.connection.onconnectionstatechange = () => {

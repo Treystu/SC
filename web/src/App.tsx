@@ -994,6 +994,7 @@ function App() {
 
   const displayConversations = storedConversations.map((conv) => {
     const contact = contacts.find((c) => c.id === conv.contactId);
+    // Use contactId (the peer ID) for online status, not conv.id (conversation ID)
     return {
       id: conv.id,
       name: contact?.displayName || conv.contactId.substring(0, 8),
@@ -1001,7 +1002,7 @@ function App() {
       timestamp: conv.lastMessageTimestamp,
       unreadCount: conv.unreadCount,
       verified: contact?.verified ?? false,
-      online: isOnline(conv.id),
+      online: isOnline(conv.contactId),
       isRequest: conv.metadata?.isRequest && conv.metadata?.requestStatus === 'pending',
     };
   });
@@ -1372,27 +1373,17 @@ function App() {
                           conversationId={selectedConversation}
                           contactName={getContactName(selectedConversation)}
                           isOnline={(() => {
-                            // Check if peer is connected by ID
-                            const isPeerConnected = peers.some((p) => p.id === selectedConversation);
+                            // Get the contactId from the conversation
+                            const conv = storedConversations.find((c) => c.id === selectedConversation);
+                            const contactId = conv?.contactId || selectedConversation;
                             
-                            // Also check if contact's stored peerId matches any connected peer
-                            const contact = contacts.find((c) => c.id === selectedConversation);
-                            const isContactPeerConnected = contact?.peerId 
-                              ? peers.some((p) => p.id === contact.peerId)
-                              : false;
+                            // Use the same isOnline logic as conversation list
+                            const isConnectedMesh = peers.some((p) => p.id === contactId);
+                            const isDiscoveredInRoom = discoveredPeers.some((dpId) => 
+                              dpId === contactId || dpId.startsWith(contactId) || contactId.startsWith(dpId.substring(0, 8))
+                            );
                             
-                            const isOnline = isPeerConnected || isContactPeerConnected;
-                            
-                            console.log('[App] ChatView online status check:', {
-                              conversationId: selectedConversation,
-                              isPeerConnected,
-                              isContactPeerConnected,
-                              contactPeerId: contact?.peerId,
-                              connectedPeerIds: peers.map(p => p.id),
-                              finalIsOnline: isOnline
-                            });
-                            
-                            return isOnline;
+                            return isConnectedMesh || isDiscoveredInRoom;
                           })()}
                           messages={messages}
                           onSendMessage={handleSendMessage}
