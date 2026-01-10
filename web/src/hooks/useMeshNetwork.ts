@@ -151,21 +151,33 @@ export function useMeshNetwork() {
         }
 
         network.onMessage(async (message: Message) => {
+          console.log('[useMeshNetwork] ========== MESSAGE RECEIVED ==========');
+          console.log('[useMeshNetwork] Raw message header:', message.header);
+          console.log('[useMeshNetwork] Message type:', message.header.type);
+          
           try {
             const payload = new TextDecoder().decode(message.payload);
+            console.log('[useMeshNetwork] Decoded payload:', payload.substring(0, 200));
+            
             const data = JSON.parse(payload);
+            console.log('[useMeshNetwork] Parsed data:', data);
+            
             const senderId = Array.from(message.header.senderId as Uint8Array)
               .map((b) => (b as number).toString(16).padStart(2, "0"))
               .join("")
               .substring(0, 8);
+            
+            console.log('[useMeshNetwork] Sender ID:', senderId);
+            console.log('[useMeshNetwork] Local Peer ID:', network.getLocalPeerId());
 
             if (senderId === network.getLocalPeerId()) {
-              useMeshNetworkLogger.debug("Ignored echo message from self");
+              console.log('[useMeshNetwork] Ignored echo message from self');
               return;
             }
 
             const messageId =
               data.id || `${message.header.timestamp}-${senderId}`;
+            console.log('[useMeshNetwork] Message ID:', messageId);
 
             if (seenMessageIdsRef.current.has(messageId)) {
               useMeshNetworkLogger.debug(
@@ -623,13 +635,23 @@ export function useMeshNetwork() {
       attachments?: File[],
       groupId?: string,
     ) => {
+      console.log('[useMeshNetwork] ========== SEND MESSAGE START ==========');
+      console.log('[useMeshNetwork] Recipient ID:', recipientId);
+      console.log('[useMeshNetwork] Content:', content.substring(0, 100));
+      console.log('[useMeshNetwork] Group ID:', groupId);
+      console.log('[useMeshNetwork] Has attachments:', attachments?.length || 0);
+      
       const endMeasure = performanceMonitor.startMeasure("sendMessage");
       if (!meshNetworkRef.current) {
-        useMeshNetworkLogger.error(
-          "sendMessage failed: Mesh network not initialized",
-        );
+        console.error('[useMeshNetwork] SEND FAILED: Mesh network not initialized');
         throw new Error("Mesh network not initialized");
       }
+      
+      console.log('[useMeshNetwork] Mesh network ref exists:', !!meshNetworkRef.current);
+      console.log('[useMeshNetwork] Local peer ID:', meshNetworkRef.current.getLocalPeerId());
+      
+      const connectedPeers = meshNetworkRef.current.getConnectedPeers?.() || [];
+      console.log('[useMeshNetwork] Connected peers:', connectedPeers.map((p: Peer) => p.id));
 
       useMeshNetworkLogger.info(
         `sendMessage to ${recipientId}: "${content.substring(0, 50)}${content.length > 50 ? "..." : ""}"`,
@@ -855,7 +877,10 @@ export function useMeshNetwork() {
           timestamp: Date.now(),
           groupId,
         });
+        console.log('[useMeshNetwork] Sending payload:', payload);
+        console.log('[useMeshNetwork] Calling meshNetwork.sendMessage...');
         await meshNetworkRef.current.sendMessage(recipientId, payload);
+        console.log('[useMeshNetwork] ========== MESSAGE SENT SUCCESSFULLY ==========');
         endMeasure({ success: true });
       } catch (error) {
         useMeshNetworkLogger.error("Failed to send message to network:", error);
