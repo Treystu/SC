@@ -1351,17 +1351,34 @@ export function useMeshNetwork() {
             }
 
             if (signals && signals.length > 0) {
+              console.log('[useMeshNetwork] ========== SIGNALS RECEIVED ==========');
+              console.log('[useMeshNetwork] Signal count:', signals.length);
+              console.log('[useMeshNetwork] Signals:', JSON.stringify(signals, null, 2));
+              
               useMeshNetworkLogger.info(
                 `Received ${signals.length} signals from Room`,
               );
               for (const sig of signals) {
+                console.log('[useMeshNetwork] Processing signal:', {
+                  type: sig.type,
+                  from: sig.from,
+                  signalType: typeof sig.signal
+                });
+                
                 try {
                   const signalData =
                     typeof sig.signal === "string"
                       ? JSON.parse(sig.signal)
                       : sig.signal;
+                  
+                  console.log('[useMeshNetwork] Parsed signal data:', {
+                    type: signalData.type,
+                    hasSdp: !!signalData.sdp,
+                    keys: Object.keys(signalData)
+                  });
 
                   if (sig.type === "offer" || signalData.type === "offer") {
+                    console.log('[useMeshNetwork] 📥 Processing OFFER from', sig.from);
                     useMeshNetworkLogger.info(
                       `📥 Received OFFER from ${sig.from}`,
                       { signalType: signalData.type, hasSdp: !!signalData.sdp },
