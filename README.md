@@ -79,10 +79,21 @@ The `@sc/core` library provides the foundational cryptography and networking pri
 ## 🧪 Testing
 
 ```bash
-# Run core library tests
+# Run core library tests (1045+ tests)
 cd core
 npm test
+
+# Run web application tests (35+ tests)
+cd web
+npm test
 ```
+
+## 🔐 Identity System
+
+The platform uses a unified identity format:
+- **16-character uppercase hex** peer IDs derived from Ed25519 public key fingerprints
+- Consistent across all components: mesh network, room signaling, storage
+- Single identity per device, persisted in IndexedDB
 
 ## 🤝 Contributing
 
