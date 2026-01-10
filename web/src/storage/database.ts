@@ -231,7 +231,13 @@ export class DatabaseManager {
             this.db = null;
             this.initPromise = null;
           };
-          resolve();
+          // Run post-init migration to normalize IDs
+          this.migrateNormalizeIds().then(() => {
+            resolve();
+          }).catch((migrationError: Error) => {
+            console.warn("ID normalization migration failed:", migrationError);
+            resolve(); // Still resolve, migration is best-effort
+          });
         };
 
         request.onupgradeneeded = async (event) => {
@@ -252,6 +258,61 @@ export class DatabaseManager {
 
     this.initPromise = attemptInit();
     return this.initPromise;
+  }
+
+  /**
+   * Migrate existing data to normalize IDs to uppercase format
+   * This runs on every init to ensure consistency
+   */
+  private async migrateNormalizeIds(): Promise<void> {
+    if (!this.db) return;
+
+    // Check if migration already done
+    const migrationKey = "id_normalization_v1";
+    try {
+      const setting = await this.getSetting(migrationKey);
+      if (setting === true) return; // Already migrated
+    } catch {
+      // Setting doesn't exist, continue with migration
+    }
+
+    console.log("DatabaseManager: Running ID normalization migration...");
+
+    // Normalize conversations
+    const conversations = await this.getConversations();
+    for (const conv of conversations) {
+      const normalizedId = this.normalizePeerId(conv.id);
+      const normalizedContactId = conv.contactId ? this.normalizePeerId(conv.contactId) : conv.contactId;
+      
+      if (normalizedId !== conv.id || normalizedContactId !== conv.contactId) {
+        // Delete old entry and create new one with normalized ID
+        await this.deleteConversation(conv.id);
+        await this.saveConversation({
+          ...conv,
+          id: normalizedId,
+          contactId: normalizedContactId,
+        });
+      }
+    }
+
+    // Normalize contacts
+    const contacts = await this.getContacts();
+    for (const contact of contacts) {
+      const normalizedId = this.normalizePeerId(contact.id);
+      
+      if (normalizedId !== contact.id) {
+        // Delete old entry and create new one with normalized ID
+        await this.deleteContact(contact.id);
+        await this.saveContact({
+          ...contact,
+          id: normalizedId,
+        });
+      }
+    }
+
+    // Mark migration as complete
+    await this.setSetting(migrationKey, true);
+    console.log("DatabaseManager: ID normalization migration complete");
   }
 
   /**
@@ -498,10 +559,16 @@ export class DatabaseManager {
       );
     }
 
+    // Normalize ID to consistent format
+    const normalizedContact = {
+      ...contact,
+      id: this.normalizePeerId(contact.id),
+    };
+
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(["contacts"], "readwrite");
       const store = transaction.objectStore("contacts");
-      const request = store.put(contact);
+      const request = store.put(normalizedContact);
 
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
@@ -559,15 +626,29 @@ export class DatabaseManager {
   // ===== CONVERSATION OPERATIONS =====
 
   /**
+   * Normalize peer ID to consistent format (uppercase, no spaces)
+   */
+  private normalizePeerId(id: string): string {
+    return id.replace(/\s/g, "").toUpperCase();
+  }
+
+  /**
    * Save a conversation
    */
   async saveConversation(conversation: StoredConversation): Promise<void> {
     if (!this.db) await this.init();
 
+    // Normalize IDs to consistent format
+    const normalizedConversation = {
+      ...conversation,
+      id: this.normalizePeerId(conversation.id),
+      contactId: conversation.contactId ? this.normalizePeerId(conversation.contactId) : conversation.contactId,
+    };
+
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(["conversations"], "readwrite");
       const store = transaction.objectStore("conversations");
-      const request = store.put(conversation);
+      const request = store.put(normalizedConversation);
 
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
