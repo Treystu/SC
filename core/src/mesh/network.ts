@@ -794,15 +794,18 @@ export class MeshNetwork {
     content: string,
     type: MessageType = MessageType.TEXT,
   ): Promise<void> {
+    // Normalize recipient ID to uppercase for consistent matching
+    const normalizedRecipientId = recipientId.replace(/\s/g, "").toUpperCase();
+    
     console.log(
-      `[MeshNetwork] sendMessage to ${recipientId}, type=${MessageType[type]}`,
+      `[MeshNetwork] sendMessage to ${normalizedRecipientId}, type=${MessageType[type]}`,
     );
 
     const payload = new TextEncoder().encode(
       JSON.stringify({
         text: content,
         timestamp: Date.now(),
-        recipient: recipientId,
+        recipient: normalizedRecipientId,
       }),
     );
 
