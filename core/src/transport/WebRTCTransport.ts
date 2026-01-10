@@ -477,7 +477,26 @@ export class WebRTCTransport implements Transport {
     return {
       getOrCreatePeer: (id: string) => {
         if (!this.peers.has(id)) {
-          this.connect(id).catch(console.error);
+          // Create peer connection wrapper synchronously (don't call connect() which also creates data channels)
+          const connection = this.createPeerConnection(id);
+          const wrapper: PeerConnectionWrapper = {
+            peerId: id,
+            connection,
+            reliableChannel: null,
+            unreliableChannel: null,
+            state: "connecting",
+            bytesSent: 0,
+            bytesReceived: 0,
+            lastSeen: Date.now(),
+            lastRTT: 0,
+            pingTimestamp: 0,
+            rttTimeoutId: null,
+            batchBuffer: [],
+            batchBufferLength: 0,
+            batchTimeoutId: null,
+          };
+          this.peers.set(id, wrapper);
+          this.events?.onStateChange?.(id, "connecting");
         }
         const wrapper = this.peers.get(id);
         if (!wrapper) throw new Error(`Failed to create peer ${id}`);
