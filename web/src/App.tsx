@@ -980,6 +980,18 @@ function App() {
   );
 
   // Merge stored conversations with contact details
+  // Check both connected mesh peers AND discovered peers in room for online status
+  const isOnline = (peerId: string) => {
+    // Check if peer is in connected mesh
+    const isConnectedMesh = peers.some((p) => p.id === peerId);
+    // Check if peer is discovered in room (discoveredPeers is string[])
+    // Compare using prefix matching since peer IDs may be truncated
+    const isDiscoveredInRoom = discoveredPeers.some((dpId) => 
+      dpId === peerId || dpId.startsWith(peerId) || peerId.startsWith(dpId.substring(0, 8))
+    );
+    return isConnectedMesh || isDiscoveredInRoom;
+  };
+
   const displayConversations = storedConversations.map((conv) => {
     const contact = contacts.find((c) => c.id === conv.contactId);
     return {
@@ -989,7 +1001,7 @@ function App() {
       timestamp: conv.lastMessageTimestamp,
       unreadCount: conv.unreadCount,
       verified: contact?.verified ?? false,
-      online: peers.some((p) => p.id === conv.id),
+      online: isOnline(conv.id),
       isRequest: conv.metadata?.isRequest && conv.metadata?.requestStatus === 'pending',
     };
   });
@@ -1011,7 +1023,7 @@ function App() {
       timestamp: c.createdAt,
       unreadCount: 0,
       verified: c.verified ?? false,
-      online: peers.some((p) => p.id === c.id),
+      online: isOnline(c.id),
     })),
   ].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
