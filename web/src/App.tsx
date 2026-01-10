@@ -43,6 +43,23 @@ import { rateLimiter } from "@sc/core";
 import { config } from "./config";
 import { saveBootstrapPeers } from "./utils/peerBootstrap";
 
+// Extend Window interface for E2E testing helpers
+declare global {
+  interface Window {
+    __E2E__?: boolean;
+    __SC_STATUS__?: unknown;
+    generateConnectionOffer?: () => Promise<string>;
+    acceptConnectionOffer?: (offer: string) => Promise<string>;
+    connectToPeer?: (peerId: string) => Promise<void>;
+    sendMessage?: (recipientId: string, content: string, attachments?: File[], groupId?: string) => Promise<void>;
+    getDatabase?: () => unknown;
+    peers?: unknown[];
+    messages?: unknown[];
+    addContact?: (id: string, name: string) => Promise<void>;
+    resetState?: () => Promise<void>;
+  }
+}
+
 // Encryption is initialized in `main.tsx` bootstrap to ensure it's ready
 // before the app mounts. Do not initialize here to avoid races.
 
@@ -51,7 +68,7 @@ function App() {
   // Note: navigator.webdriver is read-only in Safari, so we supports window.__E2E__ override
   const isE2E =
     (typeof navigator !== "undefined" && navigator.webdriver === true) ||
-    (typeof window !== "undefined" && (window as any).__E2E__ === true);
+    (typeof window !== "undefined" && window.__E2E__ === true);
 
   const [activeRoom, setActiveRoom] = useState<string | null>(null);
   const [selectedConversation, setSelectedConversation] = useState<
@@ -181,18 +198,18 @@ function App() {
     // Always expose in non-production or if E2E is detected
     if (isE2E || import.meta.env.MODE === "development") {
       console.log("[App] Exposing E2E helpers");
-      (window as any).generateConnectionOffer = generateConnectionOffer;
-      (window as any).acceptConnectionOffer = acceptConnectionOffer;
-      (window as any).connectToPeer = connectToPeer;
-      (window as any).sendMessage = sendMessage;
-      (window as any).getDatabase = getDatabase;
-      (window as any).peers = peers;
-      (window as any).messages = messages;
-      (window as any).__SC_STATUS__ = status;
+      window.generateConnectionOffer = generateConnectionOffer;
+      window.acceptConnectionOffer = acceptConnectionOffer;
+      window.connectToPeer = connectToPeer;
+      window.sendMessage = sendMessage;
+      window.getDatabase = getDatabase;
+      window.peers = peers;
+      window.messages = messages;
+      window.__SC_STATUS__ = status;
     }
     if (isE2E) {
       // Expose helpers for Playwright
-      (window as any).addContact = async (id: string, name: string) => {
+      window.addContact = async (id: string, name: string) => {
         // Construct a partial contact object for testing
         await addContact({
           id,
@@ -201,13 +218,13 @@ function App() {
           createdAt: Date.now(),
           lastSeen: Date.now(),
           verified: false
-        } as any);
+        } as Parameters<typeof addContact>[0]);
       };
-      (window as any).resetState = async () => {
+      window.resetState = async () => {
         /* Clear DBs/Storage logic if needed */
       };
       // Expose status for tests to check connectivity
-      (window as any).__SC_STATUS__ = displayStatus;
+      window.__SC_STATUS__ = displayStatus;
       console.log(
         "[App] Exposing E2E helpers, status.localPeerId:",
         displayStatus.localPeerId,
