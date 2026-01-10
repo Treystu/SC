@@ -1720,6 +1720,15 @@ export class MeshNetwork {
   }
 
   /**
+   * Register a callback for signaling (ICE candidates, offers, answers) to be sent via external channel
+   */
+  registerSignalingCallback(
+    callback: (peerId: string, signal: { type: string; candidate?: RTCIceCandidateInit; sdp?: RTCSessionDescriptionInit }) => Promise<void>,
+  ): void {
+    this.signalingCallback = callback;
+  }
+
+  /**
    * Register a callback for outbound messages via external transport (e.g., Native BLE)
    */
   registerOutboundTransport(
