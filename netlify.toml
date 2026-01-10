@@ -65,22 +65,35 @@ Referrer-Policy = "strict-origin-when-cross-origin"
 # Permissions policy
 Permissions-Policy = "camera=(), microphone=(), geolocation=()"
 
-# JavaScript files
+# JavaScript files in assets directory (Vite build output)
 [[headers]]
-for = "/*.js"
+for = "/assets/*.js"
 [headers.values]
 Content-Type = "application/javascript; charset=utf-8"
 Cache-Control = "public, max-age=31536000, immutable"
 
-# CSS files
+# CSS files in assets directory
 [[headers]]
-for = "/*.css"
+for = "/assets/*.css"
 [headers.values]
 Content-Type = "text/css; charset=utf-8"
 Cache-Control = "public, max-age=31536000, immutable"
 
-# Cache static assets
+# Service worker at root
 [[headers]]
-for = "/assets/*"
+for = "/service-worker.js"
 [headers.values]
-Cache-Control = "public, max-age=31536000, immutable"
+Content-Type = "application/javascript; charset=utf-8"
+Cache-Control = "no-cache"
+
+# Root level JS files
+[[headers]]
+for = "/*.js"
+[headers.values]
+Content-Type = "application/javascript; charset=utf-8"
+
+# Root level CSS files
+[[headers]]
+for = "/*.css"
+[headers.values]
+Content-Type = "text/css; charset=utf-8"
