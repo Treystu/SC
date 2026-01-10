@@ -28,13 +28,17 @@ to = "/join.html"
 status = 200
 force = true
 
+# Static assets should NOT redirect
+[[redirects]]
+from = "/assets/*"
+to = "/assets/:splat"
+status = 200
+
 # Redirect all other requests to index.html for SPA routing
-# BUT exclude static assets (js, css, images, etc.)
 [[redirects]]
 from = "/*"
 to = "/index.html"
 status = 200
-force = false
 
 # Security headers
 [[headers]]

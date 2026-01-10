@@ -1359,9 +1359,29 @@ function App() {
                         <ChatView
                           conversationId={selectedConversation}
                           contactName={getContactName(selectedConversation)}
-                          isOnline={peers.some(
-                            (p) => p.id === selectedConversation,
-                          )} // Groups are always "online" effectively, or check if any member is online
+                          isOnline={(() => {
+                            // Check if peer is connected by ID
+                            const isPeerConnected = peers.some((p) => p.id === selectedConversation);
+                            
+                            // Also check if contact's stored peerId matches any connected peer
+                            const contact = contacts.find((c) => c.id === selectedConversation);
+                            const isContactPeerConnected = contact?.peerId 
+                              ? peers.some((p) => p.id === contact.peerId)
+                              : false;
+                            
+                            const isOnline = isPeerConnected || isContactPeerConnected;
+                            
+                            console.log('[App] ChatView online status check:', {
+                              conversationId: selectedConversation,
+                              isPeerConnected,
+                              isContactPeerConnected,
+                              contactPeerId: contact?.peerId,
+                              connectedPeerIds: peers.map(p => p.id),
+                              finalIsOnline: isOnline
+                            });
+                            
+                            return isOnline;
+                          })()}
                           messages={messages}
                           onSendMessage={handleSendMessage}
                           onSendVoice={handleSendVoice}
