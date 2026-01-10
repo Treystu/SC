@@ -232,7 +232,7 @@ export class WebRTCTransport implements Transport {
 
     channel.binaryType = "arraybuffer";
 
-    channel.onopen = () => {
+    const handleChannelOpen = () => {
       console.debug(`Data channel ${channel.label} opened for ${peerId}`);
       // If reliable channel is open, consider peer fully connected
       if (isReliable) {
@@ -243,6 +243,16 @@ export class WebRTCTransport implements Transport {
         this.flushBatch(peerId);
       }
     };
+
+    channel.onopen = handleChannelOpen;
+
+    // Handle case where channel is already open when received via ondatachannel
+    // This is a known WebRTC race condition - the channel may be open before
+    // the ondatachannel event handler is called
+    if (channel.readyState === "open") {
+      console.debug(`Data channel ${channel.label} already open for ${peerId}, triggering handler`);
+      handleChannelOpen();
+    }
 
     channel.onclose = () => {
       console.debug(`Data channel ${channel.label} closed for ${peerId}`);

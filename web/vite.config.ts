@@ -20,6 +20,14 @@ export default defineConfig({
   ],
   server: {
     port: 3000,
+    proxy: {
+      // Proxy Netlify functions to the deployed site for local dev
+      '/.netlify/functions': {
+        target: 'https://sovereigncommunications.netlify.app',
+        changeOrigin: true,
+        secure: true,
+      },
+    },
   },
   define: {
     // 'process.env': {}, // Let Vite handle this

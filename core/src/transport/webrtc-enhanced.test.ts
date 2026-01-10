@@ -390,7 +390,7 @@ describe('WebRTC Enhanced - Task 25: SDP Offer/Answer Exchange', () => {
   });
 
   it('should validate SDP before processing', async () => {
-    const invalidSDP = { type: 'offer' as const, sdp: 'invalid' };
+    const invalidSDP = { type: 'offer' as const, sdp: 'invalid\r\nm=application' };
 
     await expect(peer.createAnswer(invalidSDP)).rejects.toThrow();
   });
