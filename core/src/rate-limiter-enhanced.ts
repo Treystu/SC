@@ -124,6 +124,16 @@ export class TokenBucketRateLimiter {
   getTokens(key: string): number {
     return this.tokens.get(key) ?? this.maxTokens;
   }
+  
+  /**
+   * Clean up resources
+   */
+  destroy(): void {
+    if (this.refillTimer) {
+      clearInterval(this.refillTimer);
+      this.refillTimer = undefined;
+    }
+  }
 }
 
 /**
@@ -214,6 +224,16 @@ export class SlidingWindowRateLimiter {
     const windowStart = now - this.windowMs;
     const requests = this.requests.get(key) ?? [];
     return requests.filter(time => time > windowStart).length;
+  }
+  
+  /**
+   * Clean up resources
+   */
+  destroy(): void {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = undefined;
+    }
   }
 }
 

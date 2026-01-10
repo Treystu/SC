@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import DOMPurify from 'dompurify';
 
 interface Message {
   id: string;
@@ -65,8 +66,21 @@ export const MessageSearch: React.FC = () => {
   };
 
   const highlightMatch = (text: string, query: string): string => {
-    const regex = new RegExp(`(${query})`, 'gi');
-    return text.replace(regex, '<mark>$1</mark>');
+    // First, sanitize the text content to strip any existing HTML
+    const sanitizedText = DOMPurify.sanitize(text, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
+    
+    // Escape regex special characters in query to prevent injection
+    const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    
+    // Create safe regex and highlight matches
+    const regex = new RegExp(`(${escapedQuery})`, 'gi');
+    const highlighted = sanitizedText.replace(regex, '<mark>$1</mark>');
+    
+    // Final sanitization allowing only <mark> tags for highlighting
+    return DOMPurify.sanitize(highlighted, { 
+      ALLOWED_TAGS: ['mark'], 
+      ALLOWED_ATTR: [] 
+    });
   };
 
   const openDatabase = (): Promise<IDBDatabase> => {

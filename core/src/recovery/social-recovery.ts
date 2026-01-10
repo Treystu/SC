@@ -37,6 +37,13 @@ interface ResponseSharePayload {
   nonce: string; // base64 encoded nonce for encryption
 }
 
+interface RecoveryPromise {
+  resolve: (secret: Uint8Array) => void;
+  reject: (error: Error) => void;
+  fingerprint: string;
+  timeout: NodeJS.Timeout | number;
+}
+
 export class SocialRecoveryManager {
   private network: MeshNetwork;
   // Store for shares held for OTHERS. Key: fingerprint, Value: SharePayload
@@ -49,6 +56,9 @@ export class SocialRecoveryManager {
   > = new Map();
   private collectedShares: Map<string, Array<{ x: number; y: Uint8Array }>> =
     new Map();
+  
+  // Properly typed recovery promise tracker (replaces hacky (this as any) pattern)
+  private activeRecoveryPromise?: RecoveryPromise;
 
   constructor(network: MeshNetwork) {
     this.network = network;
@@ -223,12 +233,8 @@ export class SocialRecoveryManager {
         }
       }, 30000);
 
-      // Register resolver
-      // We'll check in handleMessage
-      // For now, store resolve/reject in a map?
-      // Simplification: We just poll or event based.
-      // Let's hack: attach to 'this'
-      (this as any)._recoveryPromise = {
+      // Register resolver with proper typing
+      this.activeRecoveryPromise = {
         resolve,
         reject,
         fingerprint,
@@ -248,17 +254,13 @@ export class SocialRecoveryManager {
       const data: SharePayload = JSON.parse(
         new TextDecoder().decode(message.payload),
       );
-      console.log(`Received share from ${senderId} for ${data.fingerprint}`);
-      // Store it
-      // In real app, prompt user "Do you accept backup for User X?"
+      // Store share (in production, prompt user for acceptance)
       this.heldShares.set(data.fingerprint || "unknown", data);
     } else if (type === MessageType.REQUEST_SHARE) {
       const data: RequestSharePayload = JSON.parse(
         new TextDecoder().decode(message.payload),
       );
-      console.log(
-        `Received recovery request for ${data.fingerprint} from ${senderId}`,
-      );
+      // Process recovery request
 
       const share = this.heldShares.get(data.fingerprint);
       if (share) {
@@ -298,10 +300,10 @@ export class SocialRecoveryManager {
       const data: ResponseSharePayload = JSON.parse(
         new TextDecoder().decode(message.payload),
       );
-      console.log(`Received recovery share part for ${data.fingerprint}`);
+      // Process received recovery share
 
       // Decrypt the received share using our private key
-      const promise = (this as any)._recoveryPromise;
+      const promise = this.activeRecoveryPromise;
       if (promise && promise.fingerprint === data.fingerprint) {
         try {
           const identity = this.network.getIdentity();
@@ -337,16 +339,16 @@ export class SocialRecoveryManager {
             try {
               const secret = combine(current);
               // If successful, resolve the recovery promise
-              clearTimeout(promise.timeout);
+              clearTimeout(promise.timeout as NodeJS.Timeout);
               promise.resolve(secret);
-              (this as any)._recoveryPromise = undefined;
+              this.activeRecoveryPromise = undefined;
             } catch (e) {
               // Not enough shares yet, or invalid combination
-              console.log(`Cannot combine yet: ${e}`);
+              // Silently continue collecting shares
             }
           }
         } catch (e) {
-          console.error(`Failed to decrypt share: ${e}`);
+          // Failed to decrypt share - may be corrupted or wrong key
         }
       }
     }
@@ -377,29 +379,29 @@ export class SocialRecoveryManager {
 
     const identity = this.network.getIdentity();
 
-    const header = {
+    const header: Message['header'] = {
       version: 1,
       type,
       ttl: 64,
       timestamp: Date.now(),
       senderId: identity.publicKey,
-      signature: new Uint8Array(64) as unknown as Uint8Array,
+      signature: new Uint8Array(64),
     };
 
     // Construct partial message to sign
-    const msg: Message = { header: header as any, payload };
+    const msg: Message = { header, payload };
     // Sign
     const bytes = encodeMessage(msg);
     header.signature = signMessage(bytes, identity.privateKey);
     // Re-encode with signature
-    const finalBytes = encodeMessage({ header: header as any, payload });
+    const finalBytes = encodeMessage({ header, payload });
 
     const transport = (this.network as any).transportManager;
     if (transport && typeof transport.send === "function") {
       await transport.send(to, finalBytes);
     } else {
-      // Fallback or error
-      console.error("TransportManager not accessible on network instance");
+      // TransportManager not accessible - network may not be initialized
+      throw new Error('TransportManager not available for sending recovery messages');
     }
   }
 }

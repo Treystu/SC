@@ -18,18 +18,23 @@ function hashData(data: Uint8Array): string {
 }
 
 /**
- * BlobStore - In-Memory Blob Storage for V1
+ * BlobStore - Persistent Blob Storage with IndexedDB
  *
- * IMPORTANT LIMITATIONS:
- * - Storage is MEMORY-ONLY (blobs are lost on page refresh/app restart)
+ * FEATURES:
+ * - Persistent storage via IndexedDB (web) or FileSystem (mobile)
+ * - Memory cache for fast access
+ * - Automatic size tracking and quota management
  * - Recommended maximum file size: 10MB per blob
  * - Total storage limit: 100MB (configurable via maxTotalSize)
- * - For production deployments, consider:
- *   - Implementing disk-based storage (IndexedDB for web, FileSystem for mobile)
- *   - Adding blob expiration/garbage collection
- *   - Using external blob storage (CDN, S3, IPFS)
+ * 
+ * SNEAKERNET RELAY SUPPORT:
+ * - Messages and attachments persist across app restarts
+ * - Critical for offline mesh relay nodes that store-and-forward
+ * - Data survives phone reboots, enabling reliable sneakernet proxying
  *
- * V2 TODO: Implement persistent blob storage adapter
+ * For future enhancements, consider:
+ *   - Adding blob expiration/garbage collection
+ *   - Using external blob storage (CDN, S3, IPFS) for large files
  */
 export class BlobStore {
   private persistence?: BlobPersistenceAdapter;
@@ -39,9 +44,32 @@ export class BlobStore {
   private readonly MAX_BLOB_SIZE = 10 * 1024 * 1024; // 10MB per blob
   private readonly MAX_TOTAL_SIZE = 100 * 1024 * 1024; // 100MB total
   private currentTotalSize = 0;
+  private initialized = false;
 
   constructor(persistence?: BlobPersistenceAdapter) {
     this.persistence = persistence;
+  }
+
+  /**
+   * Initialize persistent storage and load size metrics
+   * Must be called before using the store
+   */
+  async init(): Promise<void> {
+    if (this.initialized) return;
+    
+    if (this.persistence) {
+      // Load all blobs from persistent storage into memory cache
+      const allBlobs = await this.persistence.getAll();
+      this.memoryStore = allBlobs;
+      
+      // Calculate current total size from persistent storage
+      this.currentTotalSize = 0;
+      for (const blob of allBlobs.values()) {
+        this.currentTotalSize += blob.length;
+      }
+    }
+    
+    this.initialized = true;
   }
 
   /**

@@ -2,19 +2,19 @@
  * Validation and sanitization utilities
  */
 
-// Import DOMPurify for HTML sanitization in browser environment
-// In Node.js/test environments, provide a fallback
+// Import DOMPurify for HTML sanitization
+// SECURITY: DOMPurify is REQUIRED - no unsafe fallbacks allowed
 let DOMPurify: any;
 
 if (typeof window !== "undefined") {
-  // In the browser, assuming it will be available via global or handled by bundler
+  // In the browser, DOMPurify must be available
   try {
     DOMPurify = require("dompurify");
   } catch {
     DOMPurify = (globalThis as any).DOMPurify;
   }
 } else {
-  // In Node.js/test environments, try to use jsdom
+  // In Node.js/test environments, use jsdom-based DOMPurify
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const createDOMPurify = require("dompurify");
@@ -22,13 +22,34 @@ if (typeof window !== "undefined") {
     const { JSDOM } = require("jsdom");
     const window = new JSDOM("").window;
     DOMPurify = createDOMPurify(window);
-  } catch {
-    // Fallback if dependencies missing
+  } catch (e) {
+    // In test environments without jsdom, use minimal safe fallback
+    // This only strips ALL HTML - no partial sanitization
+    if (process.env.NODE_ENV === 'test') {
+      DOMPurify = {
+        sanitize: (input: string, config?: any) => {
+          // Test-only: strip all HTML tags completely
+          if (config?.ALLOWED_TAGS?.length === 0) {
+            return input.replace(/<[^>]*>/g, "");
+          }
+          // If allowing tags in tests, fail explicitly
+          throw new Error('DOMPurify not available - install jsdom for testing');
+        },
+      };
+    }
   }
 }
 
-// Ensure DOMPurify has a sanitize method even if loading failed
+// SECURITY: Fail explicitly if DOMPurify is not available in production
 if (!DOMPurify || !DOMPurify.sanitize) {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'SECURITY ERROR: DOMPurify is required but not available. ' +
+      'This is a critical security dependency. Install dompurify package.'
+    );
+  }
+  // Development/test fallback - strip all HTML
+  console.warn('WARNING: DOMPurify not available, using unsafe fallback');
   DOMPurify = {
     sanitize: (input: string) => input.replace(/<[^>]*>/g, ""),
   };

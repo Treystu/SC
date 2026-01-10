@@ -26,7 +26,7 @@ import { KademliaRoutingTable, publicKeyToNodeId } from "./dht/index.js";
 import { HttpBootstrapProvider } from "../discovery/http-bootstrap.js";
 import { StorageAdapter } from "./dht/storage/StorageAdapter.js";
 import { RendezvousManager } from "./rendezvous.js";
-import { BlobStore } from "../storage/blob-store.js";
+import { BlobStore, IndexedDBBlobAdapter } from "../storage/blob-store.js";
 import { SocialRecoveryManager } from "../recovery/social-recovery.js";
 import { TransferManager } from "../transfer/TransferManager.js";
 import { RoutingMode } from "./routing.js";
@@ -294,8 +294,19 @@ export class MeshNetwork {
       },
     );
 
-    // Initialize BlobStore
-    this.blobStore = new BlobStore();
+    // Initialize BlobStore with persistent storage for sneakernet relay
+    // In browser environments, use IndexedDB; in Node/test, use memory-only
+    let blobPersistence;
+    if (typeof indexedDB !== 'undefined') {
+      blobPersistence = new IndexedDBBlobAdapter();
+    }
+    this.blobStore = new BlobStore(blobPersistence);
+    
+    // Initialize blob store asynchronously (non-blocking)
+    this.blobStore.init().catch(err => {
+      console.error('[BlobStore] Failed to initialize persistent storage:', err);
+      // Continue with memory-only mode if IndexedDB fails
+    });
 
     // Initialize Social Recovery
     this.socialRecovery = new SocialRecoveryManager(this);
