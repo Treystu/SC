@@ -485,10 +485,12 @@ export function useMeshNetwork() {
             const idObj = network.getIdentity();
             if (idObj && idObj.publicKey) {
               const pk = idObj.publicKey as Uint8Array;
+              // Use 8 bytes (16 hex chars) to match peer ID format
               localId = Array.from(pk)
                 .slice(0, 8)
                 .map((b) => b.toString(16).padStart(2, "0"))
-                .join("");
+                .join("")
+                .toUpperCase();
             }
           }
         } catch (e) {

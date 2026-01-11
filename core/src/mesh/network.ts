@@ -331,9 +331,12 @@ export class MeshNetwork {
       this.messagesReceived++;
       this.bytesTransferred += message.payload.byteLength;
 
+      // Extract sender ID - use first 16 chars (8 bytes) in uppercase to match peer ID format
       const senderId = Array.from(message.header.senderId)
         .map((b) => b.toString(16).padStart(2, "0"))
-        .join("");
+        .join("")
+        .substring(0, 16)
+        .toUpperCase();
 
       // Handle Control Messages
       if (message.header.type === MessageType.CONTROL_PING) {
@@ -1097,7 +1100,8 @@ export class MeshNetwork {
   // --- Blob Handlers ---
 
   private async handleBlobMessage(message: Message): Promise<void> {
-    const senderId = bytesToHex(message.header.senderId);
+    // Normalize sender ID to 16-char uppercase format
+    const senderId = bytesToHex(message.header.senderId).substring(0, 16).toUpperCase();
 
     if (message.header.type === MessageType.REQUEST_BLOB) {
       try {
