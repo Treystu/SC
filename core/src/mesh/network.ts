@@ -833,10 +833,10 @@ export class MeshNetwork {
 
     // Send via mesh
     const encodedMessage = encodeMessage(message);
-    const nextHop = this.routingTable.getNextHop(recipientId);
+    const nextHop = this.routingTable.getNextHop(normalizedRecipientId);
 
     console.log(
-      `[MeshNetwork] Route lookup: nextHop=${nextHop || "none"}, connectedPeers=${this.routingTable.getAllPeers().filter((p) => p.state === "connected").length}`,
+      `[MeshNetwork] Route lookup for ${normalizedRecipientId}: nextHop=${nextHop || "none"}, connectedPeers=${this.routingTable.getAllPeers().filter((p) => p.state === "connected").length}`,
     );
 
     if (nextHop) {

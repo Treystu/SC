@@ -160,6 +160,10 @@ export class RoutingTable {
    * Add or update a peer
    */
   addPeer(peer: Peer): void {
+    // Normalize peer ID to uppercase for consistent matching
+    const normalizedId = peer.id.replace(/\s/g, "").toUpperCase();
+    peer.id = normalizedId;
+    
     // Ensure peer has required metadata
     if (!peer.state) {
       peer.state = PeerState.CONNECTED;
@@ -178,11 +182,11 @@ export class RoutingTable {
       };
     }
 
-    this.peers.set(peer.id, peer);
+    this.peers.set(normalizedId, peer);
     // Direct route to connected peer
-    this.routes.set(peer.id, {
-      destination: peer.id,
-      nextHop: peer.id,
+    this.routes.set(normalizedId, {
+      destination: normalizedId,
+      nextHop: normalizedId,
       hopCount: 0,
       timestamp: Date.now(),
       metrics: {
