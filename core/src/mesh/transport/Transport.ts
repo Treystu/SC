@@ -112,15 +112,22 @@ export class TransportManager {
     data: Uint8Array,
     preferredTransport?: string,
   ): Promise<void> {
+    // Normalize peer ID for consistent lookup
+    const normalizedPeerId = peerId.replace(/\s/g, "").toUpperCase();
+    
+    console.log(`[TransportManager] send() to ${normalizedPeerId}, data size: ${data.length}`);
+    
     // 1. Try preferred
     if (preferredTransport) {
       const transport = this.transports.get(preferredTransport);
       if (transport) {
         try {
           // Check if connected before sending?
-          const state = transport.getConnectionState(peerId);
+          const state = transport.getConnectionState(normalizedPeerId);
+          console.log(`[TransportManager] Preferred transport ${preferredTransport} state for ${normalizedPeerId}: ${state}`);
           if (state === "connected") {
-            await transport.send(peerId, data);
+            await transport.send(normalizedPeerId, data);
+            console.log(`[TransportManager] Sent via preferred transport ${preferredTransport}`);
             return;
           }
         } catch (e) {
@@ -136,12 +143,15 @@ export class TransportManager {
     for (const transport of this.transports.values()) {
       if (transport.name === preferredTransport) continue;
 
-      const state = transport.getConnectionState(peerId);
+      const state = transport.getConnectionState(normalizedPeerId);
+      console.log(`[TransportManager] Transport ${transport.name} state for ${normalizedPeerId}: ${state}`);
       if (state === "connected") {
         try {
-          await transport.send(peerId, data);
+          await transport.send(normalizedPeerId, data);
+          console.log(`[TransportManager] Sent via transport ${transport.name}`);
           return;
         } catch (e) {
+          console.warn(`[TransportManager] Failed to send via ${transport.name}:`, e);
           // Continue
         }
       }
@@ -150,8 +160,9 @@ export class TransportManager {
     // 3. Last ditch: try ANY transport even if we don't think we're connected
     // (UDP-like behavior or auto-connect?)
     // No, standard is to fail if not connected.
+    console.error(`[TransportManager] No connected transport found for ${normalizedPeerId}`);
     throw new Error(
-      `Failed to send message to ${peerId}: Peer not connected via any transport.`,
+      `Failed to send message to ${normalizedPeerId}: Peer not connected via any transport.`,
     );
   }
 
