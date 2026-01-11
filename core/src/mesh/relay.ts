@@ -150,14 +150,18 @@ export class MessageRelay {
 
     // Step 1: Check if we've seen this message before (deduplication)
     const hash = messageHash(message);
+    console.log(`[MessageRelay] Processing message from ${fromPeerId}, type=${message.header.type}, hash=${hash.substring(0, 8)}`);
+    
     if (this.routingTable.hasSeenMessage(hash)) {
       this.stats.messagesDuplicate++;
+      console.log(`[MessageRelay] Dropping duplicate message ${hash.substring(0, 8)}`);
       return; // Drop duplicate
     }
 
     // Step 2: Check for routing loops
     if (this.detectLoop(hash, fromPeerId)) {
       this.stats.loopsDetected++;
+      console.log(`[MessageRelay] Dropping looped message ${hash.substring(0, 8)}`);
       return; // Drop looped message
     }
 
@@ -167,22 +171,29 @@ export class MessageRelay {
     // Step 3: Check TTL
     if (message.header.ttl === 0) {
       this.stats.messagesExpired++;
+      console.log(`[MessageRelay] Dropping expired message (TTL=0)`);
       return; // Drop expired message
     }
 
     // Step 4: Check flood rate limit
     if (!this.checkFloodRateLimit(fromPeerId)) {
+      console.log(`[MessageRelay] Dropping message due to flood rate limit`);
       return; // Drop if flooding too fast
     }
 
     // Step 5: Determine message relevance and forwarding policy
     const isBroadcast = this.isBroadcastMessage(message.header.type);
     const isTarget = this.isMessageForSelf(message);
+    
+    console.log(`[MessageRelay] Message analysis: isBroadcast=${isBroadcast}, isTarget=${isTarget}, localPeerId=${this.localPeerId}`);
 
     // Deliver to self if we are target or it's a broadcast
     if (isTarget || isBroadcast) {
       if (isTarget) this.stats.messagesForSelf++;
+      console.log(`[MessageRelay] ========== DELIVERING MESSAGE TO SELF ==========`);
       this.onMessageForSelfCallback?.(message);
+    } else {
+      console.log(`[MessageRelay] Message NOT for self, will forward`);
     }
 
     // Determine if we should stop forwarding (Unicast to us)

@@ -762,19 +762,26 @@ export class WebRTCTransport implements Transport {
   }
 
   async send(peerId: TransportPeerId, payload: Uint8Array): Promise<void> {
+    console.log(`[WebRTCTransport] send() called for peer ${peerId}, payload size: ${payload.length}`);
+    
     if (!this.isRunning) {
+      console.error(`[WebRTCTransport] Transport is not running!`);
       throw new Error("Transport is not running");
     }
 
     const wrapper = this.peers.get(peerId);
     if (!wrapper) {
+      console.error(`[WebRTCTransport] Peer ${peerId} not found in peers map. Available peers: ${Array.from(this.peers.keys()).join(', ')}`);
       throw new Error(`Peer ${peerId} is not connected`);
     }
 
     const channel = wrapper.reliableChannel;
     if (!channel || (channel.readyState !== "open" && channel.readyState !== "connecting")) {
+      console.error(`[WebRTCTransport] Data channel to ${peerId} not ready. State: ${channel?.readyState || 'no channel'}`);
       throw new Error(`Data channel to ${peerId} is not ready`);
     }
+    
+    console.log(`[WebRTCTransport] Data channel state: ${channel.readyState}, bufferedAmount: ${channel.bufferedAmount}`);
 
     // Batching Logic
     // We use Nagle-like algorithm: Buffer small messages, send if buffer full or timeout
