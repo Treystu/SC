@@ -1506,7 +1506,11 @@ export function useMeshNetwork() {
 
         pollLoop();
       } catch (error) {
-        useMeshNetworkLogger.error("Failed to join room:", error);
+        // Extract meaningful error info for logging
+        const errorInfo = error instanceof Error 
+          ? { message: error.message, name: error.name, stack: error.stack?.split('\n').slice(0, 3).join('\n') }
+          : String(error);
+        useMeshNetworkLogger.error("Failed to join room:", errorInfo);
         setJoinError(error instanceof Error ? error.message : String(error));
         setIsJoinedToRoom(false);
       }

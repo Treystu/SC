@@ -59,13 +59,19 @@ export class RoomClient {
     } catch (error) {
       const isNetworkError =
         error instanceof TypeError && error.message === "Failed to fetch";
+      
+      // Extract meaningful error info for logging
+      const errorInfo = error instanceof Error 
+        ? { message: error.message, name: error.name, stack: error.stack }
+        : String(error);
+      
       if (isNetworkError) {
         console.warn(
           `RoomClient ${action} network error (offline or server down):`,
-          error,
+          errorInfo,
         );
       } else {
-        console.error(`RoomClient ${action} error:`, error);
+        console.error(`RoomClient ${action} error:`, errorInfo);
       }
       throw error;
     }
