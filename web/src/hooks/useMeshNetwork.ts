@@ -162,10 +162,11 @@ export function useMeshNetwork() {
             const data = JSON.parse(payload);
             console.log('[useMeshNetwork] Parsed data:', data);
             
-            const senderId = Array.from(message.header.senderId as Uint8Array)
+            // Extract sender ID from public key - use first 16 chars (8 bytes) in uppercase to match peer ID format
+            const senderIdRaw = Array.from(message.header.senderId as Uint8Array)
               .map((b) => (b as number).toString(16).padStart(2, "0"))
-              .join("")
-              .substring(0, 8);
+              .join("");
+            const senderId = senderIdRaw.substring(0, 16).toUpperCase();
             
             console.log('[useMeshNetwork] Sender ID:', senderId);
             console.log('[useMeshNetwork] Local Peer ID:', network.getLocalPeerId());
