@@ -79,20 +79,22 @@ export class ErrorTracker {
 const isProd =
   typeof process !== "undefined"
     ? process.env.NODE_ENV === "production"
-    : typeof import.meta !== "undefined" && (import.meta as any).env?.PROD;
+    : typeof window !== "undefined" && (window as any).__PROD__
+      ? (window as any).__PROD__
+      : false;
 
 const sentryDsn =
   typeof process !== "undefined"
     ? process.env.VITE_SENTRY_DSN
-    : typeof import.meta !== "undefined"
-      ? (import.meta as any).env?.VITE_SENTRY_DSN
+    : typeof window !== "undefined" && (window as any).__VITE_SENTRY_DSN__
+      ? (window as any).__VITE_SENTRY_DSN__
       : undefined;
 
 const environment =
   typeof process !== "undefined"
     ? process.env.NODE_ENV
-    : typeof import.meta !== "undefined"
-      ? (import.meta as any).env?.MODE
+    : typeof window !== "undefined" && (window as any).__DEV__
+      ? "development"
       : undefined;
 
 if (isProd && sentryDsn && environment) {

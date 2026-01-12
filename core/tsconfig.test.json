@@ -2,9 +2,12 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "types": ["node", "jest"],
-    "module": "ESNext",
-    "moduleResolution": "node"
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "target": "ES2020"
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "**/*.test.ts", "**/*.test.mts"],
   "exclude": ["node_modules", "dist"]
 }

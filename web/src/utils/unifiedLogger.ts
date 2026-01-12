@@ -76,6 +76,10 @@ function getSourceColor(source: LogSource): string {
   return colors[source] || '#9E9E9E';
 }
 
+function formatMessage(source: LogSource, message: string): string {
+  return `[${source}] ${message}`;
+}
+
 function getLevelStyle(level: LogLevel): string {
   const styles = {
     'DEBUG': 'color: #9E9E9E; font-weight: normal;',

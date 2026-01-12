@@ -2,9 +2,7 @@
   "name": "@sc/core",
   "version": "0.1.0",
   "description": "Core cryptography and protocol implementation for Sovereign Communications",
-  "type": "module",
   "main": "dist/index.js",
-  "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
@@ -15,7 +13,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "NODE_OPTIONS='--experimental-vm-modules --no-warnings' npx jest",
+    "test": "NODE_OPTIONS='--experimental-vm-modules --no-warnings' npx jest --config jest.config.js",
     "dev": "tsc --watch"
   },
   "dependencies": {

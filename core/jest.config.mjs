@@ -1,4 +1,8 @@
-module.exports = {
+/**
+ * Jest configuration for ES modules
+ */
+
+export default {
   testEnvironment: 'node',
   roots: ['<rootDir>/src'],
   testMatch: [
@@ -33,23 +37,20 @@ module.exports = {
   resetMocks: true,
   restoreMocks: true,
   forceExit: true,
-    testPathIgnorePatterns: [
-      '/node_modules/',
-      '/dist/',
-      '/tests/.*\\.(e2e|integration|playwright|visual)\\.test\\.(ts|js|mjs)$',
-      '/web/src/.*__tests__/.*\\.(e2e|playwright|visual)\\.test\\.(ts|js|mjs)$',
-      '/core/src/.*\\.(e2e|playwright|visual)\\.test\\.(ts|js|mjs)$',
-      '/tests/.*vitest.*',
-      '/tests/.*@playwright/test.*',
-      '/tests/scripts/',
-    ],
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/dist/',
+    '/tests/.*\\.(e2e|integration|playwright|visual)\\.test\\.(ts|js|mjs)$',
+    '/web/src/.*__tests__/.*\\.(e2e|playwright|visual)\\.test\\.(ts|js|mjs)$',
+    '/core/src/.*\\.(e2e|playwright|visual)\\.test\\.(ts|js|mjs)$',
+    '/tests/.*vitest.*',
+    '/tests/.*@playwright/test.*',
+    '/tests/scripts/',
+  ],
   extensionsToTreatAsEsm: ['.ts', '.tsx', '.test.ts'],
   setupFilesAfterEnv: ['<rootDir>/jest.setup.cjs'],
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
-    // NOTE: Removed jest mocks for @noble libraries because they use fake crypto implementations
-    // Tests that need real crypto (like test-vectors.test.ts) should use actual @noble libraries
-    // Only keep mocks for specific utilities if needed by non-crypto tests
   },
   modulePathIgnorePatterns: ['<rootDir>/dist/'],
   preset: 'ts-jest/presets/default-esm',
@@ -68,7 +69,6 @@ module.exports = {
     '/dist/'
   ],
   injectGlobals: true,
-  // Add support for ES modules
   globals: {
     'ts-jest': {
       useESM: true,

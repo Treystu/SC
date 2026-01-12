@@ -80,6 +80,14 @@ export class MeshNetwork {
   public socialRecovery: SocialRecoveryManager;
   public transferManager: TransferManager;
 
+  // Connection monitoring and recovery
+  private connectionHealthCheckInterval?: NodeJS.Timeout;
+  private readonly HEALTH_CHECK_INTERVAL = 15000; // 15 seconds
+  private readonly CONNECTION_TIMEOUT = 45000; // 45 seconds
+  private readonly MAX_CONNECTION_ATTEMPTS = 3;
+  private connectionAttempts: Map<string, number> = new Map();
+  private lastConnectionAttempt: Map<string, number> = new Map();
+
   // Callbacks
   private messageListeners: Set<(message: Message) => void> = new Set();
   private peerConnectedListeners: Set<(peerId: string) => void> = new Set();
@@ -1741,12 +1749,108 @@ export class MeshNetwork {
     await this.transportManager.start();
     this.startHeartbeat();
     this.startSessionPresence();
+    this.startConnectionHealthMonitoring();
+  }
+
+  /**
+   * Start connection health monitoring for rock-solid connections
+   */
+  private startConnectionHealthMonitoring(): void {
+    if (this.connectionHealthCheckInterval) {
+      clearInterval(this.connectionHealthCheckInterval);
+    }
+
+    this.connectionHealthCheckInterval = setInterval(() => {
+      this.performConnectionHealthCheck();
+    }, this.HEALTH_CHECK_INTERVAL);
+
+    console.log('[MeshNetwork] 🔍 Started connection health monitoring');
+  }
+
+  /**
+   * Perform comprehensive connection health check
+   */
+  private performConnectionHealthCheck(): void {
+    const now = Date.now();
+    const connectedPeers = this.routingTable.getAllPeers().filter(p => p.state === 'connected');
+    
+    console.log(`[MeshNetwork] 💓 Health check: ${connectedPeers.length} connected peers`);
+
+    for (const peer of connectedPeers) {
+      const lastSeen = peer.lastSeen || 0;
+      const connectionAge = now - lastSeen;
+      const attempts = this.connectionAttempts.get(peer.id) || 0;
+      
+      // Check for stale connections
+      if (connectionAge > this.CONNECTION_TIMEOUT) {
+        console.warn(`[MeshNetwork] ⚠️ Stale connection detected for ${peer.id} (${connectionAge}ms ago)`);
+        
+        if (attempts < this.MAX_CONNECTION_ATTEMPTS) {
+          console.log(`[MeshNetwork] 🔄 Attempting to recover connection to ${peer.id}`);
+          this.attemptConnectionRecovery(peer.id);
+        } else {
+          console.error(`[MeshNetwork] 💥 Too many failed attempts for ${peer.id}, disconnecting`);
+          this.routingTable.removePeer(peer.id);
+          this.peerDisconnectedListeners.forEach(listener => listener(peer.id));
+        }
+      } else {
+        // Reset connection attempts for healthy connections
+        this.connectionAttempts.delete(peer.id);
+        this.lastConnectionAttempt.delete(peer.id);
+      }
+    }
+  }
+
+  /**
+   * Attempt to recover a failing connection
+   */
+  private async attemptConnectionRecovery(peerId: string): Promise<void> {
+    const attempts = (this.connectionAttempts.get(peerId) || 0) + 1;
+    this.connectionAttempts.set(peerId, attempts);
+    this.lastConnectionAttempt.set(peerId, Date.now());
+
+    try {
+      console.log(`[MeshNetwork] 🔄 Recovery attempt ${attempts}/${this.MAX_CONNECTION_ATTEMPTS} for ${peerId}`);
+      
+      // Remove old peer entry
+      this.routingTable.removePeer(peerId);
+      
+      // Try to reconnect via transport
+      await this.transportManager.connect(peerId);
+      
+      // Wait a bit for connection to establish
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Check if connection was successful
+      const peer = this.routingTable.getPeer(peerId);
+      if (peer && peer.state === 'connected') {
+        console.log(`[MeshNetwork] ✅ Successfully recovered connection to ${peerId}`);
+        this.connectionAttempts.delete(peerId);
+        this.lastConnectionAttempt.delete(peerId);
+      } else {
+        throw new Error('Connection not established after recovery attempt');
+      }
+    } catch (error) {
+      console.error(`[MeshNetwork] ❌ Recovery attempt ${attempts} failed for ${peerId}:`, error);
+      
+      if (attempts >= this.MAX_CONNECTION_ATTEMPTS) {
+        console.error(`[MeshNetwork] 💥 Giving up on connection to ${peerId} after ${attempts} attempts`);
+        this.routingTable.removePeer(peerId);
+        this.peerDisconnectedListeners.forEach(listener => listener(peerId));
+      }
+    }
   }
 
   /**
    * Stop the network
    */
   async stop(): Promise<void> {
+    // Clean up connection health monitoring
+    if (this.connectionHealthCheckInterval) {
+      clearInterval(this.connectionHealthCheckInterval);
+      this.connectionHealthCheckInterval = undefined;
+    }
+    
     this.shutdown();
   }
 

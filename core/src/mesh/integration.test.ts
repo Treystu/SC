@@ -3,9 +3,9 @@
  * Tests routing table, message relay, and network integration
  */
 
-import { RoutingTable, PeerState, createPeer } from '../mesh/routing';
-import { MessageRelay } from '../mesh/relay';
-import { MeshNetwork } from '../mesh/network';
+import { RoutingTable, PeerState, createPeer, Peer } from './routing';
+import { MessageRelay } from './relay';
+import { MeshNetwork } from './network';
 import { MessageType, encodeMessage, Message } from '../protocol/message';
 import { generateIdentity } from '../crypto/primitives';
 
