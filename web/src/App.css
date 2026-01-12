@@ -1,3 +1,26 @@
+.e2e-debug-banner {
+  background: red;
+  color: white;
+  padding: 8px;
+  font-weight: bold;
+  z-index: 9999;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+}
+
+.session-invalidated-banner {
+  background-color: var(--accent-warning);
+  color: black;
+  z-index: 10000;
+}
+
+.session-invalidated-cta {
+  background-color: black;
+  color: white;
+  border: none;
+}
 /* Skip link for keyboard navigation */
 .skip-link {
   position: absolute;
@@ -35,8 +58,8 @@
   padding: 1rem 1.5rem;
   padding: 1rem 1.5rem;
   background-color: var(--header-bg);
-  backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--border-color);
   z-index: 20;
 }
@@ -73,6 +96,7 @@
   flex-direction: column;
   background-color: var(--sidebar-bg);
   border-right: 1px solid var(--border-color);
+  -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
   transition: transform 0.3s var(--ease-spring);
 }
@@ -112,6 +136,7 @@
   margin-bottom: 1rem;
   background: linear-gradient(to right, #fff, #a1a1aa);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
@@ -228,6 +253,7 @@
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.6);
+  -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   z-index: 1000;
   display: flex;
@@ -316,6 +342,7 @@
   margin-bottom: 0.5rem;
   background: linear-gradient(to right, #fff, #94a3b8);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
@@ -331,8 +358,8 @@
 
 .dashboard-card {
   background: rgba(20, 22, 25, 0.6);
-  backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   padding: 1.5rem;

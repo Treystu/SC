@@ -1257,6 +1257,7 @@ export function useMeshNetwork() {
           navigator.webdriver === true);
       setJoinError(null);
       setRoomMessages([]);
+      setDiscoveredPeers([]);
       setIsJoinedToRoom(true);
 
       try {

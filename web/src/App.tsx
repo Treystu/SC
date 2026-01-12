@@ -48,12 +48,20 @@ import { generateNewIdentity } from "./services/mesh-network-service";
 declare global {
   interface Window {
     __E2E__?: boolean;
-    __SC_STATUS__?: unknown;
+    __SC_STATUS__?: {
+      localPeerId?: string;
+      isConnected?: boolean;
+      peerCount?: number;
+      joinError?: string | null;
+      connectionQuality?: unknown;
+      initializationError?: string;
+      isSessionInvalidated?: boolean;
+    };
     generateConnectionOffer?: () => Promise<string>;
     acceptConnectionOffer?: (offer: string) => Promise<string>;
     connectToPeer?: (peerId: string) => Promise<void>;
     sendMessage?: (recipientId: string, content: string, attachments?: File[], groupId?: string) => Promise<void>;
-    getDatabase?: () => unknown;
+    getDatabase?: () => Database;
     peers?: unknown[];
     messages?: unknown[];
     addContact?: (id: string, name: string) => Promise<void>;
@@ -61,7 +69,7 @@ declare global {
     e2eCreateIdentity?: (displayName?: string) => Promise<void>;
     joinRoom?: (url: string) => Promise<void>;
     leaveRoom?: () => void;
-    discoveredPeers?: unknown[];
+    discoveredPeers?: string[];
     isJoinedToRoom?: boolean;
   }
 }
@@ -147,7 +155,7 @@ function App() {
         if (onboardingComplete === true) {
           setShowOnboarding(false);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Failed to check onboarding status:", error);
       }
     };
@@ -192,7 +200,7 @@ function App() {
           handleUnhandledRejection,
         );
       };
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("[App] useEffect: Setup logger error:", error);
     }
     console.log("[App] useEffect: Setup logger completed");
@@ -200,34 +208,54 @@ function App() {
 
   // Expose helpers for E2E tests
   useEffect(() => {
-    // Always expose in non-production or if E2E is detected
-    if (isE2E || import.meta.env.MODE === "development") {
-      console.log("[App] Exposing E2E helpers");
-      window.generateConnectionOffer = generateConnectionOffer;
-      window.acceptConnectionOffer = acceptConnectionOffer;
-      window.connectToPeer = connectToPeer;
-      window.sendMessage = sendMessage;
-      window.joinRoom = joinRoom;
-      window.leaveRoom = leaveRoom;
-      window.getDatabase = getDatabase;
-      window.peers = peers;
-      window.messages = messages;
-      window.discoveredPeers = discoveredPeers;
-      window.isJoinedToRoom = isJoinedToRoom;
-      window.__SC_STATUS__ = status;
-    }
-    if (isE2E) {
-      // Expose helpers for Playwright
-      window.addContact = async (id: string, name: string) => {
-        // Construct a partial contact object for testing
-        await addContact({
-          id,
-          publicKey: "test-key", 
-          displayName: name,
-          createdAt: Date.now(),
-          lastSeen: Date.now(),
-          verified: false
-        } as Parameters<typeof addContact>[0]);
+    if (isE2E || process.env.NODE_ENV === "development") {
+      const w = window as typeof window & {
+        generateConnectionOffer?: typeof generateConnectionOffer;
+        acceptConnectionOffer?: typeof acceptConnectionOffer;
+        connectToPeer?: typeof connectToPeer;
+        sendRoomMessage?: typeof sendRoomMessage;
+        e2eCreateIdentity?: (displayName: string) => Promise<void>;
+        __SC_RESET_MESH__?: () => void;
+        __sc_identity_fingerprint?: string;
+      };
+      w.generateConnectionOffer = generateConnectionOffer;
+      w.acceptConnectionOffer = acceptConnectionOffer;
+      w.connectToPeer = connectToPeer;
+      w.sendRoomMessage = sendRoomMessage;
+      w.leaveRoom = leaveRoom;
+      w.getDatabase = getDatabase;
+      w.peers = peers;
+      w.messages = messages;
+      w.discoveredPeers = discoveredPeers;
+      w.isJoinedToRoom = isJoinedToRoom;
+      w.__SC_STATUS__ = status;
+      // Expose a reset helper for E2E offline/online tests
+      const closePeerLike = (value: unknown) => {
+        if (!value || typeof value !== "object") return;
+        const obj = value as { close?: () => void; connection?: { close?: () => void } };
+        if (typeof obj.close === "function") {
+          try {
+            obj.close();
+          } catch {
+            // ignore
+          }
+          return;
+        }
+        const conn = obj.connection;
+        if (conn && typeof conn.close === "function") {
+          try {
+            conn.close();
+          } catch {
+            // ignore
+          }
+        }
+      };
+
+      w.__SC_RESET_MESH__ = () => {
+        // Force disconnect all peers and clear state
+        Object.values(peers as Record<string, unknown>).forEach(closePeerLike);
+        window.sessionStorage.clear();
+        window.localStorage.clear();
       };
       window.resetState = async () => {
         /* Clear DBs/Storage logic if needed */
@@ -247,8 +275,7 @@ function App() {
     generateConnectionOffer,
     acceptConnectionOffer,
     connectToPeer,
-    sendMessage,
-    joinRoom,
+    sendRoomMessage,
     leaveRoom,
     discoveredPeers,
     isJoinedToRoom,
@@ -267,7 +294,7 @@ function App() {
       if (status.localPeerId) {
         logger.setPeerId(status.localPeerId);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("[App] useEffect: Update peer ID error:", error);
     }
     console.log("[App] useEffect: Update peer ID completed");
@@ -299,12 +326,13 @@ function App() {
             }),
           );
           // Expose fingerprint for test selectors
-          (window as any).__sc_identity_fingerprint = fingerprint;
+          (window as typeof window & { __sc_identity_fingerprint?: string }).__sc_identity_fingerprint =
+            fingerprint;
           console.log("[App] Identity synced, fingerprint:", fingerprint);
         } else {
           console.log("[App] No identity found. Waiting for onboarding.");
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("[App] useEffect: Identity sync error:", error);
       }
     };
@@ -335,11 +363,12 @@ function App() {
           "show-notification",
           handleToast as EventListener,
         );
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("[App] useEffect: Toast handler error:", error);
     }
     console.log("[App] useEffect: Toast handler completed");
   }, []);
+
   const autoJoinedRef = useRef(false);
 
   // Invite system - call useInvite at top level (hooks must be at top level)
@@ -613,7 +642,7 @@ function App() {
           });
         }
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Failed to process pending invite:", error);
       announce.message(
         "Failed to process invite. The invite may be invalid or expired.",
@@ -662,7 +691,7 @@ function App() {
         setSelectedConversation(null);
       }
       announce.message("Conversation deleted", "polite");
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Failed to delete conversation:", error);
       announce.message("Failed to delete conversation", "assertive");
     }
@@ -774,7 +803,7 @@ function App() {
       createdAt: Date.now(),
       metadata: {
         displayName: finalName,
-      } as any,
+      },
     });
 
     recentConversationNamesRef.current.set(finalPeerId, finalName);
@@ -822,7 +851,7 @@ function App() {
       refreshConversations();
       setSelectedConversation(remotePeerId);
       announce.message(`Connected to ${name}`, "polite");
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Failed to connect to peer from offer:", error);
       announce.message(`Failed to connect to ${name}`, "assertive");
     }
@@ -879,7 +908,7 @@ function App() {
               attachments,
               group.id,
             );
-          } catch (error) {
+          } catch (error: unknown) {
             console.error(
               `Failed to send to group member ${recipientId}:`,
               error,
@@ -907,7 +936,7 @@ function App() {
               recipientId: selectedConversation,
               type: "text",
               status: "sent",
-            } as any);
+            });
 
             if (isE2E) {
               console.log("[E2E] UI persisted message", {
@@ -918,18 +947,18 @@ function App() {
 
             const existingConv = await db.getConversation(selectedConversation);
             if (existingConv) {
-              await db.saveConversation({
+              const updated = {
                 ...existingConv,
                 lastMessageTimestamp: ts,
                 lastMessageId: id,
-              } as any);
-
+              };
               if (isE2E) {
                 console.log("[E2E] UI updated conversation lastMessage", {
-                  conversationId: selectedConversation,
-                  lastMessageId: id,
+                  existingConv,
+                  updated,
                 });
               }
+              await db.saveConversation(updated);
             }
           } catch {
             if (isE2E) {
@@ -946,7 +975,7 @@ function App() {
           setTimeout(refreshConversations, 100);
         } catch (error) {
           console.error("Error sending message via hook:", error);
-          alert(`Failed to send message: ${error}`);
+          alert(`Failed to send message: ${error instanceof Error ? error.message : String(error)}`);
         }
       }
     } else {
@@ -969,7 +998,7 @@ function App() {
       for (const recipientId of recipients) {
         try {
           await sendReaction(messageId, emoji, recipientId, group.id);
-        } catch (error) {
+        } catch (error: unknown) {
           console.error(
             `Failed to send reaction to group member ${recipientId}:`,
             error,
@@ -980,9 +1009,13 @@ function App() {
       // 1:1
       try {
         await sendReaction(messageId, emoji, selectedConversation);
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Failed to send reaction:", error);
-        alert(`Failed to send reaction: ${error}`);
+        if (error instanceof Error) {
+          alert(`Failed to send reaction: ${error.message}`);
+        } else {
+          alert(`Failed to send reaction: ${String(error)}`);
+        }
       }
     }
   };
@@ -1002,7 +1035,7 @@ function App() {
       for (const recipientId of recipients) {
         try {
           await sendVoice(recipientId, audioBlob, undefined, group.id);
-        } catch (error) {
+        } catch (error: unknown) {
           console.error(
             `Failed to send voice to group member ${recipientId}:`,
             error,
@@ -1015,7 +1048,7 @@ function App() {
         await sendVoice(selectedConversation, audioBlob);
       } catch (error) {
         console.error("Failed to send voice:", error);
-        alert(`Failed to send voice: ${error}`);
+        alert(`Failed to send voice: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
   };
@@ -1054,7 +1087,7 @@ function App() {
           await db.updateUnreadCount(id, 0);
           refreshConversations();
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Failed to reset unread count:", error);
       }
     },
@@ -1135,8 +1168,8 @@ function App() {
     if (group) return group.name;
 
     const conversation = storedConversations.find((c) => c.id === id);
-    if (conversation && (conversation as any).metadata) {
-      const md: any = (conversation as any).metadata;
+    if (conversation && conversation.metadata) {
+      const md = conversation.metadata as { displayName?: string };
       if (typeof md.displayName === "string" && md.displayName.trim()) {
         return md.displayName;
       }
@@ -1187,20 +1220,7 @@ function App() {
   return (
     <>
       {isE2E && (
-        <div
-          style={{
-            background: "red",
-            color: "white",
-            padding: 8,
-            fontWeight: "bold",
-            zIndex: 9999,
-            position: "fixed",
-            top: 0,
-            left: 0,
-            width: "100%",
-          }}
-          data-testid="e2e-debug-banner"
-        >
+        <div className="e2e-debug-banner" data-testid="e2e-debug-banner">
           E2E MODE: React App Mounted
         </div>
       )}
@@ -1227,15 +1247,7 @@ function App() {
           )}
 
           {status.isSessionInvalidated && (
-            <div
-              className="error-banner"
-              role="alert"
-              style={{
-                backgroundColor: "var(--accent-warning)",
-                color: "black",
-                zIndex: 10000,
-              }}
-            >
+            <div className="error-banner session-invalidated-banner" role="alert">
               <div className="error-content">
                 <h3>⚠️ Session Active Elsewhere</h3>
                 <p>
@@ -1244,12 +1256,7 @@ function App() {
                 </p>
                 <button
                   onClick={() => window.location.reload()}
-                  className="btn btn-primary"
-                  style={{
-                    backgroundColor: "black",
-                    color: "white",
-                    border: "none",
-                  }}
+                  className="btn btn-primary session-invalidated-cta"
                 >
                   Use Here Instead
                 </button>
@@ -1379,15 +1386,9 @@ function App() {
                           </button>
                           <button
                             onClick={() => setShowHelp(true)}
-                            className="help-btn"
+                            className="help-btn help-btn-unstyled"
                             aria-label="Help"
                             title="Help & FAQ"
-                            style={{
-                              background: "none",
-                              border: "none",
-                              cursor: "pointer",
-                              fontSize: "1.2rem",
-                            }}
                           >
                             ❓
                           </button>
@@ -1560,14 +1561,13 @@ function App() {
                               </p>
                             </div>
                             <div
-                              className="dashboard-card action-card"
+                              className="dashboard-card action-card dashboard-card-link"
                               onClick={() =>
                                 window.open(
                                   "https://github.com/Treystu/SC",
                                   "_blank",
                                 )
                               }
-                              style={{ cursor: "pointer" }}
                             >
                               <div className="card-icon">⭐</div>
                               <h3>Star on GitHub</h3>

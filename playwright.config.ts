@@ -75,7 +75,12 @@ export default defineConfig({
 
     {
       name: "webkit",
-      use: { ...devices["Desktop Safari"] },
+      use: { 
+        ...devices["Desktop Safari"],
+        // WebKit can be slower; increase timeouts
+        actionTimeout: 30000,
+        navigationTimeout: 60000,
+      },
     },
 
     /* Test against mobile viewports */

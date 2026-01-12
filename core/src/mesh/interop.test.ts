@@ -30,14 +30,18 @@ class MockTransport implements Transport {
 
   // Simulate finding a peer
   simulateConnect(peerId: string) {
-    this.connectedPeers.add(peerId);
-    if (this.onPeerConnect) this.onPeerConnect(peerId);
+    // Normalize peer ID for consistent storage (match TransportManager behavior)
+    const normalizedId = peerId.replace(/\s/g, "").toUpperCase();
+    this.connectedPeers.add(normalizedId);
+    if (this.onPeerConnect) this.onPeerConnect(normalizedId);
   }
 
   // Simulate losing a peer
   simulateDisconnect(peerId: string) {
-    this.connectedPeers.delete(peerId);
-    if (this.onPeerDisconnect) this.onPeerDisconnect(peerId);
+    // Normalize peer ID for consistent storage (match TransportManager behavior)
+    const normalizedId = peerId.replace(/\s/g, "").toUpperCase();
+    this.connectedPeers.delete(normalizedId);
+    if (this.onPeerDisconnect) this.onPeerDisconnect(normalizedId);
   }
 
   // Simulate receiving data
@@ -72,7 +76,9 @@ class MockTransport implements Transport {
     return undefined;
   }
   getConnectionState(peerId: string) {
-    return this.connectedPeers.has(peerId) ? "connected" : "disconnected";
+    // Normalize peer ID for consistent lookup (match TransportManager behavior)
+    const normalizedId = peerId.replace(/\s/g, "").toUpperCase();
+    return this.connectedPeers.has(normalizedId) ? "connected" : "disconnected";
   }
 }
 

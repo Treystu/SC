@@ -162,7 +162,7 @@ export class RoutingTable {
   addPeer(peer: Peer): void {
     // Normalize peer ID to uppercase for consistent matching
     const normalizedId = peer.id.replace(/\s/g, "").toUpperCase();
-    peer.id = normalizedId;
+    const originalId = peer.id; // Preserve original format
     
     // Ensure peer has required metadata
     if (!peer.state) {
@@ -182,11 +182,12 @@ export class RoutingTable {
       };
     }
 
+    // Store peer with original ID format, but use normalized key for lookup
     this.peers.set(normalizedId, peer);
     // Direct route to connected peer
     this.routes.set(normalizedId, {
       destination: normalizedId,
-      nextHop: normalizedId,
+      nextHop: originalId, // Return original ID for getNextHop
       hopCount: 0,
       timestamp: Date.now(),
       metrics: {
@@ -216,11 +217,13 @@ export class RoutingTable {
    * Remove a peer
    */
   removePeer(peerId: string): void {
-    this.peers.delete(peerId);
-    this.routes.delete(peerId);
+    // Normalize peer ID for consistent lookup
+    const normalizedId = peerId.replace(/\s/g, "").toUpperCase();
+    this.peers.delete(normalizedId);
+    this.routes.delete(normalizedId);
     // Remove routes that go through this peer
     for (const [dest, route] of this.routes.entries()) {
-      if (route.nextHop === peerId) {
+      if (route.nextHop === normalizedId) {
         this.routes.delete(dest);
       }
     }
@@ -230,7 +233,9 @@ export class RoutingTable {
    * Get a peer by ID
    */
   getPeer(peerId: string): Peer | undefined {
-    return this.peers.get(peerId);
+    // Normalize peer ID for consistent lookup
+    const normalizedId = peerId.replace(/\s/g, "").toUpperCase();
+    return this.peers.get(normalizedId);
   }
 
   /**
@@ -244,7 +249,9 @@ export class RoutingTable {
    * Update peer last seen timestamp
    */
   updatePeerLastSeen(peerId: string): void {
-    const peer = this.peers.get(peerId);
+    // Normalize peer ID for consistent lookup
+    const normalizedId = peerId.replace(/\s/g, "").toUpperCase();
+    const peer = this.peers.get(normalizedId);
     if (peer) {
       peer.lastSeen = Date.now();
     }
@@ -363,7 +370,9 @@ export class RoutingTable {
     success: boolean,
     bandwidth?: number,
   ): void {
-    const route = this.routes.get(destination);
+    // Normalize destination ID for consistent lookup
+    const normalizedDest = destination.replace(/\s/g, "").toUpperCase();
+    const route = this.routes.get(normalizedDest);
     if (route) {
       route.metrics.latency = latency;
       route.metrics.lastUsed = Date.now();
@@ -376,6 +385,23 @@ export class RoutingTable {
       if (bandwidth !== undefined) {
         route.metrics.bandwidth = bandwidth;
       }
+
+      // Also update peer metadata for reputation tracking
+      const peer = this.peers.get(normalizedDest);
+      if (peer) {
+        if (success) {
+          peer.metadata.successCount += 1;
+          peer.metadata.reputation = Math.min(100, peer.metadata.reputation + 1);
+        } else {
+          peer.metadata.failureCount += 1;
+          peer.metadata.reputation = Math.max(0, peer.metadata.reputation - 2);
+          
+          // If reputation gets too low, mark as degraded
+          if (peer.metadata.reputation < 20 && peer.state === PeerState.CONNECTED) {
+            peer.state = PeerState.DEGRADED;
+          }
+        }
+      }
     }
   }
 
@@ -386,6 +412,7 @@ export class RoutingTable {
     // Normalize destination ID for consistent lookup
     const normalizedDest = destination.replace(/\s/g, "").toUpperCase();
     const route = this.routes.get(normalizedDest) || this.routes.get(destination);
+    // Return the nextHop which stores the original ID format
     return route?.nextHop;
   }
 
@@ -455,7 +482,9 @@ export class RoutingTable {
    * Update peer reputation based on behavior
    */
   updatePeerReputation(peerId: string, success: boolean): void {
-    const peer = this.peers.get(peerId);
+    // Normalize peer ID for consistent lookup
+    const normalizedId = peerId.replace(/\s/g, "").toUpperCase();
+    const peer = this.peers.get(normalizedId);
     if (!peer) return;
 
     if (success) {
@@ -481,7 +510,9 @@ export class RoutingTable {
    * Blacklist a peer temporarily or permanently
    */
   blacklistPeer(peerId: string, durationMs?: number): void {
-    const peer = this.peers.get(peerId);
+    // Normalize peer ID for consistent lookup
+    const normalizedId = peerId.replace(/\s/g, "").toUpperCase();
+    const peer = this.peers.get(normalizedId);
     if (!peer) return;
 
     peer.metadata.blacklisted = true;
@@ -495,7 +526,9 @@ export class RoutingTable {
    * Remove peer from blacklist
    */
   unblacklistPeer(peerId: string): void {
-    const peer = this.peers.get(peerId);
+    // Normalize peer ID for consistent lookup
+    const normalizedId = peerId.replace(/\s/g, "").toUpperCase();
+    const peer = this.peers.get(normalizedId);
     if (!peer) return;
 
     peer.metadata.blacklisted = false;
@@ -522,7 +555,9 @@ export class RoutingTable {
    * Check if peer is blacklisted
    */
   isPeerBlacklisted(peerId: string): boolean {
-    const peer = this.peers.get(peerId);
+    // Normalize peer ID for consistent lookup
+    const normalizedId = peerId.replace(/\s/g, "").toUpperCase();
+    const peer = this.peers.get(normalizedId);
     if (!peer) return false;
 
     // Check expiry
@@ -543,13 +578,18 @@ export class RoutingTable {
     const now = Date.now();
     const stale: string[] = [];
 
-    for (const [id, peer] of this.peers.entries()) {
+    for (const [_normalizedId, peer] of this.peers.entries()) {
       if (now - peer.lastSeen > timeoutMs) {
-        stale.push(id);
+        // Return the original peer ID, not the normalized one
+        stale.push(peer.id);
       }
     }
 
-    stale.forEach((id) => this.removePeer(id));
+    // Remove using normalized IDs
+    stale.forEach((peerId) => {
+      const normalizedId = peerId.replace(/\s/g, "").toUpperCase();
+      this.removePeer(normalizedId);
+    });
     return stale;
   }
 

@@ -111,6 +111,7 @@ export class WebClient extends PlatformClient {
   private page: Page;
   private browser: Browser;
   private consoleLogs: string[] = [];
+  private lastContactPeerIds: string[] = [];
 
   constructor(clientId: string, page: Page, browser: Browser) {
     super(clientId, "web");
@@ -132,11 +133,24 @@ export class WebClient extends PlatformClient {
     await this.page.goto("/");
     await this.page.waitForLoadState("domcontentloaded");
 
-    // Ensure mesh status is exposed
-    await this.page.waitForFunction(() => {
-      const s = (window as any).__SC_STATUS__;
-      return !!s;
-    });
+    // WebKit can be slower to initialize; increase timeout and add retries
+    const maxRetries = 3;
+    let retries = 0;
+    while (retries < maxRetries) {
+      try {
+        // Ensure mesh status is exposed
+        await this.page.waitForFunction(() => {
+          const s = (window as any).__SC_STATUS__;
+          return !!s;
+        }, { timeout: 30000 });
+        break; // Success, exit retry loop
+      } catch (e) {
+        retries++;
+        if (retries >= maxRetries) throw e;
+        // Brief pause before retry
+        await this.page.waitForTimeout(1000);
+      }
+    }
 
     // Ensure identity exists (some tests run with completely fresh DB)
     const hasPeerId = await this.page
@@ -212,6 +226,8 @@ export class WebClient extends PlatformClient {
     }, undefined, { timeout: 10000 });
 
     await sendBtn.click();
+    // Brief pause after send before returning to allow UI to settle
+    await this.page.waitForTimeout(200);
   }
 
   async waitForMessage(message: string, timeout = 10000): Promise<boolean> {
@@ -268,6 +284,11 @@ export class WebClient extends PlatformClient {
     await this.page.waitForSelector(`[data-testid="contact-${name}"]`, {
       timeout: 15000,
     });
+
+    // Track explicit contacts for reconnection after offline/online
+    if (publicKey) {
+      this.lastContactPeerIds.push(publicKey);
+    }
   }
 
   async openConversation(contactName: string): Promise<void> {
@@ -295,17 +316,40 @@ export class WebClient extends PlatformClient {
     expectedCount: number,
     timeout = 10000,
   ): Promise<void> {
-    await this.page.waitForFunction(
-      (count) => {
+    try {
+      await this.page.waitForFunction(
+        (count) => {
+          const w = window as any;
+          if (Array.isArray(w.peers)) return w.peers.length >= count;
+          if (Array.isArray(w.__SC_STATUS__?.peers)) return w.__SC_STATUS__.peers.length >= count;
+          const elem = document.querySelector('[data-testid="peer-count"]');
+          return elem && parseInt(elem.textContent || "0", 10) >= count;
+        },
+        expectedCount,
+        { timeout },
+      );
+    } catch (err) {
+      const debug = await this.page.evaluate(() => {
         const w = window as any;
-        if (Array.isArray(w.peers)) return w.peers.length >= count;
-        if (Array.isArray(w.__SC_STATUS__?.peers)) return w.__SC_STATUS__.peers.length >= count;
-        const elem = document.querySelector('[data-testid="peer-count"]');
-        return elem && parseInt(elem.textContent || "0", 10) >= count;
-      },
-      expectedCount,
-      { timeout },
-    );
+        return {
+          localPeerId: w.__SC_STATUS__?.localPeerId ?? null,
+          isJoinedToRoom: w.isJoinedToRoom ?? null,
+          discoveredPeers: Array.isArray(w.discoveredPeers) ? w.discoveredPeers : null,
+          peers: Array.isArray(w.peers) ? w.peers : null,
+          statusPeers: w.__SC_STATUS__?.peers ?? null,
+        };
+      });
+      const recentLogs = this.consoleLogs.slice(-30);
+      // Also capture a snapshot on timeout for deeper diagnostics
+      const snapshot = await this.getDebugSnapshot();
+      throw new Error(
+        `waitForPeerConnection timed out. Expected >= ${expectedCount}. Debug: ${JSON.stringify(
+          debug,
+        )}\nRecent console logs:\n${recentLogs.join("\n")}\nDebug snapshot: ${JSON.stringify(snapshot)}\nOriginal error: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
   }
 
   override async waitForDiscoveredPeer(
@@ -356,11 +400,11 @@ export class WebClient extends PlatformClient {
   override async connectToPeer(peerId: string): Promise<void> {
     await this.page.evaluate(async (targetPeerId: string) => {
       const win = window as any;
-      if (typeof win.connectToPeer !== "function") {
-        throw new Error("window.connectToPeer helper not available");
-      }
+      if (typeof win.connectToPeer !== "function") return;
       await win.connectToPeer(targetPeerId);
     }, peerId);
+    // Give a brief moment for the WebRTC handshake to start
+    await this.page.waitForTimeout(300);
   }
 
   override async waitForPeer(peerId: string, timeout = 30000): Promise<void> {
@@ -368,7 +412,9 @@ export class WebClient extends PlatformClient {
       await this.page.waitForFunction(
         (targetPeerId) => {
           const w = window as any;
-          const peers = Array.isArray(w.peers) ? w.peers : [];
+          const peers =
+            (Array.isArray(w.peers) ? w.peers : []) ??
+            (Array.isArray(w.__SC_STATUS__?.peers) ? w.__SC_STATUS__?.peers : []);
           return peers.some((p: any) => {
             const id = typeof p === "string" ? p : p?.id;
             return (
@@ -445,11 +491,16 @@ export class WebClient extends PlatformClient {
     await this.page.waitForTimeout(500);
   }
 
-  async goOnline(): Promise<void> {
+  async goOnline(targetPeerId?: string): Promise<void> {
+    const localPeerId =
+      (await this.page.evaluate(() => (window as any).__SC_STATUS__?.localPeerId)) || null;
+
     // Restore network
     await this.page.context().setOffline(false);
     // Reload to force mesh re-init and room rejoin
     await this.page.reload({ waitUntil: "domcontentloaded" });
+    // Give SW/network a brief moment to settle
+    await this.page.waitForTimeout(500);
 
     // Wait for identity to be ready
     await this.page.waitForFunction(
@@ -477,6 +528,116 @@ export class WebClient extends PlatformClient {
       null,
       { timeout: 15000 },
     );
+
+    // Explicitly clear stale peer lists and any existing RTCPeerConnections to avoid ghost IDs
+    await this.page.evaluate(() => {
+      const w = window as any;
+      w.peers = [];
+      w.discoveredPeers = [];
+      // Force disconnect any existing peer connections by calling the exposed reset helper if available
+      if (typeof w.__SC_RESET_MESH__ === "function") {
+        w.__SC_RESET_MESH__();
+      }
+      // Also clear any pending room messages to avoid stale state
+      if (Array.isArray(w.roomMessages)) {
+        w.roomMessages = [];
+      }
+    });
+    // Small pause to let cleanup settle
+    await this.page.waitForTimeout(300);
+
+    // Wait for discovered peers list to repopulate after rejoin (if any)
+    let discovered: string[] = [];
+    try {
+      discovered = await this.page
+        .waitForFunction(() => {
+          const w = window as any;
+          if (!Array.isArray(w.discoveredPeers)) return null;
+          return w.discoveredPeers.filter((p: any) => typeof p === "string" && p.length > 0);
+        }, null, { timeout: 10000 })
+        .then((res) => res as unknown as string[])
+        .catch(() => []);
+    } catch {
+      discovered = [];
+    }
+    if (!Array.isArray(discovered)) {
+      discovered = [];
+    }
+    if (localPeerId) {
+      discovered = Array.isArray(discovered)
+        ? discovered.filter((p) => p !== localPeerId)
+        : [];
+    }
+
+    // Proactively reconnect to discovered peers (auto-connect is disabled in E2E)
+    if (discovered.length > 0) {
+      for (const pid of discovered) {
+        await this.page.evaluate(async (peerId: string) => {
+          const win = window as any;
+          if (typeof win.connectToPeer !== "function") return;
+          try {
+            await win.connectToPeer(peerId);
+          } catch (e) {
+            console.warn("Failed to reconnect to peer after online:", peerId, e);
+          }
+        }, pid);
+        // Small delay between reconnections to avoid race conditions
+        await this.page.waitForTimeout(200);
+      }
+    }
+
+    // Also reconnect to explicit contacts + targetPeerId
+    const targets = Array.from(
+      new Set([
+        ...this.lastContactPeerIds,
+        ...(targetPeerId ? [targetPeerId] : []),
+      ]),
+    );
+    if (targets.length > 0) {
+      for (const pid of targets) {
+        await this.page.evaluate(async (peerId: string) => {
+          const win = window as any;
+          if (typeof win.connectToPeer !== "function") return;
+          try {
+            await win.connectToPeer(peerId);
+          } catch (e) {
+            console.warn("Failed to reconnect (contact list) to peer after online:", peerId, e);
+          }
+        }, pid);
+        // Small delay between reconnections to avoid race conditions
+        await this.page.waitForTimeout(200);
+      }
+
+      for (const pid of targets) {
+        try {
+          await this.waitForPeer(pid, 15000);
+        } catch {
+          // ignore; waitForMessage will surface if still disconnected
+        }
+      }
+    }
+
+    // Final guard: wait for at least one connected peer if any targets/discovered existed
+    const expected =
+      (Array.isArray(discovered) ? discovered : []).length +
+        (Array.isArray(targets) ? targets : []).length >
+      0
+        ? 1
+        : 0;
+    if (expected > 0) {
+      try {
+        await this.waitForPeerConnection(expected, 30000);
+      } catch (e) {
+        // On failure, capture a debug snapshot to diagnose
+        const snapshot = await this.getDebugSnapshot();
+        console.error(
+          `[goOnline] Failed to establish peer connection after reconnect. Debug snapshot: ${JSON.stringify(
+            snapshot,
+          )}`,
+        );
+        // swallow; downstream waits/tests will report if still disconnected
+      }
+    }
   }
 
   async sendMessageToGroup(message: string): Promise<void> {

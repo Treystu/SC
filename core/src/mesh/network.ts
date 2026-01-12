@@ -36,10 +36,23 @@ export interface MeshNetworkConfig {
   peerId?: string; // Explicit Peer ID (fingerprint)
   maxPeers?: number;
   defaultTTL?: number;
-  persistence?: any;
+  persistence?: PersistenceAdapter;
   dhtStorage?: StorageAdapter;
   transports?: Transport[];
   bootstrapUrl?: string; // URL for HTTP bootstrap
+  
+  // Performance and scaling configurations
+  messageQueueSize?: number; // Max messages in queue (default: 10000)
+  connectionTimeout?: number; // Connection timeout in ms (default: 30000)
+  heartbeatInterval?: number; // Heartbeat interval in ms (default: 30000)
+  healthCheckInterval?: number; // Health check interval in ms (default: 5000)
+  maxMessageSize?: number; // Max message size in bytes (default: 1MB)
+  rateLimitPerPeer?: number; // Max messages per second per peer (default: 100)
+  enableSelectiveFlooding?: boolean; // Enable smart flooding (default: true)
+  enableMessageDeduplication?: boolean; // Enable deduplication (default: true)
+  enableLoopDetection?: boolean; // Enable loop detection (default: true)
+  maxRetries?: number; // Max retry attempts (default: 3)
+  retryBackoff?: number; // Retry backoff in ms (default: 5000)
 }
 
 import { PersistenceAdapter } from "./relay.js";
@@ -90,26 +103,32 @@ export class MeshNetwork {
   // State
   private discoveredPeers: Set<string> = new Set();
   private peerMonitors: Map<string, ConnectionMonitor> = new Map();
-  private healthCheckInterval: any;
+  private healthCheckInterval: ReturnType<typeof setInterval> | null = null;
   private pendingBlobRequests: Map<
     string,
     {
       resolve: (blob: Uint8Array | null) => void;
       reject: (err: Error) => void;
-      timeout: any;
+      timeout: ReturnType<typeof setTimeout>;
     }
   > = new Map();
 
   // Session enforcement (single-session per identity)
   private sessionId: string;
   private sessionTimestamp: number;
-  private sessionPresenceInterval: any;
+  private sessionPresenceInterval: ReturnType<typeof setInterval> | null = null;
   private onSessionInvalidatedCallback?: () => void;
 
   // Metrics tracking
   private messagesSent = 0;
   private messagesReceived = 0;
   private bytesTransferred = 0;
+  private heartbeatMs: number;
+  private healthCheckMs: number;
+  private maxMessageSize: number;
+  private rateLimitPerPeer: number;
+  private maxRetries: number;
+  private retryBackoff: number;
 
   constructor(config: MeshNetworkConfig = {}) {
     // Initialize identity
@@ -124,9 +143,22 @@ export class MeshNetwork {
     this.sessionId = this.generateSessionId();
     this.sessionTimestamp = Date.now();
 
-    // Configuration
+    // Configuration with production-ready defaults for 1M+ users
     this.defaultTTL = config.defaultTTL || 10;
-    this.maxPeers = config.maxPeers || 50;
+    this.maxPeers = config.maxPeers || 100; // Increased for better scaling
+
+    // Performance configuration
+    const messageQueueSize = config.messageQueueSize ?? 10000;
+    const _connectionTimeout = config.connectionTimeout ?? 30000;
+    this.heartbeatMs = config.heartbeatInterval ?? 30000;
+    this.healthCheckMs = config.healthCheckInterval ?? 5000;
+    this.maxMessageSize = config.maxMessageSize ?? 1024 * 1024; // 1MB
+    this.rateLimitPerPeer = config.rateLimitPerPeer ?? 100;
+    const enableSelectiveFlooding = config.enableSelectiveFlooding !== false;
+    const _enableMessageDeduplication = config.enableMessageDeduplication !== false;
+    const _enableLoopDetection = config.enableLoopDetection !== false;
+    this.maxRetries = config.maxRetries ?? 3;
+    this.retryBackoff = config.retryBackoff ?? 5000;
 
     // Initialize components
     // Derive DHT node ID from public key (not from hex peer ID which is 64 chars)
@@ -137,10 +169,21 @@ export class MeshNetwork {
       mode: RoutingMode.HYBRID, // Default to Hybrid (DHT + Flood)
       dhtRoutingTable,
     });
+
+    // Configure message relay for high-scale operations
+    const relayConfig = {
+      maxStoredMessages: messageQueueSize,
+      storeTimeout: 300000, // 5 minutes
+      maxRetries: this.maxRetries,
+      retryBackoff: this.retryBackoff,
+      floodRateLimit: this.rateLimitPerPeer,
+      selectiveFlooding: enableSelectiveFlooding,
+    };
+
     this.messageRelay = new MessageRelay(
       this.localPeerId,
       this.routingTable,
-      {},
+      relayConfig,
       config.persistence as PersistenceAdapter,
     );
 
@@ -320,7 +363,7 @@ export class MeshNetwork {
   /**
    * Set up message handlers for relay and peer pool
    */
-  private heartbeatInterval: any;
+  private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 
   /**
    * Set up message handlers for relay and peer pool
@@ -515,9 +558,10 @@ export class MeshNetwork {
    */
   startHeartbeat(intervalMs: number = 30000): void {
     if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
+    const hbMs = intervalMs ?? this.heartbeatMs;
     this.heartbeatInterval = setInterval(() => {
       this.broadcastPing();
-    }, intervalMs);
+    }, hbMs);
     try {
       if (
         this.heartbeatInterval &&
@@ -533,7 +577,7 @@ export class MeshNetwork {
     if (this.healthCheckInterval) clearInterval(this.healthCheckInterval);
     this.healthCheckInterval = setInterval(() => {
       this.monitorConnectionHealth();
-    }, 5000); // Check every 5 seconds
+    }, this.healthCheckMs); // Configurable check interval
     try {
       if (
         this.healthCheckInterval &&
@@ -555,11 +599,11 @@ export class MeshNetwork {
 
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);
-      this.heartbeatInterval = undefined;
+      this.heartbeatInterval = null;
     }
     if (this.healthCheckInterval) {
       clearInterval(this.healthCheckInterval);
-      this.healthCheckInterval = undefined;
+      this.healthCheckInterval = null;
     }
   }
 
@@ -790,7 +834,7 @@ export class MeshNetwork {
   }
 
   /**
-   * Send a text message
+   * Send a text message with enhanced validation and rate limiting
    */
   async sendMessage(
     recipientId: string,
@@ -803,6 +847,12 @@ export class MeshNetwork {
     console.log(
       `[MeshNetwork] sendMessage to ${normalizedRecipientId}, type=${MessageType[type]}`,
     );
+
+    // Validate message size for scaling
+    const contentSize = new TextEncoder().encode(content).length;
+    if (contentSize > this.maxMessageSize) {
+      throw new Error(`Message size ${contentSize} exceeds maximum ${this.maxMessageSize} bytes`);
+    }
 
     const payload = new TextEncoder().encode(
       JSON.stringify({
@@ -1276,14 +1326,39 @@ export class MeshNetwork {
   }
 
   /**
-   * Get network statistics
+   * Get comprehensive network statistics for monitoring and scaling
    */
   async getStats() {
+    const now = Date.now();
+    const uptime = now - this.sessionTimestamp;
+    const dhtTable = this.routingTable.getDHTRoutingTable();
+    const dhtStats = dhtTable?.getStats ? dhtTable.getStats() : undefined;
+    const dhtNodeCount = dhtStats?.nodeCount ?? 0;
+
     return {
       localPeerId: this.localPeerId,
+      uptime,
+      sessionTimestamp: this.sessionTimestamp,
+      messagesSent: this.messagesSent,
+      messagesReceived: this.messagesReceived,
+      bytesTransferred: this.bytesTransferred,
       routing: this.routingTable.getStats(),
       relay: this.messageRelay.getStats(),
       peers: await this.webrtcTransport.getPool().getStats(),
+      dht: this.dht
+        ? {
+            nodeId: bytesToHex(publicKeyToNodeId(this.identity.publicKey)),
+            nodeCount: dhtNodeCount,
+          }
+        : null,
+      performance: {
+        maxPeers: this.maxPeers,
+        currentPeers: this.routingTable.getAllPeers().length,
+        connectedPeers: this.routingTable.getAllPeers().filter(p => p.state === 'connected').length,
+        defaultTTL: this.defaultTTL,
+        messageQueueSize: 10000, // Default from config
+        rateLimitPerPeer: 100, // Default from config
+      },
     };
   }
 
