@@ -6,7 +6,7 @@
 import { RoutingTable, PeerState, createPeer } from '../mesh/routing';
 import { MessageRelay } from '../mesh/relay';
 import { MeshNetwork } from '../mesh/network';
-import { MessageType, encodeMessage } from '../protocol/message';
+import { MessageType, encodeMessage, Message } from '../protocol/message';
 import { generateIdentity } from '../crypto/primitives';
 
 describe('Mesh Network Integration', () => {
@@ -23,7 +23,6 @@ describe('Mesh Network Integration', () => {
     relay = new MessageRelay(localPeerId, routingTable);
     network = new MeshNetwork({
       identity: {
-        id: localPeerId,
         publicKey: identity.publicKey,
         privateKey: identity.privateKey,
       },
@@ -38,24 +37,29 @@ describe('Mesh Network Integration', () => {
       const peer = createPeer(peerId, new Uint8Array(32), 'webrtc');
       routingTable.addPeer(peer);
 
-      // Create a test message
-      const message = {
-        id: 'msg123',
-        type: MessageType.TEXT,
-        sender: localPeerId,
-        recipient: peerId,
-        timestamp: Date.now(),
-        payload: new TextEncoder().encode('Hello, World!'),
-        signature: new Uint8Array(64),
+      // Create a test message addressed to local peer
+      const message: Message = {
+        header: {
+          version: 0x01,
+          type: MessageType.TEXT,
+          ttl: 10,
+          timestamp: Date.now(),
+          senderId: identity.publicKey,
+          signature: new Uint8Array(64),
+        },
+        payload: new TextEncoder().encode(JSON.stringify({
+          text: 'Hello, World!',
+          recipient: localPeerId
+        })),
       };
 
       // Process message through relay
       let deliveredMessage: Message | undefined;
-      relay.onMessageForSelf = (msg: Message) => {
+      relay.onMessageForSelf((msg: Message) => {
         deliveredMessage = msg;
-      };
+      });
 
-      await relay.processMessage(message);
+      await relay.processMessage(encodeMessage(message), 'test-peer');
 
       // Verify message was processed
       expect(deliveredMessage).toBeDefined();
@@ -82,11 +86,13 @@ describe('Mesh Network Integration', () => {
 
     it('should handle route expiration', async () => {
       const peerId = 'peer789';
-      const peer = createPeer(peerId, new Uint8Array(32), 'webrtc');
       
       // Add peer with short TTL
       const shortTTLConfig = { routeTTL: 100 }; // 100ms
       const shortRoutingTable = new RoutingTable(localPeerId, shortTTLConfig);
+      const shortRelay = new MessageRelay(localPeerId, shortRoutingTable);
+      
+      const peer = createPeer(peerId, new Uint8Array(32), 'webrtc');
       shortRoutingTable.addPeer(peer);
 
       // Verify route exists initially
@@ -110,27 +116,33 @@ describe('Mesh Network Integration', () => {
       routingTable.addPeer(peer2);
 
       // Create message from peer1 to peer2
-      const message = {
-        id: 'msg456',
-        type: MessageType.TEXT,
-        sender: 'peer1',
-        recipient: 'peer2',
-        timestamp: Date.now(),
-        payload: new TextEncoder().encode('Forwarded message'),
-        signature: new Uint8Array(64),
+      const message: Message = {
+        header: {
+          version: 0x01,
+          type: MessageType.TEXT,
+          ttl: 10,
+          timestamp: Date.now(),
+          senderId: identity.publicKey,
+          signature: new Uint8Array(64),
+        },
+        payload: new TextEncoder().encode(JSON.stringify({
+          text: 'Forwarded message',
+          recipient: 'peer2'
+        })),
       };
 
       let forwardedMessage: Message | undefined;
-      relay.onForwardMessage = (msg: Message) => {
+      relay.onForwardMessage((msg: Message, excludePeerId: string) => {
         forwardedMessage = msg;
-      };
+      });
 
       // Process message
-      await relay.processMessage(message);
+      await relay.processMessage(encodeMessage(message), 'test-peer');
 
       // Verify message was forwarded
       expect(forwardedMessage).toBeDefined();
-      expect(forwardedMessage?.recipient).toBe('peer2');
+      const payload = JSON.parse(new TextDecoder().decode(forwardedMessage!.payload));
+      expect(payload.recipient).toBe('peer2');
     });
 
     it('should handle message deduplication', async () => {
@@ -138,24 +150,29 @@ describe('Mesh Network Integration', () => {
       const peer = createPeer(peerId, new Uint8Array(32), 'webrtc');
       routingTable.addPeer(peer);
 
-      const message = {
-        id: 'msg789',
-        type: MessageType.TEXT,
-        sender: localPeerId,
-        recipient: peerId,
-        timestamp: Date.now(),
-        payload: new TextEncoder().encode('Duplicate test'),
-        signature: new Uint8Array(64),
+      const message: Message = {
+        header: {
+          version: 0x01,
+          type: MessageType.TEXT,
+          ttl: 10,
+          timestamp: Date.now(),
+          senderId: identity.publicKey,
+          signature: new Uint8Array(64),
+        },
+        payload: new TextEncoder().encode(JSON.stringify({
+          text: 'Duplicate test',
+          recipient: localPeerId
+        })),
       };
 
       let messageCount = 0;
-      relay.onMessageForSelf = () => {
+      relay.onMessageForSelf(() => {
         messageCount++;
-      };
+      });
 
       // Process same message twice
-      await relay.processMessage(message);
-      await relay.processMessage(message);
+      await relay.processMessage(encodeMessage(message), 'test-peer');
+      await relay.processMessage(encodeMessage(message), 'test-peer');
 
       // Should only be delivered once
       expect(messageCount).toBe(1);
@@ -166,22 +183,21 @@ describe('Mesh Network Integration', () => {
     it('should initialize network with routing table', async () => {
       const network = new MeshNetwork({
         identity: {
-          id: localPeerId,
           publicKey: identity.publicKey,
           privateKey: identity.privateKey,
         },
         transports: [],
       });
 
-      const stats = network.getStats();
-      expect(stats.peerCount).toBe(0);
-      expect(stats.routingStats).toBeDefined();
+      const stats = await network.getStats();
+      expect(stats.localPeerId).toBe(localPeerId);
+      expect(stats.routing).toBeDefined();
+      expect(stats.routing.peerCount).toBe(0);
     });
 
     it('should handle peer connections in network', async () => {
       const network = new MeshNetwork({
         identity: {
-          id: localPeerId,
           publicKey: identity.publicKey,
           privateKey: identity.privateKey,
         },
@@ -195,14 +211,13 @@ describe('Mesh Network Integration', () => {
       // Add peer through network's routing table
       network['routingTable'].addPeer(peer);
 
-      const stats = network.getStats();
-      expect(stats.peerCount).toBe(1);
+      const stats = await network.getStats();
+      expect(stats.routing.peerCount).toBe(1);
     });
 
     it('should handle message sending through network', async () => {
       const network = new MeshNetwork({
         identity: {
-          id: localPeerId,
           publicKey: identity.publicKey,
           privateKey: identity.privateKey,
         },
@@ -239,26 +254,31 @@ describe('Mesh Network Integration', () => {
 
       let messageFlow: string[] = [];
       
-      relay.onMessageForSelf = (msg: Message) => {
+      relay.onMessageForSelf((msg: Message) => {
         messageFlow.push('delivered');
-      };
+      });
       
-      relay.onForwardMessage = (msg: Message) => {
+      relay.onForwardMessage((msg: Message, excludePeerId: string) => {
         messageFlow.push('forwarded');
-      };
+      });
 
       // Send message from peer1 to peer2
-      const message = {
-        id: 'msg-e2e',
-        type: MessageType.TEXT,
-        sender: 'peer1',
-        recipient: 'peer2',
-        timestamp: Date.now(),
-        payload: new TextEncoder().encode('End-to-end test'),
-        signature: new Uint8Array(64),
+      const message: Message = {
+        header: {
+          version: 0x01,
+          type: MessageType.TEXT,
+          ttl: 10,
+          timestamp: Date.now(),
+          senderId: new Uint8Array(32), // peer1 public key
+          signature: new Uint8Array(64),
+        },
+        payload: new TextEncoder().encode(JSON.stringify({
+          text: 'End-to-end test',
+          recipient: 'peer2'
+        })),
       };
 
-      await relay.processMessage(message);
+      await relay.processMessage(encodeMessage(message), 'peer1');
 
       // Verify message flow
       expect(messageFlow).toContain('forwarded');

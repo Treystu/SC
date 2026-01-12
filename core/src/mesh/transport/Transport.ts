@@ -117,52 +117,66 @@ export class TransportManager {
     
     console.log(`[TransportManager] send() to ${normalizedPeerId}, data size: ${data.length}`);
     
-    // 1. Try preferred
-    if (preferredTransport) {
-      const transport = this.transports.get(preferredTransport);
-      if (transport) {
-        try {
-          // Check if connected before sending?
-          const state = transport.getConnectionState(normalizedPeerId);
-          console.log(`[TransportManager] Preferred transport ${preferredTransport} state for ${normalizedPeerId}: ${state}`);
-          if (state === "connected") {
-            await transport.send(normalizedPeerId, data);
-            console.log(`[TransportManager] Sent via preferred transport ${preferredTransport}`);
-            return;
+    let lastError: Error | null = null;
+    const maxRetries = 3;
+    const retryDelay = 1000; // 1 second
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      // 1. Try preferred
+      if (preferredTransport) {
+        const transport = this.transports.get(preferredTransport);
+        if (transport) {
+          try {
+            // Check if connected before sending?
+            const state = transport.getConnectionState(normalizedPeerId);
+            console.log(`[TransportManager] Preferred transport ${preferredTransport} state for ${normalizedPeerId}: ${state}`);
+            if (state === "connected") {
+              await transport.send(normalizedPeerId, data);
+              console.log(`[TransportManager] Sent via preferred transport ${preferredTransport}`);
+              return;
+            }
+          } catch (e) {
+            lastError = e as Error;
+            console.warn(
+              `Failed to send via preferred transport ${preferredTransport} (attempt ${attempt}):`,
+              e,
+            );
           }
-        } catch (e) {
-          console.warn(
-            `Failed to send via preferred transport ${preferredTransport}:`,
-            e,
-          );
         }
       }
-    }
 
-    // 2. Try any connected transport
-    for (const transport of this.transports.values()) {
-      if (transport.name === preferredTransport) continue;
+      // 2. Try any connected transport
+      for (const transport of this.transports.values()) {
+        if (transport.name === preferredTransport) continue;
 
-      const state = transport.getConnectionState(normalizedPeerId);
-      console.log(`[TransportManager] Transport ${transport.name} state for ${normalizedPeerId}: ${state}`);
-      if (state === "connected") {
-        try {
-          await transport.send(normalizedPeerId, data);
-          console.log(`[TransportManager] Sent via transport ${transport.name}`);
-          return;
-        } catch (e) {
-          console.warn(`[TransportManager] Failed to send via ${transport.name}:`, e);
-          // Continue
+        const state = transport.getConnectionState(normalizedPeerId);
+        console.log(`[TransportManager] Transport ${transport.name} state for ${normalizedPeerId}: ${state}`);
+        if (state === "connected") {
+          try {
+            await transport.send(normalizedPeerId, data);
+            console.log(`[TransportManager] Sent via transport ${transport.name}`);
+            return;
+          } catch (e) {
+            lastError = e as Error;
+            console.warn(`[TransportManager] Failed to send via ${transport.name} (attempt ${attempt}):`, e);
+            // Continue to next transport
+          }
         }
+      }
+
+      // If we have attempts left and got an error, wait before retry
+      if (attempt < maxRetries && lastError) {
+        console.log(`[TransportManager] Retry ${attempt}/${maxRetries} failed, waiting ${retryDelay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
       }
     }
 
     // 3. Last ditch: try ANY transport even if we don't think we're connected
     // (UDP-like behavior or auto-connect?)
     // No, standard is to fail if not connected.
-    console.error(`[TransportManager] No connected transport found for ${normalizedPeerId}`);
+    console.error(`[TransportManager] No connected transport found for ${normalizedPeerId} after ${maxRetries} attempts`);
     throw new Error(
-      `Failed to send message to ${normalizedPeerId}: Peer not connected via any transport.`,
+      `Failed to send message to ${normalizedPeerId}: Peer not connected via any transport. Last error: ${lastError?.message || 'Unknown'}`,
     );
   }
 

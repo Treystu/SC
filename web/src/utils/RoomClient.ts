@@ -90,8 +90,18 @@ export class RoomClient {
     });
   }
 
-  async message(content: string) {
-    await this.request("message", { content });
+  async message(content: string): Promise<{ messageId: string; timestamp: string }> {
+    const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    const data = await this.request("message", { 
+      content, 
+      messageId 
+    });
+    
+    return {
+      messageId: data.messageId || messageId,
+      timestamp: data.timestamp || new Date().toISOString()
+    };
   }
 
   async poll(): Promise<{
@@ -99,10 +109,10 @@ export class RoomClient {
     messages: RoomMessage[];
     peers: RoomDisplayPeer[];
   }> {
-    // Safe Polling: Always ask for the last 60 seconds of messages.
-    // This allows for significant clock skew and network delay without missing messages.
+    // Safe Polling: Always ask for the last 120 seconds of messages.
+    // Increased from 60s to handle network delays and prevent message loss.
     // Client-side deduplication handles the overlap.
-    const safeSince = Date.now() - 60000;
+    const safeSince = Date.now() - 120000;
 
     const data = await this.request("poll", {
       since: safeSince,

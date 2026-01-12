@@ -267,22 +267,36 @@ export const handler: Handler = async (event, context) => {
       }
 
       case "message": {
-        // Post a public message
-        const { content } = payload;
+        // Post a public message with delivery confirmation
+        const { content, messageId } = payload;
         if (!content) throw new Error("Missing content");
 
-        console.log(`[${requestId}] Processing message from ${peerId}`);
+        // Generate unique message ID if not provided
+        const finalMessageId = messageId || `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        console.log(`[${requestId}] Processing message ${finalMessageId} from ${peerId}`);
 
-        await messagesCollection.insertOne({
+        // Insert message with timestamp and ID for tracking
+        const result = await messagesCollection.insertOne({
+          id: finalMessageId,
           from: peerId,
           content,
           timestamp: new Date(),
+          deliveredTo: [], // Track which peers have received this message
         });
+
+        if (result.acknowledged) {
+          console.log(`[${requestId}] Message ${finalMessageId} stored successfully`);
+        }
 
         return {
           statusCode: 200,
           headers: CORS_HEADERS,
-          body: JSON.stringify({ success: true }),
+          body: JSON.stringify({ 
+            success: true, 
+            messageId: finalMessageId,
+            timestamp: new Date().toISOString()
+          }),
         };
       }
 

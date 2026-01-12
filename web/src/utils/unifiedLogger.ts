@@ -1,24 +1,30 @@
 /**
- * Unified Logging System
+ * Enhanced Unified Logging System
  * 
- * Provides consistent logging across:
- * - Browser console
+ * Provides comprehensive logging across:
+ * - Browser console (with colors and grouping)
  * - In-app UI display
  * - Netlify function logs (via correlation IDs)
+ * - Message delivery tracking
  * 
  * Log Format: [TIMESTAMP] [LEVEL] [SOURCE] Message
- * Example: [2025-12-28T04:10:00.000Z] [INFO] [useMeshNetwork] Connecting to signaling server...
+ * Example: [2025-12-28T04:10:00.000Z] [INFO] [MESH] Connecting to peer...
  */
 
 export type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
 export type LogSource =
-  | 'useMeshNetwork'
-  | 'WebRTCTransport'
-  | 'MeshNetwork'
-  | 'RoomClient'
-  | 'App'
-  | 'Signaling'
-  | 'RoomFunction';
+  | 'MESH'           // Mesh network operations
+  | 'ROOM'           // Room system operations  
+  | 'WEBRTC'         // WebRTC transport
+  | 'MESSAGE'        // Message delivery
+  | 'SIGNAL'         // Signaling operations
+  | 'APP'            // Application level
+  | 'TRANSPORT'      // Transport layer
+  | 'ROUTING'        // Routing operations
+  | 'RELAY'          // Message relay
+  | 'POLL'           // Room polling
+  | 'SEND'           // Message sending
+  | 'RECV'           // Message receiving;
 
 interface LogEntry {
   timestamp: string;
@@ -48,14 +54,74 @@ export function subscribeToLogs(callback: LogCallback): () => void {
 }
 
 function formatTimestamp(): string {
-  return new Date().toISOString();
+  const now = new Date();
+  return now.toISOString().replace('T', ' ').substring(0, 19);
 }
 
-function formatMessage(source: LogSource, message: string): string {
-  return `[${source}] ${message}`;
+function getSourceColor(source: LogSource): string {
+  const colors = {
+    'MESH': '#4CAF50',     // Green
+    'ROOM': '#2196F3',     // Blue  
+    'WEBRTC': '#FF9800',   // Orange
+    'MESSAGE': '#9C27B0',  // Purple
+    'SIGNAL': '#00BCD4',   // Cyan
+    'APP': '#607D8B',      // Blue Grey
+    'TRANSPORT': '#795548', // Brown
+    'ROUTING': '#FF5722',  // Deep Orange
+    'RELAY': '#E91E63',    // Pink
+    'POLL': '#009688',     // Teal
+    'SEND': '#8BC34A',     // Light Green
+    'RECV': '#FFC107',     // Amber
+  };
+  return colors[source] || '#9E9E9E';
+}
+
+function getLevelStyle(level: LogLevel): string {
+  const styles = {
+    'DEBUG': 'color: #9E9E9E; font-weight: normal;',
+    'INFO': 'color: #2196F3; font-weight: bold;',
+    'WARN': 'color: #FF9800; font-weight: bold;',
+    'ERROR': 'color: #F44336; font-weight: bold;',
+  };
+  return styles[level] || 'color: #000;';
+}
+
+function formatConsoleMessage(entry: LogEntry): void {
+  const sourceColor = getSourceColor(entry.source);
+  const levelStyle = getLevelStyle(entry.level);
+  
+  // Main message with styling
+  const mainMessage = `%c[${entry.timestamp}] %c[${entry.level}] %c[${entry.source}] %c${entry.message}`;
+  const styles = [
+    'color: #666; font-size: 11px;',
+    levelStyle,
+    `color: ${sourceColor}; font-weight: bold;`,
+    'color: #333; font-weight: normal;',
+  ];
+  
+  // Choose console method based on level
+  const consoleMethod = entry.level === 'ERROR' ? 'error' : 
+                        entry.level === 'WARN' ? 'warn' : 
+                        entry.level === 'DEBUG' ? 'debug' : 'log';
+  
+  // Log the main message
+  console[consoleMethod](mainMessage, ...styles);
+  
+  // Log additional data if present
+  if (entry.data && Object.keys(entry.data).length > 0) {
+    console.groupCollapsed(`%c📊 Data for ${entry.source} ${entry.message}`, `color: ${sourceColor};`);
+    console.log('Data:', entry.data);
+    if (entry.correlationId) {
+      console.log('Correlation ID:', entry.correlationId);
+    }
+    console.groupEnd();
+  }
 }
 
 function notifyCallbacks(entry: LogEntry): void {
+  // Enhanced console output
+  formatConsoleMessage(entry);
+  
   // Add to in-app store
   inAppLogs.unshift(entry);
   if (inAppLogs.length > MAX_IN_APP_LOGS) {
