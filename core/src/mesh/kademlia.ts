@@ -6,6 +6,7 @@
  */
 
 import type { Peer } from './routing.js';
+import { hexToBytes } from "../utils/encoding.js";
 
 const K = 20; // Kademlia constant for bucket size
 const ID_LENGTH = 256; // Peer ID length in bits
@@ -18,15 +19,29 @@ const ID_LENGTH = 256; // Peer ID length in bits
  * @returns The XOR distance as a BigInt.
  */
 export function xorDistance(id1: string, id2: string): bigint {
-  const buf1 = Buffer.from(id1, 'hex');
-  const buf2 = Buffer.from(id2, 'hex');
-  const result = Buffer.alloc(buf1.length);
+  const norm1 = id1.replace(/\s/g, "").toLowerCase();
+  const norm2 = id2.replace(/\s/g, "").toLowerCase();
 
-  for (let i = 0; i < buf1.length; i++) {
-    result[i] = buf1[i] ^ buf2[i];
+  // Ensure both are even-length hex strings before decoding.
+  const hex1 = norm1.length % 2 === 0 ? norm1 : `0${norm1}`;
+  const hex2 = norm2.length % 2 === 0 ? norm2 : `0${norm2}`;
+
+  const bytes1 = hexToBytes(hex1);
+  const bytes2 = hexToBytes(hex2);
+
+  const len = Math.max(bytes1.length, bytes2.length);
+
+  // Left-pad to equal lengths.
+  const a = new Uint8Array(len);
+  const b = new Uint8Array(len);
+  a.set(bytes1, len - bytes1.length);
+  b.set(bytes2, len - bytes2.length);
+
+  let out = 0n;
+  for (let i = 0; i < len; i++) {
+    out = (out << 8n) | BigInt((a[i] ^ b[i]) & 0xff);
   }
-
-  return BigInt('0x' + result.toString('hex'));
+  return out;
 }
 
 /**

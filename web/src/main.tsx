@@ -14,7 +14,16 @@ import "./sentry"; // Sentry is initialized in sentry.ts
 import "./index.css";
 
 // Register service worker for PWA support
-if ("serviceWorker" in navigator) {
+const __isE2E__ =
+  (globalThis as any).__E2E__ === true ||
+  (typeof navigator !== "undefined" &&
+    "webdriver" in navigator &&
+    navigator.webdriver === true) ||
+  (typeof import.meta !== "undefined" &&
+    (import.meta as any).env &&
+    (import.meta as any).env.MODE === "test");
+
+if (!__isE2E__ && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker
       .register("/service-worker.js")

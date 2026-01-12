@@ -30,8 +30,20 @@ const getRelayUrl = () => {
     window.location.hostname.endsWith(".netlify.app") ||
     window.location.hostname.endsWith(".netlify.com");
 
-  if (isNetlifyHost) {
+  const isLocalHost =
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1";
+
+  const isSovcomAliasHost = window.location.hostname === "sovcomnetlify.app";
+
+  if (isNetlifyHost || isSovcomAliasHost) {
     return window.location.origin + "/.netlify/functions/room";
+  }
+
+  // For local dev, default to the production hub so local↔prod can connect.
+  // Override with VITE_RELAY_URL if you want a different hub.
+  if (isLocalHost) {
+    return "https://sovcom.netlify.app/.netlify/functions/room";
   }
 
   // For other deployments, return empty string to allow P2P-only mode

@@ -8,7 +8,7 @@
  * 3. Initial peer discovery and connection
  */
 
-import { MeshNetwork } from '../../../core/src/mesh/network';
+import { MeshNetwork } from "@sc/core";
 
 export interface BootstrapNode {
   id: string;
@@ -104,7 +104,9 @@ export class BootstrapService {
       const identity = network.getIdentity();
       const nodeInfo = {
         id: network.getLocalPeerId(),
-        publicKey: Buffer.from(identity.publicKey).toString('hex'),
+        publicKey: Array.from(identity.publicKey)
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join(""),
         capabilities: {
           bandwidthMbps: 100, // Assume good bandwidth for web deployment
           uptime: Date.now(), // Track uptime

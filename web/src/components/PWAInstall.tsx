@@ -125,7 +125,16 @@ export const useServiceWorker = () => {
     useState<ServiceWorkerRegistration | null>(null);
 
   useEffect(() => {
-    if ("serviceWorker" in navigator) {
+    const isE2E =
+      (globalThis as any).__E2E__ === true ||
+      (typeof navigator !== "undefined" &&
+        "webdriver" in navigator &&
+        navigator.webdriver === true) ||
+      (typeof import.meta !== "undefined" &&
+        (import.meta as any).env &&
+        (import.meta as any).env.MODE === "test");
+
+    if (!isE2E && "serviceWorker" in navigator) {
       navigator.serviceWorker
         .register("/sw.js")
         .then((reg) => {

@@ -1644,7 +1644,7 @@ export class MeshNetwork {
    */
   isConnectedToPeer(peerId: string): boolean {
     const peer = this.routingTable.getPeer(peerId);
-    return peer !== null;
+    return Boolean(peer && peer.state === "connected");
   }
 
   /**
@@ -1687,8 +1687,33 @@ export class MeshNetwork {
     }
 
     // Create or get peer connection
-    // Manual connection is specifically WEBRTC feature, so we access shim
-    const peer = this.webrtcTransport.getPool().getOrCreatePeer(peerId);
+    // Manual connection is specifically WEBRTC feature, so we access shim.
+    // IMPORTANT: if we already have a peer connection for this peer, recreate it
+    // before generating a new offer. Generating multiple offers / re-creating data
+    // channels on an existing RTCPeerConnection can cause SDP m-line order mismatch.
+    const pool = this.webrtcTransport.getPool();
+    if (typeof (pool as any).has === "function" && (pool as any).has(peerId)) {
+      try {
+        const maybePromise = (pool as any).removePeer(peerId);
+        if (maybePromise && typeof maybePromise.then === "function") {
+          await maybePromise;
+        }
+      } catch (e) {
+        // no-op
+      }
+    }
+    const peer = pool.getOrCreatePeer(peerId);
+
+    // Manual connection flow explicitly controls offer/answer exchange.
+    // Disable automatic renegotiation offers during initial setup to avoid
+    // concurrent offers and SDP m-line order mismatch.
+    try {
+      if ((peer as any).connection && typeof (peer as any).connection === "object") {
+        (peer as any).connection.onnegotiationneeded = null;
+      }
+    } catch {
+      // no-op
+    }
 
     // Create data channels
     peer.createDataChannel({ label: "reliable", ordered: true });

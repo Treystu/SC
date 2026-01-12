@@ -18,6 +18,9 @@ test.describe('Web to Web Cross-Platform Tests', () => {
   test.beforeEach(async ({ browser }) => {
     coordinator = new CrossPlatformTestCoordinator();
 
+    const dbName1 = `sc_e2e_web1_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const dbName2 = `sc_e2e_web2_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
     // Create two separate browser contexts for complete isolation
     context1 = await browser.newContext({
       viewport: { width: 1280, height: 720 },
@@ -28,6 +31,16 @@ test.describe('Web to Web Cross-Platform Tests', () => {
       viewport: { width: 1280, height: 720 },
       userAgent: 'SC-Web-Client-2/1.0'
     });
+
+    await context1.addInitScript((dbName: string) => {
+      (window as any).__E2E__ = true;
+      (window as any).__SC_DB_NAME__ = dbName;
+    }, dbName1);
+
+    await context2.addInitScript((dbName: string) => {
+      (window as any).__E2E__ = true;
+      (window as any).__SC_DB_NAME__ = dbName;
+    }, dbName2);
 
     page1 = await context1.newPage();
     page2 = await context2.newPage();
@@ -44,10 +57,6 @@ test.describe('Web to Web Cross-Platform Tests', () => {
       page2,
       browser
     ) as WebClient;
-
-    // Initialize both clients
-    await webClient1.initialize();
-    await webClient2.initialize();
   });
 
   test.afterEach(async () => {

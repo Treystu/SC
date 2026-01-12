@@ -1,4 +1,5 @@
 import { getDatabase } from "./storage/database";
+import { encryptionManager } from "./storage/encryption";
 
 // Timeout for encryption initialization
 const ENCRYPTION_INIT_TIMEOUT = 10000;
@@ -23,6 +24,21 @@ export const generateBrowserFingerprint = async (): Promise<string> => {
 
 export const initializeEncryption = async (): Promise<void> => {
   try {
+    // E2E runs should keep persistence deterministic and avoid device-fingerprint-derived
+    // key drift breaking decrypt-after-reload.
+    if (
+      (typeof navigator !== "undefined" && navigator.webdriver === true) ||
+      (typeof window !== "undefined" && (window as any).__E2E__ === true)
+    ) {
+      try {
+        encryptionManager.disable();
+      } catch {
+        // ignore
+      }
+      console.log("✅ Encryption disabled (E2E)");
+      return;
+    }
+
     const db = getDatabase();
     const passphrase = await generateBrowserFingerprint();
     

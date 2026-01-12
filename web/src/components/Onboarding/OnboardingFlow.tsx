@@ -208,6 +208,11 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                 placeholder="Display Name"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && displayName.trim() && !isGenerating) {
+                    handleNext();
+                  }
+                }}
               />
             </div>
 

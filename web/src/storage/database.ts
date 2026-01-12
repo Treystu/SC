@@ -541,28 +541,42 @@ export class DatabaseManager {
   async saveContact(contact: StoredContact): Promise<void> {
     if (!this.db) await this.init();
 
-    // Validate public key before saving
-    try {
-      const publicKeyBytes = new Uint8Array(
-        atob(contact.publicKey)
-          .split("")
-          .map((c) => c.charCodeAt(0)),
-      );
-      if (publicKeyBytes.length !== 32) {
-        throw new Error(
-          "Invalid public key length. Must be 32 bytes for Ed25519.",
+    // Normalize/validate public key before saving
+    // Accept either base64 (preferred) or 64-char hex (32 bytes) for compatibility with room metadata.
+    let publicKeyBase64 = contact.publicKey;
+    if (publicKeyBase64) {
+      const looksLikeHex = /^[0-9a-fA-F]{64}$/.test(publicKeyBase64);
+      if (looksLikeHex) {
+        const bytes = new Uint8Array(32);
+        for (let i = 0; i < 32; i++) {
+          bytes[i] = parseInt(publicKeyBase64.slice(i * 2, i * 2 + 2), 16);
+        }
+        publicKeyBase64 = btoa(String.fromCharCode(...Array.from(bytes)));
+      }
+
+      try {
+        const publicKeyBytes = new Uint8Array(
+          atob(publicKeyBase64)
+            .split("")
+            .map((c) => c.charCodeAt(0)),
+        );
+        if (publicKeyBytes.length !== 32) {
+          throw new Error(
+            "Invalid public key length. Must be 32 bytes for Ed25519.",
+          );
+        }
+      } catch (e) {
+        return Promise.reject(
+          new Error(`Invalid base64 public key: ${(e as Error).message}`),
         );
       }
-    } catch (e) {
-      return Promise.reject(
-        new Error(`Invalid base64 public key: ${(e as Error).message}`),
-      );
     }
 
     // Normalize ID to consistent format
     const normalizedContact = {
       ...contact,
       id: this.normalizePeerId(contact.id),
+      publicKey: publicKeyBase64,
     };
 
     return new Promise((resolve, reject) => {

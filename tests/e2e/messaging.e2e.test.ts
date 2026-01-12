@@ -318,6 +318,28 @@ test.describe("Message History", () => {
     await messageInput.fill("Persistent message");
     await page.locator('[data-testid="send-message-btn"]').click();
 
+    const conversationId = await page.evaluate(() => {
+      // ChatView is mounted only when a conversation is selected
+      const container = document.querySelector(
+        '[data-testid="chat-container"]',
+      ) as HTMLElement | null;
+      return container ? container.getAttribute("data-conversation-id") : null;
+    });
+    console.log("[TEST] conversationId:", conversationId);
+
+    // Wait for the message to be persisted before reload
+    await page.waitForFunction(
+      async (convId) => {
+        if (!convId) return false;
+        const db = (window as any).getDatabase?.();
+        if (!db || typeof db.getMessages !== "function") return false;
+        const msgs = await db.getMessages(convId);
+        return Array.isArray(msgs) && msgs.some((m: any) => m?.content === "Persistent message");
+      },
+      conversationId,
+      { timeout: 15000 },
+    );
+
     // Wait for message to be status (sent OR queued OR pending)
     const status = page.locator('[data-testid^="message-status-"]').first();
     await expect(status).toBeVisible({ timeout: 15000 });
@@ -331,13 +353,69 @@ test.describe("Message History", () => {
     await page.waitForLoadState("domcontentloaded");
     await expect(page.locator(".loading-state")).toBeHidden();
 
+    // Debug: confirm what's actually in IndexedDB after reload
+    const dbDebug = await page.evaluate(async () => {
+      const win = window as any;
+      const db = win.getDatabase?.() || null;
+      const firstConvEl = document.querySelector(".conversation-item") as
+        | HTMLElement
+        | null;
+      return {
+        hasDb: Boolean(db),
+        firstConvText: firstConvEl?.textContent || null,
+      };
+    });
+    console.log("[TEST] After reload DB debug:", dbDebug);
+
     // Select the conversation again
     const firstConv = page.locator(".conversation-item").first();
     await expect(firstConv).toBeVisible();
     await firstConv.click();
 
+    const uiConversationId = await page.evaluate(() => {
+      const container = document.querySelector(
+        '[data-testid="chat-container"]',
+      ) as HTMLElement | null;
+      return container ? container.getAttribute("data-conversation-id") : null;
+    });
+    console.log("[TEST] UI conversationId after click:", uiConversationId);
+
+    const domDebug = await page.evaluate(() => {
+      const msgContainer = document.querySelector(
+        '[data-testid="message-container"]',
+      ) as HTMLElement | null;
+      const renderedMessages = document.querySelectorAll(".message").length;
+      return {
+        renderedMessages,
+        messageContainerText: msgContainer?.innerText || null,
+        messageContainerHtml: msgContainer?.innerHTML?.slice(0, 500) || null,
+      };
+    });
+    console.log("[TEST] DOM debug after reload+click:", domDebug);
+
+    const afterClickDb = await page.evaluate(async (convId) => {
+      const win = window as any;
+      const db = win.getDatabase?.() || null;
+      const messages = db && convId && db.getMessages ? await db.getMessages(convId) : [];
+      return {
+        convId,
+        messageCount: Array.isArray(messages) ? messages.length : 0,
+        lastContent:
+          Array.isArray(messages) && messages.length > 0
+            ? (messages[messages.length - 1] as any).content
+            : null,
+      };
+    }, conversationId);
+    console.log("[TEST] After reload DB messages for conversationId:", afterClickDb);
+
     // Message should still be there
-    const message = page.locator("text=Persistent message");
+    const messageContainer = page.locator('[data-testid="message-container"]');
+    await expect(messageContainer).toBeVisible();
+    await page.waitForFunction(() => {
+      return document.querySelectorAll(".message").length > 0;
+    });
+
+    const message = messageContainer.getByText("Persistent message").first();
     await expect(message).toBeVisible();
   });
 

@@ -42,6 +42,7 @@ import { validateMessageContent } from "@sc/core";
 import { rateLimiter } from "@sc/core";
 import { config } from "./config";
 import { saveBootstrapPeers } from "./utils/peerBootstrap";
+import { generateNewIdentity } from "./services/mesh-network-service";
 
 // Extend Window interface for E2E testing helpers
 declare global {
@@ -57,6 +58,11 @@ declare global {
     messages?: unknown[];
     addContact?: (id: string, name: string) => Promise<void>;
     resetState?: () => Promise<void>;
+    e2eCreateIdentity?: (displayName?: string) => Promise<void>;
+    joinRoom?: (url: string) => Promise<void>;
+    leaveRoom?: () => void;
+    discoveredPeers?: unknown[];
+    isJoinedToRoom?: boolean;
   }
 }
 
@@ -71,9 +77,8 @@ function App() {
     (typeof window !== "undefined" && window.__E2E__ === true);
 
   const [activeRoom, setActiveRoom] = useState<string | null>(null);
-  const [selectedConversation, setSelectedConversation] = useState<
-    string | null
-  >(null);
+  const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
+  const recentConversationNamesRef = useRef<Map<string, string>>(new Map());
   const [activeTab, setActiveTab] = useState<"chats" | "groups">("chats");
   const [showSettings, setShowSettings] = useState(false);
   // Force skip onboarding in E2E/test mode so main UI always renders
@@ -202,9 +207,13 @@ function App() {
       window.acceptConnectionOffer = acceptConnectionOffer;
       window.connectToPeer = connectToPeer;
       window.sendMessage = sendMessage;
+      window.joinRoom = joinRoom;
+      window.leaveRoom = leaveRoom;
       window.getDatabase = getDatabase;
       window.peers = peers;
       window.messages = messages;
+      window.discoveredPeers = discoveredPeers;
+      window.isJoinedToRoom = isJoinedToRoom;
       window.__SC_STATUS__ = status;
     }
     if (isE2E) {
@@ -223,6 +232,9 @@ function App() {
       window.resetState = async () => {
         /* Clear DBs/Storage logic if needed */
       };
+      window.e2eCreateIdentity = async (displayName: string = "E2E") => {
+        await generateNewIdentity(displayName);
+      };
       // Expose status for tests to check connectivity
       window.__SC_STATUS__ = displayStatus;
       console.log(
@@ -236,6 +248,10 @@ function App() {
     acceptConnectionOffer,
     connectToPeer,
     sendMessage,
+    joinRoom,
+    leaveRoom,
+    discoveredPeers,
+    isJoinedToRoom,
     peers,
     messages,
     status,
@@ -756,7 +772,12 @@ function App() {
       lastMessageTimestamp: Date.now(),
       unreadCount: 0,
       createdAt: Date.now(),
+      metadata: {
+        displayName: finalName,
+      } as any,
     });
+
+    recentConversationNamesRef.current.set(finalPeerId, finalName);
 
     refreshConversations();
     setSelectedConversation(finalPeerId);
@@ -872,6 +893,50 @@ function App() {
       } else {
         // Handle 1:1 Message
         try {
+          try {
+            const db = getDatabase();
+            const ts = Date.now();
+            const id = `ui-${ts}-${Math.random().toString(16).slice(2)}`;
+
+            await db.saveMessage({
+              id,
+              conversationId: selectedConversation,
+              content: sanitizedContent,
+              timestamp: ts,
+              senderId: "me",
+              recipientId: selectedConversation,
+              type: "text",
+              status: "sent",
+            } as any);
+
+            if (isE2E) {
+              console.log("[E2E] UI persisted message", {
+                id,
+                conversationId: selectedConversation,
+              });
+            }
+
+            const existingConv = await db.getConversation(selectedConversation);
+            if (existingConv) {
+              await db.saveConversation({
+                ...existingConv,
+                lastMessageTimestamp: ts,
+                lastMessageId: id,
+              } as any);
+
+              if (isE2E) {
+                console.log("[E2E] UI updated conversation lastMessage", {
+                  conversationId: selectedConversation,
+                  lastMessageId: id,
+                });
+              }
+            }
+          } catch {
+            if (isE2E) {
+              console.log("[E2E] UI failed to persist message (ignored)");
+            }
+          }
+
           await sendMessage(
             selectedConversation,
             sanitizedContent,
@@ -1063,8 +1128,19 @@ function App() {
     const contact = contacts.find((c) => c.id === id);
     if (contact) return contact.displayName;
 
+    const recent = recentConversationNamesRef.current.get(id);
+    if (recent) return recent;
+
     const group = groups.find((g) => g.id === id);
     if (group) return group.name;
+
+    const conversation = storedConversations.find((c) => c.id === id);
+    if (conversation && (conversation as any).metadata) {
+      const md: any = (conversation as any).metadata;
+      if (typeof md.displayName === "string" && md.displayName.trim()) {
+        return md.displayName;
+      }
+    }
 
     return "Unknown Contact";
   };

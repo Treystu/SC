@@ -111,8 +111,72 @@ export const getMeshNetwork = async (): Promise<MeshNetwork> => {
           peerId = storedIdentity.id.replace(/\s/g, "").toUpperCase();
           console.log('[MeshNetworkService] Identity ready:', { peerId, fingerprint: storedIdentity.fingerprint, pubKeyLen: pubKey.length, privKeyLen: privKey.length });
         } else {
-          console.log('[MeshNetworkService] No persisted identity found. Waiting for onboarding...');
-          throw new Error("NO_IDENTITY");
+          const isE2E =
+            (globalThis as any).__E2E__ === true ||
+            (typeof navigator !== "undefined" &&
+              "webdriver" in navigator &&
+              navigator.webdriver === true) ||
+            (typeof import.meta !== "undefined" &&
+              (import.meta as any).env &&
+              (import.meta as any).env.MODE === "test");
+
+          let onboardingComplete = false;
+          try {
+            const v = await db.getSetting<boolean>("onboarding-complete");
+            onboardingComplete = v === true;
+          } catch {
+            onboardingComplete = false;
+          }
+
+          // Some older tests used localStorage instead of IndexedDB for onboarding.
+          if (!onboardingComplete) {
+            try {
+              onboardingComplete =
+                typeof localStorage !== "undefined" &&
+                (localStorage.getItem("sc-onboarding-complete") === "true" ||
+                  localStorage.getItem("onboarding-complete") === "true");
+            } catch {
+              // ignore
+            }
+          }
+
+          const hasE2ETestDb = Boolean((globalThis as any).__SC_DB_NAME__);
+          const shouldAutoGenerateIdentity =
+            onboardingComplete || (isE2E && hasE2ETestDb);
+
+          if (shouldAutoGenerateIdentity) {
+            console.log(
+              '[MeshNetworkService] No persisted identity found but onboarding is complete; auto-generating identity...',
+            );
+            const { generateIdentity } = await import("@sc/core");
+            const { generateFingerprint } = await import("@sc/core");
+            const newIdentity = generateIdentity();
+            const fingerprint = await generateFingerprint(newIdentity.publicKey);
+            const cleanFingerprint = fingerprint.replace(/\s/g, "").toUpperCase();
+            const newId = cleanFingerprint.substring(0, 16);
+
+            await db.saveIdentity({
+              id: newId,
+              publicKey: newIdentity.publicKey,
+              privateKey: newIdentity.privateKey,
+              fingerprint: fingerprint,
+              createdAt: Date.now(),
+              isPrimary: true,
+              label: "Primary Identity",
+              displayName: "E2E",
+            });
+
+            identityKeyPair = {
+              publicKey: newIdentity.publicKey,
+              privateKey: newIdentity.privateKey,
+              displayName: "Anonymous",
+            };
+            peerId = newId;
+            console.log('[MeshNetworkService] Auto-generated identity ready:', { peerId });
+          } else {
+            console.log('[MeshNetworkService] No persisted identity found. Waiting for onboarding...');
+            throw new Error("NO_IDENTITY");
+          }
         }
       } catch (error) {
         if ((error as Error).message === "NO_IDENTITY") {

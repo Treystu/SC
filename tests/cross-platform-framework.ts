@@ -51,6 +51,38 @@ export abstract class PlatformClient {
   abstract goOffline(): Promise<void>;
   abstract goOnline(): Promise<void>;
 
+  async getPeerId(): Promise<string> {
+    return this.clientId;
+  }
+
+  async openConversation(_contactName: string): Promise<void> {
+    // Default no-op for platforms where UI selection isn't modeled.
+    // WebClient overrides this to ensure the correct chat is open before assertions.
+  }
+
+  async joinRoom(_url: string): Promise<void> {
+    // Default no-op for non-web clients.
+  }
+
+  async connectToPeer(_peerId: string): Promise<void> {
+    // Default no-op for non-web clients.
+  }
+
+  async waitForPeer(_peerId: string, _timeout = 30000): Promise<void> {
+    // Default no-op for non-web clients.
+  }
+
+  async waitForDiscoveredPeer(_peerId: string, _timeout = 30000): Promise<void> {
+    // Default no-op for non-web clients.
+  }
+
+  async getDebugSnapshot(): Promise<Record<string, any>> {
+    return {
+      clientId: this.clientId,
+      platform: this.platform,
+    };
+  }
+
   // Group messaging methods (with default implementations that can be overridden)
   async sendMessageToGroup(message: string): Promise<void> {
     throw new Error("sendMessageToGroup not implemented for this platform");
@@ -78,42 +110,74 @@ export abstract class PlatformClient {
 export class WebClient extends PlatformClient {
   private page: Page;
   private browser: Browser;
+  private consoleLogs: string[] = [];
 
   constructor(clientId: string, page: Page, browser: Browser) {
     super(clientId, "web");
     this.page = page;
     this.browser = browser;
+
+    // Capture browser logs for debugging flaky E2E signaling/transport issues
+    this.page.on("console", (msg) => {
+      const line = `[${msg.type()}] ${msg.text()}`;
+      this.consoleLogs.push(line);
+      if (this.consoleLogs.length > 200) {
+        this.consoleLogs.splice(0, this.consoleLogs.length - 200);
+      }
+    });
   }
 
   async initialize(): Promise<void> {
     // Navigate to page
     await this.page.goto("/");
+    await this.page.waitForLoadState("domcontentloaded");
 
-    // Clear storage to ensure fresh state
-    await this.page.evaluate(() => {
-      localStorage.clear();
-      // Remove any previously created databases for this test client
-      // Note: we can't easily delete IndexedDB here without potentially blocking,
-      // but the unique DB name approach in tests handles this.
-    });
-
-    // Ensure E2E mode and unique DB if not already set
-    // Using a consistent DB name based on clientId for this test run
-    const uniqueDbName = `sc_e2e_${this.clientId}_${Date.now()}`;
-    await this.page.addInitScript((dbName) => {
-      (window as any).__E2E__ = true;
-      (window as any).__SC_DB_NAME__ = dbName;
-    }, uniqueDbName);
-
-    // Reload to apply init script
-    await this.page.reload();
-    await this.page.waitForLoadState("networkidle");
-
-    // Wait for mesh status to be exposed
+    // Ensure mesh status is exposed
     await this.page.waitForFunction(() => {
       const s = (window as any).__SC_STATUS__;
       return !!s;
     });
+
+    // Ensure identity exists (some tests run with completely fresh DB)
+    const hasPeerId = await this.page
+      .waitForFunction(() => (window as any).__SC_STATUS__?.localPeerId, undefined, {
+        timeout: 2000,
+      })
+      .then(() => true)
+      .catch(() => false);
+
+    if (!hasPeerId) {
+      try {
+        const getStarted = this.page.getByRole("button", { name: "Get Started" });
+        if (await getStarted.isVisible({ timeout: 2000 })) {
+          await getStarted.click();
+        }
+      } catch {
+        // ignore
+      }
+
+      try {
+        const displayNameInput = this.page.getByPlaceholder("Display Name");
+        if (await displayNameInput.isVisible({ timeout: 5000 })) {
+          await displayNameInput.fill(this.clientId);
+          await displayNameInput.press("Enter");
+        }
+      } catch {
+        // ignore
+      }
+
+      // Fallback: use exposed E2E helper if UI isn't present
+      await this.page.evaluate(async (displayName: string) => {
+        const win = window as any;
+        if (typeof win.e2eCreateIdentity === "function") {
+          await win.e2eCreateIdentity(displayName);
+        }
+      }, this.clientId);
+
+      await this.page.waitForFunction(() => (window as any).__SC_STATUS__?.localPeerId, undefined, {
+        timeout: 15000,
+      });
+    }
   }
 
   async cleanup(): Promise<void> {
@@ -121,14 +185,59 @@ export class WebClient extends PlatformClient {
   }
 
   async sendMessage(contactName: string, message: string): Promise<void> {
-    await this.page.click(`[data-testid="contact-${contactName}"]`);
+    // Prefer opening the conversation thread, but don't hard-fail if we're already in it
+    // (e.g. when the coordinator opens the conversation separately).
+    try {
+      await this.page.click(`[data-testid="contact-${contactName}"]`, {
+        timeout: 3000,
+      });
+    } catch {
+      // ignore
+    }
+    await this.page.waitForSelector('[data-testid="chat-container"]', {
+      timeout: 10000,
+    });
+    await this.page.waitForSelector('[data-testid="message-input"]', {
+      timeout: 10000,
+    });
+
     await this.page.fill('[data-testid="message-input"]', message);
-    await this.page.click('[data-testid="send-message-btn"]');
+
+    // Wait until the send button is enabled (React state updates can be async)
+    const sendBtn = this.page.locator('[data-testid="send-message-btn"]');
+    await sendBtn.waitFor({ state: "visible", timeout: 10000 });
+    await this.page.waitForFunction(() => {
+      const btn = document.querySelector('[data-testid="send-message-btn"]') as HTMLButtonElement | null;
+      return !!btn && btn.disabled === false;
+    }, undefined, { timeout: 10000 });
+
+    await sendBtn.click();
   }
 
   async waitForMessage(message: string, timeout = 10000): Promise<boolean> {
     try {
-      await this.page.waitForSelector(`text=${message}`, { timeout });
+      // Prefer checking the app's in-memory state exposed for E2E
+      const inState = await this.page
+        .waitForFunction(
+          (msg) => {
+            const w = window as any;
+            const msgs = Array.isArray(w.messages) ? w.messages : [];
+            return msgs.some((m: any) =>
+              typeof m?.content === "string" && m.content.includes(String(msg)),
+            );
+          },
+          message,
+          { timeout: Math.min(timeout, 8000) },
+        )
+        .then(() => true)
+        .catch(() => false);
+
+      if (inState) return true;
+
+      // Fallback: UI assertion scoped to the chat message container
+      const container = this.page.locator('[data-testid="message-container"]');
+      await container.waitFor({ state: "visible", timeout });
+      await container.locator(`text=${message}`).waitFor({ timeout });
       return true;
     } catch {
       return false;
@@ -136,17 +245,49 @@ export class WebClient extends PlatformClient {
   }
 
   async addContact(name: string, publicKey: string): Promise<void> {
+    // Open the add menu
     await this.page.click('[data-testid="add-contact-btn"]');
+
+    // Click "Add by ID" (opens AddContactDialog)
+    await this.page.waitForSelector('[data-testid="add-by-id-btn"]', {
+      timeout: 5000,
+    });
+    await this.page.click('[data-testid="add-by-id-btn"]');
+
+    // Fill dialog inputs
+    await this.page.waitForSelector('[data-testid="contact-name-input"]', {
+      timeout: 5000,
+    });
     await this.page.fill('[data-testid="contact-name-input"]', name);
     await this.page.fill('[data-testid="contact-publickey-input"]', publicKey);
+
+    // Submit
     await this.page.click('[data-testid="save-contact-btn"]');
-    await this.page.waitForSelector(`[data-testid="contact-${name}"]`);
+
+    // Wait for conversation to appear
+    await this.page.waitForSelector(`[data-testid="contact-${name}"]`, {
+      timeout: 15000,
+    });
+  }
+
+  async openConversation(contactName: string): Promise<void> {
+    await this.page.click(`[data-testid="contact-${contactName}"]`);
+    await this.page.waitForSelector('[data-testid="chat-container"]', {
+      timeout: 10000,
+    });
   }
 
   async getPeerCount(): Promise<number> {
-    const peerCountText = await this.page.textContent(
-      '[data-testid="peer-count"]',
-    );
+    const count = await this.page.evaluate(() => {
+      const w = window as any;
+      if (Array.isArray(w.peers)) return w.peers.length;
+      if (Array.isArray(w.__SC_STATUS__?.peers)) return w.__SC_STATUS__.peers.length;
+      return null;
+    });
+
+    if (typeof count === "number") return count;
+
+    const peerCountText = await this.page.textContent('[data-testid="peer-count"]');
     return parseInt(peerCountText || "0", 10);
   }
 
@@ -156,10 +297,31 @@ export class WebClient extends PlatformClient {
   ): Promise<void> {
     await this.page.waitForFunction(
       (count) => {
+        const w = window as any;
+        if (Array.isArray(w.peers)) return w.peers.length >= count;
+        if (Array.isArray(w.__SC_STATUS__?.peers)) return w.__SC_STATUS__.peers.length >= count;
         const elem = document.querySelector('[data-testid="peer-count"]');
         return elem && parseInt(elem.textContent || "0", 10) >= count;
       },
       expectedCount,
+      { timeout },
+    );
+  }
+
+  override async waitForDiscoveredPeer(
+    peerId: string,
+    timeout = 30000,
+  ): Promise<void> {
+    await this.page.waitForFunction(
+      (targetPeerId) => {
+        const w = window as any;
+        const discovered = Array.isArray(w.discoveredPeers) ? w.discoveredPeers : [];
+        return discovered.some((p: any) => {
+          const id = typeof p === "string" ? p : p?.id;
+          return typeof id === "string" && id.toLowerCase() === String(targetPeerId).toLowerCase();
+        });
+      },
+      peerId,
       { timeout },
     );
   }
@@ -171,6 +333,104 @@ export class WebClient extends PlatformClient {
     });
   }
 
+  override async getPeerId(): Promise<string> {
+    return await this.page.evaluate(() => {
+      return (window as any).__SC_STATUS__?.localPeerId || "";
+    });
+  }
+
+  override async joinRoom(url: string): Promise<void> {
+    await this.page.evaluate(async (roomUrl: string) => {
+      const win = window as any;
+      if (typeof win.joinRoom !== "function") {
+        throw new Error("window.joinRoom helper not available");
+      }
+      await win.joinRoom(roomUrl);
+    }, url);
+
+    await this.page.waitForFunction(() => (window as any).isJoinedToRoom === true, undefined, {
+      timeout: 20000,
+    });
+  }
+
+  override async connectToPeer(peerId: string): Promise<void> {
+    await this.page.evaluate(async (targetPeerId: string) => {
+      const win = window as any;
+      if (typeof win.connectToPeer !== "function") {
+        throw new Error("window.connectToPeer helper not available");
+      }
+      await win.connectToPeer(targetPeerId);
+    }, peerId);
+  }
+
+  override async waitForPeer(peerId: string, timeout = 30000): Promise<void> {
+    try {
+      await this.page.waitForFunction(
+        (targetPeerId) => {
+          const w = window as any;
+          const peers = Array.isArray(w.peers) ? w.peers : [];
+          return peers.some((p: any) => {
+            const id = typeof p === "string" ? p : p?.id;
+            return (
+              typeof id === "string" &&
+              id.toLowerCase() === String(targetPeerId).toLowerCase()
+            );
+          });
+        },
+        peerId,
+        { timeout },
+      );
+    } catch (e) {
+      const debug = await this.page.evaluate(() => {
+        const w = window as any;
+        return {
+          localPeerId: w.__SC_STATUS__?.localPeerId || null,
+          isJoinedToRoom: w.isJoinedToRoom ?? null,
+          discoveredPeers: Array.isArray(w.discoveredPeers)
+            ? w.discoveredPeers
+            : null,
+          peers: Array.isArray(w.peers) ? w.peers : null,
+        };
+      });
+
+      const recentLogs = this.consoleLogs.slice(-50);
+
+      throw new Error(
+        `waitForPeer timeout waiting for ${peerId}. Debug: ${JSON.stringify(debug)}\nRecent console logs:\n${recentLogs.join("\n")}`,
+      );
+    }
+  }
+
+  override async getDebugSnapshot(): Promise<Record<string, any>> {
+    const pageState = await this.page.evaluate(() => {
+      const w = window as any;
+      const peers = Array.isArray(w.peers) ? w.peers : [];
+      const msgs = Array.isArray(w.messages) ? w.messages : [];
+      return {
+        localPeerId: w.__SC_STATUS__?.localPeerId || null,
+        isJoinedToRoom: w.isJoinedToRoom ?? null,
+        discoveredPeers: Array.isArray(w.discoveredPeers) ? w.discoveredPeers : null,
+        peers,
+        messagesCount: msgs.length,
+        lastMessages: msgs.slice(-5).map((m: any) => ({
+          content: m?.content,
+          from: m?.from,
+          to: m?.to,
+          conversationId: m?.conversationId,
+          timestamp: m?.timestamp,
+          status: m?.status,
+        })),
+      };
+    });
+
+    return {
+      clientId: this.clientId,
+      platform: this.platform,
+      pageState,
+      recentConsoleLogs: this.consoleLogs.slice(-25),
+    };
+  }
+
   async takeScreenshot(name: string): Promise<void> {
     await this.page.screenshot({
       path: `screenshots/${this.platform}-${this.clientId}-${name}.png`,
@@ -179,11 +439,44 @@ export class WebClient extends PlatformClient {
   }
 
   async goOffline(): Promise<void> {
+    // Toggle offline mode at the browser context level
     await this.page.context().setOffline(true);
+    // Give the app a moment to react (service workers, network status)
+    await this.page.waitForTimeout(500);
   }
 
   async goOnline(): Promise<void> {
+    // Restore network
     await this.page.context().setOffline(false);
+    // Reload to force mesh re-init and room rejoin
+    await this.page.reload({ waitUntil: "domcontentloaded" });
+
+    // Wait for identity to be ready
+    await this.page.waitForFunction(
+      () => (window as any).__SC_STATUS__?.localPeerId,
+      null,
+      { timeout: 15000 },
+    );
+
+    // Ensure we are joined to the signaling room again
+    const ROOM_URL = "https://sovcom.netlify.app/.netlify/functions/room";
+    await this.page.evaluate(async (roomUrl: string) => {
+      const win = window as any;
+      if (typeof win.joinRoom === "function") {
+        try {
+          await win.joinRoom(roomUrl);
+        } catch {
+          // ignore
+        }
+      }
+    }, ROOM_URL);
+
+    // Wait until the app reports joined
+    await this.page.waitForFunction(
+      () => (window as any).isJoinedToRoom === true,
+      null,
+      { timeout: 15000 },
+    );
   }
 
   async sendMessageToGroup(message: string): Promise<void> {
@@ -218,22 +511,14 @@ export class AndroidClient extends PlatformClient {
   }
 
   async initialize(): Promise<void> {
-    // Separate W3C and Appium-specific capabilities
-    const w3cCaps: Record<string, any> = {};
-    const appiumCaps: Record<string, any> = {};
-    for (const [key, value] of Object.entries(config.android)) {
-      // Only allow W3C top-level keys
-      if (key === "platformName" || key === "browserName") {
-        w3cCaps[key] = value;
-      } else {
-        appiumCaps[key] = value;
-      }
-    }
-    // Override deviceName for parallelization
-    appiumCaps.deviceName = `${config.android.deviceName}-${this.clientId}`;
-    const capabilities: RemoteOptions["capabilities"] = {
-      ...w3cCaps,
-      "appium:options": appiumCaps,
+    // Build W3C capabilities with nested appium:options
+    const { platformName, ...appiumOpts } = config.android;
+    const capabilities = {
+      platformName,
+      "appium:options": {
+        ...appiumOpts,
+        deviceName: `${config.android.deviceName}-${this.clientId}`,
+      },
     };
 
     this.driver = await remote({
@@ -241,7 +526,7 @@ export class AndroidClient extends PlatformClient {
       port: config.server.port,
       path: config.server.path,
       logLevel: config.logLevel as any,
-      capabilities,
+      capabilities: capabilities as any,
     });
 
     // Wait for app to load
@@ -425,22 +710,14 @@ export class iOSClient extends PlatformClient {
   }
 
   async initialize(): Promise<void> {
-    // Separate W3C and Appium-specific capabilities
-    const w3cCaps: Record<string, any> = {};
-    const appiumCaps: Record<string, any> = {};
-    for (const [key, value] of Object.entries(config.ios)) {
-      // Only allow W3C top-level keys
-      if (key === "platformName" || key === "browserName") {
-        w3cCaps[key] = value;
-      } else {
-        appiumCaps[key] = value;
-      }
-    }
-    // Override deviceName for parallelization
-    appiumCaps.deviceName = `${config.ios.deviceName}-${this.clientId}`;
-    const capabilities: RemoteOptions["capabilities"] = {
-      ...w3cCaps,
-      "appium:options": appiumCaps,
+    // Build W3C capabilities with nested appium:options
+    const { platformName, ...appiumOpts } = config.ios;
+    const capabilities = {
+      platformName,
+      "appium:options": {
+        ...appiumOpts,
+        deviceName: `${config.ios.deviceName}-${this.clientId}`,
+      },
     };
 
     this.driver = await remote({
@@ -649,11 +926,50 @@ export class CrossPlatformTestCoordinator {
     client1: PlatformClient,
     client2: PlatformClient,
   ): Promise<void> {
-    const publicKey1 = await client1.getPublicKey();
-    const publicKey2 = await client2.getPublicKey();
+    const peerId1 = await client1.getPeerId();
+    const peerId2 = await client2.getPeerId();
 
-    await client1.addContact(client2.getId(), publicKey2);
-    await client2.addContact(client1.getId(), publicKey1);
+    if (!peerId1 || !peerId2) {
+      throw new Error(
+        `Missing peer IDs for connectClients: peerId1=${peerId1 || "(empty)"}, peerId2=${peerId2 || "(empty)"}`,
+      );
+    }
+
+    await client1.addContact(client2.getId(), peerId2);
+    await client2.addContact(client1.getId(), peerId1);
+
+    // Join the same signaling room so WebRTC can exchange offers/candidates
+    const ROOM_URL = "https://sovcom.netlify.app/.netlify/functions/room";
+    await Promise.all([client1.joinRoom(ROOM_URL), client2.joinRoom(ROOM_URL)]);
+
+    // Wait for discovery before initiating the connection
+    await Promise.all([
+      client1.waitForDiscoveredPeer(peerId2, 60000),
+      client2.waitForDiscoveredPeer(peerId1, 60000),
+    ]);
+
+    // Deterministically initiate connection to avoid glare
+    await client1.connectToPeer(peerId2);
+
+    // Give the initiator a moment to enqueue offers/candidates
+    await new Promise((r) => setTimeout(r, 1000));
+
+    // If connection isn't showing up quickly, try initiating from the other side too.
+    // (Some environments require the remote to also actively initiate.)
+    const fastConnect = await Promise.race([
+      client1.waitForPeer(peerId2, 15000).then(() => true),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 15000)),
+    ]);
+
+    if (!fastConnect) {
+      await client2.connectToPeer(peerId1);
+    }
+
+    // Wait until the two clients see each other as connected peers
+    await Promise.all([
+      client1.waitForPeer(peerId2, 60000),
+      client2.waitForPeer(peerId1, 60000),
+    ]);
   }
 
   /**
@@ -692,8 +1008,25 @@ export class CrossPlatformTestCoordinator {
     message: string,
     timeout = 10000,
   ): Promise<boolean> {
+    // Ensure receiver is looking at the right conversation thread
+    await receiver.openConversation(sender.getId());
+    // Ensure sender is also in the right thread for UI-driven send
+    await sender.openConversation(receiver.getId());
     await sender.sendMessage(receiver.getId(), message);
-    return await receiver.waitForMessage(message, timeout);
+    const received = await receiver.waitForMessage(message, timeout);
+
+    if (!received) {
+      const [senderSnap, receiverSnap] = await Promise.all([
+        sender.getDebugSnapshot().catch((e) => ({ error: String(e) })),
+        receiver.getDebugSnapshot().catch((e) => ({ error: String(e) })),
+      ]);
+      // eslint-disable-next-line no-console
+      console.log(
+        `[CrossPlatformTestCoordinator] Message not received within ${timeout}ms. Message="${message}"\nSender snapshot: ${JSON.stringify(senderSnap)}\nReceiver snapshot: ${JSON.stringify(receiverSnap)}`,
+      );
+    }
+
+    return received;
   }
 
   /**

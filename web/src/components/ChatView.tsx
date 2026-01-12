@@ -13,6 +13,10 @@ const sanitizeHTML = (html: string) => {
   return DOMPurify.sanitize(html);
 };
 
+const looksLikeHtml = (value: string): boolean => {
+  return /<[^>]+>/.test(value);
+};
+
 interface ChatViewProps {
   conversationId: string;
   contactName?: string;
@@ -61,8 +65,48 @@ function ChatView({
   useEffect(() => {
     const fetchMessages = async () => {
       const db = getDatabase();
-      const fetchedMessages = await db.getMessages(conversationId);
+      const idsToTry = Array.from(
+        new Set([
+          conversationId,
+          conversationId.toLowerCase(),
+          conversationId.toUpperCase(),
+        ]),
+      );
+
+      const results: any[] = [];
+      for (const id of idsToTry) {
+        try {
+          const msgs = await db.getMessages(id);
+          if (Array.isArray(msgs) && msgs.length > 0) {
+            results.push(...msgs);
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      const byId = new Map<string, any>();
+      for (const m of results) {
+        if (m && m.id) byId.set(m.id, m);
+      }
+      const fetchedMessages = Array.from(byId.values());
+
       setHistoryMessages(fetchedMessages);
+
+      if (typeof navigator !== "undefined" && navigator.webdriver === true) {
+        try {
+          console.log("[E2E] Loaded history messages", {
+            conversationId,
+            count: fetchedMessages.length,
+            lastContent:
+              fetchedMessages.length > 0
+                ? (fetchedMessages[fetchedMessages.length - 1] as any).content
+                : null,
+          });
+        } catch {
+          // ignore
+        }
+      }
     };
 
     fetchMessages();
@@ -70,34 +114,48 @@ function ChatView({
 
   // Merge history and live messages
   const displayedMessages = useMemo(() => {
-    const msgMap = new Map();
+    const msgMap = new Map<string, any>();
 
-    // Add history first
     historyMessages.forEach((m) => {
-      msgMap.set(m.id, m);
+      if (m && m.id) msgMap.set(m.id, m);
     });
 
     // Add/Update with live messages (optimistic updates map "from" to "senderId")
     liveMessages.forEach((m) => {
-      if (
-        m.conversationId === conversationId ||
-        m.from === conversationId ||
-        (m.from === "me" && !m.conversationId)
-      ) {
-        const existing = msgMap.get(m.id);
-        // If existing is from history (usually persisted), and live is optimistic, prefer live status updates
-        // But fundamentally, ID collision means same message.
-        msgMap.set(m.id, {
-          ...m,
-          // If we found it in history, we might want to preserve some props, but live update usually has valid status
-          senderId: m.from === "me" ? "me" : m.from, // map 'from' to 'senderId'
-          status: m.status || existing?.status || "delivered",
-        });
+      if (!m) return;
+
+      const convKey =
+        (typeof m.conversationId === "string" && m.conversationId) ||
+        (typeof m.from === "string" && m.from) ||
+        "";
+
+      const convKeyMatch =
+        convKey === conversationId ||
+        convKey.toLowerCase() === conversationId.toLowerCase();
+
+      if (convKeyMatch) {
+        const existing = m.id ? msgMap.get(m.id) : undefined;
+        if (!existing || (existing.timestamp ?? 0) <= (m.timestamp ?? 0)) {
+          if (m.id) msgMap.set(m.id, m);
+        }
       }
     });
 
-    return Array.from(msgMap.values()).sort(
-      (a, b) => a.timestamp - b.timestamp,
+    const combined = Array.from(msgMap.values());
+
+    // Secondary dedupe for cases where ids differ but the message is the same
+    const byKey = new Map<string, any>();
+    for (const m of combined) {
+      const key =
+        (m as any).id ??
+        `${String((m as any).timestamp)}-${String((m as any).from)}-${String(
+          (m as any).content,
+        )}`;
+      byKey.set(key, m);
+    }
+
+    return Array.from(byKey.values()).sort(
+      (a, b) => (a as any).timestamp - (b as any).timestamp,
     );
   }, [historyMessages, liveMessages, conversationId]);
 
@@ -107,7 +165,11 @@ function ChatView({
   }, [displayedMessages]);
 
   return (
-    <div className="chat-view" data-testid="chat-container">
+    <div
+      className="chat-view"
+      data-testid="chat-container"
+      data-conversation-id={conversationId}
+    >
       <div
         className="chat-header"
         onClick={() => setShowProfile(true)}
@@ -200,7 +262,7 @@ function ChatView({
             displayedMessages.map((message) => (
               <div
                 key={message.id}
-                className={`message ${message.senderId === "me" ? "sent" : "received"} `}
+                className={`message ${message.senderId === "me" || message.from === "me" ? "sent" : "received"} `}
               >
                 <div className="message-bubble">
                   <div className="message-content-wrapper">
@@ -214,12 +276,18 @@ function ChatView({
                         duration={message.metadata?.duration || 0}
                       />
                     ) : (
-                      <div
-                        className="message-content"
-                        dangerouslySetInnerHTML={{
-                          __html: sanitizeHTML(message.content),
-                        }}
-                      ></div>
+                      <div className="message-content">
+                        {typeof message.content === "string" &&
+                        looksLikeHtml(message.content) ? (
+                          <span
+                            dangerouslySetInnerHTML={{
+                              __html: sanitizeHTML(message.content),
+                            }}
+                          />
+                        ) : (
+                          <span>{String(message.content)}</span>
+                        )}
+                      </div>
                     )}
                   </div>
 
@@ -243,7 +311,7 @@ function ChatView({
                         minute: "2-digit",
                       })}
                     </span>
-                    {message.senderId === "me" && (
+                    {(message.senderId === "me" || message.from === "me") && (
                       <span
                         className={`message-status status-${message.status} `}
                         data-testid={`message-status-${message.status}`}
