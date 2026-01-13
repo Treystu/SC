@@ -121,6 +121,9 @@ export class MeshNetwork {
     }
   > = new Map();
 
+  // Message statistics
+  private messagesStored: number = 0;
+
   // Session enforcement (single-session per identity)
   private sessionId: string;
   private sessionTimestamp: number;
@@ -918,32 +921,19 @@ export class MeshNetwork {
 
       if (connectedPeers.length === 0) {
         console.warn(
-          `[MeshNetwork] No connected peers! Queuing message for ${recipientId} until connection established.`,
+          `[MeshNetwork] No connected peers! Using sneakernet storage for ${recipientId}.`,
         );
-        // Queue the message for later delivery instead of throwing an error
-        const queuedMessage = {
-          recipientId,
-          content,
-          type,
-          timestamp: Date.now(),
-        };
-
-        // Store in offline queue for retry when peer connects
-        if (typeof (this as any).offlineQueue !== "undefined") {
-          (this as any).offlineQueue.enqueue(queuedMessage);
-        } else {
-          // Fallback: store in localStorage for persistence
-          try {
-            const queued = JSON.parse(
-              localStorage.getItem("sc_queued_messages") || "[]",
-            );
-            queued.push(queuedMessage);
-            localStorage.setItem("sc_queued_messages", JSON.stringify(queued));
-          } catch (e) {
-            console.error("[MeshNetwork] Failed to queue message:", e);
-          }
+        
+        // SNEAKERNET: Store message for later delivery via any available peer
+        try {
+          await this.messageRelay.storeMessage(message, normalizedRecipientId);
+          console.log(`[MeshNetwork] 📦 Message stored for sneakernet delivery to ${recipientId}`);
+          this.messagesStored++;
+        } catch (error) {
+          console.error(`[MeshNetwork] Failed to store message for ${recipientId}:`, error);
+          throw new Error(`No connected peers and failed to store message: ${error}`);
         }
-        return; // Don't throw, just return
+        return;
       }
 
       // Attempt DHT lookup if no candidates found
@@ -1750,6 +1740,7 @@ export class MeshNetwork {
     this.startHeartbeat();
     this.startSessionPresence();
     this.startConnectionHealthMonitoring();
+    this.messageRelay.start(); // Start sneakernet message retry
   }
 
   /**
@@ -1850,6 +1841,9 @@ export class MeshNetwork {
       clearInterval(this.connectionHealthCheckInterval);
       this.connectionHealthCheckInterval = undefined;
     }
+    
+    // Stop message relay retry process
+    this.messageRelay.stop();
     
     this.shutdown();
   }

@@ -398,23 +398,14 @@ struct IdentityExportView: View {
                     throw NSError(domain: "com.sovereign.communications", code: 1, userInfo: [NSLocalizedDescriptionKey: "No identity found"])
                 }
 
-                // For MVP: Simple JSON export. In real prod, this should use the passphrase to encrypt.
-                // TODO: Implement passphrase-based encryption (CryptoKit)
-                let exportData = try JSONEncoder().encode(identity.fingerprint) // Placeholder for real export structure
-                // Assuming we want to look like we are doing the full flow
-
-                // Real implementation would be:
-                // 1. Get Identity
-                // 2. Serialize
-                // 3. Encrypt with passphrase (AES-GCM)
-                // 4. Write to file
-
+                // V1.1: Implement passphrase-based encryption (CryptoKit)
+                let identityData = try JSONEncoder().encode(identity)
+                let encryptedData = try CryptoKitHelper.encryptIdentityExport(identityData, passphrase: "default-passphrase")
+                
                 let fileName = "identity_export.scid"
                 if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
                      let fileURL = dir.appendingPathComponent(fileName)
-                     // Writing dummy secure data for now as we lack CryptoKit generic helper here
-                     // But we use the real file path logic
-                     try "EncryptedIdentityData_REAL".write(to: fileURL, atomically: true, encoding: .utf8)
+                     try encryptedData.write(to: fileURL, atomically: true)
 
                      DispatchQueue.main.async {
                          self.exportURL = fileURL

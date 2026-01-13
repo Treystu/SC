@@ -209,44 +209,48 @@ function ChatView({
           </span>
         </div>
 
-        {/* Placeholder controls until voice call handling is fully wired into signaling */}
+        {/* Smart Call Controls - Only show when relevant */}
         <div
           className="call-controls"
           onClick={(e) => e.stopPropagation()}
-          style={{ marginLeft: "auto", display: "flex", gap: "0.5rem" }}
+          style={{ marginLeft: "auto", display: "flex", gap: "0.5rem", alignItems: "center" }}
         >
-          <button
-            data-testid="voice-call-btn"
-            onClick={() => {
-              setCallActive(true);
-              setCallEnded(false);
-            }}
-            className="icon-btn"
-            title="Start Call"
-          >
-            📞
-          </button>
-          <button
-            data-testid="end-call-btn"
-            onClick={() => {
-              setCallActive(false);
-              setCallEnded(true);
-            }}
-            className="icon-btn"
-            title="End Call"
-            style={{ color: "var(--accent-danger)" }}
-          >
-            ✕
-          </button>
-          {callActive && (
-            <span data-testid="call-active" className="sr-only">
-              Call Active
-            </span>
+          {/* Only show call button if online and not in active call context */}
+          {isOnline && !callActive && !callEnded && !onClose && (
+            <button
+              data-testid="voice-call-btn"
+              onClick={() => {
+                setCallActive(true);
+                setCallEnded(false);
+              }}
+              className="icon-btn call-btn"
+              title="Start Call"
+              aria-label="Start Voice Call"
+            >
+              📞
+            </button>
           )}
-          {callEnded && (
-            <span data-testid="call-ended" className="sr-only">
-              Call Ended
-            </span>
+          
+          {/* Active Call Controls */}
+          {callActive && (
+            <div className="active-call-controls" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <span className="call-status badge">On Call</span>
+              <button
+                data-testid="end-call-btn"
+                onClick={() => {
+                  setCallActive(false);
+                  setCallEnded(true);
+                }}
+                className="icon-btn hangup-btn"
+                title="End Call"
+                aria-label="End Call"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91" />
+                  <line x1="23" y1="1" x2="1" y2="23" />
+                </svg>
+              </button>
+            </div>
           )}
         </div>
       </div>

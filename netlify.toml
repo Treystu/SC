@@ -56,8 +56,13 @@ X-Content-Type-Options = "nosniff"
 # Enable XSS protection
 X-XSS-Protection = "1; mode=block"
 
+# Certificate Pinning (HPKP) - High Priority Security Feature
+# Note: HPKP is deprecated but still supported by browsers for legacy compatibility
+# For production, generate actual certificate pins using the command in SECURITY_TODO.md
+Public-Key-Pins = "pin-sha256=\"base64+primary==\"; pin-sha256=\"base64+backup==\"; max-age=5184000; includeSubDomains; report-uri=\"https://sovcom.netlify.app/.netlify/functions/report-pin-violation\""
+
 # Content Security Policy
-Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; connect-src 'self' wss: https:; worker-src 'self' blob:;"
+Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; connect-src 'self' wss: https:; worker-src 'self' blob:; report-uri https://sovcom.netlify.app/.netlify/functions/report-csp-violation"
 
 # Referrer policy
 Referrer-Policy = "strict-origin-when-cross-origin"

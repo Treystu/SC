@@ -2,6 +2,9 @@
  * Main exports for the core library
  */
 
+// Mobile UI System
+export * from "./mobile/index.js";
+
 // Protocol
 export * from "./protocol/message.js";
 

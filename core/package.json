@@ -13,7 +13,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "NODE_OPTIONS='--experimental-vm-modules --no-warnings' npx jest --config jest.config.js",
+    "test": "npx jest --config jest.config.js",
     "dev": "tsc --watch"
   },
   "dependencies": {

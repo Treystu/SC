@@ -23,6 +23,8 @@ export interface StoredMessage {
   attempts: number;
   lastAttempt: number;
   expiresAt: number;
+  priority: 'high' | 'normal' | 'low';
+  routeAttempts: string[];
 }
 
 export interface RelayConfig {
@@ -32,6 +34,7 @@ export interface RelayConfig {
   retryBackoff?: number;
   floodRateLimit?: number; // messages per second per peer
   selectiveFlooding?: boolean;
+  retryInterval?: number; // Auto-retry interval in milliseconds
 }
 
 /**
@@ -104,6 +107,7 @@ export class MessageRelay {
   private messageRoutes: Map<string, string[]> = new Map(); // messageHash -> path of peer IDs
   private peerFloodCounter: Map<string, number[]> = new Map(); // peerId -> timestamps
   private config: RelayConfig;
+  private retryInterval?: NodeJS.Timeout;
 
   // Callbacks
   private onMessageForSelfCallback?: (message: Message) => void;
@@ -127,6 +131,7 @@ export class MessageRelay {
       retryBackoff: config.retryBackoff || 5000, // 5 seconds
       floodRateLimit: config.floodRateLimit || 100, // 100 msg/sec per peer
       selectiveFlooding: config.selectiveFlooding !== false,
+      retryInterval: config.retryInterval || 10000, // 10 seconds
     };
     this.persistence = persistence || new MemoryPersistenceAdapter();
   }
@@ -388,59 +393,99 @@ export class MessageRelay {
       attempts: 0,
       lastAttempt: Date.now(),
       expiresAt: Date.now() + this.config.storeTimeout!,
+      priority: 'normal',
+      routeAttempts: [],
     });
 
     this.stats.messagesStored++;
   }
 
   /**
-   * Retry forwarding stored messages
+   * Retry forwarding stored messages with sneakernet approach
    */
   async retryStoredMessages(): Promise<void> {
     const now = Date.now();
     const toDelete: string[] = [];
     const allMessages = await this.persistence.getAllMessages();
 
+    // Get all connected peers for potential relay
+    const connectedPeers = this.routingTable.getAllPeers().filter(p => p.state === 'connected');
+    
     for (const [hash, stored] of allMessages.entries()) {
       // Check expiry
       if (stored.expiresAt < now) {
         toDelete.push(hash);
+        this.stats.messagesExpired++;
         continue;
-      }
-
-      // Check if peer is now available
-      const peer = this.routingTable.getPeer(stored.destinationPeerId);
-      if (!peer) {
-        continue; // Peer still offline
       }
 
       // Check retry backoff
       const timeSinceLastAttempt = now - stored.lastAttempt;
-      const backoffTime =
-        this.config.retryBackoff! * Math.pow(2, stored.attempts);
+      const backoffTime = this.config.retryBackoff! * Math.pow(2, stored.attempts);
 
       if (timeSinceLastAttempt < backoffTime) {
         continue; // Not time to retry yet
       }
 
-      // Attempt to forward
+      // SNEAKERNET APPROACH: Try multiple routing strategies
+      let deliveryAttempted = false;
+      
+      // Strategy 1: Direct delivery if target peer is connected
+      const targetPeer = this.routingTable.getPeer(stored.destinationPeerId);
+      if (targetPeer && targetPeer.state === 'connected') {
+        console.log(`[MessageRelay] 🎯 Direct delivery to ${stored.destinationPeerId}`);
+        this.onForwardMessageCallback?.(stored.message, "");
+        deliveryAttempted = true;
+      }
+      // Strategy 2: Relay through any connected peer (sneakernet)
+      else if (connectedPeers.length > 0) {
+        // Try each connected peer as a potential relay
+        for (const relayPeer of connectedPeers) {
+          // Don't try the same relay peer twice for the same message
+          if (stored.routeAttempts.includes(relayPeer.id)) {
+            continue;
+          }
+          
+          console.log(`[MessageRelay] 🚸 Sneakernet relay via ${relayPeer.id} to reach ${stored.destinationPeerId}`);
+          
+          // Mark this peer as attempted for routing
+          stored.routeAttempts.push(relayPeer.id);
+          
+          // Forward message through this peer
+          this.onForwardMessageCallback?.(stored.message, relayPeer.id);
+          deliveryAttempted = true;
+          break; // Try one peer per retry cycle
+        }
+      }
+
+      // Update attempt tracking
       stored.attempts++;
       stored.lastAttempt = now;
 
+      if (!deliveryAttempted) {
+        console.log(`[MessageRelay] ❌ No delivery path available for ${stored.destinationPeerId}`);
+      }
+
+      // Check if we've exceeded max retries
       if (stored.attempts > this.config.maxRetries!) {
+        console.log(`[MessageRelay] 💀 Giving up on message to ${stored.destinationPeerId} after ${stored.attempts} attempts`);
         toDelete.push(hash);
         this.stats.relayFailures++;
       } else {
-        // Try forwarding again
-        this.onForwardMessageCallback?.(stored.message, "");
-        // Update stored state
+        // Update stored state with new route attempts
         await this.persistence.saveMessage(hash, stored);
+        this.stats.messagesForwarded++;
       }
     }
 
-    // Clean up
+    // Clean up expired/failed messages
     for (const hash of toDelete) {
       await this.persistence.removeMessage(hash);
+    }
+
+    // Log statistics
+    if (allMessages.size > 0) {
+      console.log(`[MessageRelay] 📊 Retry cycle complete: ${allMessages.size - toDelete.length} messages retained, ${toDelete.length} cleaned up`);
     }
   }
 
@@ -475,6 +520,33 @@ export class MessageRelay {
     callback: (message: Message, excludePeerId: string) => void,
   ): void {
     this.onForwardMessageCallback = callback;
+  }
+
+  /**
+   * Start automatic retry process
+   */
+  start(): void {
+    if (this.retryInterval) {
+      clearInterval(this.retryInterval);
+    }
+    
+    console.log(`[MessageRelay] 🚀 Starting automatic retry every ${this.config.retryInterval}ms`);
+    this.retryInterval = setInterval(() => {
+      this.retryStoredMessages().catch(error => {
+        console.error('[MessageRelay] Error in automatic retry:', error);
+      });
+    }, this.config.retryInterval!);
+  }
+
+  /**
+   * Stop automatic retry process
+   */
+  stop(): void {
+    if (this.retryInterval) {
+      clearInterval(this.retryInterval);
+      this.retryInterval = undefined;
+      console.log('[MessageRelay] 🛑 Stopped automatic retry');
+    }
   }
 
   /**

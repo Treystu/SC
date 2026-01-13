@@ -1,4 +1,4 @@
-import { HealthChecker } from './health-check.js';
+import { HealthChecker } from './health-check';
 
 describe('HealthChecker', () => {
   it('should perform a health check and return a healthy result', async () => {

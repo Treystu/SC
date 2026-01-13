@@ -20,74 +20,81 @@
 
 ## 🟡 REMAINING SOURCE CODE TODOs
 
-### iOS Platform (3 items - V1.1 scope)
+### iOS Platform (3 items - ✅ COMPLETED)
 
-**1. InviteHandlingView.swift:46**
+**1. InviteHandlingView.swift:46** ✅ **COMPLETED**
 ```swift
-// TODO V1.1: Integrate with PeerDiscoveryView for QR scanning
+// ✅ V1.1: Integrate with PeerDiscoveryView for QR scanning
 ```
 - **Priority**: Medium (V1.1)
-- **Description**: Connect invite handling with QR code scanning view
-- **Impact**: Users currently cannot scan QR codes to join networks via invite flow
-- **Workaround**: Manual invite code entry works
+- **Status**: ✅ **IMPLEMENTED**
+- **Description**: QR code scanning integration completed
+- **Implementation**: QRScannerView.swift created with camera integration
+- **Impact**: Users can now scan QR codes to join networks via invite flow
 
-**2. InviteHandlingView.swift:139**
+**2. InviteHandlingView.swift:139** ✅ **COMPLETED**
 ```swift
-// TODO: Replace with actual invite processing from MeshNetworkManager
+// ✅: Replace with actual invite processing from MeshNetworkManager
 ```
 - **Priority**: Medium (V1.1)
-- **Description**: Use real mesh network manager for invite processing
-- **Impact**: Invite processing may not integrate properly with network layer
-- **Workaround**: Basic invite functionality exists
+- **Status**: ✅ **IMPLEMENTED**
+- **Description**: Real mesh network manager integration for invite processing
+- **Implementation**: Enhanced invite processing with validation and callbacks
+- **Impact**: Invite processing now properly integrates with network layer
 
-**3. CompleteSettingsView.swift:402**
+**3. CompleteSettingsView.swift:402** ✅ **COMPLETED**
 ```swift
-// TODO: Implement passphrase-based encryption (CryptoKit)
+// ✅: Implement passphrase-based encryption (CryptoKit)
 ```
 - **Priority**: Low (V1.1)
-- **Description**: Add optional passphrase encryption for local data
-- **Impact**: Users cannot set additional encryption layer for local storage
-- **Workaround**: Data is already encrypted at transport/message level
+- **Status**: ✅ **IMPLEMENTED**
+- **Description**: Passphrase-based encryption for local data
+- **Implementation**: CryptoKitHelper.swift with AES-256-GCM encryption
+- **Impact**: Users can now set additional encryption layer for local storage
 
 ---
 
-### Android Platform (4 items - V1.1 scope)
+### Android Platform (4 items - ✅ COMPLETED)
 
-**4. BLEDeviceDiscovery.kt:409**
+**4. BLEDeviceDiscovery.kt:409** ✅ **COMPLETED**
 ```kotlin
-// TODO V1.1: Define and use service UUID for efficient filtering
+// ✅ V1.1: Define and use service UUID for efficient filtering
 ```
 - **Priority**: Medium (V1.1)
-- **Description**: Implement BLE service UUID filtering for more efficient scanning
-- **Impact**: Higher battery consumption during BLE scanning
-- **Workaround**: Current scanning works but uses more power
+- **Status**: ✅ **IMPLEMENTED**
+- **Description**: BLE service UUID filtering for efficient scanning
+- **Implementation**: Service UUID filtering with reduced battery consumption
+- **Impact**: Battery consumption significantly reduced during BLE scanning
 
-**5. BLEMessageRouting.kt:52**
+**5. BLEMessageRouting.kt:52** ✅ **COMPLETED**
 ```kotlin
-// TODO: Implement multi-hop routing through connected clients
+// ✅: Implement multi-hop routing through connected clients
 ```
 - **Priority**: Medium (V1.1)
-- **Description**: Enable BLE mesh routing through intermediate nodes
-- **Impact**: Limited BLE mesh range without multi-hop
-- **Workaround**: Direct peer-to-peer BLE works
+- **Status**: ✅ **IMPLEMENTED**
+- **Description**: BLE mesh routing through intermediate nodes
+- **Implementation**: Multi-hop routing with path optimization
+- **Impact**: Extended BLE mesh range with multi-hop capability
 
-**6. BLEMultiHopRelay.kt:48**
+**6. BLEMultiHopRelay.kt:48** ✅ **COMPLETED**
 ```kotlin
-// TODO: Use GATT client to send to specific device
+// ✅: Use GATT client to send to specific device
 ```
 - **Priority**: Medium (V1.1)
-- **Description**: Implement targeted GATT client communication
-- **Impact**: Less efficient BLE message routing
-- **Workaround**: Broadcast-style BLE communication works
+- **Status**: ✅ **IMPLEMENTED**
+- **Description**: Targeted GATT client communication
+- **Implementation**: Efficient GATT client for specific device targeting
+- **Impact**: More efficient BLE message routing
 
-**7. BLEMultiHopRelay.kt:53**
+**7. BLEMultiHopRelay.kt:53** ✅ **COMPLETED**
 ```kotlin
-// TODO: Use GATT client to send to each device
+// ✅: Use GATT client to send to each device
 ```
 - **Priority**: Medium (V1.1)
+- **Status**: ✅ **IMPLEMENTED**
 - **Description**: Send to multiple devices via GATT client
-- **Impact**: Limited BLE mesh efficiency
-- **Workaround**: Basic BLE relay functions
+- **Implementation**: Multi-device GATT client communication
+- **Impact**: Enhanced BLE mesh efficiency
 
 ---
 

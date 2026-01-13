@@ -1,5 +1,5 @@
 /**
- * Jest configuration for ES modules
+ * Jest configuration for TypeScript
  */
 
 module.exports = {
@@ -50,20 +50,14 @@ module.exports = {
     '^(\\.{1,2}/.*)\\.mjs$': '$1',
   },
   modulePathIgnorePatterns: ['<rootDir>/dist/'],
-  preset: 'ts-jest/presets/default-esm',
+  preset: 'ts-jest',
   transform: {
     '^.+\\.(ts|tsx)$': ['ts-jest', { 
-      useESM: true,
       tsconfig: '<rootDir>/tsconfig.test.json'
-    }],
-    '^.+\\.(js|mjs)$': [
-      'babel-jest',
-      { configFile: './babel.config.cjs' }
-    ]
+    }]
   },
   transformIgnorePatterns: [
     '/node_modules/(?!(?:@noble|@sc|fflate)/)',
     '/dist/'
-  ],
-  extensionsToTreatAsEsm: ['.ts', '.tsx']
+  ]
 };

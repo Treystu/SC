@@ -7,6 +7,7 @@ struct InviteHandlingView: View {
     @State private var showError: Bool = false
     @State private var errorMessage: String = ""
     @State private var showSuccess: Bool = false
+    @State private var showQRScanner: Bool = false
     
     @Environment(\.presentationMode) var presentationMode
     
@@ -43,9 +44,8 @@ struct InviteHandlingView: View {
                 
                 // QR Code Scanner Button
                 Button(action: {
-                    // TODO V1.1: Integrate with PeerDiscoveryView for QR scanning
-                    // This would present the camera scanner view
-                    // For V1.0, users can manually paste invite codes
+                    // V1.1: Integrate with PeerDiscoveryView for QR scanning
+                    showQRScanner = true
                 }) {
                     HStack {
                         Image(systemName: "qrcode.viewfinder")
@@ -58,6 +58,12 @@ struct InviteHandlingView: View {
                     .cornerRadius(10)
                 }
                 .padding(.horizontal)
+                .sheet(isPresented: $showQRScanner) {
+                    QRScannerView { scannedCode in
+                        inviteCode = scannedCode
+                        showQRScanner = false
+                    }
+                }
                 
                 Spacer()
                 
