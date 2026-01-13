@@ -214,20 +214,22 @@ export class Logger {
     let filteredLogs = [...this.logs];
 
     if (filter) {
-      if (filter.level !== undefined) {
-        filteredLogs = filteredLogs.filter(log => log.level >= filter.level);
+      const { level, module, startTime, endTime, search } = filter;
+
+      if (typeof level === 'number') {
+        filteredLogs = filteredLogs.filter(log => log.level >= level);
       }
-      if (filter.module) {
-        filteredLogs = filteredLogs.filter(log => log.module === filter.module);
+      if (module) {
+        filteredLogs = filteredLogs.filter(log => log.module === module);
       }
-      if (filter.startTime !== undefined) {
-        filteredLogs = filteredLogs.filter(log => log.timestamp >= filter.startTime);
+      if (typeof startTime === 'number') {
+        filteredLogs = filteredLogs.filter(log => log.timestamp >= startTime);
       }
-      if (filter.endTime !== undefined) {
-        filteredLogs = filteredLogs.filter(log => log.timestamp <= filter.endTime);
+      if (typeof endTime === 'number') {
+        filteredLogs = filteredLogs.filter(log => log.timestamp <= endTime);
       }
-      if (filter.search) {
-        const searchLower = filter.search.toLowerCase();
+      if (search) {
+        const searchLower = search.toLowerCase();
         filteredLogs = filteredLogs.filter(log => 
           log.message.toLowerCase().includes(searchLower) ||
           (log.module && log.module.toLowerCase().includes(searchLower))

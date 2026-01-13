@@ -13,10 +13,24 @@
   gap: 1rem;
   padding: 1rem;
   background-color: var(--header-bg);
-  backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border-color);
   z-index: 10;
+  cursor: pointer;
+}
+
+.call-controls {
+  margin-left: auto;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.active-call-controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
 }
 
 .close-chat-btn {

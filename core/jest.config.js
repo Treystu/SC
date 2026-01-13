@@ -2,38 +2,63 @@
  * Jest configuration for TypeScript
  */
 
-module.exports = {
-  testEnvironment: 'node',
+const config = {
+  // Test environment
+  testEnvironment: 'jsdom',
+  
+  // Roots
   roots: ['<rootDir>/src'],
+  
+  // Test match patterns
   testMatch: [
-    '**/__tests__/**/*.ts',
-    '**/?(*.)+(spec|test).ts'
+    '**/__tests__/**/*.+(ts|tsx|js)',
+    '**/*.(test|spec).+(ts|tsx|js)'
   ],
-  collectCoverageFrom: [
-    'src/**/*.ts',
-    '!src/**/*.d.ts',
-    '!src/index.ts',
-    '!src/**/*.test.ts',
-    '!src/**/benchmarks.ts'
-  ],
+  
+  // Coverage configuration
+  collectCoverage: false,
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
   coverageThreshold: {
     global: {
-      branches: 20,
-      functions: 20,
-      lines: 20,
-      statements: 20
+      branches: 70,
+      functions: 70,
+      lines: 70,
+      statements: 70
     }
   },
-  testTimeout: 10000,
-  maxWorkers: 1,
-  bail: false,
-  verbose: false,
-  clearMocks: true,
-  resetMocks: true,
-  restoreMocks: true,
-  forceExit: true,
+  
+  // Module file extensions
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
+  
+  // Transform configuration
+  transform: {
+    '^.+\\.(ts|tsx)$': ['ts-jest', { 
+      tsconfig: '<rootDir>/tsconfig.test.json',
+      useESM: false,
+    }]
+  },
+  
+  // Module name mapper
+  moduleNameMapper: {
+    '^(\\.{1,2}/.*)\\.js$': '$1',
+    '^(\\.{1,2}/.*)\\.mjs$': '$1',
+    '^(\\.{1,2}/.*)\\.ts$': '$1',
+  },
+  
+  // Setup files
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.cjs'],
+  
+  // Module path ignore patterns
+  modulePathIgnorePatterns: ['<rootDir>/dist/'],
+  
+  // Transform ignore patterns
+  transformIgnorePatterns: [
+    '/node_modules/(?!(?:@noble|@sc|fflate)/)',
+    '/dist/'
+  ],
+  
+  // Test path ignore patterns
   testPathIgnorePatterns: [
     '/node_modules/',
     '/dist/',
@@ -44,20 +69,44 @@ module.exports = {
     '/tests/.*@playwright/test.*',
     '/tests/scripts/',
   ],
-  setupFilesAfterEnv: ['<rootDir>/jest.setup.cjs'],
-  moduleNameMapper: {
-    '^(\\.{1,2}/.*)\\.js$': '$1',
-    '^(\\.{1,2}/.*)\\.mjs$': '$1',
+  
+  // Verbose output
+  verbose: true,
+  
+  // Clear mocks
+  clearMocks: true,
+  
+  // Restore mocks
+  restoreMocks: true,
+  
+  // Error handling
+  errorOnDeprecated: true,
+  
+  // Max workers
+  maxWorkers: '50%',
+  
+  // Cache
+  cache: true,
+  cacheDirectory: '<rootDir>/.jest-cache',
+  
+  // Test timeout
+  testTimeout: 10000,
+  
+  // Haste configuration
+  haste: {
+    enableSymlinks: false,
   },
-  modulePathIgnorePatterns: ['<rootDir>/dist/'],
-  preset: 'ts-jest',
-  transform: {
-    '^.+\\.(ts|tsx)$': ['ts-jest', { 
-      tsconfig: '<rootDir>/tsconfig.test.json'
-    }]
+  
+  // Resolver
+  resolver: undefined,
+  
+  // Global configuration
+  globals: {
+    'ts-jest': {
+      tsconfig: '<rootDir>/tsconfig.test.json',
+      useESM: false,
+    },
   },
-  transformIgnorePatterns: [
-    '/node_modules/(?!(?:@noble|@sc|fflate)/)',
-    '/dist/'
-  ]
 };
+
+module.exports = config;

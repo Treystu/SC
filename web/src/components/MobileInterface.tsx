@@ -199,13 +199,11 @@ const DraggablePanel: React.FC<DraggablePanelProps> = ({
       ref={panelRef}
       className={`mobile-panel ${isDragging ? 'dragging' : ''} ${isResizing ? 'resizing' : ''}`}
       style={{
-        position: 'fixed',
-        left: `${position.x}px`,
-        top: `${position.y}px`,
-        width: `${size.width}px`,
-        height: `${size.height}px`,
-        zIndex: 10
-      }}
+        '--panel-left': `${position.x}px`,
+        '--panel-top': `${position.y}px`,
+        '--panel-width': `${size.width}px`,
+        '--panel-height': `${size.height}px`
+      } as React.CSSProperties}
     >
       <div
         ref={headerRef}
@@ -224,17 +222,20 @@ const DraggablePanel: React.FC<DraggablePanelProps> = ({
       </div>
       
       <div className="mobile-panel-content">
-        {children}
+        {children || (
+          <div className="mobile-panel-placeholder">
+            <p>Mobile interface panel</p>
+            <p>Drag to move, resize handle to resize</p>
+          </div>
+        )}
       </div>
       
-      {isResizable && (
-        <div
-          ref={resizeHandleRef}
-          className="mobile-panel-resize-handle"
-          onMouseDown={handleResizeStart}
-          onTouchStart={handleResizeStart}
-        />
-      )}
+      <div
+        ref={resizeHandleRef}
+        className="mobile-panel-resize-handle"
+        onMouseDown={handleResizeStart}
+        onTouchStart={handleResizeStart}
+      />
     </div>
   );
 };

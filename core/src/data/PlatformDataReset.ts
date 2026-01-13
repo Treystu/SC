@@ -88,14 +88,16 @@ export class PlatformDataReset {
         success: errors.length === 0,
         platform,
         clearedItems,
-        errors: errors.length > 0 ? errors : undefined
+        errors: errors.length > 0 ? errors : undefined,
+        timestamp: Date.now(),
       };
     } catch (error) {
       return {
         success: false,
         platform,
         clearedItems,
-        errors: [error instanceof Error ? error.message : String(error)]
+        errors: [error instanceof Error ? error.message : String(error)],
+        timestamp: Date.now(),
       };
     }
   }
@@ -240,9 +242,12 @@ export class PlatformDataReset {
    */
   private async clearAllIndexedDB(): Promise<void> {
     const databases = await indexedDB.databases();
-    await Promise.all(
-      databases.map(db => indexedDB.deleteDatabase(db.name))
-    );
+    for (const db of databases) {
+      const name = db?.name;
+      if (typeof name === 'string' && name.length > 0) {
+        await indexedDB.deleteDatabase(name);
+      }
+    }
   }
 
   private async clearServiceWorkerCache(): Promise<void> {
@@ -254,7 +259,11 @@ export class PlatformDataReset {
 
   private async clearApplicationCache(): Promise<void> {
     if ('applicationCache' in window) {
-      await window.applicationCache?.update();
+      const appCache = (window as unknown as { applicationCache?: { update?: () => Promise<void> | void } }).applicationCache;
+      const updater = appCache?.update;
+      if (typeof updater === 'function') {
+        await Promise.resolve(updater.call(appCache));
+      }
     }
   }
 

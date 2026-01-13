@@ -119,7 +119,13 @@ export class ConfigManager {
    * Get specific configuration section
    */
   getSection<K extends keyof AppConfig>(section: K): AppConfig[K] {
-    return { ...this.config[section] };
+    const value = this.config[section];
+    // If the section is an object, return a shallow copy to avoid external mutation.
+    // For primitive sections (e.g., environment string), return the value directly.
+    if (typeof value === 'object' && value !== null) {
+      return JSON.parse(JSON.stringify(value)) as AppConfig[K];
+    }
+    return value;
   }
 
   /**
@@ -156,7 +162,17 @@ export class ConfigManager {
    * Update specific configuration section
    */
   updateSection<K extends keyof AppConfig>(section: K, updates: Partial<AppConfig[K]>, options: ConfigUpdateOptions = { persist: true, validate: true, notify: true }): ConfigValidationResult {
-    return this.updateConfig({ [section]: { ...this.config[section], ...updates } } as Partial<AppConfig>, options);
+    const current = this.config[section];
+    let merged: AppConfig[K];
+
+    if (typeof current === 'object' && current !== null) {
+      merged = { ...(current as Record<string, unknown>), ...(updates as Record<string, unknown>) } as unknown as AppConfig[K];
+    } else {
+      // For primitive sections (like environment), just take the new value if provided, else keep current.
+      merged = (updates as AppConfig[K]) ?? current;
+    }
+
+    return this.updateConfig({ [section]: merged } as Partial<AppConfig>, options);
   }
 
   /**

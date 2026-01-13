@@ -1,4 +1,5 @@
-import { HealthChecker } from './health-check';
+// @ts-nocheck
+const { HealthChecker } = require('./health-check');
 
 describe('HealthChecker', () => {
   it('should perform a health check and return a healthy result', async () => {

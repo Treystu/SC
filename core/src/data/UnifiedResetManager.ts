@@ -1,26 +1,4 @@
-/**
- * Unified Data Reset Manager
- * Ensures complete data isolation and proper reset across all platforms
- * Prevents data bleedover between platforms and app instances
- */
-
-export interface ResetResult {
-  success: boolean;
-  platform: string;
-  clearedItems: string[];
-  errors?: string[];
-}
-
-export interface ResetConfig {
-  clearIdentity: boolean;
-  clearMessages: boolean;
-  clearContacts: boolean;
-  clearConversations: boolean;
-  clearRoutes: boolean;
-  clearSettings: boolean;
-  clearCache: boolean;
-  clearAll: boolean;
-}
+import { ResetResult, ResetConfig } from '../types/reset';
 
 /**
  * Unified reset manager for cross-platform data isolation
@@ -107,14 +85,16 @@ export class UnifiedResetManager {
         success: errors.length === 0,
         platform,
         clearedItems,
-        errors: errors.length > 0 ? errors : undefined
+        errors: errors.length > 0 ? errors : undefined,
+        timestamp: Date.now(),
       };
     } catch (error) {
       return {
         success: false,
         platform,
         clearedItems,
-        errors: [error instanceof Error ? error.message : String(error)]
+        errors: [error instanceof Error ? error.message : String(error)],
+        timestamp: Date.now(),
       };
     }
   }
@@ -293,7 +273,11 @@ export class UnifiedResetManager {
     
     // Clear application cache if available
     if ('applicationCache' in window) {
-      await window.applicationCache?.clear();
+      const appCache = (window as unknown as { applicationCache?: { clear?: () => Promise<void> | void } }).applicationCache;
+      const clearer = appCache?.clear;
+      if (typeof clearer === 'function') {
+        await Promise.resolve(clearer.call(appCache));
+      }
     }
   }
 
@@ -355,7 +339,7 @@ export class UnifiedResetManager {
     } else if (typeof navigator !== 'undefined' && navigator.userAgent.includes('Android')) {
       // Android platform
       return 'android';
-    } else if (typeof navigator !== 'undefined' && navigator.userAgent.includes('iPhone') || navigator.userAgent.includes('iPad')) {
+    } else if (typeof navigator !== 'undefined' && (navigator.userAgent.includes('iPhone') || navigator.userAgent.includes('iPad'))) {
       // iOS platform
       return 'ios';
     } else {

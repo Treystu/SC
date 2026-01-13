@@ -208,7 +208,7 @@ export class ResetManager {
 
       // Clear service worker cache
       if (config.clearAll || config.clearCache) {
-        await this.clearServiceWorkerCache();
+        await this.clearWebCache();
         clearedItems.push('serviceWorker_cache');
       }
 
@@ -313,15 +313,27 @@ export class ResetManager {
    */
   private async clearAllIndexedDB(): Promise<void> {
     const databases = await indexedDB.databases();
-    await Promise.all(
-      databases.map(db => indexedDB.deleteDatabase(db.name))
-    );
+    for (const db of databases) {
+      const name = db?.name;
+      if (typeof name === 'string' && name.length > 0) {
+        await indexedDB.deleteDatabase(name);
+      }
+    }
   }
 
-  private async clearServiceWorkerCache(): Promise<void> {
+  private async clearWebCache(): Promise<void> {
+    // Clear service worker cache
     if ('caches' in window) {
       const cacheNames = await caches.keys();
       await Promise.all(cacheNames.map(name => caches.delete(name)));
+    }
+
+    // Clear application cache if available
+    if ('applicationCache' in window) {
+      const appCache = (window as unknown as { applicationCache?: { clear?: () => Promise<void> | void } }).applicationCache;
+      if (appCache?.clear) {
+        await appCache.clear();
+      }
     }
   }
 
@@ -439,13 +451,13 @@ export class ResetManager {
     return true;
   }
 
-  private async verifyAndroidReset(options: ResetVerificationOptions): Promise<boolean> {
+  private async verifyAndroidReset(_options: ResetVerificationOptions): Promise<boolean> {
     // This would verify with Android native code
     console.log('Verifying Android reset: Would call native bridge');
     return true;
   }
 
-  private async verifyIOSReset(options: ResetVerificationOptions): Promise<boolean> {
+  private async verifyIOSReset(_options: ResetVerificationOptions): Promise<boolean> {
     // This would verify with iOS native code
     console.log('Verifying iOS reset: Would call native bridge');
     return true;

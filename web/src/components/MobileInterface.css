@@ -28,10 +28,16 @@
   display: flex;
   flex-direction: column;
   transition: box-shadow 0.3s ease, transform 0.3s ease;
-  user-select: none;
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
+  user-select: none;
+  position: fixed;
+  left: var(--panel-left, 100px);
+  top: var(--panel-top, 100px);
+  width: var(--panel-width, 400px);
+  height: var(--panel-height, 300px);
+  z-index: 10;
 }
 
 .mobile-panel.dragging {
@@ -54,12 +60,12 @@
   border-bottom: 1px solid #e0e0e0;
   border-radius: 12px 12px 0 0;
   cursor: move;
-  touch-action: none;
   -webkit-touch-action: none;
-  user-select: none;
+  touch-action: none;
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
+  user-select: none;
 }
 
 .mobile-panel-title {
@@ -99,7 +105,6 @@
   flex: 1;
   padding: 16px;
   overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
 }
 
 .mobile-panel-placeholder {
@@ -122,8 +127,8 @@
   background: linear-gradient(135deg, transparent 50%, #ddd 50%);
   cursor: nwse-resize;
   border-radius: 0 0 12px 0;
-  touch-action: none;
   -webkit-touch-action: none;
+  touch-action: none;
 }
 
 .mobile-panel-resize-handle:hover {
@@ -159,12 +164,12 @@
   justify-content: center;
   box-shadow: 0 4px 16px rgba(0, 123, 255, 0.3);
   transition: all 0.3s ease;
-  touch-action: manipulation;
   -webkit-touch-action: manipulation;
-  user-select: none;
+  touch-action: manipulation;
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
+  user-select: none;
 }
 
 .mobile-control-btn:hover {

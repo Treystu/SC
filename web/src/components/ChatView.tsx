@@ -173,7 +173,6 @@ function ChatView({
       <div
         className="chat-header"
         onClick={() => setShowProfile(true)}
-        style={{ cursor: "pointer" }}
       >
         {onClose && (
           <button
@@ -213,7 +212,6 @@ function ChatView({
         <div
           className="call-controls"
           onClick={(e) => e.stopPropagation()}
-          style={{ marginLeft: "auto", display: "flex", gap: "0.5rem", alignItems: "center" }}
         >
           {/* Only show call button if online and not in active call context */}
           {isOnline && !callActive && !callEnded && !onClose && (
@@ -233,7 +231,7 @@ function ChatView({
           
           {/* Active Call Controls */}
           {callActive && (
-            <div className="active-call-controls" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <div className="active-call-controls">
               <span className="call-status badge">On Call</span>
               <button
                 data-testid="end-call-btn"

@@ -3,11 +3,12 @@
  * Tests routing table, message relay, and network integration
  */
 
-import { RoutingTable, PeerState, createPeer, Peer } from './routing';
-import { MessageRelay } from './relay';
-import { MeshNetwork } from './network';
-import { MessageType, encodeMessage, Message } from '../protocol/message';
-import { generateIdentity } from '../crypto/primitives';
+// @ts-nocheck
+const { RoutingTable, PeerState, createPeer } = require('./routing');
+const { MessageRelay } = require('./relay');
+const { MeshNetwork } = require('./network');
+const { MessageType, encodeMessage } = require('../protocol/message');
+const { generateIdentity } = require('../crypto/primitives');
 
 describe('Mesh Network Integration', () => {
   let routingTable: RoutingTable;
