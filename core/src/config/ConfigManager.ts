@@ -165,7 +165,7 @@ export class ConfigManager {
     const current = this.config[section];
     let merged: AppConfig[K];
 
-    if (typeof current === 'object' && current !== null) {
+    if (isPlainObject(current) && isPlainObject(updates)) {
       merged = { ...(current as Record<string, unknown>), ...(updates as Record<string, unknown>) } as unknown as AppConfig[K];
     } else {
       // For primitive sections (like environment), just take the new value if provided, else keep current.
@@ -416,6 +416,10 @@ export class ConfigManager {
       logging: { ...this.config.logging, ...overrides.logging },
     };
   }
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 // Export singleton instance

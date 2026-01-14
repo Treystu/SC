@@ -1,0 +1,220 @@
+5c1c1ddf9ed73049234b9ca03f54092f
+"use strict";
+/**
+ * Crypto module exports
+ * Provides all cryptographic primitives for Sovereign Communications
+ */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.KeyManager = exports.CryptoManager = exports.deriveMessageKey = exports.ratchetStep = exports.initializeRatchet = exports.NonceManager = exports.randomBytes = exports.incrementNonce = exports.validateEntropy = exports.secureWipe = exports.timingSafeEqual = exports.shouldRotateKey = exports.rotateSessionKey = exports.generateFingerprint = exports.deriveSessionKey = exports.deriveSharedSecret = exports.performKeyExchange = exports.decryptMessage = exports.encryptMessage = exports.batchVerifySignatures = exports.verifySignature = exports.signMessage = exports.generateEphemeralKeyPair = exports.generateSessionKey = exports.generateNonce = exports.generateKey = exports.generateKeyPair = exports.generateIdentity = void 0;
+__exportStar(require("./primitives.js"), exports);
+__exportStar(require("./storage.js"), exports);
+__exportStar(require("./envelope.js"), exports);
+// Re-export specific commonly-used items for convenience
+const primitives_js_1 = require("./primitives.js");
+Object.defineProperty(exports, "generateIdentity", { enumerable: true, get: function () { return primitives_js_1.generateIdentity; } });
+Object.defineProperty(exports, "generateKeyPair", { enumerable: true, get: function () { return primitives_js_1.generateKeyPair; } });
+Object.defineProperty(exports, "generateKey", { enumerable: true, get: function () { return primitives_js_1.generateKey; } });
+Object.defineProperty(exports, "generateNonce", { enumerable: true, get: function () { return primitives_js_1.generateNonce; } });
+Object.defineProperty(exports, "generateSessionKey", { enumerable: true, get: function () { return primitives_js_1.generateSessionKey; } });
+Object.defineProperty(exports, "generateEphemeralKeyPair", { enumerable: true, get: function () { return primitives_js_1.generateEphemeralKeyPair; } });
+Object.defineProperty(exports, "signMessage", { enumerable: true, get: function () { return primitives_js_1.signMessage; } });
+Object.defineProperty(exports, "verifySignature", { enumerable: true, get: function () { return primitives_js_1.verifySignature; } });
+Object.defineProperty(exports, "batchVerifySignatures", { enumerable: true, get: function () { return primitives_js_1.batchVerifySignatures; } });
+Object.defineProperty(exports, "encryptMessage", { enumerable: true, get: function () { return primitives_js_1.encryptMessage; } });
+Object.defineProperty(exports, "decryptMessage", { enumerable: true, get: function () { return primitives_js_1.decryptMessage; } });
+Object.defineProperty(exports, "performKeyExchange", { enumerable: true, get: function () { return primitives_js_1.performKeyExchange; } });
+Object.defineProperty(exports, "deriveSharedSecret", { enumerable: true, get: function () { return primitives_js_1.deriveSharedSecret; } });
+Object.defineProperty(exports, "deriveSessionKey", { enumerable: true, get: function () { return primitives_js_1.deriveSessionKey; } });
+Object.defineProperty(exports, "generateFingerprint", { enumerable: true, get: function () { return primitives_js_1.generateFingerprint; } });
+Object.defineProperty(exports, "rotateSessionKey", { enumerable: true, get: function () { return primitives_js_1.rotateSessionKey; } });
+Object.defineProperty(exports, "shouldRotateKey", { enumerable: true, get: function () { return primitives_js_1.shouldRotateKey; } });
+Object.defineProperty(exports, "timingSafeEqual", { enumerable: true, get: function () { return primitives_js_1.timingSafeEqual; } });
+Object.defineProperty(exports, "secureWipe", { enumerable: true, get: function () { return primitives_js_1.secureWipe; } });
+Object.defineProperty(exports, "validateEntropy", { enumerable: true, get: function () { return primitives_js_1.validateEntropy; } });
+Object.defineProperty(exports, "incrementNonce", { enumerable: true, get: function () { return primitives_js_1.incrementNonce; } });
+Object.defineProperty(exports, "randomBytes", { enumerable: true, get: function () { return primitives_js_1.randomBytes; } });
+Object.defineProperty(exports, "NonceManager", { enumerable: true, get: function () { return primitives_js_1.NonceManager; } });
+Object.defineProperty(exports, "initializeRatchet", { enumerable: true, get: function () { return primitives_js_1.initializeRatchet; } });
+Object.defineProperty(exports, "ratchetStep", { enumerable: true, get: function () { return primitives_js_1.ratchetStep; } });
+Object.defineProperty(exports, "deriveMessageKey", { enumerable: true, get: function () { return primitives_js_1.deriveMessageKey; } });
+/**
+ * CryptoManager class - High-level encryption/decryption API
+ * Provides a convenient class-based interface for cryptographic operations
+ */
+class CryptoManager {
+    constructor() {
+        this.encoder = new TextEncoder();
+        this.decoder = new TextDecoder();
+    }
+    /**
+     * Validate and extract nonce/ciphertext from encrypted data
+     * @param encrypted - Encrypted data with nonce prepended
+     * @returns Object containing nonce and ciphertext
+     * @throws Error if encrypted data is too short
+     */
+    extractNonceAndCiphertext(encrypted) {
+        if (encrypted.length < CryptoManager.NONCE_SIZE) {
+            throw new Error(`Encrypted data too short: must be at least ${CryptoManager.NONCE_SIZE} bytes (nonce size)`);
+        }
+        return {
+            nonce: encrypted.slice(0, CryptoManager.NONCE_SIZE),
+            ciphertext: encrypted.slice(CryptoManager.NONCE_SIZE),
+        };
+    }
+    /**
+     * Generate a random 32-byte symmetric key
+     */
+    generateKey() {
+        return (0, primitives_js_1.generateKey)();
+    }
+    /**
+     * Encrypt a message using XChaCha20-Poly1305
+     * @param message - String or Uint8Array to encrypt
+     * @param key - 32-byte encryption key
+     * @returns Encrypted data with nonce prepended
+     */
+    encrypt(message, key) {
+        const plaintext = typeof message === 'string'
+            ? this.encoder.encode(message)
+            : message;
+        const nonce = (0, primitives_js_1.generateNonce)();
+        const ciphertext = (0, primitives_js_1.encryptMessage)(plaintext, key, nonce);
+        // Prepend nonce to ciphertext
+        const result = new Uint8Array(nonce.length + ciphertext.length);
+        result.set(nonce, 0);
+        result.set(ciphertext, nonce.length);
+        return result;
+    }
+    /**
+     * Decrypt a message using XChaCha20-Poly1305
+     * @param encrypted - Encrypted data with nonce prepended
+     * @param key - 32-byte decryption key
+     * @returns Decrypted string
+     * @throws Error if encrypted data is too short
+     */
+    decrypt(encrypted, key) {
+        const { nonce, ciphertext } = this.extractNonceAndCiphertext(encrypted);
+        const plaintext = (0, primitives_js_1.decryptMessage)(ciphertext, key, nonce);
+        return this.decoder.decode(plaintext);
+    }
+    /**
+     * Decrypt a message and return raw bytes (Uint8Array)
+     * @param encrypted - Encrypted data with nonce prepended
+     * @param key - 32-byte decryption key
+     * @returns Decrypted Uint8Array
+     * @throws Error if encrypted data is too short
+     */
+    decryptBytes(encrypted, key) {
+        const { nonce, ciphertext } = this.extractNonceAndCiphertext(encrypted);
+        return (0, primitives_js_1.decryptMessage)(ciphertext, key, nonce);
+    }
+    /**
+     * Sign a message using Ed25519
+     * @param message - Message to sign (string or Uint8Array)
+     * @param privateKey - 32-byte Ed25519 private key
+     * @returns 64-byte signature
+     */
+    sign(message, privateKey) {
+        const data = typeof message === 'string'
+            ? this.encoder.encode(message)
+            : message;
+        return (0, primitives_js_1.signMessage)(data, privateKey);
+    }
+    /**
+     * Verify a signature using Ed25519
+     * @param message - Original message
+     * @param signature - 64-byte signature
+     * @param publicKey - 32-byte Ed25519 public key
+     * @returns true if valid, false otherwise
+     */
+    verify(message, signature, publicKey) {
+        const data = typeof message === 'string'
+            ? this.encoder.encode(message)
+            : message;
+        return (0, primitives_js_1.verifySignature)(data, signature, publicKey);
+    }
+    /**
+     * Derive a shared secret using X25519 ECDH
+     * @param privateKey - Our private key
+     * @param peerPublicKey - Peer's public key
+     * @returns 32-byte shared secret
+     */
+    deriveSecret(privateKey, peerPublicKey) {
+        return (0, primitives_js_1.deriveSharedSecret)(privateKey, peerPublicKey);
+    }
+}
+exports.CryptoManager = CryptoManager;
+/** Minimum size for encrypted data (nonce size) */
+CryptoManager.NONCE_SIZE = 24;
+/**
+ * KeyManager class - Manages identity keypairs
+ * Provides persistent key storage and generation
+ */
+class KeyManager {
+    constructor() {
+        this.publicKey = null;
+        this.privateKey = null;
+    }
+    /**
+     * Generate a new Ed25519 identity keypair
+     */
+    generateIdentityKeyPair() {
+        const keypair = (0, primitives_js_1.generateIdentity)();
+        this.publicKey = keypair.publicKey;
+        this.privateKey = keypair.privateKey;
+    }
+    /**
+     * Get the public key
+     * @throws Error if keypair not generated
+     * @returns A copy of the public key to prevent external modification
+     */
+    getPublicKey() {
+        if (!this.publicKey) {
+            throw new Error('Keypair not generated. Call generateIdentityKeyPair first.');
+        }
+        return new Uint8Array(this.publicKey);
+    }
+    /**
+     * Get the private key
+     * @throws Error if keypair not generated
+     * @returns A copy of the private key to prevent external modification
+     */
+    getPrivateKey() {
+        if (!this.privateKey) {
+            throw new Error('Keypair not generated. Call generateIdentityKeyPair first.');
+        }
+        return new Uint8Array(this.privateKey);
+    }
+    /**
+     * Check if a keypair has been generated
+     */
+    hasKeypair() {
+        return this.publicKey !== null && this.privateKey !== null;
+    }
+    /**
+     * Clear the stored keypair from memory
+     */
+    clear() {
+        if (this.privateKey) {
+            (0, primitives_js_1.secureWipe)(this.privateKey);
+        }
+        this.publicKey = null;
+        this.privateKey = null;
+    }
+}
+exports.KeyManager = KeyManager;
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJmaWxlIjoiL1VzZXJzL2NocmlzdHltYXh3ZWxsL0Rlc2t0b3AvTHVrZV9TdHVmZi9HaXRIdWIvU0MvY29yZS9zcmMvY3J5cHRvL2luZGV4LnRzIiwibWFwcGluZ3MiOiI7QUFBQTs7O0dBR0c7Ozs7Ozs7Ozs7Ozs7Ozs7O0FBRUgsa0RBQWdDO0FBQ2hDLCtDQUE2QjtBQUM3QixnREFBOEI7QUFFOUIseURBQXlEO0FBQ3pELG1EQThCeUI7QUFJdkIsaUdBakNBLGdDQUFnQixPQWlDQTtBQUNoQixnR0FqQ0EsK0JBQWUsT0FpQ0E7QUFDZiw0RkFqQ0EsMkJBQVcsT0FpQ0E7QUFDWCw4RkFqQ0EsNkJBQWEsT0FpQ0E7QUFDYixtR0FqQ0Esa0NBQWtCLE9BaUNBO0FBQ2xCLHlHQWpDQSx3Q0FBd0IsT0FpQ0E7QUFDeEIsNEZBakNBLDJCQUFXLE9BaUNBO0FBQ1gsZ0dBakNBLCtCQUFlLE9BaUNBO0FBQ2Ysc0dBakNBLHFDQUFxQixPQWlDQTtBQUNyQiwrRkFqQ0EsOEJBQWMsT0FpQ0E7QUFDZCwrRkFqQ0EsOEJBQWMsT0FpQ0E7QUFDZCxtR0FqQ0Esa0NBQWtCLE9BaUNBO0FBQ2xCLG1HQWpDQSxrQ0FBa0IsT0FpQ0E7QUFDbEIsaUdBakNBLGdDQUFnQixPQWlDQTtBQUNoQixvR0FqQ0EsbUNBQW1CLE9BaUNBO0FBQ25CLGlHQWpDQSxnQ0FBZ0IsT0FpQ0E7QUFDaEIsZ0dBakNBLCtCQUFlLE9BaUNBO0FBQ2YsZ0dBakNBLCtCQUFlLE9BaUNBO0FBQ2YsMkZBakNBLDBCQUFVLE9BaUNBO0FBQ1YsZ0dBakNBLCtCQUFlLE9BaUNBO0FBQ2YsK0ZBakNBLDhCQUFjLE9BaUNBO0FBQ2QsNEZBakNBLDJCQUFXLE9BaUNBO0FBQ1gsNkZBakNBLDRCQUFZLE9BaUNBO0FBQ1osa0dBakNBLGlDQUFpQixPQWlDQTtBQUNqQiw0RkFqQ0EsMkJBQVcsT0FpQ0E7QUFDWCxpR0FqQ0EsZ0NBQWdCLE9BaUNBO0FBTWxCOzs7R0FHRztBQUNILE1BQWEsYUFBYTtJQUExQjtRQUNVLFlBQU8sR0FBRyxJQUFJLFdBQVcsRUFB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RUQ7O09BRUc7SUFDSCxVQUFVO1FBQ1IsT0FBTyxJQUFJLENBQUMsU0FBUyxLQUFLLElBQUksSUFBSSxJQUFJLENBQUMsVUFBVSxLQUFLLElBQUksQ0FBQztJQUM3RCxDQUFDO0lBRUQ7O09BRUc7SUFDSCxLQUFLO1FBQ0gsSUFBSSxJQUFJLENBQUMsVUFBVSxFQUFFLENBQUM7WUFDcEIsSUFBQSwwQkFBVSxFQUFDLElBQUksQ0FBQyxVQUFVLENBQUMsQ0FBQztRQUM5QixDQUFDO1FBQ0QsSUFBSSxDQUFDLFNBQVMsR0FBRyxJQUFJLENBQUM7UUFDdEIsSUFBSSxDQUFDLFVBQVUsR0FBRyxJQUFJLENBQUM7SUFDekIsQ0FBQztDQUNGO0FBdERELGdDQXNEQyIsIm5hbWVzIjpbXSwic291cmNlcyI6WyIvVXNlcnMvY2hyaXN0eW1heHdlbGwvRGVza3RvcC9MdWtlX1N0dWZmL0dpdEh1Yi9TQy9jb3JlL3NyYy9jcnlwdG8vaW5kZXgudHMiXSwic291cmNlc0NvbnRlbnQiOlsiLyoqXG4gKiBDcnlwdG8gbW9kdWxlIGV4cG9ydHNcbiAqIFByb3ZpZGVzIGFsbCBjcnlwdG9ncmFwaGljIHByaW1pdGl2ZXMgZm9yIFNvdmVyZWlnbiBDb21tdW5pY2F0aW9uc1xuICovXG5cbmV4cG9ydCAqIGZyb20gJy4vcHJpbWl0aXZlcy5qcyc7XG5leHBvcnQgKiBmcm9tICcuL3N0b3JhZ2UuanMnO1xuZXhwb3J0ICogZnJvbSAnLi9lbnZlbG9wZS5qcyc7XG5cbi8vIFJlLWV4cG9ydCBzcGVjaWZpYyBjb21tb25seS11c2VkIGl0ZW1zIGZvciBjb252ZW5pZW5jZVxuaW1wb3J0IHtcbiAgZ2VuZXJhdGVJZGVudGl0eSxcbiAgZ2VuZXJhdGVLZXlQYWlyLFxuICBnZW5lcmF0ZUtleSxcbiAgZ2VuZXJhdGVOb25jZSxcbiAgZ2VuZXJhdGVTZXNzaW9uS2V5LFxuICBnZW5lcmF0ZUVwaGVtZXJhbEtleVBhaXIsXG4gIHNpZ25NZXNzYWdlLFxuICB2ZXJpZnlTaWduYXR1cmUsXG4gIGJhdGNoVmVyaWZ5U2lnbmF0dXJlcyxcbiAgZW5jcnlwdE1lc3NhZ2UsXG4gIGRlY3J5cHRNZXNzYWdlLFxuICBwZXJmb3JtS2V5RXhjaGFuZ2UsXG4gIGRlcml2ZVNoYXJlZFNlY3JldCxcbiAgZGVyaXZlU2Vzc2lvbktleSxcbiAgZ2VuZXJhdGVGaW5nZXJwcmludCxcbiAgcm90YXRlU2Vzc2lvbktleSxcbiAgc2hvdWxkUm90YXRlS2V5LFxuICB0aW1pbmdTYWZlRXF1YWwsXG4gIHNlY3VyZVdpcGUsXG4gIHZhbGlkYXRlRW50cm9weSxcbiAgaW5jcmVtZW50Tm9uY2UsXG4gIHJhbmRvbUJ5dGVzLFxuICBOb25jZU1hbmFnZXIsXG4gIGluaXRpYWxpemVSYXRjaGV0LFxuICByYXRjaGV0U3RlcCxcbiAgZGVyaXZlTWVzc2FnZUtleSxcbiAgdHlwZSBJZGVudGl0eUtleVBhaXIsXG4gIHR5cGUgU2Vzc2lvbktleSxcbiAgdHlwZSBSYXRjaGV0U3RhdGUsXG59IGZyb20gJy4vcHJpbWl0aXZlcy5qcyc7XG5cbi8vIFJlLWV4cG9ydCB0aGUgaW1wb3J0ZWQgaXRlbXNcbmV4cG9ydCB7XG4gIGdlbmVyYXRlSWRlbnRpdHksXG4gIGdlbmVyYXRlS2V5UGFpcixcbiAgZ2VuZXJhdGVLZXksXG4gIGdlbmVyYXRlTm9uY2UsXG4gIGdlbmVyYXRlU2Vzc2lvbktleSxcbiAgZ2VuZXJhdGVFcGhlbWVyYWxLZXlQYWlyLFxuICBzaWduTWVzc2FnZSxcbiAgdmVyaWZ5U2lnbmF0dXJlLFxuICBiYXRjaFZlcmlmeVNpZ25hdHVyZXMsXG4gIGVuY3J5cHRNZXNzYWdlLFxuICBkZWNyeXB0TWVzc2FnZSxcbiAgcGVyZm9ybUtleUV4Y2hhbmdlLFxuICBkZXJpdmVTaGFyZWRTZWNyZXQsXG4gIGRlcml2ZVNlc3Npb25LZXksXG4gIGdlbmVyYXRlRmluZ2VycHJpbnQsXG4gIHJvdGF0ZVNlc3Npb25LZXksXG4gIHNob3VsZFJvdGF0ZUtleSxcbiAgdGltaW5nU2FmZUVxdWFsLFxuICBzZWN1cmVXaXBlLFxuICB2YWxpZGF0ZUVudHJvcHksXG4gIGluY3JlbWVudE5vbmNlLFxuICByYW5kb21CeXRlcyxcbiAgTm9uY2VNYW5hZ2VyLFxuICBpbml0aWFsaXplUmF0Y2hldCxcbiAgcmF0Y2hldFN0ZXAsXG4gIGRlcml2ZU1lc3NhZ2VLZXksXG4gIHR5cGUgSWRlbnRpdHlLZXlQYWlyLFxuICB0eXBlIFNlc3Npb25LZXksXG4gIHR5cGUgUmF0Y2hldFN0YXRlLFxufTtcblxuLyoqXG4gKiBDcnlwdG9NYW5hZ2VyIGNsYXNzIC0gSGlnaC1sZXZlbCBlbmNyeXB0aW9uL2RlY3J5cHRpb24gQVBJXG4gKiBQcm92aWRlcyBhIGNvbnZlbmllbnQgY2xhc3MtYmFzZWQgaW50ZXJmYWNlIGZvciBjcnlwdG9ncmFwaGljIG9wZXJhdGlvbnNcbiAqL1xuZXhwb3J0IGNsYXNzIENyeXB0b01hbmFnZXIge1xuICBwcml2YXRlIGVuY29kZXIgPSBuZXcgVGV4dEVuY29kZXIoKTtcbiAgcHJpdmF0ZSBkZWNvZGVyID0gbmV3IFRleHREZWNvZGVyKCk7XG5cbiAgLyoqIE1pbmltdW0gc2l6ZSBmb3IgZW5jcnlwdGVkIGRhdGEgKG5vbmNlIHNpemUpICovXG4gIHByaXZhdGUgc3RhdGljIHJlYWRvbmx5IE5PTkNFX1NJWkUgPSAyNDtcblxuICAvKipcbiAgICogVmFsaWRhdGUgYW5kIGV4dHJhY3Qgbm9uY2UvY2lwaGVydGV4dCBmcm9tIGVuY3J5cHRlZCBkYXRhXG4gICAqIEBwYXJhbSBlbmNyeXB0ZWQgLSBFbmNyeXB0ZWQgZGF0YSB3aXRoIG5vbmNlIHByZXBlbmRlZFxuICAgKiBAcmV0dXJucyBPYmplY3QgY29udGFpbmluZyBub25jZSBhbmQgY2lwaGVydGV4dFxuICAgKiBAdGhyb3dzIEVycm9yIGlmIGVuY3J5cHRlZCBkYXRhIGlzIHRvbyBzaG9ydFxuICAgKi9cbiAgcHJpdmF0ZSBleHRyYWN0Tm9uY2VBbmRDaXBoZXJ0ZXh0KGVuY3J5cHRlZDogVWludDhBcnJheSk6IHsgbm9uY2U6IFVpbnQ4QXJyYXk7IGNpcGhlcnRleHQ6IFVpbnQ4QXJyYXkgfSB7XG4gICAgaWYgKGVuY3J5cHRlZC5sZW5ndGggPCBDcnlwdG9NYW5hZ2VyLk5PTkNFX1NJWkUpIHtcbiAgICAgIHRocm93IG5ldyBFcnJvcihgRW5jcnlwdGVkIGRhdGEgdG9vIHNob3J0OiBtdXN0IGJlIGF0IGxlYXN0ICR7Q3J5cHRvTWFuYWdlci5OT05DRV9TSVpFfSBieXRlcyAobm9uY2Ugc2l6ZSlgKTtcbiAgICB9XG4gICAgcmV0dXJuIHtcbiAgICAgIG5vbmNlOiBlbmNyeXB0ZWQuc2xpY2UoMCwgQ3J5cHRvTWFuYWdlci5OT05DRV9TSVpFKSxcbiAgICAgIGNpcGhlcnRleHQ6IGVuY3J5cHRlZC5zbGljZShDcnlwdG9NYW5hZ2VyLk5PTkNFX1NJWkUpLFxuICAgIH07XG4gIH1cblxuICAvKipcbiAgICogR2VuZXJhdGUgYSByYW5kb20gMzItYnl0ZSBzeW1tZXRyaWMga2V5XG4gICAqL1xuICBnZW5lcmF0ZUtleSgpOiBVaW50OEFycmF5IHtcbiAgICByZXR1cm4gZ2VuZXJhdGVLZXkoKTtcbiAgfVxuXG4gIC8qKlxuICAgKiBFbmNyeXB0IGEgbWVzc2FnZSB1c2luZyBYQ2hhQ2hhMjAtUG9seTEzMDVcbiAgICogQHBhcmFtIG1lc3NhZ2UgLSBTdHJpbmcgb3IgVWludDhBcnJheSB0byBlbmNyeXB0XG4gICAqIEBwYXJhbSBrZXkgLSAzMi1ieXRlIGVuY3J5cHRpb24ga2V5XG4gICAqIEByZXR1cm5zIEVuY3J5cHRlZCBkYXRhIHdpdGggbm9uY2UgcHJlcGVuZGVkXG4gICAqL1xuICBlbmNyeXB0KG1lc3NhZ2U6IHN0cmluZyB8IFVpbnQ4QXJyYXksIGtleTogVWludDhBcnJheSk6IFVpbnQ4QXJyYXkge1xuICAgIGNvbnN0IHBsYWludGV4dCA9IHR5cGVvZiBtZXNzYWdlID09PSAnc3RyaW5nJyBcbiAgICAgID8gdGhpcy5lbmNvZGVyLmVuY29kZShtZXNzYWdlKVxuICAgICAgOiBtZXNzYWdlO1xuICAgIFxuICAgIGNvbnN0IG5vbmNlID0gZ2VuZXJhdGVOb25jZSgpO1xuICAgIGNvbnN0IGNpcGhlcnRleHQgPSBlbmNyeXB0TWVzc2FnZShwbGFpbnRleHQsIGtleSwgbm9uY2UpO1xuICAgIFxuICAgIC8vIFByZXBlbmQgbm9uY2UgdG8gY2lwaGVydGV4dFxuICAgIGNvbnN0IHJlc3VsdCA9IG5ldyBVaW50OEFycmF5KG5vbmNlLmxlbmd0aCArIGNpcGhlcnRleHQubGVuZ3RoKTtcbiAgICByZXN1bHQuc2V0KG5vbmNlLCAwKTtcbiAgICByZXN1bHQuc2V0KGNpcGhlcnRleHQsIG5vbmNlLmxlbmd0aCk7XG4gICAgXG4gICAgcmV0dXJuIHJlc3VsdDtcbiAgfVxuXG4gIC8qKlxuICAgKiBEZWNyeXB0IGEgbWVzc2FnZSB1c2luZyBYQ2hhQ2hhMjAtUG9seTEzMDVcbiAgICogQHBhcmFtIGVuY3J5cHRlZCAtIEVuY3J5cHRlZCBkYXRhIHdpdGggbm9uY2UgcHJlcGVuZGVkXG4gICAqIEBwYXJhbSBrZXkgLSAzMi1ieXRlIGRlY3J5cHRpb24ga2V5XG4gICAqIEByZXR1cm5zIERlY3J5cHRlZCBzdHJpbmdcbiAgICogQHRocm93cyBFcnJvciBpZiBlbmNyeXB0ZWQgZGF0YSBpcyB0b28gc2hvcnRcbiAgICovXG4gIGRlY3J5cHQoZW5jcnlwdGVkOiBVaW50OEFycmF5LCBrZXk6IFVpbnQ4QXJyYXkpOiBzdHJpbmcge1xuICAgIGNvbnN0IHsgbm9uY2UsIGNpcGhlcnRleHQgfSA9IHRoaXMuZXh0cmFjdE5vbmNlQW5kQ2lwaGVydGV4dChlbmNyeXB0ZWQpO1xuICAgIGNvbnN0IHBsYWludGV4dCA9IGRlY3J5cHRNZXNzYWdlKGNpcGhlcnRleHQsIGtleSwgbm9uY2UpO1xuICAgIHJldHVybiB0aGlzLmRlY29kZXIuZGVjb2RlKHBsYWludGV4dCk7XG4gIH1cblxuICAvKipcbiAgICogRGVjcnlwdCBhIG1lc3NhZ2UgYW5kIHJldHVybiByYXcgYnl0ZXMgKFVpbnQ4QXJyYXkpXG4gICAqIEBwYXJhbSBlbmNyeXB0ZWQgLSBFbmNyeXB0ZWQgZGF0YSB3aXRoIG5vbmNlIHByZXBlbmRlZFxuICAgKiBAcGFyYW0ga2V5IC0gMzItYnl0ZSBkZWNyeXB0aW9uIGtleVxuICAgKiBAcmV0dXJucyBEZWNyeXB0ZWQgVWludDhBcnJheVxuICAgKiBAdGhyb3dzIEVycm9yIGlmIGVuY3J5cHRlZCBkYXRhIGlzIHRvbyBzaG9ydFxuICAgKi9cbiAgZGVjcnlwdEJ5dGVzKGVuY3J5cHRlZDogVWludDhBcnJheSwga2V5OiBVaW50OEFycmF5KTogVWludDhBcnJheSB7XG4gICAgY29uc3QgeyBub25jZSwgY2lwaGVydGV4dCB9ID0gdGhpcy5leHRyYWN0Tm9uY2VBbmRDaXBoZXJ0ZXh0KGVuY3J5cHRlZCk7XG4gICAgcmV0dXJuIGRlY3J5cHRNZXNzYWdlKGNpcGhlcnRleHQsIGtleSwgbm9uY2UpO1xuICB9XG5cbiAgLyoqXG4gICAqIFNpZ24gYSBtZXNzYWdlIHVzaW5nIEVkMjU1MTlcbiAgICogQHBhcmFtIG1lc3NhZ2UgLSBNZXNzYWdlIHRvIHNpZ24gKHN0cmluZyBvciBVaW50OEFycmF5KVxuICAgKiBAcGFyYW0gcHJpdmF0ZUtleSAtIDMyLWJ5dGUgRWQyNTUxOSBwcml2YXRlIGtleVxuICAgKiBAcmV0dXJucyA2NC1ieXRlIHNpZ25hdHVyZVxuICAgKi9cbiAgc2lnbihtZXNzYWdlOiBzdHJpbmcgfCBVaW50OEFycmF5LCBwcml2YXRlS2V5OiBVaW50OEFycmF5KTogVWludDhBcnJheSB7XG4gICAgY29uc3QgZGF0YSA9IHR5cGVvZiBtZXNzYWdlID09PSAnc3RyaW5nJ1xuICAgICAgPyB0aGlzLmVuY29kZXIuZW5jb2RlKG1lc3NhZ2UpXG4gICAgICA6IG1lc3NhZ2U7XG4gICAgXG4gICAgcmV0dXJuIHNpZ25NZXNzYWdlKGRhdGEsIHByaXZhdGVLZXkpO1xuICB9XG5cbiAgLyoqXG4gICAqIFZlcmlmeSBhIHNpZ25hdHVyZSB1c2luZyBFZDI1NTE5XG4gICAqIEBwYXJhbSBtZXNzYWdlIC0gT3JpZ2luYWwgbWVzc2FnZVxuICAgKiBAcGFyYW0gc2lnbmF0dXJlIC0gNjQtYnl0ZSBzaWduYXR1cmVcbiAgICogQHBhcmFtIHB1YmxpY0tleSAtIDMyLWJ5dGUgRWQyNTUxOSBwdWJsaWMga2V5XG4gICAqIEByZXR1cm5zIHRydWUgaWYgdmFsaWQsIGZhbHNlIG90aGVyd2lzZVxuICAgKi9cbiAgdmVyaWZ5KG1lc3NhZ2U6IHN0cmluZyB8IFVpbnQ4QXJyYXksIHNpZ25hdHVyZTogVWludDhBcnJheSwgcHVibGljS2V5OiBVaW50OEFycmF5KTogYm9vbGVhbiB7XG4gICAgY29uc3QgZGF0YSA9IHR5cGVvZiBtZXNzYWdlID09PSAnc3RyaW5nJ1xuICAgICAgPyB0aGlzLmVuY29kZXIuZW5jb2RlKG1lc3NhZ2UpXG4gICAgICA6IG1lc3NhZ2U7XG4gICAgXG4gICAgcmV0dXJuIHZlcmlmeVNpZ25hdHVyZShkYXRhLCBzaWduYXR1cmUsIHB1YmxpY0tleSk7XG4gIH1cblxuICAvKipcbiAgICogRGVyaXZlIGEgc2hhcmVkIHNlY3JldCB1c2luZyBYMjU1MTkgRUNESFxuICAgKiBAcGFyYW0gcHJpdmF0ZUtleSAtIE91ciBwcml2YXRlIGtleVxuICAgKiBAcGFyYW0gcGVlclB1YmxpY0tleSAtIFBlZXIncyBwdWJsaWMga2V5XG4gICAqIEByZXR1cm5zIDMyLWJ5dGUgc2hhcmVkIHNlY3JldFxuICAgKi9cbiAgZGVyaXZlU2VjcmV0KHByaXZhdGVLZXk6IFVpbnQ4QXJyYXksIHBlZXJQdWJsaWNLZXk6IFVpbnQ4QXJyYXkpOiBVaW50OEFycmF5IHtcbiAgICByZXR1cm4gZGVyaXZlU2hhcmVkU2VjcmV0KHByaXZhdGVLZXksIHBlZXJQdWJsaWNLZXkpO1xuICB9XG59XG5cbi8qKlxuICogS2V5TWFuYWdlciBjbGFzcyAtIE1hbmFnZXMgaWRlbnRpdHkga2V5cGFpcnNcbiAqIFByb3ZpZGVzIHBlcnNpc3RlbnQga2V5IHN0b3JhZ2UgYW5kIGdlbmVyYXRpb25cbiAqL1xuZXhwb3J0IGNsYXNzIEtleU1hbmFnZXIge1xuICBwcml2YXRlIHB1YmxpY0tleTogVWludDhBcnJheSB8IG51bGwgPSBudWxsO1xuICBwcml2YXRlIHByaXZhdGVLZXk6IFVpbnQ4QXJyYXkgfCBudWxsID0gbnVsbDtcblxuICAvKipcbiAgICogR2VuZXJhdGUgYSBuZXcgRWQyNTUxOSBpZGVudGl0eSBrZXlwYWlyXG4gICAqL1xuICBnZW5lcmF0ZUlkZW50aXR5S2V5UGFpcigpOiB2b2lkIHtcbiAgICBjb25zdCBrZXlwYWlyID0gZ2VuZXJhdGVJZGVudGl0eSgpO1xuICAgIHRoaXMucHVibGljS2V5ID0ga2V5cGFpci5wdWJsaWNLZXk7XG4gICAgdGhpcy5wcml2YXRlS2V5ID0ga2V5cGFpci5wcml2YXRlS2V5O1xuICB9XG5cbiAgLyoqXG4gICAqIEdldCB0aGUgcHVibGljIGtleVxuICAgKiBAdGhyb3dzIEVycm9yIGlmIGtleXBhaXIgbm90IGdlbmVyYXRlZFxuICAgKiBAcmV0dXJucyBBIGNvcHkgb2YgdGhlIHB1YmxpYyBrZXkgdG8gcHJldmVudCBleHRlcm5hbCBtb2RpZmljYXRpb25cbiAgICovXG4gIGdldFB1YmxpY0tleSgpOiBVaW50OEFycmF5IHtcbiAgICBpZiAoIXRoaXMucHVibGljS2V5KSB7XG4gICAgICB0aHJvdyBuZXcgRXJyb3IoJ0tleXBhaXIgbm90IGdlbmVyYXRlZC4gQ2FsbCBnZW5lcmF0ZUlkZW50aXR5S2V5UGFpciBmaXJzdC4nKTtcbiAgICB9XG4gICAgcmV0dXJuIG5ldyBVaW50OEFycmF5KHRoaXMucHVibGljS2V5KTtcbiAgfVxuXG4gIC8qKlxuICAgKiBHZXQgdGhlIHByaXZhdGUga2V5XG4gICAqIEB0aHJvd3MgRXJyb3IgaWYga2V5cGFpciBub3QgZ2VuZXJhdGVkXG4gICAqIEByZXR1cm5zIEEgY29weSBvZiB0aGUgcHJpdmF0ZSBrZXkgdG8gcHJldmVudCBleHRlcm5hbCBtb2RpZmljYXRpb25cbiAgICovXG4gIGdldFByaXZhdGVLZXkoKTogVWludDhBcnJheSB7XG4gICAgaWYgKCF0aGlzLnByaXZhdGVLZXkpIHtcbiAgICAgIHRocm93IG5ldyBFcnJvcignS2V5cGFpciBub3QgZ2VuZXJhdGVkLiBDYWxsIGdlbmVyYXRlSWRlbnRpdHlLZXlQYWlyIGZpcnN0LicpO1xuICAgIH1cbiAgICByZXR1cm4gbmV3IFVpbnQ4QXJyYXkodGhpcy5wcml2YXRlS2V5KTtcbiAgfVxuXG4gIC8qKlxuICAgKiBDaGVjayBpZiBhIGtleXBhaXIgaGFzIGJlZW4gZ2VuZXJhdGVkXG4gICAqL1xuICBoYXNLZXlwYWlyKCk6IGJvb2xlYW4ge1xuICAgIHJldHVybiB0aGlzLnB1YmxpY0tleSAhPT0gbnVsbCAmJiB0aGlzLnByaXZhdGVLZXkgIT09IG51bGw7XG4gIH1cblxuICAvKipcbiAgICogQ2xlYXIgdGhlIHN0b3JlZCBrZXlwYWlyIGZyb20gbWVtb3J5XG4gICAqL1xuICBjbGVhcigpOiB2b2lkIHtcbiAgICBpZiAodGhpcy5wcml2YXRlS2V5KSB7XG4gICAgICBzZWN1cmVXaXBlKHRoaXMucHJpdmF0ZUtleSk7XG4gICAgfVxuICAgIHRoaXMucHVibGljS2V5ID0gbnVsbDtcbiAgICB0aGlzLnByaXZhdGVLZXkgPSBudWxsO1xuICB9XG59XG4iXSwidmVyc2lvbiI6M30=

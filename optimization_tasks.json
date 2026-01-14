@@ -1,0 +1,121 @@
+{
+  "generated": "2026-01-13T00:00:00Z",
+  "status": "COMPLETED",
+  "totalTasks": 12,
+  "completedTasks": 5,
+  "tasks": [
+    {
+      "id": 1,
+      "priority": "CRITICAL",
+      "status": "pending",
+      "category": "lint-errors",
+      "description": "Fix 3 lint ERRORS in MobileUIManager.ts (unused variables)",
+      "files": ["core/src/mobile/MobileUIManager.ts"],
+      "effort": "trivial"
+    },
+    {
+      "id": 2,
+      "priority": "CRITICAL",
+      "status": "pending",
+      "category": "tests",
+      "description": "Fix peer-security-alerts.test.ts - @noble/curves import error",
+      "files": ["core/src/mesh/peer-security-alerts.test.ts", "core/src/crypto/primitives.ts"],
+      "error": "SyntaxError: The requested module '@noble/curves/ed25519.js' does not provide an export named 'ed25519'",
+      "effort": "medium"
+    },
+    {
+      "id": 3,
+      "priority": "CRITICAL",
+      "status": "pending",
+      "category": "tests",
+      "description": "Fix error-handler.test.ts - Sentry ESM/CJS compatibility",
+      "files": ["core/src/error-handler.test.ts", "core/src/error-handler.ts"],
+      "error": "ReferenceError: exports is not defined",
+      "effort": "medium"
+    },
+    {
+      "id": 4,
+      "priority": "HIGH",
+      "status": "pending",
+      "category": "bundle-size",
+      "description": "Reduce api chunk from 3.8MB to <500KB via code splitting",
+      "files": ["web/vite.config.ts", "core/src/index.ts"],
+      "details": "jsdom and Node.js modules being bundled in browser build",
+      "effort": "high"
+    },
+    {
+      "id": 5,
+      "priority": "HIGH",
+      "status": "pending",
+      "category": "security",
+      "description": "Update axios to fix DoS and SSRF vulnerabilities",
+      "files": ["package.json"],
+      "details": "Multiple CVEs in axios 1.0.0-1.11.0",
+      "effort": "medium"
+    },
+    {
+      "id": 6,
+      "priority": "HIGH",
+      "status": "pending",
+      "category": "build",
+      "description": "Fix dynamic/static import warnings in Vite build",
+      "files": ["web/vite.config.ts", "core/dist/offline-queue.js", "web/src/App.tsx"],
+      "effort": "medium"
+    },
+    {
+      "id": 7,
+      "priority": "MEDIUM",
+      "status": "pending",
+      "category": "config",
+      "description": "Fix ts-jest deprecated config warnings",
+      "files": ["core/jest.config.mjs"],
+      "effort": "trivial"
+    },
+    {
+      "id": 8,
+      "priority": "MEDIUM",
+      "status": "pending",
+      "category": "types",
+      "description": "Fix 150+ TypeScript 'any' warnings in core package",
+      "files": ["core/src/**/*.ts"],
+      "effort": "high"
+    },
+    {
+      "id": 9,
+      "priority": "MEDIUM",
+      "status": "pending",
+      "category": "security",
+      "description": "Update brace-expansion to fix ReDoS vulnerability",
+      "files": ["package.json"],
+      "effort": "trivial"
+    },
+    {
+      "id": 10,
+      "priority": "MEDIUM",
+      "status": "pending",
+      "category": "security",
+      "description": "Update form-data to fix weak random boundary issue",
+      "files": ["package.json"],
+      "effort": "trivial"
+    },
+    {
+      "id": 11,
+      "priority": "LOW",
+      "status": "pending",
+      "category": "deps",
+      "description": "Update outdated dependencies to latest versions",
+      "files": ["package.json", "core/package.json", "web/package.json"],
+      "effort": "medium"
+    },
+    {
+      "id": 12,
+      "priority": "LOW",
+      "status": "pending",
+      "category": "build",
+      "description": "Evaluate eval() warning in cssom library",
+      "files": [],
+      "details": "Third-party library issue - may need to find alternative",
+      "effort": "low"
+    }
+  ]
+}

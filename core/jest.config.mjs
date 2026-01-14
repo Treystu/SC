@@ -51,8 +51,10 @@ export default {
   setupFilesAfterEnv: ['<rootDir>/jest.setup.cjs'],
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
+    '^@sentry/browser$': '<rootDir>/__mocks__/@sentry/browser.cjs',
   },
   modulePathIgnorePatterns: ['<rootDir>/dist/'],
+  resolver: '<rootDir>/jest-esm-resolver.cjs',
   preset: 'ts-jest/presets/default-esm',
   transform: {
     '^.+\\.(ts|tsx)$': ['ts-jest', { 
@@ -69,13 +71,4 @@ export default {
     '/dist/'
   ],
   injectGlobals: true,
-  globals: {
-    'ts-jest': {
-      useESM: true,
-      tsconfig: {
-        allowSyntheticDefaultImports: true,
-        esModuleInterop: true
-      }
-    }
-  }
 };

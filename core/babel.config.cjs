@@ -4,7 +4,7 @@ module.exports = {
       '@babel/preset-env',
       {
         targets: { node: 'current' },
-        modules: false
+        modules: false // Keep ESM for Jest experimental-vm-modules
       }
     ],
     [

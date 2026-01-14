@@ -433,7 +433,7 @@ export class MobileUIManager {
   /**
    * Start gesture detection
    */
-  private startGestureDetection(position: Position, timestamp: number): void {
+  private startGestureDetection(position: Position, _timestamp: number): void {
     // Implementation would track initial touch position and time
     console.log('Starting gesture detection at:', position);
   }
@@ -441,7 +441,7 @@ export class MobileUIManager {
   /**
    * Update gesture detection
    */
-  private updateGestureDetection(position: Position, timestamp: number): void {
+  private updateGestureDetection(position: Position, _timestamp: number): void {
     // Implementation would track movement and detect gesture patterns
     console.log('Updating gesture detection at:', position);
   }
@@ -449,7 +449,7 @@ export class MobileUIManager {
   /**
    * Complete gesture detection
    */
-  private completeGestureDetection(timestamp: number): void {
+  private completeGestureDetection(_timestamp: number): void {
     // Implementation would analyze gesture pattern and trigger appropriate events
     console.log('Completing gesture detection');
   }

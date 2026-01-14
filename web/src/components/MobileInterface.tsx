@@ -194,16 +194,20 @@ const DraggablePanel: React.FC<DraggablePanelProps> = ({
 
   if (!isVisible) return null;
 
+  // Sync CSS variables on the panel element without inline styles in JSX
+  useEffect(() => {
+    const el = panelRef.current;
+    if (!el) return;
+    el.style.setProperty('--panel-left', `${position.x}px`);
+    el.style.setProperty('--panel-top', `${position.y}px`);
+    el.style.setProperty('--panel-width', `${size.width}px`);
+    el.style.setProperty('--panel-height', `${size.height}px`);
+  }, [position, size]);
+
   return (
     <div
       ref={panelRef}
       className={`mobile-panel ${isDragging ? 'dragging' : ''} ${isResizing ? 'resizing' : ''}`}
-      style={{
-        '--panel-left': `${position.x}px`,
-        '--panel-top': `${position.y}px`,
-        '--panel-width': `${size.width}px`,
-        '--panel-height': `${size.height}px`
-      } as React.CSSProperties}
     >
       <div
         ref={headerRef}

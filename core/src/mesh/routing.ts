@@ -412,6 +412,15 @@ export class RoutingTable {
     // Normalize destination ID for consistent lookup
     const normalizedDest = destination.replace(/\s/g, "").toUpperCase();
     const route = this.routes.get(normalizedDest) || this.routes.get(destination);
+
+    // Check if route is expired
+    if (route && route.expiresAt < Date.now()) {
+      // Remove expired route
+      this.routes.delete(normalizedDest);
+      this.routes.delete(destination);
+      return undefined;
+    }
+
     // Return the nextHop which stores the original ID format
     return route?.nextHop;
   }

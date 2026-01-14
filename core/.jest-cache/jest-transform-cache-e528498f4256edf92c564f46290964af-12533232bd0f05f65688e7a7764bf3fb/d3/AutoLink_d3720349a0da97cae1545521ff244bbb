@@ -1,0 +1,75 @@
+fb396b4a733225792d8dc9e0c3c0bcd2
+"use strict";
+/**
+ * AutoLink - Automatically establishes bidirectional connections between peers
+ *
+ * When an invite is redeemed, this system:
+ * 1. Adds the inviter to the recipient's contacts
+ * 2. Notifies the inviter that their invite was accepted
+ * 3. Establishes a trusted connection between both parties
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.AutoLink = void 0;
+class AutoLink {
+    constructor(contacts, messageSender) {
+        this.contacts = contacts;
+        this.messageSender = messageSender;
+    }
+    /**
+     * Create an automatic connection when an invite is redeemed
+     */
+    async createAutoConnection(invite, recipientPeerId, recipientPublicKey, recipientName) {
+        // Add the inviter to the recipient's contacts
+        const contact = {
+            peerId: invite.inviterPeerId,
+            publicKey: invite.inviterPublicKey,
+            name: invite.inviterName,
+            addedVia: 'invite',
+            addedAt: Date.now(),
+            verified: true, // Auto-verified through invite signature
+        };
+        await this.contacts.add(contact);
+        // Send acceptance notification to the inviter (if message sender is available)
+        if (this.messageSender) {
+            const message = {
+                type: 'INVITE_ACCEPTED',
+                recipientPeerId,
+                recipientPublicKey,
+                recipientName,
+                inviteCode: invite.code,
+                timestamp: Date.now(),
+            };
+            try {
+                await this.messageSender.sendToPeer(invite.inviterPeerId, message);
+            }
+            catch (error) {
+                // Log but don't fail - the inviter will discover the connection through other means
+                console.warn('Failed to send invite acceptance notification:', error);
+            }
+        }
+    }
+    /**
+     * Handle an invite acceptance message
+     * This is called on the inviter's side when someone redeems their invite
+     */
+    async handleInviteAcceptance(message) {
+        // Check if this contact already exists
+        const existingContact = await this.contacts.get(message.recipientPeerId);
+        if (existingContact) {
+            // Contact already exists, no need to add again
+            return;
+        }
+        // Add the recipient to the inviter's contacts
+        const contact = {
+            peerId: message.recipientPeerId,
+            publicKey: message.recipientPublicKey,
+            name: message.recipientName,
+            addedVia: 'invite',
+            addedAt: Date.now(),
+            verified: true,
+        };
+        await this.contacts.add(contact);
+    }
+}
+exports.AutoLink = AutoLink;
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJmaWxlIjoiL1VzZXJzL2NocmlzdHltYXh3ZWxsL0Rlc2t0b3AvTHVrZV9TdHVmZi9HaXRIdWIvU0MvY29yZS9zcmMvc2hhcmluZy9BdXRvTGluay50cyIsIm1hcHBpbmdzIjoiO0FBQUE7Ozs7Ozs7R0FPRzs7O0FBdUJILE1BQWEsUUFBUTtJQUluQixZQUFZLFFBQXNCLEVBQUUsYUFBNkI7UUFDL0QsSUFBSSxDQUFDLFFBQVEsR0FBRyxRQUFRLENBQUM7UUFDekIsSUFBSSxDQUFDLGFBQWEsR0FBRyxhQUFhLENBQUM7SUFDckMsQ0FBQztJQUVEOztPQUVHO0lBQ0gsS0FBSyxDQUFDLG9CQUFvQixDQUN4QixNQUFxQixFQUNyQixlQUF1QixFQUN2QixrQkFBOEIsRUFDOUIsYUFBc0I7UUFFdEIsOENBQThDO1FBQzlDLE1BQU0sT0FBTyxHQUFZO1lBQ3ZCLE1BQU0sRUFBRSxNQUFNLENBQUMsYUFBYTtZQUM1QixTQUFTLEVBQUUsTUFBTSxDQUFDLGdCQUFnQjtZQUNsQyxJQUFJLEVBQUUsTUFBTSxDQUFDLFdBQVc7WUFDeEIsUUFBUSxFQUFFLFFBQVE7WUFDbEIsT0FBTyxFQUFFLElBQUksQ0FBQyxHQUFHLEVBQUU7WUFDbkIsUUFBUSxFQUFFLElBQUksRUFBRSx5Q0FBeUM7U0FDMUQsQ0FBQztRQUVGLE1BQU0sSUFBSSxDQUFDLFFBQVEsQ0FBQyxHQUFHLENBQUMsT0FBTyxDQUFDLENBQUM7UUFFakMsK0VBQStFO1FBQy9FLElBQUksSUFBSSxDQUFDLGFBQWEsRUFBRSxDQUFDO1lBQ3ZCLE1BQU0sT0FBTyxHQUFvQjtnQkFDL0IsSUFBSSxFQUFFLGlCQUFpQjtnQkFDdkIsZUFBZTtnQkFDZixrQkFBa0I7Z0JBQ2xCLGFBQWE7Z0JBQ2IsVUFBVSxFQUFFLE1BQU0sQ0FBQyxJQUFJO2dCQUN2QixTQUFTLEVBQUUsSUFBSSxDQUFDLEdBQUcsRUFBRTthQUN0QixDQUFDO1lBRUYsSUFBSSxDQUFDO2dCQUNILE1BQU0sSUFBSSxDQUFDLGFBQWEsQ0FBQyxVQUFVLENBQUMsTUFBTSxDQUFDLGFBQWEsRUFBRSxPQUFPLENBQUMsQ0FBQztZQUNyRSxDQUFDO1lBQUMsT0FBTyxLQUFLLEVBQUUsQ0FBQztnQkFDZixvRkFBb0Y7Z0JBQ3BGLE9BQU8sQ0FBQyxJQUFJLENBQUMsZ0RBQWdELEVBQUUsS0FBSyxDQUFDLENBQUM7WUFDeEUsQ0FBQztRQUNILENBQUM7SUFDSCxDQUFDO0lBRUQ7OztPQUdHO0lBQ0gsS0FBSyxDQUFDLHNCQUFzQixDQUFDLE9BQXdCO1FBQ25ELHVDQUF1QztRQUN2QyxNQUFNLGVBQWUsR0FBRyxNQUFNLElBQUksQ0FBQyxRQUFRLENBQUMsR0FBRyxDQUFDLE9BQU8sQ0FBQyxlQUFlLENBQUMsQ0FBQztRQUV6RSxJQUFJLGVBQWUsRUFBRSxDQUFDO1lBQ3BCLCtDQUErQztZQUMvQyxPQUFPO1FBQ1QsQ0FBQztRQUVELDhDQUE4QztRQUM5QyxNQUFNLE9BQU8sR0FBWTtZQUN2QixNQUFNLEVBQUUsT0FBTyxDQUFDLGVBQWU7WUFDL0IsU0FBUyxFQUFFLE9BQU8sQ0FBQyxrQkFBa0I7WUFDckMsSUFBSSxFQUFFLE9BQU8sQ0FBQyxhQUFhO1lBQzNCLFFBQVEsRUFBRSxRQUFRO1lBQ2xCLE9BQU8sRUFBRSxJQUFJLENBQUMsR0FBRyxFQUFFO1lBQ25CLFFBQVEsRUFBRSxJQUFJO1NBQ2YsQ0FBQztRQUVGLE1BQU0sSUFBSSxDQUFDLFFBQVEsQ0FBQyxHQUFHLENBQUMsT0FBTyxDQUFDLENBQUM7SUFDbkMsQ0FBQztDQUNGO0FBM0VELDRCQTJFQyIsIm5hbWVzIjpbXSwic291cmNlcyI6WyIvVXNlcnMvY2hyaXN0eW1heHdlbGwvRGVza3RvcC9MdWtlX1N0dWZmL0dpdEh1Yi9TQy9jb3JlL3NyYy9zaGFyaW5nL0F1dG9MaW5rLnRzIl0sInNvdXJjZXNDb250ZW50IjpbIi8qKlxuICogQXV0b0xpbmsgLSBBdXRvbWF0aWNhbGx5IGVzdGFibGlzaGVzIGJpZGlyZWN0aW9uYWwgY29ubmVjdGlvbnMgYmV0d2VlbiBwZWVyc1xuICogXG4gKiBXaGVuIGFuIGludml0ZSBpcyByZWRlZW1lZCwgdGhpcyBzeXN0ZW06XG4gKiAxLiBBZGRzIHRoZSBpbnZpdGVyIHRvIHRoZSByZWNpcGllbnQncyBjb250YWN0c1xuICogMi4gTm90aWZpZXMgdGhlIGludml0ZXIgdGhhdCB0aGVpciBpbnZpdGUgd2FzIGFjY2VwdGVkXG4gKiAzLiBFc3RhYmxpc2hlcyBhIHRydXN0ZWQgY29ubmVjdGlvbiBiZXR3ZWVuIGJvdGggcGFydGllc1xuICovXG5cbmltcG9ydCB7IFBlbmRpbmdJbnZpdGUsIENvbnRhY3QgfSBmcm9tICcuL3R5cGVzLmpzJztcblxuZXhwb3J0IGludGVyZmFjZSBBdXRvTGlua01lc3NhZ2Uge1xuICB0eXBlOiAnSU5WSVRFX0FDQ0VQVEVEJztcbiAgcmVjaXBpZW50UGVlcklkOiBzdHJpbmc7XG4gIHJlY2lwaWVudFB1YmxpY0tleTogVWludDhBcnJheTtcbiAgcmVjaXBpZW50TmFtZT86IHN0cmluZztcbiAgaW52aXRlQ29kZTogc3RyaW5nO1xuICB0aW1lc3RhbXA6IG51bWJlcjtcbn1cblxuZXhwb3J0IGludGVyZmFjZSBDb250YWN0U3RvcmUge1xuICBhZGQoY29udGFjdDogQ29udGFjdCk6IFByb21pc2U8dm9pZD47XG4gIGdldChwZWVySWQ6IHN0cmluZyk6IFByb21pc2U8Q29udGFjdCB8IG51bGw+O1xuICBoYXMocGVlcklkOiBzdHJpbmcpOiBQcm9taXNlPGJvb2xlYW4+O1xufVxuXG5leHBvcnQgaW50ZXJmYWNlIE1lc3NhZ2VTZW5kZXIge1xuICBzZW5kVG9QZWVyKHBlZXJJZDogc3RyaW5nLCBtZXNzYWdlOiBBdXRvTGlua01lc3NhZ2UpOiBQcm9taXNlPHZvaWQ+O1xufVxuXG5leHBvcnQgY2xhc3MgQXV0b0xpbmsge1xuICBwcml2YXRlIGNvbnRhY3RzOiBDb250YWN0U3RvcmU7XG4gIHByaXZhdGUgbWVzc2FnZVNlbmRlcj86IE1lc3NhZ2VTZW5kZXI7XG5cbiAgY29uc3RydWN0b3IoY29udGFjdHM6IENvbnRhY3RTdG9yZSwgbWVzc2FnZVNlbmRlcj86IE1lc3NhZ2VTZW5kZXIpIHtcbiAgICB0aGlzLmNvbnRhY3RzID0gY29udGFjdHM7XG4gICAgdGhpcy5tZXNzYWdlU2VuZGVyID0gbWVzc2FnZVNlbmRlcjtcbiAgfVxuXG4gIC8qKlxuICAgKiBDcmVhdGUgYW4gYXV0b21hdGljIGNvbm5lY3Rpb24gd2hlbiBhbiBpbnZpdGUgaXMgcmVkZWVtZWRcbiAgICovXG4gIGFzeW5jIGNyZWF0ZUF1dG9Db25uZWN0aW9uKFxuICAgIGludml0ZTogUGVuZGluZ0ludml0ZSxcbiAgICByZWNpcGllbnRQZWVySWQ6IHN0cmluZyxcbiAgICByZWNpcGllbnRQdWJsaWNLZXk6IFVpbnQ4QXJyYXksXG4gICAgcmVjaXBpZW50TmFtZT86IHN0cmluZ1xuICApOiBQcm9taXNlPHZvaWQ+IHtcbiAgICAvLyBBZGQgdGhlIGludml0ZXIgdG8gdGhlIHJlY2lwaWVudCdzIGNvbnRhY3RzXG4gICAgY29uc3QgY29udGFjdDogQ29udGFjdCA9IHtcbiAgICAgIHBlZXJJZDogaW52aXRlLmludml0ZXJQZWVySWQsXG4gICAgICBwdWJsaWNLZXk6IGludml0ZS5pbnZpdGVyUHVibGljS2V5LFxuICAgICAgbmFtZTogaW52aXRlLmludml0ZXJOYW1lLFxuICAgICAgYWRkZWRWaWE6ICdpbnZpdGUnLFxuICAgICAgYWRkZWRBdDogRGF0ZS5ub3coKSxcbiAgICAgIHZlcmlmaWVkOiB0cnVlLCAvLyBBdXRvLXZlcmlmaWVkIHRocm91Z2ggaW52aXRlIHNpZ25hdHVyZVxuICAgIH07XG5cbiAgICBhd2FpdCB0aGlzLmNvbnRhY3RzLmFkZChjb250YWN0KTtcblxuICAgIC8vIFNlbmQgYWNjZXB0YW5jZSBub3RpZmljYXRpb24gdG8gdGhlIGludml0ZXIgKGlmIG1lc3NhZ2Ugc2VuZGVyIGlzIGF2YWlsYWJsZSlcbiAgICBpZiAodGhpcy5tZXNzYWdlU2VuZGVyKSB7XG4gICAgICBjb25zdCBtZXNzYWdlOiBBdXRvTGlua01lc3NhZ2UgPSB7XG4gICAgICAgIHR5cGU6ICdJTlZJVEVfQUNDRVBURUQnLFxuICAgICAgICByZWNpcGllbnRQZWVySWQsXG4gICAgICAgIHJlY2lwaWVudFB1YmxpY0tleSxcbiAgICAgICAgcmVjaXBpZW50TmFtZSxcbiAgICAgICAgaW52aXRlQ29kZTogaW52aXRlLmNvZGUsXG4gICAgICAgIHRpbWVzdGFtcDogRGF0ZS5ub3coKSxcbiAgICAgIH07XG5cbiAgICAgIHRyeSB7XG4gICAgICAgIGF3YWl0IHRoaXMubWVzc2FnZVNlbmRlci5zZW5kVG9QZWVyKGludml0ZS5pbnZpdGVyUGVlcklkLCBtZXNzYWdlKTtcbiAgICAgIH0gY2F0Y2ggKGVycm9yKSB7XG4gICAgICAgIC8vIExvZyBidXQgZG9uJ3QgZmFpbCAtIHRoZSBpbnZpdGVyIHdpbGwgZGlzY292ZXIgdGhlIGNvbm5lY3Rpb24gdGhyb3VnaCBvdGhlciBtZWFuc1xuICAgICAgICBjb25zb2xlLndhcm4oJ0ZhaWxlZCB0byBzZW5kIGludml0ZSBhY2NlcHRhbmNlIG5vdGlmaWNhdGlvbjonLCBlcnJvcik7XG4gICAgICB9XG4gICAgfVxuICB9XG5cbiAgLyoqXG4gICAqIEhhbmRsZSBhbiBpbnZpdGUgYWNjZXB0YW5jZSBtZXNzYWdlXG4gICAqIFRoaXMgaXMgY2FsbGVkIG9uIHRoZSBpbnZpdGVyJ3Mgc2lkZSB3aGVuIHNvbWVvbmUgcmVkZWVtcyB0aGVpciBpbnZpdGVcbiAgICovXG4gIGFzeW5jIGhhbmRsZUludml0ZUFjY2VwdGFuY2UobWVzc2FnZTogQXV0b0xpbmtNZXNzYWdlKTogUHJvbWlzZTx2b2lkPiB7XG4gICAgLy8gQ2hlY2sgaWYgdGhpcyBjb250YWN0IGFscmVhZHkgZXhpc3RzXG4gICAgY29uc3QgZXhpc3RpbmdDb250YWN0ID0gYXdhaXQgdGhpcy5jb250YWN0cy5nZXQobWVzc2FnZS5yZWNpcGllbnRQZWVySWQpO1xuICAgIFxuICAgIGlmIChleGlzdGluZ0NvbnRhY3QpIHtcbiAgICAgIC8vIENvbnRhY3QgYWxyZWFkeSBleGlzdHMsIG5vIG5lZWQgdG8gYWRkIGFnYWluXG4gICAgICByZXR1cm47XG4gICAgfVxuXG4gICAgLy8gQWRkIHRoZSByZWNpcGllbnQgdG8gdGhlIGludml0ZXIncyBjb250YWN0c1xuICAgIGNvbnN0IGNvbnRhY3Q6IENvbnRhY3QgPSB7XG4gICAgICBwZWVySWQ6IG1lc3NhZ2UucmVjaXBpZW50UGVlcklkLFxuICAgICAgcHVibGljS2V5OiBtZXNzYWdlLnJlY2lwaWVudFB1YmxpY0tleSxcbiAgICAgIG5hbWU6IG1lc3NhZ2UucmVjaXBpZW50TmFtZSxcbiAgICAgIGFkZGVkVmlhOiAnaW52aXRlJyxcbiAgICAgIGFkZGVkQXQ6IERhdGUubm93KCksXG4gICAgICB2ZXJpZmllZDogdHJ1ZSxcbiAgICB9O1xuXG4gICAgYXdhaXQgdGhpcy5jb250YWN0cy5hZGQoY29udGFjdCk7XG4gIH1cbn1cbiJdLCJ2ZXJzaW9uIjozfQ==

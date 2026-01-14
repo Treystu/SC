@@ -223,7 +223,7 @@ describe('Advanced Routing Table Features', () => {
   });
 
   describe('Route Expiration', () => {
-    it('should not add expired routes', async () => {
+    it('should not return expired routes', async () => {
       const expiredRoute = {
         destination: 'dest1',
         nextHop: 'peer1',
@@ -239,11 +239,10 @@ describe('Advanced Routing Table Features', () => {
       };
 
       routingTable.addRoute(expiredRoute);
-      
-      // Route should be replaced or cleaned up
+
+      // Route should not be returned since it's expired
       const nextHop = routingTable.getNextHop('dest1');
-      // Should still work if route is valid
-      expect(nextHop).toBeDefined();
+      expect(nextHop).toBeUndefined();
     });
   });
 });

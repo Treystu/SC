@@ -1,0 +1,21 @@
+46a89b9853c846fa85776940e9fe31e8
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const webrtc_1 = require("./webrtc");
+// Note: WebRTC tests are skipped in Node.js environment
+// RTCPeerConnection is not available outside of a browser context
+describe('WebRTC Module', () => {
+    describe('Exports', () => {
+        it('should export WebRTCPeer class', () => {
+            expect(webrtc_1.WebRTCPeer).toBeDefined();
+            expect(typeof webrtc_1.WebRTCPeer).toBe('function');
+        });
+        it('should export PeerConnectionPool class', () => {
+            expect(webrtc_1.PeerConnectionPool).toBeDefined();
+            expect(typeof webrtc_1.PeerConnectionPool).toBe('function');
+        });
+    });
+    // WebRTC functionality tests require a browser environment with RTCPeerConnection
+    // These would be tested in integration/E2E tests with proper WebRTC support
+});
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJmaWxlIjoiL1VzZXJzL2NocmlzdHltYXh3ZWxsL0Rlc2t0b3AvTHVrZV9TdHVmZi9HaXRIdWIvU0MvY29yZS9zcmMvdHJhbnNwb3J0L3dlYnJ0Yy50ZXN0LnRzIiwibWFwcGluZ3MiOiI7O0FBQUEscUNBQTBEO0FBRTFELHdEQUF3RDtBQUN4RCxrRUFBa0U7QUFDbEUsUUFBUSxDQUFDLGVBQWUsRUFBRSxHQUFHLEVBQUU7SUFDN0IsUUFBUSxDQUFDLFNBQVMsRUFBRSxHQUFHLEVBQUU7UUFDdkIsRUFBRSxDQUFDLGdDQUFnQyxFQUFFLEdBQUcsRUFBRTtZQUN4QyxNQUFNLENBQUMsbUJBQVUsQ0FBQyxDQUFDLFdBQVcsRUFBRSxDQUFDO1lBQ2pDLE1BQU0sQ0FBQyxPQUFPLG1CQUFVLENBQUMsQ0FBQyxJQUFJLENBQUMsVUFBVSxDQUFDLENBQUM7UUFDN0MsQ0FBQyxDQUFDLENBQUM7UUFFSCxFQUFFLENBQUMsd0NBQXdDLEVBQUUsR0FBRyxFQUFFO1lBQ2hELE1BQU0sQ0FBQywyQkFBa0IsQ0FBQyxDQUFDLFdBQVcsRUFBRSxDQUFDO1lBQ3pDLE1BQU0sQ0FBQyxPQUFPLDJCQUFrQixDQUFDLENBQUMsSUFBSSxDQUFDLFVBQVUsQ0FBQyxDQUFDO1FBQ3JELENBQUMsQ0FBQyxDQUFDO0lBQ0wsQ0FBQyxDQUFDLENBQUM7SUFFSCxrRkFBa0Y7SUFDbEYsNEVBQTRFO0FBQzlFLENBQUMsQ0FBQyxDQUFDIiwibmFtZXMiOltdLCJzb3VyY2VzIjpbIi9Vc2Vycy9jaHJpc3R5bWF4d2VsbC9EZXNrdG9wL0x1a2VfU3R1ZmYvR2l0SHViL1NDL2NvcmUvc3JjL3RyYW5zcG9ydC93ZWJydGMudGVzdC50cyJdLCJzb3VyY2VzQ29udGVudCI6WyJpbXBvcnQgeyBXZWJSVENQZWVyLCBQZWVyQ29ubmVjdGlvblBvb2wgfSBmcm9tICcuL3dlYnJ0Yyc7XG5cbi8vIE5vdGU6IFdlYlJUQyB0ZXN0cyBhcmUgc2tpcHBlZCBpbiBOb2RlLmpzIGVudmlyb25tZW50XG4vLyBSVENQZWVyQ29ubmVjdGlvbiBpcyBub3QgYXZhaWxhYmxlIG91dHNpZGUgb2YgYSBicm93c2VyIGNvbnRleHRcbmRlc2NyaWJlKCdXZWJSVEMgTW9kdWxlJywgKCkgPT4ge1xuICBkZXNjcmliZSgnRXhwb3J0cycsICgpID0+IHtcbiAgICBpdCgnc2hvdWxkIGV4cG9ydCBXZWJSVENQZWVyIGNsYXNzJywgKCkgPT4ge1xuICAgICAgZXhwZWN0KFdlYlJUQ1BlZXIpLnRvQmVEZWZpbmVkKCk7XG4gICAgICBleHBlY3QodHlwZW9mIFdlYlJUQ1BlZXIpLnRvQmUoJ2Z1bmN0aW9uJyk7XG4gICAgfSk7XG5cbiAgICBpdCgnc2hvdWxkIGV4cG9ydCBQZWVyQ29ubmVjdGlvblBvb2wgY2xhc3MnLCAoKSA9PiB7XG4gICAgICBleHBlY3QoUGVlckNvbm5lY3Rpb25Qb29sKS50b0JlRGVmaW5lZCgpO1xuICAgICAgZXhwZWN0KHR5cGVvZiBQZWVyQ29ubmVjdGlvblBvb2wpLnRvQmUoJ2Z1bmN0aW9uJyk7XG4gICAgfSk7XG4gIH0pO1xuXG4gIC8vIFdlYlJUQyBmdW5jdGlvbmFsaXR5IHRlc3RzIHJlcXVpcmUgYSBicm93c2VyIGVudmlyb25tZW50IHdpdGggUlRDUGVlckNvbm5lY3Rpb25cbiAgLy8gVGhlc2Ugd291bGQgYmUgdGVzdGVkIGluIGludGVncmF0aW9uL0UyRSB0ZXN0cyB3aXRoIHByb3BlciBXZWJSVEMgc3VwcG9ydFxufSk7XG4iXSwidmVyc2lvbiI6M30=
