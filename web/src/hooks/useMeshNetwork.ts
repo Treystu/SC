@@ -664,6 +664,24 @@ export function useMeshNetwork() {
     // Normalize peer ID for consistent matching (all peer IDs are uppercase)
     const normalizedPeerId = peerId.replace(/\s/g, "").toUpperCase();
 
+    // CRITICAL: Pending Request Gate
+    // Don't connect to peers whose connection request is still pending
+    // This ensures connections only happen after user explicitly approves
+    try {
+      const db = getDatabase();
+      const conversation = await db.getConversation(normalizedPeerId);
+      if (conversation?.metadata?.requestStatus === 'pending') {
+        console.log(`[useMeshNetwork] Skipping connection to ${normalizedPeerId} - request still pending approval`);
+        useMeshNetworkLogger.info(
+          `Connection to ${normalizedPeerId} blocked - waiting for user approval`,
+        );
+        return;
+      }
+    } catch (err) {
+      // If we can't check the conversation, proceed with caution
+      console.warn(`[useMeshNetwork] Could not check request status for ${normalizedPeerId}:`, err);
+    }
+
     const alreadyConnected = Boolean(
       meshNetworkRef.current &&
         typeof meshNetworkRef.current.isConnectedToPeer === "function"
@@ -1269,7 +1287,14 @@ export function useMeshNetwork() {
         throw new Error("Mesh network not initialized");
       const localPeerId = meshNetworkRef.current.getLocalPeerId();
       const runtimeEnv = getRuntimeEnv();
+      // CRITICAL: Auto-connect is DISABLED by default in production
+      // This prevents unwanted connections without user consent
+      // Set sc-enable-auto-connect=true in localStorage to enable (for dev/testing)
+      const userEnabledAutoConnect =
+        typeof localStorage !== "undefined" &&
+        localStorage.getItem("sc-enable-auto-connect") === "true";
       const disableAutoConnect =
+        !userEnabledAutoConnect ||
         runtimeEnv.MODE === "test" ||
         runtimeEnv.VITE_E2E === "true" ||
         (typeof navigator !== "undefined" &&
@@ -1687,7 +1712,14 @@ export function useMeshNetwork() {
   useEffect(() => {
     const connectToKnownPeers = async () => {
       const env = getRuntimeEnv();
+      // CRITICAL: Auto-connect is DISABLED by default in production
+      // This prevents unwanted connections without user consent
+      // Set sc-enable-auto-connect=true in localStorage to enable (for dev/testing)
+      const userEnabledAutoConnect =
+        typeof localStorage !== "undefined" &&
+        localStorage.getItem("sc-enable-auto-connect") === "true";
       const shouldSkipAutoConnect =
+        !userEnabledAutoConnect ||
         env.MODE === "test" ||
         env.VITE_E2E === "true" ||
         (typeof navigator !== "undefined" &&

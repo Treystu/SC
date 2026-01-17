@@ -128,15 +128,81 @@ export interface SessionKey {
 
 /**
  * IndexedDB Database Manager
+ *
+ * IDENTITY-SCOPED DATABASE:
+ * Database names are scoped per identity to prevent data bleeding between sessions.
+ * - Fresh sessions (no active identity) use "sovereign-comm-bootstrap"
+ * - After onboarding, databases are named "sovereign-comm-{fingerprint8chars}"
+ * - This ensures true isolation between different identities/users
  */
 export class DatabaseManager {
+  private static BOOTSTRAP_DB_NAME = "sovereign-comm-bootstrap";
+  private static SCOPE_KEY = "sc-active-identity-scope";
+
   private dbName =
     typeof window !== "undefined" && (window as any).__SC_DB_NAME__
       ? (window as any).__SC_DB_NAME__
-      : "sovereign-communications";
+      : DatabaseManager.BOOTSTRAP_DB_NAME;
   private version = CURRENT_SCHEMA_VERSION;
   private db: IDBDatabase | null = null;
   private initPromise: Promise<void> | null = null;
+  private identityScope: string | null = null;
+
+  /**
+   * Get the active identity scope from localStorage
+   * Returns null if no identity has been set (fresh session)
+   */
+  private getActiveIdentityScope(): string | null {
+    if (typeof localStorage === "undefined") return null;
+    return localStorage.getItem(DatabaseManager.SCOPE_KEY);
+  }
+
+  /**
+   * Set the active identity scope and update database name
+   * Call this after generating a new identity during onboarding
+   */
+  async setActiveIdentityScope(fingerprint: string): Promise<void> {
+    if (typeof localStorage === "undefined") return;
+
+    // Normalize fingerprint to 8-char uppercase scope
+    const scope = fingerprint.replace(/\s/g, "").substring(0, 8).toUpperCase();
+
+    console.log(`[DatabaseManager] Setting identity scope: ${scope}`);
+
+    // Close existing database connection
+    this.close();
+
+    // Set new scope
+    localStorage.setItem(DatabaseManager.SCOPE_KEY, scope);
+    this.identityScope = scope;
+    this.dbName = `sovereign-comm-${scope}`;
+
+    // Clear init promise to allow re-initialization
+    this.initPromise = null;
+
+    console.log(`[DatabaseManager] Database name updated to: ${this.dbName}`);
+  }
+
+  /**
+   * Clear the identity scope (used when resetting/clearing all data)
+   * This forces the next session to start fresh
+   */
+  clearIdentityScope(): void {
+    if (typeof localStorage === "undefined") return;
+
+    console.log("[DatabaseManager] Clearing identity scope");
+    localStorage.removeItem(DatabaseManager.SCOPE_KEY);
+    this.identityScope = null;
+    this.dbName = DatabaseManager.BOOTSTRAP_DB_NAME;
+  }
+
+  /**
+   * Get the current database name (for debugging)
+   */
+  getDbName(): string {
+    return this.dbName;
+  }
+
   async initializeEncryption(passphrase: string): Promise<void> {
     try {
       await encryptionManager.initialize(passphrase);
@@ -149,6 +215,11 @@ export class DatabaseManager {
 
   /**
    * Initialize database with timeout protection
+   *
+   * IDENTITY SCOPING:
+   * - Checks localStorage for active identity scope
+   * - If scope exists, uses identity-scoped database name
+   * - If no scope, uses bootstrap database (for fresh sessions)
    */
   async init(): Promise<void> {
     if ((window as any).__IS_RESETTING__) {
@@ -157,6 +228,20 @@ export class DatabaseManager {
     }
     if (this.db) return;
     if (this.initPromise) return this.initPromise;
+
+    // CRITICAL: Determine database name based on identity scope
+    // This must happen BEFORE opening the database
+    if (!(window as any).__SC_DB_NAME__) {
+      const scope = this.getActiveIdentityScope();
+      if (scope) {
+        this.identityScope = scope;
+        this.dbName = `sovereign-comm-${scope}`;
+        console.log(`[DatabaseManager] Using identity-scoped database: ${this.dbName}`);
+      } else {
+        this.dbName = DatabaseManager.BOOTSTRAP_DB_NAME;
+        console.log(`[DatabaseManager] No identity scope found, using bootstrap database: ${this.dbName}`);
+      }
+    }
 
     // Track retry attempts for exponential backoff
     let retryCount = 0;
@@ -1913,20 +1998,58 @@ export async function resetDatabaseForTest() {
   }
 
   if (dbInstance) {
+    dbInstance.clearIdentityScope();
     dbInstance.close();
     dbInstance = null;
   }
 
-  return new Promise<void>((resolve, reject) => {
-    const req = indexedDB.deleteDatabase("sovereign-communications");
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
-    req.onblocked = () => {
-      console.warn("Database deletion blocked");
-      // We resolve anyway to avoid hanging, subsequent reloading might fix it
-      resolve();
-    };
-  });
+  // Clear the identity scope from localStorage
+  if (typeof localStorage !== "undefined") {
+    localStorage.removeItem("sc-active-identity-scope");
+  }
+
+  // Delete all sovereign-comm databases (bootstrap and any identity-scoped ones)
+  const deleteDatabase = (name: string) =>
+    new Promise<void>((resolve, reject) => {
+      const req = indexedDB.deleteDatabase(name);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+      req.onblocked = () => {
+        console.warn(`Database deletion blocked: ${name}`);
+        resolve();
+      };
+    });
+
+  // Delete known database patterns
+  const databasesToDelete = [
+    "sovereign-communications", // Legacy name
+    "sovereign-comm-bootstrap", // Bootstrap database
+  ];
+
+  // Also try to find and delete identity-scoped databases
+  // Note: indexedDB.databases() is not available in all browsers
+  if (typeof indexedDB.databases === "function") {
+    try {
+      const databases = await indexedDB.databases();
+      for (const db of databases) {
+        if (db.name && db.name.startsWith("sovereign-comm-")) {
+          databasesToDelete.push(db.name);
+        }
+      }
+    } catch (e) {
+      console.warn("Could not enumerate databases:", e);
+    }
+  }
+
+  // Delete all databases
+  for (const dbName of [...new Set(databasesToDelete)]) {
+    try {
+      await deleteDatabase(dbName);
+      console.log(`Deleted database: ${dbName}`);
+    } catch (e) {
+      console.warn(`Failed to delete database ${dbName}:`, e);
+    }
+  }
 }
 
 if (typeof window !== "undefined") {

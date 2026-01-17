@@ -55,6 +55,12 @@ export const getMeshNetwork = async (): Promise<MeshNetwork> => {
         if (storedIdentity) {
           console.log('[MeshNetworkService] Loaded persisted identity:', storedIdentity.fingerprint, storedIdentity.id);
 
+          // Ensure identity scope is set correctly for this identity
+          // This handles the case where scope might have been cleared
+          if (storedIdentity.fingerprint) {
+            await db.setActiveIdentityScope(storedIdentity.fingerprint);
+          }
+
           const normalize = (v: any): Uint8Array | undefined => {
             if (v instanceof Uint8Array) return v;
             
@@ -239,8 +245,10 @@ export const generateNewIdentity = async (displayName: string) => {
   initializationPromise = null;
   if (meshNetworkInstance) {
     try {
+      // CRITICAL: Reset all internal state to prevent stale data bleeding
+      meshNetworkInstance.reset();
       await meshNetworkInstance.stop();
-    } catch (e) { console.warn('Error stopping old mesh', e); }
+    } catch (e) { console.warn('Error stopping/resetting old mesh', e); }
     meshNetworkInstance = null;
   }
 
@@ -293,6 +301,14 @@ export const generateNewIdentity = async (displayName: string) => {
   const cleanFingerprint = fingerprint.replace(/\s/g, "").toUpperCase();
   const newId = cleanFingerprint.substring(0, 16);
 
+  // CRITICAL: Set the identity scope BEFORE saving any data
+  // This ensures the new identity is stored in an identity-scoped database
+  console.log('[MeshNetworkService] Setting identity scope for new identity...');
+  await db.setActiveIdentityScope(fingerprint);
+
+  // Re-initialize the database with the new scope
+  await db.init();
+
   await db.saveIdentity({
     id: newId,
     publicKey: newIdentity.publicKey,
@@ -306,8 +322,9 @@ export const generateNewIdentity = async (displayName: string) => {
 
   await db.setSetting("onboarding-complete", true);
 
-  console.log('[MeshNetworkService] Identity generated. Re-initializing mesh...');
-  
+  console.log(`[MeshNetworkService] Identity generated in database: ${db.getDbName()}`);
+  console.log('[MeshNetworkService] Re-initializing mesh...');
+
   return await getMeshNetwork();
 };
 

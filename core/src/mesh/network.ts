@@ -40,7 +40,11 @@ export interface MeshNetworkConfig {
   dhtStorage?: StorageAdapter;
   transports?: Transport[];
   bootstrapUrl?: string; // URL for HTTP bootstrap
-  
+
+  // Connection control
+  // CRITICAL: Disabled by default to prevent unwanted connections without user consent
+  disableAutoConnect?: boolean; // Disable auto-connect on peer discovery (default: true)
+
   // Performance and scaling configurations
   messageQueueSize?: number; // Max messages in queue (default: 10000)
   connectionTimeout?: number; // Connection timeout in ms (default: 30000)
@@ -141,6 +145,9 @@ export class MeshNetwork {
   private maxRetries: number;
   private retryBackoff: number;
 
+  // Connection control
+  private disableAutoConnect: boolean;
+
   constructor(config: MeshNetworkConfig = {}) {
     // Initialize identity
     this.identity = config.identity || generateIdentity();
@@ -179,6 +186,10 @@ export class MeshNetwork {
     const _enableLoopDetection = config.enableLoopDetection !== false;
     this.maxRetries = config.maxRetries ?? 3;
     this.retryBackoff = config.retryBackoff ?? 5000;
+
+    // CRITICAL: Default to disabled to prevent unwanted connections
+    // Connections should only happen with user consent
+    this.disableAutoConnect = config.disableAutoConnect !== false; // Default: true (disabled)
 
     // Initialize components
     // Derive DHT node ID from public key (not from hex peer ID which is 64 chars)
@@ -1063,8 +1074,14 @@ export class MeshNetwork {
       this.discoveredPeers.add(peerId);
       console.log(`Discovered new peer ${peerId} via ${peer.source}`);
 
-      // Attempt to connect if we have capacity
-      if (this.routingTable.getAllPeers().length < this.maxPeers) {
+      // CRITICAL: Check if auto-connect is disabled
+      // Default is disabled to require user consent for connections
+      if (this.disableAutoConnect) {
+        console.log(
+          `[MeshNetwork] Auto-connect disabled. Peer ${peerId} discovered but not connecting automatically.`,
+        );
+      } else if (this.routingTable.getAllPeers().length < this.maxPeers) {
+        // Attempt to connect if we have capacity and auto-connect is enabled
         console.log(
           `Discovered new peer ${peer.id} via ${peer.source}. Attempting connection...`,
         );
@@ -1240,10 +1257,14 @@ export class MeshNetwork {
 
       this.pendingBlobRequests.set(requestId, { resolve, reject, timeout });
 
+      // Normalize peer ID for consistent routing
+      const normalizedPeerId = peerId.replace(/\s/g, "").toUpperCase();
+
       const payload = new TextEncoder().encode(
         JSON.stringify({
           hash,
           requestId,
+          recipient: normalizedPeerId, // CRITICAL: Include recipient for relay routing
         }),
       );
 
@@ -1558,7 +1579,76 @@ export class MeshNetwork {
     });
     this.stopHeartbeat();
     this.stopSessionPresence();
-  } /**
+  }
+
+  /**
+   * Reset all internal state without destroying the instance
+   * Used when switching identities to ensure no stale data remains
+   *
+   * CRITICAL: Call this when identity scope changes to prevent:
+   * - Stale peer connections from previous identity
+   * - Cached messages from wrong identity
+   * - Discovery state from wrong identity
+   */
+  reset(): void {
+    console.log("[MeshNetwork] Resetting all internal state...");
+
+    // Stop ongoing operations
+    this.shutdown();
+
+    // Clear all callback listeners
+    this.messageListeners.clear();
+    this.peerConnectedListeners.clear();
+    this.peerDisconnectedListeners.clear();
+    this.peerTrackListeners.clear();
+    this.discoveryUpdateListeners.clear();
+
+    // Clear discovered peers
+    this.discoveredPeers.clear();
+
+    // Clear peer monitors
+    this.peerMonitors.forEach((monitor) => {
+      try {
+        // ConnectionMonitor may have different cleanup methods
+        if (typeof (monitor as any).stop === "function") {
+          (monitor as any).stop();
+        }
+      } catch {
+        // Ignore cleanup errors
+      }
+    });
+    this.peerMonitors.clear();
+
+    // Clear pending blob requests
+    this.pendingBlobRequests.forEach(({ reject, timeout }) => {
+      clearTimeout(timeout);
+      reject(new Error("Network reset"));
+    });
+    this.pendingBlobRequests.clear();
+
+    // Clear connection attempt tracking
+    this.connectionAttempts.clear();
+    this.lastConnectionAttempt.clear();
+
+    // Reset statistics
+    this.messagesSent = 0;
+    this.messagesReceived = 0;
+    this.bytesTransferred = 0;
+    this.messagesStored = 0;
+
+    // Reset session
+    this.sessionId = this.generateSessionId();
+    this.sessionTimestamp = Date.now();
+    this.onSessionInvalidatedCallback = undefined;
+
+    // Clear legacy callbacks
+    this.outboundTransportCallback = undefined;
+    this.signalingCallback = undefined;
+
+    console.log("[MeshNetwork] Reset complete");
+  }
+
+  /**
    * Get local identity
    */
   getIdentity(): IdentityKeyPair {
@@ -1636,6 +1726,17 @@ export class MeshNetwork {
     data: Uint8Array,
     type: MessageType = MessageType.FILE_CHUNK,
   ): Promise<void> {
+    // Normalize recipient ID for consistent routing
+    const normalizedRecipientId = recipientId.replace(/\s/g, "").toUpperCase();
+
+    // CRITICAL: Wrap binary data in JSON envelope with recipient
+    // This ensures relay.isMessageForSelf() can identify the intended recipient
+    const envelope = {
+      recipient: normalizedRecipientId,
+      binaryData: bytesToBase64(data),
+    };
+    const payload = new TextEncoder().encode(JSON.stringify(envelope));
+
     const message: Message = {
       header: {
         version: 0x01,
@@ -1645,7 +1746,7 @@ export class MeshNetwork {
         senderId: this.identity.publicKey,
         signature: new Uint8Array(65),
       },
-      payload: data,
+      payload,
     };
 
     const messageBytes = encodeMessage(message);

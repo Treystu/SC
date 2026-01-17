@@ -126,12 +126,15 @@ export class MessageRelay {
     this.routingTable = routingTable;
     this.config = {
       maxStoredMessages: config.maxStoredMessages || 1000,
-      storeTimeout: config.storeTimeout || 300000, // 5 minutes
-      maxRetries: config.maxRetries || 3,
+      // IMPROVED: 24 hours instead of 5 minutes for better offline delivery
+      storeTimeout: config.storeTimeout || 86400000, // 24 hours (was 5 minutes)
+      // IMPROVED: 10 retries instead of 3 for better delivery reliability
+      maxRetries: config.maxRetries || 10, // (was 3)
       retryBackoff: config.retryBackoff || 5000, // 5 seconds
       floodRateLimit: config.floodRateLimit || 100, // 100 msg/sec per peer
       selectiveFlooding: config.selectiveFlooding !== false,
-      retryInterval: config.retryInterval || 10000, // 10 seconds
+      // IMPROVED: Retry every 30 seconds instead of 10 for less aggressive retries
+      retryInterval: config.retryInterval || 30000, // 30 seconds (was 10 seconds)
     };
     this.persistence = persistence || new MemoryPersistenceAdapter();
   }
@@ -438,23 +441,30 @@ export class MessageRelay {
         deliveryAttempted = true;
       }
       // Strategy 2: Relay through any connected peer (sneakernet)
+      // IMPROVED: Try ALL available peers per cycle for maximum delivery probability
       else if (connectedPeers.length > 0) {
         // Try each connected peer as a potential relay
+        let relayCount = 0;
         for (const relayPeer of connectedPeers) {
           // Don't try the same relay peer twice for the same message
           if (stored.routeAttempts.includes(relayPeer.id)) {
             continue;
           }
-          
+
           console.log(`[MessageRelay] 🚸 Sneakernet relay via ${relayPeer.id} to reach ${stored.destinationPeerId}`);
-          
+
           // Mark this peer as attempted for routing
           stored.routeAttempts.push(relayPeer.id);
-          
+
           // Forward message through this peer
           this.onForwardMessageCallback?.(stored.message, relayPeer.id);
           deliveryAttempted = true;
-          break; // Try one peer per retry cycle
+          relayCount++;
+          // IMPROVED: Try ALL peers instead of just one per cycle
+          // This maximizes the chance of reaching the destination
+        }
+        if (relayCount > 0) {
+          console.log(`[MessageRelay] 📤 Relayed message to ${relayCount} peers for ${stored.destinationPeerId}`);
         }
       }
 
