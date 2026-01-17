@@ -86,17 +86,17 @@ describe('Mesh Network Integration', () => {
 
     it('should handle route expiration', async () => {
       const peerId = 'peer789';
-      
+
       // Add peer with short TTL
       const shortTTLConfig = { routeTTL: 100 }; // 100ms
       const shortRoutingTable = new RoutingTable(localPeerId, shortTTLConfig);
       const shortRelay = new MessageRelay(localPeerId, shortRoutingTable);
-      
+
       const peer = createPeer(peerId, new Uint8Array(32), 'webrtc');
       shortRoutingTable.addPeer(peer);
 
-      // Verify route exists initially
-      expect(shortRoutingTable.getNextHop(peerId)).toBe(peerId);
+      // Verify route exists initially - peer IDs are normalized to uppercase
+      expect(shortRoutingTable.getNextHop(peerId)).toBe(peerId.toUpperCase());
 
       // Wait for expiration
       await new Promise(resolve => setTimeout(resolve, 150));
@@ -190,7 +190,9 @@ describe('Mesh Network Integration', () => {
       });
 
       const stats = await network.getStats();
-      expect(stats.localPeerId).toBe(localPeerId);
+      // MeshNetwork normalizes localPeerId to first 16 chars uppercase
+      const expectedPeerId = localPeerId.substring(0, 16).toUpperCase();
+      expect(stats.localPeerId).toBe(expectedPeerId);
       expect(stats.routing).toBeDefined();
       expect(stats.routing.peerCount).toBe(0);
     });

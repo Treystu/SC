@@ -93,7 +93,8 @@ describe('Advanced Routing Table Features', () => {
 
       routingTable.updateRouteMetrics('peer1', 150, true);
       const route = routingTable.getNextHop('peer1');
-      expect(route).toBe('peer1');
+      // Peer IDs are normalized to uppercase
+      expect(route).toBe('PEER1');
     });
   });
 

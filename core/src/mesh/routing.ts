@@ -160,10 +160,9 @@ export class RoutingTable {
    * Add or update a peer
    */
   addPeer(peer: Peer): void {
-    // Normalize peer ID to uppercase for consistent matching
+    // Normalize peer ID to uppercase for consistent matching throughout the system
     const normalizedId = peer.id.replace(/\s/g, "").toUpperCase();
-    const originalId = peer.id; // Preserve original format
-    
+
     // Ensure peer has required metadata
     if (!peer.state) {
       peer.state = PeerState.CONNECTED;
@@ -182,12 +181,15 @@ export class RoutingTable {
       };
     }
 
-    // Store peer with original ID format, but use normalized key for lookup
+    // CRITICAL: Update peer's ID to normalized format for consistent matching
+    peer.id = normalizedId;
+
+    // Store peer with normalized ID for lookup
     this.peers.set(normalizedId, peer);
-    // Direct route to connected peer
+    // Direct route to connected peer - all IDs normalized
     this.routes.set(normalizedId, {
       destination: normalizedId,
-      nextHop: originalId, // Return original ID for getNextHop
+      nextHop: normalizedId, // FIXED: Use normalized ID for consistent routing
       hopCount: 0,
       timestamp: Date.now(),
       metrics: {

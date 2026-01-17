@@ -476,11 +476,13 @@ export class WebRTCTransport implements Transport {
   getPool() {
     return {
       getOrCreatePeer: (id: string) => {
-        if (!this.peers.has(id)) {
+        // Normalize peer ID for consistent matching
+        const normalizedId = id.replace(/\s/g, "").toUpperCase();
+        if (!this.peers.has(normalizedId)) {
           // Create peer connection wrapper synchronously (don't call connect() which also creates data channels)
-          const connection = this.createPeerConnection(id);
+          const connection = this.createPeerConnection(normalizedId);
           const wrapper: PeerConnectionWrapper = {
-            peerId: id,
+            peerId: normalizedId, // Use normalized ID
             connection,
             reliableChannel: null,
             unreliableChannel: null,
@@ -495,11 +497,11 @@ export class WebRTCTransport implements Transport {
             batchBufferLength: 0,
             batchTimeoutId: null,
           };
-          this.peers.set(id, wrapper);
-          this.events?.onStateChange?.(id, "connecting");
+          this.peers.set(normalizedId, wrapper);
+          this.events?.onStateChange?.(normalizedId, "connecting");
         }
-        const wrapper = this.peers.get(id);
-        if (!wrapper) throw new Error(`Failed to create peer ${id}`);
+        const wrapper = this.peers.get(normalizedId);
+        if (!wrapper) throw new Error(`Failed to create peer ${normalizedId}`);
 
         const peerShim = {
           ...wrapper,
@@ -524,7 +526,7 @@ export class WebRTCTransport implements Transport {
           createDataChannel: (config: any) => {
             const channel = wrapper.connection.createDataChannel(config.label, config);
             // Wire up the data channel handlers so peer gets marked as connected
-            this.setupDataChannel(id, channel);
+            this.setupDataChannel(normalizedId, channel);
             return channel;
           },
           onStateChange: (cb: (state: string) => void) => {
@@ -555,10 +557,12 @@ export class WebRTCTransport implements Transport {
         return peerShim;
       },
       getPeer: (id: string) => {
+        // Normalize peer ID for consistent lookup
+        const normalizedId = id.replace(/\s/g, "").toUpperCase();
         // Reuse getOrCreatePeer logic but return undefined if missing?
         // Actually simpler to just duplicate shim creation logic or extract it.
         // For now, duplicate for safety.
-        const wrapper = this.peers.get(id);
+        const wrapper = this.peers.get(normalizedId);
         if (!wrapper) return undefined;
         return {
           ...wrapper,
@@ -583,7 +587,7 @@ export class WebRTCTransport implements Transport {
           createDataChannel: (config: any) => {
             const channel = wrapper.connection.createDataChannel(config.label, config);
             // Wire up the data channel handlers so peer gets marked as connected
-            this.setupDataChannel(id, channel);
+            this.setupDataChannel(normalizedId, channel);
             return channel;
           },
           onStateChange: (cb: (state: string) => void) => {
@@ -707,6 +711,9 @@ export class WebRTCTransport implements Transport {
     peerId: TransportPeerId,
     signalingData?: SignalingData,
   ): Promise<void> {
+    // Normalize peer ID for consistent matching
+    const normalizedPeerId = peerId.replace(/\s/g, "").toUpperCase();
+
     if (!this.isRunning) {
       throw new Error("Transport is not running");
     }
@@ -716,9 +723,9 @@ export class WebRTCTransport implements Transport {
     }
 
     // Create peer connection
-    const connection = this.createPeerConnection(peerId);
+    const connection = this.createPeerConnection(normalizedPeerId);
     const wrapper: PeerConnectionWrapper = {
-      peerId,
+      peerId: normalizedPeerId, // CRITICAL: Use normalized ID
       connection,
       reliableChannel: null,
       unreliableChannel: null,
@@ -733,12 +740,12 @@ export class WebRTCTransport implements Transport {
       batchBufferLength: 0,
       batchTimeoutId: null,
     };
-    this.peers.set(peerId, wrapper);
+    this.peers.set(normalizedPeerId, wrapper);
 
-    this.events?.onStateChange?.(peerId, "connecting");
+    this.events?.onStateChange?.(normalizedPeerId, "connecting");
 
     // Create data channels (initiator creates channels)
-    this.createDataChannels(peerId, connection);
+    this.createDataChannels(normalizedPeerId, connection);
 
     // If signaling data is provided (remote offer), handle it
     if (signalingData && signalingData.type === "offer") {
@@ -749,7 +756,7 @@ export class WebRTCTransport implements Transport {
       await connection.setLocalDescription(offer);
 
       if (this.onSignalCallback) {
-        this.onSignalCallback(peerId, {
+        this.onSignalCallback(normalizedPeerId, {
           type: "offer",
           sdp: offer,
         });
@@ -758,21 +765,25 @@ export class WebRTCTransport implements Transport {
   }
 
   async disconnect(peerId: TransportPeerId): Promise<void> {
-    this.handlePeerDisconnected(peerId, "Disconnected by user");
+    // Normalize peer ID for consistent lookup
+    const normalizedPeerId = peerId.replace(/\s/g, "").toUpperCase();
+    this.handlePeerDisconnected(normalizedPeerId, "Disconnected by user");
   }
 
   async send(peerId: TransportPeerId, payload: Uint8Array): Promise<void> {
-    console.log(`[WebRTCTransport] send() called for peer ${peerId}, payload size: ${payload.length}`);
-    
+    // Normalize peer ID for consistent lookup
+    const normalizedPeerId = peerId.replace(/\s/g, "").toUpperCase();
+    console.log(`[WebRTCTransport] send() called for peer ${normalizedPeerId}, payload size: ${payload.length}`);
+
     if (!this.isRunning) {
       console.error(`[WebRTCTransport] Transport is not running!`);
       throw new Error("Transport is not running");
     }
 
-    const wrapper = this.peers.get(peerId);
+    const wrapper = this.peers.get(normalizedPeerId);
     if (!wrapper) {
-      console.error(`[WebRTCTransport] Peer ${peerId} not found in peers map. Available peers: ${Array.from(this.peers.keys()).join(', ')}`);
-      throw new Error(`Peer ${peerId} is not connected`);
+      console.error(`[WebRTCTransport] Peer ${normalizedPeerId} not found in peers map. Available peers: ${Array.from(this.peers.keys()).join(', ')}`);
+      throw new Error(`Peer ${normalizedPeerId} is not connected`);
     }
 
     const channel = wrapper.reliableChannel;
@@ -874,7 +885,9 @@ export class WebRTCTransport implements Transport {
   }
 
   getPeerInfo(peerId: TransportPeerId): TransportPeerInfo | undefined {
-    const wrapper = this.peers.get(peerId);
+    // Normalize peer ID for consistent lookup
+    const normalizedPeerId = peerId.replace(/\s/g, "").toUpperCase();
+    const wrapper = this.peers.get(normalizedPeerId);
     if (!wrapper) return undefined;
 
     // Calculate connection quality based on RTT
@@ -899,16 +912,21 @@ export class WebRTCTransport implements Transport {
   getConnectionState(
     peerId: TransportPeerId,
   ): TransportConnectionState | undefined {
-    return this.peers.get(peerId)?.state;
+    // Normalize peer ID for consistent lookup
+    const normalizedPeerId = peerId.replace(/\s/g, "").toUpperCase();
+    return this.peers.get(normalizedPeerId)?.state;
   }
 
   async handleSignaling(
     signalingData: SignalingData,
   ): Promise<SignalingData | undefined> {
-    const peerId = signalingData.from;
-    if (!peerId) {
+    const rawPeerId = signalingData.from;
+    if (!rawPeerId) {
       throw new Error("Signaling data missing 'from' peer ID");
     }
+
+    // Normalize peer ID for consistent matching throughout the system
+    const peerId = rawPeerId.replace(/\s/g, "").toUpperCase();
 
     let wrapper = this.peers.get(peerId);
 
@@ -917,7 +935,7 @@ export class WebRTCTransport implements Transport {
       if (!wrapper) {
         const connection = this.createPeerConnection(peerId);
         wrapper = {
-          peerId,
+          peerId, // Use normalized ID
           connection,
           reliableChannel: null,
           unreliableChannel: null,
@@ -992,13 +1010,15 @@ export class WebRTCTransport implements Transport {
   }
 
   async createSignalingOffer(peerId: TransportPeerId): Promise<SignalingData> {
-    let wrapper = this.peers.get(peerId);
+    // Normalize peer ID for consistent matching
+    const normalizedPeerId = peerId.replace(/\s/g, "").toUpperCase();
+    let wrapper = this.peers.get(normalizedPeerId);
 
     if (!wrapper) {
       // Create peer connection
-      const connection = this.createPeerConnection(peerId);
+      const connection = this.createPeerConnection(normalizedPeerId);
       wrapper = {
-        peerId,
+        peerId: normalizedPeerId, // Use normalized ID
         connection,
         reliableChannel: null,
         unreliableChannel: null,
@@ -1013,10 +1033,10 @@ export class WebRTCTransport implements Transport {
         batchBufferLength: 0,
         batchTimeoutId: null,
       };
-      this.peers.set(peerId, wrapper);
+      this.peers.set(normalizedPeerId, wrapper);
 
       // Create data channels
-      this.createDataChannels(peerId, wrapper.connection);
+      this.createDataChannels(normalizedPeerId, wrapper.connection);
     }
 
     const offer = await wrapper.connection.createOffer();
@@ -1026,7 +1046,7 @@ export class WebRTCTransport implements Transport {
       type: "offer",
       data: offer,
       from: this.localPeerId,
-      to: peerId,
+      to: normalizedPeerId,
     };
   }
 
@@ -1037,7 +1057,9 @@ export class WebRTCTransport implements Transport {
     peerId: TransportPeerId,
     timeoutMs = 2000,
   ): Promise<void> {
-    const wrapper = this.peers.get(peerId);
+    // Normalize peer ID for consistent lookup
+    const normalizedPeerId = peerId.replace(/\s/g, "").toUpperCase();
+    const wrapper = this.peers.get(normalizedPeerId);
     if (!wrapper) return;
 
     if (wrapper.connection.iceGatheringState === "complete") {

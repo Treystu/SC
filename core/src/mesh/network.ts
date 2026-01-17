@@ -145,10 +145,19 @@ export class MeshNetwork {
     // Initialize identity
     this.identity = config.identity || generateIdentity();
 
-    // Unified Identity: Use provided ID or the full hex-encoded public key as peer ID
-    // Peer IDs across the codebase are expected to be the hex-encoded public key.
-    this.localPeerId =
-      config.peerId || Buffer.from(this.identity.publicKey).toString("hex");
+    // Unified Identity: Use provided ID or derive from public key
+    // CRITICAL FIX: Peer IDs MUST be 16 chars uppercase hex format for consistency
+    // This matches how sender IDs are extracted from messages (first 16 chars of pubkey hex)
+    if (config.peerId) {
+      // Use provided peer ID, normalized to uppercase
+      this.localPeerId = config.peerId.replace(/\s/g, "").toUpperCase();
+    } else {
+      // Derive peer ID from public key: first 16 chars (8 bytes) of hex, uppercase
+      this.localPeerId = Buffer.from(this.identity.publicKey)
+        .toString("hex")
+        .substring(0, 16)
+        .toUpperCase();
+    }
 
     // Initialize session for single-session enforcement
     this.sessionId = this.generateSessionId();
@@ -1713,10 +1722,12 @@ export class MeshNetwork {
   }
 
   /**
-   * Check if connected to a peer
+   * Check if connected to a peer (with ID normalization)
    */
   isConnectedToPeer(peerId: string): boolean {
-    const peer = this.routingTable.getPeer(peerId);
+    // Normalize peer ID for consistent matching
+    const normalizedPeerId = peerId.replace(/\s/g, "").toUpperCase();
+    const peer = this.routingTable.getPeer(normalizedPeerId);
     return Boolean(peer && peer.state === "connected");
   }
 

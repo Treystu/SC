@@ -657,15 +657,20 @@ export function useMeshNetwork() {
     console.log('[useMeshNetwork] Mesh network ref exists:', !!meshNetworkRef.current);
     console.log('[useMeshNetwork] Room client ref exists:', !!roomClientRef.current);
 
+    // Normalize peer ID for consistent matching (all peer IDs are uppercase)
+    const normalizedPeerId = peerId.replace(/\s/g, "").toUpperCase();
+
     const alreadyConnected = Boolean(
       meshNetworkRef.current &&
-        meshNetworkRef.current.getConnectedPeers &&
-        meshNetworkRef.current
-          .getConnectedPeers()
-          .some((p: Peer) => p.id === peerId),
+        typeof meshNetworkRef.current.isConnectedToPeer === "function"
+          ? meshNetworkRef.current.isConnectedToPeer(normalizedPeerId)
+          : meshNetworkRef.current.getConnectedPeers &&
+            meshNetworkRef.current
+              .getConnectedPeers()
+              .some((p: Peer) => p.id === normalizedPeerId),
     );
-    
-    console.log('[useMeshNetwork] Already connected:', alreadyConnected);
+
+    console.log('[useMeshNetwork] Already connected:', alreadyConnected, 'to', normalizedPeerId);
 
     if (alreadyConnected) {
       try {
@@ -943,22 +948,26 @@ export function useMeshNetwork() {
       // 3. Network Logic
       let finalStatus: "sent" | "queued" = "sent";
       try {
+        // Normalize recipient ID for consistent matching (all peer IDs are uppercase)
+        const normalizedRecipientId = recipientId.replace(/\s/g, "").toUpperCase();
+
         const isConnected =
           meshNetworkRef.current &&
-          typeof (meshNetworkRef.current as any).isConnectedToPeer ===
-            "function"
-            ? (meshNetworkRef.current as any).isConnectedToPeer(recipientId)
+          typeof meshNetworkRef.current.isConnectedToPeer === "function"
+            ? meshNetworkRef.current.isConnectedToPeer(normalizedRecipientId)
             : Boolean(
                 meshNetworkRef.current &&
                 meshNetworkRef.current.getConnectedPeers &&
                 meshNetworkRef.current
                   .getConnectedPeers()
-                  .some((p: Peer) => p.id === recipientId),
+                  .some((p: Peer) => p.id === normalizedRecipientId),
               );
+
+        console.log('[useMeshNetwork] isConnected to', normalizedRecipientId, ':', isConnected);
 
         if (!isConnected) {
           useMeshNetworkLogger.warn(
-            `Not connected to ${recipientId}. Attempting to connect...`,
+            `Not connected to ${normalizedRecipientId}. Attempting to connect...`,
           );
           // Timeout connection attempt to avoid hanging
           const connectPromise = connectToPeer(recipientId);

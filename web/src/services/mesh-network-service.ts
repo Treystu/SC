@@ -235,7 +235,7 @@ export const getMeshNetwork = async (): Promise<MeshNetwork> => {
 
 export const generateNewIdentity = async (displayName: string) => {
   console.log('[MeshNetworkService] Generating new identity for:', displayName);
-  
+
   initializationPromise = null;
   if (meshNetworkInstance) {
     try {
@@ -246,7 +246,44 @@ export const generateNewIdentity = async (displayName: string) => {
 
   const db = getDatabase();
   await db.init();
+
+  // CRITICAL FIX: Clear ALL storage to prevent stale identity/contact bleeding
+  // This ensures a completely fresh start when creating a new identity
+
+  // 1. Clear all IndexedDB data (messages, contacts, conversations, etc.)
   await db.clearAllData();
+
+  // 2. Clear localStorage (removes old sovereign-identity key and any other stale data)
+  if (typeof localStorage !== 'undefined') {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(key => localStorage.removeItem(key));
+    console.log('[MeshNetworkService] Cleared localStorage:', keysToRemove.length, 'keys');
+  }
+
+  // 3. Clear sessionStorage
+  if (typeof sessionStorage !== 'undefined') {
+    sessionStorage.clear();
+    console.log('[MeshNetworkService] Cleared sessionStorage');
+  }
+
+  // 4. Clear service worker caches to prevent stale cached data
+  if (typeof caches !== 'undefined') {
+    try {
+      const cacheNames = await caches.keys();
+      await Promise.all(cacheNames.map(name => caches.delete(name)));
+      console.log('[MeshNetworkService] Cleared service worker caches:', cacheNames.length);
+    } catch (e) {
+      console.warn('[MeshNetworkService] Failed to clear caches:', e);
+    }
+  }
+
+  console.log('[MeshNetworkService] All storage cleared for fresh identity');
 
   const { generateIdentity } = await import("@sc/core");
   const { generateFingerprint } = await import("@sc/core");

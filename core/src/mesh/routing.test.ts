@@ -39,8 +39,9 @@ describe('Routing Table', () => {
 
       const peers = routingTable.getAllPeers();
       expect(peers).toHaveLength(2);
-      expect(peers.map(p => p.id)).toContain('peer1');
-      expect(peers.map(p => p.id)).toContain('peer2');
+      // Peer IDs are normalized to uppercase
+      expect(peers.map(p => p.id)).toContain('PEER1');
+      expect(peers.map(p => p.id)).toContain('PEER2');
     });
 
     it('should update peer last seen', () => {
@@ -65,8 +66,9 @@ describe('Routing Table', () => {
 
       const removed = routingTable.removeStalepeers(60000); // 60 second timeout
 
-      expect(removed).toContain('stale');
-      expect(removed).not.toContain('fresh');
+      // Peer IDs are normalized to uppercase
+      expect(removed).toContain('STALE');
+      expect(removed).not.toContain('FRESH');
       expect(routingTable.getPeer('stale')).toBeUndefined();
       expect(routingTable.getPeer('fresh')).toBeDefined();
     });
@@ -98,7 +100,8 @@ describe('Routing Table', () => {
       routingTable.addPeer(peer);
       const nextHop = routingTable.getNextHop('peer1');
 
-      expect(nextHop).toBe('peer1');
+      // Peer IDs are normalized to uppercase
+      expect(nextHop).toBe('PEER1');
     });
 
     it('should return undefined for unknown destinations', () => {
