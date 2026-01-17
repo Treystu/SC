@@ -109,49 +109,36 @@ export function useMeshNetwork() {
         console.log('[useMeshNetwork] Step 1: Getting mesh network instance...');
         const network = await getMeshNetwork();
         console.log('[useMeshNetwork] Step 2: Mesh network instance obtained:', !!network);
-        
+
         const db = getDatabase();
-        console.log('[useMeshNetwork] Step 3: Starting network...');
-        await network.start();
-        console.log('[useMeshNetwork] Step 4: Network started successfully');
-        
-        meshNetworkRef.current = network;
-        console.log('[useMeshNetwork] Step 5: meshNetworkRef.current set:', !!meshNetworkRef.current);
-        
         connectionMonitorRef.current = new ConnectionMonitor();
-        console.log('[useMeshNetwork] Step 6: Connection monitor created');
 
-        try {
-          const activePeers = await db.getActivePeers();
-          useMeshNetworkLogger.info(
-            `Loaded ${activePeers.length} persisted peers`,
-          );
-          if (activePeers.length > 0) {
-            useMeshNetworkLogger.debug(
-              "Persisted peers available for reconnection:",
-              activePeers.map((p) => p.id.substring(0, 8)).join(", "),
-            );
+        // CRITICAL FIX: Register ALL callbacks BEFORE starting network and setting ref
+        // This prevents race conditions where messages arrive before handlers are ready
+        console.log('[useMeshNetwork] Step 3: Registering message and peer callbacks...');
+
+        // Helper function to update peer status
+        const updatePeerStatus = () => {
+          const connectedPeers = network.getConnectedPeers();
+          setPeers(connectedPeers);
+          setStatus((prev: MeshStatus) => ({
+            ...prev,
+            peerCount: connectedPeers.length,
+            isConnected: connectedPeers.length > 0,
+          }));
+
+          if (connectionMonitorRef.current) {
+            const monitor = connectionMonitorRef.current;
+            monitor.updateLatency(Math.random() * 100);
+            monitor.updatePacketLoss(100, 100 - Math.random() * 5);
+            setStatus((prev) => ({
+              ...prev,
+              connectionQuality: monitor.getQuality(),
+            }));
           }
-        } catch (error) {
-          useMeshNetworkLogger.error("Failed to load peers:", error);
-        }
+        };
 
-        try {
-          const routes = await db.getAllRoutes();
-          useMeshNetworkLogger.debug(
-            `Loaded ${routes.length} persisted routes`,
-          );
-        } catch (error) {
-          useMeshNetworkLogger.error("Failed to load routes:", error);
-        }
-
-        try {
-          await db.deleteExpiredRoutes();
-          await db.deleteExpiredSessionKeys();
-        } catch (error) {
-          useMeshNetworkLogger.error("Failed to clean up expired data:", error);
-        }
-
+        // Register message callback FIRST - before any messages can arrive
         network.onMessage(async (message: Message) => {
           console.log('[useMeshNetwork] ========== MESSAGE RECEIVED ==========');
           console.log('[useMeshNetwork] Raw message header:', message.header);
@@ -498,25 +485,42 @@ export function useMeshNetwork() {
           setStatus((prev) => ({ ...prev, isSessionInvalidated: true }));
         });
 
-        const updatePeerStatus = () => {
-          const connectedPeers = network.getConnectedPeers();
-          setPeers(connectedPeers);
-          setStatus((prev: MeshStatus) => ({
-            ...prev,
-            peerCount: connectedPeers.length,
-            isConnected: connectedPeers.length > 0,
-          }));
+        // CRITICAL: Set ref and start network AFTER all callbacks are registered
+        // This ensures no messages are lost during initialization
+        console.log('[useMeshNetwork] Step 4: All callbacks registered, setting ref and starting network...');
+        meshNetworkRef.current = network;
 
-          if (connectionMonitorRef.current) {
-            const monitor = connectionMonitorRef.current;
-            monitor.updateLatency(Math.random() * 100);
-            monitor.updatePacketLoss(100, 100 - Math.random() * 5);
-            setStatus((prev) => ({
-              ...prev,
-              connectionQuality: monitor.getQuality(),
-            }));
+        console.log('[useMeshNetwork] Step 5: Starting network...');
+        await network.start();
+        console.log('[useMeshNetwork] Step 6: Network started successfully');
+
+        // Load persisted data
+        try {
+          const activePeers = await db.getActivePeers();
+          useMeshNetworkLogger.info(`Loaded ${activePeers.length} persisted peers`);
+          if (activePeers.length > 0) {
+            useMeshNetworkLogger.debug(
+              "Persisted peers available for reconnection:",
+              activePeers.map((p) => p.id.substring(0, 8)).join(", "),
+            );
           }
-        };
+        } catch (error) {
+          useMeshNetworkLogger.error("Failed to load peers:", error);
+        }
+
+        try {
+          const routes = await db.getAllRoutes();
+          useMeshNetworkLogger.debug(`Loaded ${routes.length} persisted routes`);
+        } catch (error) {
+          useMeshNetworkLogger.error("Failed to load routes:", error);
+        }
+
+        try {
+          await db.deleteExpiredRoutes();
+          await db.deleteExpiredSessionKeys();
+        } catch (error) {
+          useMeshNetworkLogger.error("Failed to clean up expired data:", error);
+        }
 
         retryInterval = setInterval(retryQueuedMessages, 30000);
         retryQueuedMessages();
@@ -814,9 +818,11 @@ export function useMeshNetwork() {
           };
 
           try {
+            // CRITICAL FIX: Include recipient for relay delivery
             const payload = JSON.stringify({
               type: "file_start",
               metadata: fileMetadata,
+              recipient: recipientId.replace(/\s/g, "").toUpperCase(),
             });
             await meshNetworkRef.current.sendMessage(recipientId, payload);
 
@@ -984,10 +990,12 @@ export function useMeshNetwork() {
           throw new Error(rateLimitResult.reason);
         }
 
+        // CRITICAL FIX: Include recipient in payload for relay delivery
         const payload = JSON.stringify({
           text: content,
           timestamp: Date.now(),
           groupId,
+          recipient: normalizedRecipientId, // Required for relay.isMessageForSelf()
         });
         console.log('[useMeshNetwork] Sending payload:', payload);
         console.log('[useMeshNetwork] Calling meshNetwork.sendMessage...');
@@ -1140,11 +1148,14 @@ export function useMeshNetwork() {
     ) => {
       if (!meshNetworkRef.current)
         throw new Error("Mesh network not initialized");
+      // CRITICAL FIX: Include recipient for relay delivery
+      const normalizedRecipientId = recipientId.replace(/\s/g, "").toUpperCase();
       const payload = JSON.stringify({
         targetMessageId,
         emoji,
         groupId,
         timestamp: Date.now(),
+        recipient: normalizedRecipientId,
       });
       await meshNetworkRef.current.sendMessage(
         recipientId,
