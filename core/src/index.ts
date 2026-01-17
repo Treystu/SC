@@ -350,3 +350,59 @@ export const VERSION = "0.1.0";
 
 // API
 export * from "./api/room-client.js";
+
+// ============================================
+// Apocalypse-Resilient Communication Modules
+// ============================================
+
+// Extended Message Storage (priority-aware with TTL)
+// Note: StoredMessage is exported from ./mesh/relay.js for legacy compatibility
+// Use ApocalypseStoredMessage for the newer apocalypse-resilient storage system
+export {
+  MessagePriority as StorageMessagePriority,
+  TTL_BY_PRIORITY,
+  DeliveryStatus,
+  type StoredMessage as ApocalypseStoredMessage,
+  type MessageQuery,
+  type StorageStats,
+  type MessageStore,
+  createStoredMessage,
+  calculateMessageSize,
+} from "./storage/MessageStore.js";
+
+export {
+  MemoryMessageStore,
+} from "./storage/MemoryMessageStore.js";
+
+export {
+  IndexedDBMessageStore,
+} from "./storage/IndexedDBMessageStore.js";
+
+export {
+  QuotaManager,
+  DEFAULT_QUOTA_CONFIG,
+  QuotaStatus,
+  type QuotaConfig,
+  type EvictionResult,
+} from "./storage/QuotaManager.js";
+
+// Deduplication (Bloom filter + persistent log)
+export * from "./dedup/index.js";
+
+// P2P Signaling (DHT + QR-based offline bootstrap)
+export * from "./signaling/index.js";
+
+// Courier Sync (physical message carrying)
+export * from "./courier/index.js";
+
+// Power Management (duty cycling for 72+ hour operation)
+export * from "./power/index.js";
+
+// Long-Range Bridges (LoRa/Meshtastic)
+export * from "./bridges/index.js";
+
+// Geographic Routing (continental delivery)
+export * from "./geo/index.js";
+
+// Emergency Broadcasts (web-of-trust verified)
+export * from "./broadcast/index.js";
