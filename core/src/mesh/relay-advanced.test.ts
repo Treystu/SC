@@ -191,7 +191,7 @@ describe('Advanced Message Relay Features', () => {
       const senderId = new Uint8Array(32);
       // Convert hex string to bytes
       for (let i = 0; i < 8; i++) {
-        senderId[i] = parseInt(testPeerId.substr(i * 2, 2), 16);
+        senderId[i] = parseInt(testPeerId.substring(i * 2, i * 2 + 2), 16);
       }
 
       // Create a relay with matching peer ID for this test
@@ -275,10 +275,24 @@ describe('Advanced Message Relay Features', () => {
     });
 
     it('should forward own messages to other peers instead of delivering to self', async () => {
-      // Create 32-byte sender ID (pad as needed)
+      // Create 32-byte sender ID that matches the relay's peer ID for proper loopback testing
+      // Use the same approach as the first test to ensure proper hex-to-peer-ID matching
+      const testPeerId = '1234567890ABCDEF'; // 16-char hex peer ID
       const senderId = new Uint8Array(32);
-      const localPeerIdBytes = new TextEncoder().encode('LOCAL_PEER_ID_1234567890');
-      senderId.set(localPeerIdBytes.slice(0, Math.min(32, localPeerIdBytes.length)));
+      // Convert hex string to bytes
+      for (let i = 0; i < 8; i++) {
+        senderId[i] = parseInt(testPeerId.substring(i * 2, i * 2 + 2), 16);
+      }
+
+      // Create a relay with matching peer ID for this test
+      const testRelay = new MessageRelay(testPeerId, routingTable, {
+        maxStoredMessages: 10,
+        storeTimeout: 5000,
+        maxRetries: 3,
+        retryBackoff: 1000,
+        floodRateLimit: 10,
+        selectiveFlooding: true,
+      });
 
       const messageToOther: Message = {
         header: {
@@ -299,16 +313,16 @@ describe('Advanced Message Relay Features', () => {
       let deliveredToSelf = false;
       let forwardedToOthers = false;
 
-      relay.onMessageForSelf(() => {
+      testRelay.onMessageForSelf(() => {
         deliveredToSelf = true;
       });
 
-      relay.onForwardMessage(() => {
+      testRelay.onForwardMessage(() => {
         forwardedToOthers = true;
       });
 
       // Process own message (would happen when relaying our own sent message)
-      await relay.processMessage(messageData, 'local-peer');
+      await testRelay.processMessage(messageData, 'local-peer');
 
       // Should NOT deliver to self
       expect(deliveredToSelf).toBe(false);
@@ -316,7 +330,7 @@ describe('Advanced Message Relay Features', () => {
       // SHOULD forward to other peers
       expect(forwardedToOthers).toBe(true);
 
-      const stats = relay.getStats();
+      const stats = testRelay.getStats();
       expect(stats.messagesForSelf).toBe(0);
       expect(stats.messagesForwarded).toBe(1);
     });
