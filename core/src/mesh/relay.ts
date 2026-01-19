@@ -319,6 +319,19 @@ export class MessageRelay {
    * Check if message is addressed to this peer
    */
   private isMessageForSelf(message: Message): boolean {
+    // CRITICAL FIX: Extract sender ID and never deliver own messages back to self
+    const senderIdRaw = Array.from(message.header.senderId as Uint8Array)
+      .map((b) => (b as number).toString(16).padStart(2, "0"))
+      .join("");
+    const senderId = senderIdRaw.substring(0, 16).toUpperCase();
+    const normalizedLocalId = this.localPeerId.replace(/\s/g, "").toUpperCase();
+
+    // If we sent this message, it's never "for self" - prevents loopback
+    if (senderId === normalizedLocalId) {
+      console.log(`[MessageRelay] Ignoring own message (sender=${senderId})`);
+      return false;
+    }
+
     // For broadcast messages (PEER_DISCOVERY, etc.), everyone processes them
     if (this.isBroadcastMessage(message.header.type)) {
       return true;
@@ -342,10 +355,9 @@ export class MessageRelay {
       if (data.recipient) {
         // Normalize both IDs to uppercase for comparison
         const normalizedRecipient = data.recipient.replace(/\s/g, "").toUpperCase();
-        const normalizedLocalId = this.localPeerId.replace(/\s/g, "").toUpperCase();
-        
+
         console.log(`[MessageRelay] Checking recipient: ${normalizedRecipient} vs localPeerId: ${normalizedLocalId}`);
-        
+
         if (normalizedRecipient === normalizedLocalId) {
           return true;
         }

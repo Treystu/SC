@@ -391,6 +391,21 @@ export function useMeshNetwork() {
                   });
                 }
               } else {
+                // CRITICAL FIX: Only create conversations for messages addressed to us
+                // Check if this message was intended for us (not just relayed through us)
+                const normalizedLocalId = network.getLocalPeerId().replace(/\s/g, "").toUpperCase();
+                const isMessageForUs = !data.recipient ||
+                  data.recipient.replace(/\s/g, "").toUpperCase() === normalizedLocalId;
+
+                if (!isMessageForUs) {
+                  console.log('[useMeshNetwork] Ignoring relayed message not addressed to us:', {
+                    recipient: data.recipient,
+                    localId: normalizedLocalId,
+                    from: receivedMessage.from
+                  });
+                  return;
+                }
+
                 const conversation = await db.getConversation(
                   receivedMessage.from,
                 );
@@ -422,7 +437,8 @@ export function useMeshNetwork() {
                     from: receivedMessage.from,
                     isUnknown,
                     hasContact: !!contact,
-                    contactVerified: contact?.verified
+                    contactVerified: contact?.verified,
+                    recipient: data.recipient
                   });
 
                   await db.saveConversation({
