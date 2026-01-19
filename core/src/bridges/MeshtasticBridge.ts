@@ -185,7 +185,7 @@ export class MeshtasticBridge implements Transport {
   /**
    * Connect to a peer (Transport interface - Meshtastic is broadcast-based)
    */
-  async connect(peerId: TransportPeerId, signalingData?: SignalingData): Promise<void> {
+  async connect(peerId: TransportPeerId, _signalingData?: SignalingData): Promise<void> {
     // Meshtastic is a broadcast mesh - no direct peer connection needed
     console.log(`[MeshtasticBridge] Meshtastic is broadcast-based, no direct connect needed for ${peerId}`);
   }
@@ -239,9 +239,10 @@ export class MeshtasticBridge implements Transport {
   /**
    * Register callback for received SC messages
    */
-  onMessage(callback: (message: StoredMessage) => void): void {
+  onMessage(_callback: (message: StoredMessage) => void): void {
     // This would be called from the packet receive handler
     // after reassembly is complete
+    // TODO: Implement callback registration when packet receive handler is ready
   }
 
   /**
@@ -275,7 +276,7 @@ export class MeshtasticBridge implements Transport {
     await this.broadcast(payload);
   }
 
-  async broadcast(payload: Uint8Array, excludePeerId?: TransportPeerId): Promise<void> {
+  async broadcast(payload: Uint8Array, _excludePeerId?: TransportPeerId): Promise<void> {
     if (!this.connected) {
       throw new Error('Not connected to Meshtastic device');
     }

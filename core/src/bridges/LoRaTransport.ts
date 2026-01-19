@@ -240,7 +240,7 @@ export class LoRaTransport implements Transport {
   /**
    * Broadcast data to all peers
    */
-  async broadcast(payload: Uint8Array, excludePeerId?: TransportPeerId): Promise<void> {
+  async broadcast(payload: Uint8Array, _excludePeerId?: TransportPeerId): Promise<void> {
     await this.transmit(0xFFFF, payload); // 0xFFFF = broadcast
   }
 
@@ -255,7 +255,7 @@ export class LoRaTransport implements Transport {
   /**
    * Disconnect from a peer (not applicable for LoRa)
    */
-  async disconnect(peerId: TransportPeerId): Promise<void> {
+  async disconnect(_peerId: TransportPeerId): Promise<void> {
     // LoRa is connectionless
   }
 
@@ -284,7 +284,7 @@ export class LoRaTransport implements Transport {
   /**
    * Get connection state (LoRa is connectionless, so always "connected" if initialized)
    */
-  getConnectionState(peerId: TransportPeerId): TransportConnectionState | undefined {
+  getConnectionState(_peerId: TransportPeerId): TransportConnectionState | undefined {
     return this.initialized ? 'connected' : 'disconnected';
   }
 
@@ -417,7 +417,7 @@ export class LoRaTransport implements Transport {
     this.status.transmitting = true;
 
     try {
-      const packet: LoRaPacket = {
+      const _packet: LoRaPacket = {
         destAddr,
         srcAddr: this.getLocalAddress(),
         sequence: this.sequence++,
@@ -430,6 +430,7 @@ export class LoRaTransport implements Transport {
       console.log(`[LoRaTransport] Transmitting ${payload.length} bytes (${airtime.toFixed(0)}ms airtime)`);
 
       // Stub - would actually transmit via hardware
+      // TODO: Use _packet when hardware implementation is ready
       await new Promise(resolve => setTimeout(resolve, airtime));
 
       this.status.txCount++;
