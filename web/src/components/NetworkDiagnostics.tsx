@@ -4,6 +4,8 @@ import { useMeshNetwork } from "../hooks/useMeshNetwork";
 
 interface NetworkStats {
   connectedPeers: number;
+  meshNeighbors: number;     // SILENT MESH: Raw mesh connections
+  ledgerNodes: number;       // SILENT MESH: Known nodes in Eternal Ledger
   messagesSent: number;
   messagesReceived: number;
   bandwidth: {
@@ -23,10 +25,12 @@ interface NetworkStats {
 }
 
 export const NetworkDiagnostics: React.FC = () => {
-  const { getStats, status } = useMeshNetwork();
+  const { getStats, getSilentMeshStats, status } = useMeshNetwork();
   const [stats, setStats] = useState<NetworkStats>({
     // ... existing stats state
     connectedPeers: 0,
+    meshNeighbors: 0,
+    ledgerNodes: 0,
     messagesSent: 0,
     messagesReceived: 0,
     bandwidth: { upload: 0, download: 0 },
@@ -119,8 +123,14 @@ export const NetworkDiagnostics: React.FC = () => {
         const downloadBw =
           deltaTime > 0 ? (totalBytesReceived - lastDownload) / deltaTime : 0;
 
+        // SILENT MESH: Get mesh stats for display
+        const silentMeshStats = await getSilentMeshStats();
+
         setStats({
-          connectedPeers: newStats.peers.connectedPeers,
+          // SILENT MESH: Use status.meshNeighborCount for raw mesh connections
+          connectedPeers: status.meshNeighborCount || newStats.peers.connectedPeers,
+          meshNeighbors: silentMeshStats?.meshNeighbors || status.meshNeighborCount || 0,
+          ledgerNodes: silentMeshStats?.ledgerNodes || status.ledgerNodeCount || 0,
           messagesSent: newStats.relay.messagesForwarded,
           messagesReceived: newStats.relay.messagesReceived,
           bandwidth: {
@@ -152,12 +162,15 @@ export const NetworkDiagnostics: React.FC = () => {
   }, [
     refreshInterval,
     getStats,
+    getSilentMeshStats,
     lastTimestamp,
     lastUpload,
     lastDownload,
     startTime,
     status.joinError,
-  ]); // Added status.joinError to deps
+    status.meshNeighborCount,
+    status.ledgerNodeCount,
+  ]); // Added Silent Mesh stats to deps
 
   // ... (existing helper functions)
   const formatBytes = (bytes: number): string => {
@@ -252,7 +265,7 @@ export const NetworkDiagnostics: React.FC = () => {
           marginBottom: "30px",
         }}
       >
-        {/* ... existing cards ... */}
+        {/* SILENT MESH: Mesh Neighbors Card (raw connections) */}
         <div
           style={{
             backgroundColor: "#2a2a2a",
@@ -261,13 +274,32 @@ export const NetworkDiagnostics: React.FC = () => {
           }}
         >
           <div style={{ fontSize: "14px", color: "#888", marginBottom: "5px" }}>
-            Connected Peers
+            Mesh Neighbors
           </div>
-          <div style={{ fontSize: "32px", fontWeight: "bold" }}>
-            {stats.connectedPeers}
+          <div style={{ fontSize: "32px", fontWeight: "bold", color: stats.meshNeighbors > 0 ? "#4CAF50" : "#888" }}>
+            {stats.meshNeighbors}
           </div>
           <div style={{ fontSize: "12px", color: "#666", marginTop: "5px" }}>
             BLE: {stats.bleConnections} | WebRTC: {stats.webrtcConnections}
+          </div>
+        </div>
+
+        {/* SILENT MESH: Eternal Ledger Card */}
+        <div
+          style={{
+            backgroundColor: "#2a2a2a",
+            padding: "20px",
+            borderRadius: "8px",
+          }}
+        >
+          <div style={{ fontSize: "14px", color: "#888", marginBottom: "5px" }}>
+            Known Nodes (Ledger)
+          </div>
+          <div style={{ fontSize: "32px", fontWeight: "bold", color: "#9C27B0" }}>
+            {stats.ledgerNodes}
+          </div>
+          <div style={{ fontSize: "12px", color: "#666", marginTop: "5px" }}>
+            Persistent across identity resets
           </div>
         </div>
 

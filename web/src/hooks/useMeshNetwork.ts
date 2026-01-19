@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { MeshNetwork, Message, MessageType, Peer } from "@sc/core";
 import { ConnectionMonitor, type ConnectionQuality } from "@sc/core";
+import { SilentMeshManager, EternalLedger } from "@sc/core";
 import { getDatabase } from "../storage/database";
 import { getMeshNetwork } from "../services/mesh-network-service";
 import { notifyConversationsUpdated } from "./useConversations";
@@ -14,14 +15,26 @@ import {
 import { RoomClient } from "../utils/RoomClient";
 import { useMeshNetworkLogger } from "../utils/unifiedLogger";
 
+/**
+ * SILENT MESH STATUS
+ *
+ * The 'peerCount' now reflects the raw mesh neighbor count (technical connections)
+ * NOT the contact count. This ensures the UI shows true mesh health even when
+ * the contact list is empty.
+ *
+ * - meshNeighborCount: Number of technical mesh connections (for relaying/health)
+ * - contactCount: Number of user-promoted contacts (for chat list)
+ */
 export interface MeshStatus {
   isConnected: boolean;
-  peerCount: number;
+  peerCount: number;           // Raw mesh connections (Silent Mesh)
+  meshNeighborCount: number;   // Same as peerCount - explicit mesh count
   localPeerId: string;
   connectionQuality: ConnectionQuality;
   initializationError?: string;
   joinError?: string | null;
   isSessionInvalidated?: boolean;
+  ledgerNodeCount?: number;    // Eternal Ledger known nodes
 }
 
 export interface ReceivedMessage {
@@ -41,10 +54,12 @@ export function useMeshNetwork() {
   const [status, setStatus] = useState<MeshStatus>({
     isConnected: false,
     peerCount: 0,
+    meshNeighborCount: 0,
     localPeerId: "",
     connectionQuality: "offline",
     initializationError: undefined,
     isSessionInvalidated: false,
+    ledgerNodeCount: 0,
   });
 
   // Safe env accessor for both Vite (import.meta.env) and Jest/node (process.env)
@@ -70,6 +85,9 @@ export function useMeshNetwork() {
   const roomClientRef = useRef<RoomClient | null>(null);
   const roomPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const connectInFlightRef = useRef<Map<string, Promise<void>>>(new Map());
+
+  // SILENT MESH: Manager and Ledger for background mesh connectivity
+  const silentMeshRef = useRef<SilentMeshManager | null>(null);
 
   useEffect(() => {
     if (!meshNetworkRef.current) return;
@@ -113,18 +131,53 @@ export function useMeshNetwork() {
         const db = getDatabase();
         connectionMonitorRef.current = new ConnectionMonitor();
 
+        // SILENT MESH: Initialize the Silent Mesh Manager with Eternal Ledger
+        // The Ledger persists across identity resets for mesh bootstrapping
+        if (!silentMeshRef.current) {
+          silentMeshRef.current = new SilentMeshManager();
+          console.log('[useMeshNetwork] Silent Mesh Manager initialized');
+        }
+
         // CRITICAL FIX: Register ALL callbacks BEFORE starting network and setting ref
         // This prevents race conditions where messages arrive before handlers are ready
         console.log('[useMeshNetwork] Step 3: Registering message and peer callbacks...');
 
         // Helper function to update peer status
-        const updatePeerStatus = () => {
+        // SILENT MESH: Reports raw mesh connection count (not contact count)
+        const updatePeerStatus = async () => {
           const connectedPeers = network.getConnectedPeers();
           setPeers(connectedPeers);
+
+          // Update Silent Mesh with connected peers
+          for (const peer of connectedPeers) {
+            if (silentMeshRef.current) {
+              await silentMeshRef.current.addMeshNeighbor(peer.id, {
+                publicKey: peer.publicKey
+                  ? Array.from(peer.publicKey)
+                      .map((b) => (b as number).toString(16).padStart(2, "0"))
+                      .join("")
+                  : undefined,
+                transportType: 'webrtc',
+                source: 'discovery',
+              });
+            }
+          }
+
+          // Get ledger stats for UI
+          let ledgerNodeCount = 0;
+          if (silentMeshRef.current) {
+            const stats = await silentMeshRef.current.getStats();
+            ledgerNodeCount = stats.ledgerNodes;
+          }
+
+          // CRITICAL: peerCount reflects raw mesh connections (Silent Mesh principle)
+          // This ensures UI shows "Connected" even if contact list is empty
           setStatus((prev: MeshStatus) => ({
             ...prev,
             peerCount: connectedPeers.length,
+            meshNeighborCount: connectedPeers.length,
             isConnected: connectedPeers.length > 0,
+            ledgerNodeCount,
           }));
 
           if (connectionMonitorRef.current) {
@@ -552,9 +605,11 @@ export function useMeshNetwork() {
         setStatus({
           isConnected: true,
           peerCount: initialConnectedPeers.length,
+          meshNeighborCount: initialConnectedPeers.length,
           localPeerId: localId || "",
           connectionQuality: "good",
           initializationError: undefined,
+          ledgerNodeCount: 0,
         });
         if (identityRetryTimeout) {
           clearTimeout(identityRetryTimeout);
@@ -1053,6 +1108,18 @@ export function useMeshNetwork() {
     return await meshNetworkRef.current.getStats();
   }, []);
 
+  // SILENT MESH: Get stats about mesh neighbors and ledger
+  const getSilentMeshStats = useCallback(async () => {
+    if (!silentMeshRef.current) return null;
+    return await silentMeshRef.current.getStats();
+  }, []);
+
+  // SILENT MESH: Get mesh neighbors (for network diagnostics)
+  const getMeshNeighbors = useCallback(() => {
+    if (!silentMeshRef.current) return [];
+    return silentMeshRef.current.getMeshNeighbors();
+  }, []);
+
   const generateConnectionOffer = useCallback(async (): Promise<string> => {
     const endMeasure = performanceMonitor.startMeasure(
       "generateConnectionOffer",
@@ -1391,27 +1458,18 @@ export function useMeshNetwork() {
               for (const p of peers) {
                 if (p.metadata && p._id !== localPeerId) {
                   try {
-                    const existing =
-                      typeof db.getContact === "function"
-                        ? await db.getContact(p._id)
-                        : null;
-                    if (!existing && p.metadata.displayName) {
+                    // FIX: Don't auto-create contacts for discovered peers
+                    // This was causing the "phantom connection" bug where fresh identities
+                    // would immediately show conversations with peers they never messaged.
+                    // Contacts should only be created when:
+                    // 1. User explicitly adds them
+                    // 2. User accepts an invite
+                    // 3. User receives a message
+                    // Peer discovery is separate from contact management.
+                    if (p.metadata.displayName) {
                       useMeshNetworkLogger.debug(
-                        `Discovered new peer ${p.metadata.displayName} (${p._id})`,
+                        `Discovered peer in room: ${p.metadata.displayName} (${p._id}) - NOT auto-adding to contacts`,
                       );
-                      if (typeof db.saveContact === "function") {
-                        await db.saveContact({
-                          id: p._id,
-                          publicKey: p.metadata.publicKey || "",
-                          displayName: p.metadata.displayName,
-                          lastSeen: Date.now(),
-                          createdAt: Date.now(),
-                          fingerprint: "",
-                          verified: false,
-                          blocked: false,
-                          endpoints: [{ type: "room" }],
-                        });
-                      }
                     }
 
                     if (
@@ -1791,6 +1849,8 @@ export function useMeshNetwork() {
       sendMessage,
       connectToPeer,
       getStats,
+      getSilentMeshStats,
+      getMeshNeighbors,
       generateConnectionOffer,
       acceptConnectionOffer,
       createManualOffer,
@@ -1816,6 +1876,8 @@ export function useMeshNetwork() {
       sendMessage,
       connectToPeer,
       getStats,
+      getSilentMeshStats,
+      getMeshNeighbors,
       generateConnectionOffer,
       acceptConnectionOffer,
       createManualOffer,

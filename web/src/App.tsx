@@ -1122,26 +1122,13 @@ function App() {
     };
   });
 
-  // If we have contacts without conversations, add them too (optional, but good for UX)
-  const contactIdsInConversations = new Set(
-    storedConversations.map((c) => c.contactId),
-  );
-  const contactsWithoutConversations = contacts.filter(
-    (c) => !contactIdsInConversations.has(c.id),
-  );
-
-  const allConversations = [
-    ...displayConversations,
-    ...contactsWithoutConversations.map((c) => ({
-      id: c.id,
-      name: c.displayName,
-      lastMessage: "Start a conversation",
-      timestamp: c.createdAt,
-      unreadCount: 0,
-      verified: c.verified ?? false,
-      online: isOnline(c.id),
-    })),
-  ].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+  // FIX: Don't display contacts without conversations as phantom conversations
+  // This was causing the "phantom connection" bug where fresh identities
+  // would show conversations with peers they never messaged.
+  // Conversations should only appear when there's actual message history.
+  // Users can start new conversations via the "Add Contact" or "Direct Connect" flows.
+  const allConversations = [...displayConversations]
+    .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
   // Add Public Room if joined
   if (isJoinedToRoom) {

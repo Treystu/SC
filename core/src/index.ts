@@ -48,6 +48,23 @@ export {
   type MeshSeenAdapter,
 } from "./mesh/seen-adapter.js";
 
+// Silent Mesh & Eternal Ledger
+export {
+  EternalLedger,
+  MemoryLedgerAdapter,
+  IndexedDBLedgerAdapter,
+  type KnownNode,
+  type LedgerStats,
+  type LedgerPersistenceAdapter,
+} from "./mesh/ledger.js";
+export {
+  SilentMeshManager,
+  type MeshNeighbor,
+  type PotentialSocialContact,
+  type SilentMeshStats,
+  type WateringHoleMessage,
+} from "./mesh/silent-mesh.js";
+
 // DHT (Kademlia)
 export * from "./mesh/dht/index.js";
 export { DHT, type DHTConfig, type NodeLookupResult } from "./mesh/dht.js";
