@@ -11,7 +11,7 @@
  * - False negative (impossible): Never happens with bloom filters
  */
 
-import { BloomFilter, BloomFilterState, DEFAULT_BLOOM_CONFIG } from "./BloomFilter.js";
+import { BloomFilter, BloomFilterState } from "./BloomFilter.js";
 
 /**
  * Configuration for the deduplication manager

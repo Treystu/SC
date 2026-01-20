@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { MeshNetwork, Message, MessageType, Peer } from "@sc/core";
 import { ConnectionMonitor, type ConnectionQuality } from "@sc/core";
 import { SilentMeshManager, EternalLedger } from "@sc/core";
+import { extractPeerId, normalizePeerId, peerIdsEqual } from "@sc/core";
 import { getDatabase } from "../storage/database";
 import { getMeshNetwork } from "../services/mesh-network-service";
 import { notifyConversationsUpdated } from "./useConversations";
@@ -244,23 +245,44 @@ export function useMeshNetwork() {
               contentText = "";
             }
             
-            // Extract sender ID from public key - use first 16 chars (8 bytes) in uppercase to match peer ID format
-            const senderIdRaw = Array.from(message.header.senderId as Uint8Array)
-              .map((b) => (b as number).toString(16).padStart(2, "0"))
-              .join("");
-            const senderId = senderIdRaw.substring(0, 16).toUpperCase();
-            
-            console.log('[useMeshNetwork] Sender ID:', senderId);
-            console.log('[useMeshNetwork] Local Peer ID:', network.getLocalPeerId());
+            // Extract sender ID from public key using utility function
+            const senderId = extractPeerId(message.header.senderId);
+            const localPeerId = normalizePeerId(network.getLocalPeerId());
 
-            if (senderId === network.getLocalPeerId()) {
-              console.log('[useMeshNetwork] Ignored echo message from self');
+            useMeshNetworkLogger.debug('Message received', { senderId, localPeerId });
+
+            // Filter out echo messages from self
+            if (peerIdsEqual(senderId, localPeerId)) {
+              useMeshNetworkLogger.debug('Ignored echo message from self');
               return;
+            }
+
+            // CRITICAL: Validate recipient BEFORE processing to avoid orphaned messages
+            // Type guard: ensure recipient is a string if present
+            if (!data.groupId) {
+              if (data.recipient !== undefined && data.recipient !== null && data.recipient !== '') {
+                if (typeof data.recipient !== 'string') {
+                  useMeshNetworkLogger.warn('Invalid recipient type, ignoring message', { recipient: data.recipient });
+                  return;
+                }
+
+                const normalizedRecipient = normalizePeerId(data.recipient);
+                // Check if this message is addressed to us
+                if (!peerIdsEqual(normalizedRecipient, localPeerId)) {
+                  useMeshNetworkLogger.debug('Ignoring relayed message not addressed to us', {
+                    recipient: normalizedRecipient,
+                    localId: localPeerId,
+                    from: senderId
+                  });
+                  return;
+                }
+              }
+              // If recipient is missing/null/empty, treat as direct message to us (broadcast)
             }
 
             const messageId =
               data.id || `${message.header.timestamp}-${senderId}`;
-            console.log('[useMeshNetwork] Message ID:', messageId);
+            useMeshNetworkLogger.debug('Processing message', { messageId });
 
             if (seenMessageIdsRef.current.has(messageId)) {
               useMeshNetworkLogger.debug(
@@ -391,6 +413,7 @@ export function useMeshNetwork() {
                   });
                 }
               } else {
+                // Recipient validation already done above, so we can safely create/update conversation
                 const conversation = await db.getConversation(
                   receivedMessage.from,
                 );
@@ -418,7 +441,7 @@ export function useMeshNetwork() {
                   const contact = await db.getContact(receivedMessage.from);
                   const isUnknown = !contact || !contact.verified;
 
-                  console.log('[useMeshNetwork] Creating NEW conversation from incoming message:', {
+                  useMeshNetworkLogger.info('Creating NEW conversation from incoming message', {
                     from: receivedMessage.from,
                     isUnknown,
                     hasContact: !!contact,
@@ -436,7 +459,7 @@ export function useMeshNetwork() {
                   });
 
                   // CRITICAL: Notify UI to refresh conversation list
-                  console.log('[useMeshNetwork] Notifying UI of new conversation');
+                  useMeshNetworkLogger.debug('Notifying UI of new conversation');
                   notifyConversationsUpdated();
 
                   // Show in-app toast notification for new message request

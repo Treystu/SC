@@ -59,8 +59,9 @@ export interface GeoZone {
 
 /**
  * Maidenhead grid square (used for zone encoding)
+ * @internal Reserved for future grid-based operations
  */
-interface MaidenheadSquare {
+interface _MaidenheadSquare {
   /** Field (18 worldwide: A-R for longitude, A-R for latitude) */
   field: string;
 

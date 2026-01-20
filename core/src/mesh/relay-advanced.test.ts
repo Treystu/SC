@@ -182,6 +182,230 @@ describe('Advanced Message Relay Features', () => {
       expect(stats.messagesReceived).toBe(1);
     });
   });
+
+  describe('Loopback Prevention (Regression Tests for PR #211)', () => {
+    it('should NOT deliver own messages back to self', async () => {
+      // Create 32-byte sender ID that extracts to a matching peer ID
+      // For this test, use a hex peer ID that matches the extraction
+      const testPeerId = 'ABCDEF0123456789'; // 16-char hex peer ID
+      const senderId = new Uint8Array(32);
+      // Convert hex string to bytes
+      for (let i = 0; i < 8; i++) {
+        senderId[i] = parseInt(testPeerId.substring(i * 2, i * 2 + 2), 16);
+      }
+
+      // Create a relay with matching peer ID for this test
+      const testRelay = new MessageRelay(testPeerId, routingTable, {
+        maxStoredMessages: 10,
+        storeTimeout: 5000,
+        maxRetries: 3,
+        retryBackoff: 1000,
+        floodRateLimit: 10,
+        selectiveFlooding: true,
+      });
+
+      const messageToSelf: Message = {
+        header: {
+          version: 0x01,
+          type: MessageType.TEXT,
+          ttl: 5,
+          timestamp: Date.now(),
+          senderId: senderId, // Message sent by local peer
+          signature: new Uint8Array(64),
+        },
+        payload: new TextEncoder().encode(JSON.stringify({
+          text: 'Hello from myself',
+          recipient: testPeerId,
+        })),
+      };
+
+      const messageData = encodeMessage(messageToSelf);
+      let deliveredToSelf = false;
+
+      testRelay.onMessageForSelf(() => {
+        deliveredToSelf = true;
+      });
+
+      // Process a message that we sent
+      await testRelay.processMessage(messageData, 'some-peer');
+
+      // Should NOT be delivered to self (loopback prevention)
+      expect(deliveredToSelf).toBe(false);
+
+      const stats = testRelay.getStats();
+      expect(stats.messagesForSelf).toBe(0);
+    });
+
+    it('should deliver messages from OTHER peers addressed to us', async () => {
+      // Create 32-byte sender ID (pad as needed)
+      const senderId = new Uint8Array(32);
+      const otherPeerIdBytes = new TextEncoder().encode('OTHER_PEER_ID_9876543210');
+      senderId.set(otherPeerIdBytes.slice(0, Math.min(32, otherPeerIdBytes.length)));
+
+      const messageFromOther: Message = {
+        header: {
+          version: 0x01,
+          type: MessageType.TEXT,
+          ttl: 5,
+          timestamp: Date.now(),
+          senderId: senderId, // Message sent by OTHER peer
+          signature: new Uint8Array(64),
+        },
+        payload: new TextEncoder().encode(JSON.stringify({
+          text: 'Hello from other peer',
+          recipient: localPeerId,
+        })),
+      };
+
+      const messageData = encodeMessage(messageFromOther);
+      let deliveredToSelf = false;
+
+      relay.onMessageForSelf(() => {
+        deliveredToSelf = true;
+      });
+
+      // Process a message from another peer addressed to us
+      await relay.processMessage(messageData, 'other-peer');
+
+      // SHOULD be delivered to self (from different peer)
+      expect(deliveredToSelf).toBe(true);
+
+      const stats = relay.getStats();
+      expect(stats.messagesForSelf).toBe(1);
+    });
+
+    it('should forward own messages to other peers instead of delivering to self', async () => {
+      // Create 32-byte sender ID that matches the relay's peer ID for proper loopback testing
+      // Use the same approach as the first test to ensure proper hex-to-peer-ID matching
+      const testPeerId = '1234567890ABCDEF'; // 16-char hex peer ID
+      const senderId = new Uint8Array(32);
+      // Convert hex string to bytes
+      for (let i = 0; i < 8; i++) {
+        senderId[i] = parseInt(testPeerId.substring(i * 2, i * 2 + 2), 16);
+      }
+
+      // Create a relay with matching peer ID for this test
+      const testRelay = new MessageRelay(testPeerId, routingTable, {
+        maxStoredMessages: 10,
+        storeTimeout: 5000,
+        maxRetries: 3,
+        retryBackoff: 1000,
+        floodRateLimit: 10,
+        selectiveFlooding: true,
+      });
+
+      const messageToOther: Message = {
+        header: {
+          version: 0x01,
+          type: MessageType.TEXT,
+          ttl: 5,
+          timestamp: Date.now(),
+          senderId: senderId, // Message sent by local peer
+          signature: new Uint8Array(64),
+        },
+        payload: new TextEncoder().encode(JSON.stringify({
+          text: 'Hello to other peer',
+          recipient: 'OTHER_PEER_ID',
+        })),
+      };
+
+      const messageData = encodeMessage(messageToOther);
+      let deliveredToSelf = false;
+      let forwardedToOthers = false;
+
+      testRelay.onMessageForSelf(() => {
+        deliveredToSelf = true;
+      });
+
+      testRelay.onForwardMessage(() => {
+        forwardedToOthers = true;
+      });
+
+      // Process own message (would happen when relaying our own sent message)
+      await testRelay.processMessage(messageData, 'local-peer');
+
+      // Should NOT deliver to self
+      expect(deliveredToSelf).toBe(false);
+
+      // SHOULD forward to other peers
+      expect(forwardedToOthers).toBe(true);
+
+      const stats = testRelay.getStats();
+      expect(stats.messagesForSelf).toBe(0);
+      expect(stats.messagesForwarded).toBe(1);
+    });
+
+    it('should process broadcast messages even from self', async () => {
+      // Create 32-byte sender ID (pad as needed)
+      const senderId = new Uint8Array(32);
+      const localPeerIdBytes = new TextEncoder().encode('LOCAL_PEER_ID_1234567890');
+      senderId.set(localPeerIdBytes.slice(0, Math.min(32, localPeerIdBytes.length)));
+
+      const broadcastMessage: Message = {
+        header: {
+          version: 0x01,
+          type: MessageType.PEER_DISCOVERY, // Broadcast type
+          ttl: 5,
+          timestamp: Date.now(),
+          senderId: senderId, // Message sent by local peer
+          signature: new Uint8Array(64),
+        },
+        payload: new TextEncoder().encode('Discovery broadcast'),
+      };
+
+      const messageData = encodeMessage(broadcastMessage);
+      let deliveredToSelf = false;
+
+      relay.onMessageForSelf(() => {
+        deliveredToSelf = true;
+      });
+
+      // Process broadcast message from self
+      await relay.processMessage(messageData, 'local-peer');
+
+      // Broadcast messages should still be delivered (special case)
+      expect(deliveredToSelf).toBe(true);
+
+      const stats = relay.getStats();
+      expect(stats.messagesForSelf).toBe(1);
+    });
+
+    it('should handle recipient validation with type safety', async () => {
+      // Create 32-byte sender ID (pad as needed)
+      const senderId = new Uint8Array(32);
+      const otherPeerIdBytes = new TextEncoder().encode('OTHER_PEER_ID_9876543210');
+      senderId.set(otherPeerIdBytes.slice(0, Math.min(32, otherPeerIdBytes.length)));
+
+      // Test with invalid recipient type (not a string)
+      const messageWithInvalidRecipient: Message = {
+        header: {
+          version: 0x01,
+          type: MessageType.TEXT,
+          ttl: 5,
+          timestamp: Date.now(),
+          senderId: senderId,
+          signature: new Uint8Array(64),
+        },
+        payload: new TextEncoder().encode(JSON.stringify({
+          text: 'Message with invalid recipient',
+          recipient: 12345, // Invalid: number instead of string
+        })),
+      };
+
+      const messageData = encodeMessage(messageWithInvalidRecipient);
+      let deliveredToSelf = false;
+
+      relay.onMessageForSelf(() => {
+        deliveredToSelf = true;
+      });
+
+      // Should handle gracefully without crashing
+      await expect(relay.processMessage(messageData, 'other-peer')).resolves.not.toThrow();
+
+      // Should not deliver invalid message
+      expect(deliveredToSelf).toBe(false);
+    });
+  });
 });
 
 describe('Message Fragmentation Advanced Features', () => {
