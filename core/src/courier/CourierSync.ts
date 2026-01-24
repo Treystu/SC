@@ -187,7 +187,7 @@ export class CourierSync {
    */
   async generateManifest(): Promise<SyncManifest> {
     const stats = await this.messageStore.getStats();
-    const allIds = await this.messageStore.getAllIds();
+    const _allIds = await this.messageStore.getAllIds();
 
     // Get unique geo zones from our messages
     const messages = await this.messageStore.query({});

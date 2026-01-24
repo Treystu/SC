@@ -5,6 +5,7 @@
 import type { Message } from "../protocol/message";
 import { MessageType, decodeMessage, messageHash } from "../protocol/message";
 import { RoutingTable } from "./routing.js";
+import { extractPeerId, normalizePeerId } from "../utils/peer-id.js";
 
 export interface RelayStats {
   messagesReceived: number;
@@ -334,7 +335,22 @@ export class MessageRelay {
    * Check if message is addressed to this peer
    */
   private isMessageForSelf(message: Message): boolean {
+    // CRITICAL FIX: Extract sender ID and never deliver own messages back to self
+    const senderId = extractPeerId(message.header.senderId);
+    // Note: this.localPeerId is already normalized in constructor
+    const normalizedLocalId = normalizePeerId(this.localPeerId);
+
+    // If we sent this message, it's never "for self" - prevents loopback
+    if (senderId === normalizedLocalId) {
+      // Use debug-level logging to avoid production noise
+      if (process.env.NODE_ENV === 'development' || process.env.DEBUG) {
+        console.debug(`[MessageRelay] Ignoring own message (sender=${senderId})`);
+      }
+      return false;
+    }
+
     // For broadcast messages (PEER_DISCOVERY, etc.), everyone processes them
+    // Note: Even if sender is self, broadcasts should still be processed
     if (this.isBroadcastMessage(message.header.type)) {
       return true;
     }
@@ -354,13 +370,14 @@ export class MessageRelay {
       const payloadStr = new TextDecoder().decode(message.payload);
       const data = JSON.parse(payloadStr);
 
-      if (data.recipient) {
-        // Normalize both IDs to uppercase for comparison
-        const normalizedRecipient = data.recipient.replace(/\s/g, "").toUpperCase();
-        const normalizedLocalId = this.localPeerId.replace(/\s/g, "").toUpperCase();
-        
-        console.log(`[MessageRelay] Checking recipient: ${normalizedRecipient} vs localPeerId: ${normalizedLocalId}`);
-        
+      // Type guard: ensure recipient is a string before processing
+      if (data.recipient && typeof data.recipient === 'string') {
+        const normalizedRecipient = normalizePeerId(data.recipient);
+
+        if (process.env.NODE_ENV === 'development' || process.env.DEBUG) {
+          console.debug(`[MessageRelay] Checking recipient: ${normalizedRecipient} vs localPeerId: ${normalizedLocalId}`);
+        }
+
         if (normalizedRecipient === normalizedLocalId) {
           return true;
         }

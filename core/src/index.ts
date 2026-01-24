@@ -35,6 +35,14 @@ export {
 
 export * as utils from "./utils/encoding.js"; // For Native Bridge compatibility
 
+// Peer ID utilities
+export {
+  extractPeerId,
+  normalizePeerId,
+  peerIdsEqual,
+  PEER_ID_LENGTH,
+} from "./utils/peer-id.js";
+
 // Mesh networking
 export * from "./mesh/routing.js";
 export * from "./mesh/relay.js";
