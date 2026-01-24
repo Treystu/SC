@@ -543,6 +543,11 @@ export function useMeshNetwork() {
         console.log('[useMeshNetwork] Step 4: All callbacks registered, setting ref and starting network...');
         meshNetworkRef.current = network;
 
+        // Expose mesh network to window for E2E tests
+        if (typeof window !== 'undefined') {
+          (window as any).__meshNetwork = network;
+        }
+
         console.log('[useMeshNetwork] Step 5: Starting network...');
         await network.start();
         console.log('[useMeshNetwork] Step 6: Network started successfully');

@@ -189,11 +189,26 @@ export class MessageRelay {
       return; // Drop if flooding too fast
     }
 
-    // Step 5: Determine message relevance and forwarding policy
+    // Step 5: Check if we are the original sender (prevent loopback)
+    let originalSenderId = null;
+    try {
+      const payloadStr = new TextDecoder().decode(message.payload);
+      const data = JSON.parse(payloadStr);
+      originalSenderId = data.originalSenderId;
+    } catch (e) {
+      // Ignore parsing errors for binary messages
+    }
+
+    if (originalSenderId === this.localPeerId) {
+      console.log(`[MessageRelay] 🔄 Preventing loopback: message originally from ${originalSenderId}`);
+      return; // Don't process our own messages that came back to us
+    }
+
+    // Step 6: Determine message relevance and forwarding policy
     const isBroadcast = this.isBroadcastMessage(message.header.type);
     const isTarget = this.isMessageForSelf(message);
-    
-    console.log(`[MessageRelay] Message analysis: isBroadcast=${isBroadcast}, isTarget=${isTarget}, localPeerId=${this.localPeerId}`);
+
+    console.log(`[MessageRelay] Message analysis: isBroadcast=${isBroadcast}, isTarget=${isTarget}, localPeerId=${this.localPeerId}, originalSender=${originalSenderId}`);
 
     // Deliver to self if we are target or it's a broadcast
     if (isTarget || isBroadcast) {
@@ -212,7 +227,7 @@ export class MessageRelay {
       return; // Stop forwarding Unicast addressed to us
     }
 
-    // Step 6: Decrement TTL for forwarding
+    // Step 7: Decrement TTL for forwarding
     const forwardMessage: Message = {
       header: {
         ...message.header,
@@ -221,7 +236,7 @@ export class MessageRelay {
       payload: message.payload,
     };
 
-    // Step 7: Forward to all peers except sender (Smart/Flood routing)
+    // Step 8: Forward to all peers except sender (Smart/Flood routing)
     if (forwardMessage.header.ttl > 0) {
       if (this.shouldForwardMessage(forwardMessage)) {
         this.stats.messagesForwarded++;

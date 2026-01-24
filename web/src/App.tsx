@@ -89,8 +89,9 @@ function App() {
   const recentConversationNamesRef = useRef<Map<string, string>>(new Map());
   const [activeTab, setActiveTab] = useState<"chats" | "groups">("chats");
   const [showSettings, setShowSettings] = useState(false);
-  // Force skip onboarding in E2E/test mode so main UI always renders
-  const [showOnboarding, setShowOnboarding] = useState(!isE2E);
+  // In E2E mode, start with false and check DB for identity - show onboarding if needed
+  // This allows E2E tests to either go through onboarding UI or use e2eCreateIdentity()
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [showShareApp, setShowShareApp] = useState(false);
   const [showDirectConnection, setShowDirectConnection] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
@@ -142,21 +143,46 @@ function App() {
   const displayStatus = status;
 
   // Check onboarding completion status from IndexedDB
+  // In both normal and E2E mode, show onboarding if identity doesn't exist
   useEffect(() => {
-    if (isE2E) return; // Skip in E2E mode
-
     const checkOnboardingStatus = async () => {
       try {
+        // Check for E2E auto-identity mode (when __SC_DB_NAME__ is set)
+        // This matches mesh-network-service logic that auto-generates identity
+        const hasE2ETestDb = Boolean((globalThis as any).__SC_DB_NAME__);
+        const isE2EAutoIdentity = isE2E && hasE2ETestDb;
+
+        if (isE2EAutoIdentity) {
+          // E2E tests with custom DB will get auto-generated identity
+          // Don't show onboarding - let mesh-network-service handle identity creation
+          console.log("[App] E2E auto-identity mode - skipping onboarding check");
+          setShowOnboarding(false);
+          return;
+        }
+
         const db = getDatabase();
         await db.init();
+
+        // Check if identity exists
+        const primaryIdentity = await db.getPrimaryIdentity();
         const onboardingComplete = await db.getSetting<boolean>(
           "onboarding-complete",
         );
-        if (onboardingComplete === true) {
+
+        // Show onboarding if:
+        // 1. No identity exists AND onboarding not complete
+        // This allows E2E tests to go through onboarding UI or use e2eCreateIdentity()
+        if (!primaryIdentity && onboardingComplete !== true) {
+          console.log("[App] No identity found and onboarding not complete - showing onboarding");
+          setShowOnboarding(true);
+        } else if (onboardingComplete === true) {
+          console.log("[App] Onboarding complete - hiding onboarding");
           setShowOnboarding(false);
         }
       } catch (error: unknown) {
         console.error("Failed to check onboarding status:", error);
+        // On error, default to showing onboarding so user can create identity
+        setShowOnboarding(true);
       }
     };
 

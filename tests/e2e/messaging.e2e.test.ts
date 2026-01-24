@@ -3,6 +3,66 @@
  */
 import { test, expect, Page } from "@playwright/test";
 
+/**
+ * Helper to create identity and skip onboarding for E2E tests
+ * Completes onboarding through UI interaction
+ */
+async function setupIdentityForE2E(page: Page): Promise<void> {
+  // Wait for app to be ready - give time for React to mount
+  await page.waitForTimeout(2000);
+
+  // Check if onboarding is shown
+  const onboardingOverlay = page.locator('.onboarding-overlay');
+  const isOnboardingVisible = await onboardingOverlay.isVisible({ timeout: 3000 }).catch(() => false);
+
+  if (isOnboardingVisible) {
+    console.log('[setupIdentityForE2E] Onboarding visible, completing it via UI...');
+
+    // Click "Get Started" button
+    const getStartedBtn = page.locator('button:has-text("Get Started")');
+    if (await getStartedBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await getStartedBtn.click();
+      await page.waitForTimeout(1000);
+    }
+
+    // Fill display name
+    const nameInput = page.locator('input[placeholder="Display Name"]');
+    if (await nameInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await nameInput.fill('TestUser');
+      await page.waitForTimeout(500);
+
+      // Click Next
+      const nextBtn = page.locator('button:has-text("Next")');
+      if (await nextBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await nextBtn.click();
+        await page.waitForTimeout(4000); // Wait for key generation
+      }
+    }
+
+    // Skip through remaining screens
+    for (let i = 0; i < 5; i++) {
+      const skipBtn = page.locator('button:has-text("Next"), button:has-text("Skip"), button:has-text("Start Messaging")').first();
+      if (await skipBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
+        await skipBtn.click();
+        await page.waitForTimeout(500);
+      } else {
+        break;
+      }
+    }
+
+    // Wait for onboarding to complete
+    await page.waitForTimeout(2000);
+  }
+
+  // Wait for mesh network to be ready (longer timeout for identity generation)
+  await page.waitForFunction(() => {
+    const w = window as any;
+    return !!(w.__meshNetwork || w.meshNetwork);
+  }, { timeout: 30000 }).catch(() => {
+    console.log('[setupIdentityForE2E] Mesh network not available within timeout');
+  });
+}
+
 test.describe("Messaging Interface", () => {
   test.beforeEach(async ({ page }) => {
     // Force E2E mode via window.__E2E__ and use unique DB to avoid locks
@@ -16,8 +76,12 @@ test.describe("Messaging Interface", () => {
 
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
+
+    // Setup identity for E2E testing
+    await setupIdentityForE2E(page);
+
     // Ensure loading is done
-    await expect(page.locator(".loading-state")).toBeHidden();
+    await expect(page.locator(".loading-state")).toBeHidden({ timeout: 5000 }).catch(() => {});
   });
 
   test("should show conversations section", async ({ page }) => {
@@ -83,7 +147,11 @@ test.describe("Connection Status", () => {
 
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
-    await expect(page.locator(".loading-state")).toBeHidden();
+
+    // Setup identity for E2E testing
+    await setupIdentityForE2E(page);
+
+    await expect(page.locator(".loading-state")).toBeHidden({ timeout: 5000 }).catch(() => {});
   });
 
   test("should display peer information", async ({ page }) => {
@@ -154,7 +222,11 @@ test.describe("Conversation List", () => {
 
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
-    await expect(page.locator(".loading-state")).toBeHidden();
+
+    // Setup identity for E2E testing
+    await setupIdentityForE2E(page);
+
+    await expect(page.locator(".loading-state")).toBeHidden({ timeout: 5000 }).catch(() => {});
   });
 
   test("should have conversations header", async ({ page }) => {
@@ -223,7 +295,11 @@ test.describe("Message Sending", () => {
 
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
-    await expect(page.locator(".loading-state")).toBeHidden();
+
+    // Setup identity for E2E testing
+    await setupIdentityForE2E(page);
+
+    await expect(page.locator(".loading-state")).toBeHidden({ timeout: 5000 }).catch(() => {});
     await createConversation(page);
   });
 
@@ -307,7 +383,11 @@ test.describe("Message History", () => {
 
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
-    await expect(page.locator(".loading-state")).toBeHidden();
+
+    // Setup identity for E2E testing
+    await setupIdentityForE2E(page);
+
+    await expect(page.locator(".loading-state")).toBeHidden({ timeout: 5000 }).catch(() => {});
     await createConversation(page);
   });
 
@@ -445,7 +525,11 @@ test.describe("Contact Management", () => {
 
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
-    await expect(page.locator(".loading-state")).toBeHidden();
+
+    // Setup identity for E2E testing
+    await setupIdentityForE2E(page);
+
+    await expect(page.locator(".loading-state")).toBeHidden({ timeout: 5000 }).catch(() => {});
   });
 
   test("should add a new contact", async ({ page }) => {

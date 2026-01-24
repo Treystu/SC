@@ -11,12 +11,9 @@ import {
   EternalLedger,
   MemoryLedgerAdapter,
   type KnownNode,
-} from '../../core/src/mesh/ledger';
-
-import {
   SilentMeshManager,
   type MeshNeighbor,
-} from '../../core/src/mesh/silent-mesh';
+} from '@sc/core';
 
 describe('Silent Mesh Integration', () => {
   describe('Eternal Ledger', () => {
