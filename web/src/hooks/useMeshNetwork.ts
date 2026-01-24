@@ -249,11 +249,24 @@ export function useMeshNetwork() {
             const senderId = extractPeerId(message.header.senderId);
             const localPeerId = normalizePeerId(network.getLocalPeerId());
 
-            useMeshNetworkLogger.debug('Message received', { senderId, localPeerId });
+            useMeshNetworkLogger.debug('Message received', { senderId, localPeerId, equal: peerIdsEqual(senderId, localPeerId) });
 
-            // Filter out echo messages from self
-            if (peerIdsEqual(senderId, localPeerId)) {
-              useMeshNetworkLogger.debug('Ignored echo message from self');
+            // CRITICAL FIX: Enhanced loopback prevention
+            // Check both header senderId AND payload originalSenderId to prevent all loopbacks
+            let isFromSelf = peerIdsEqual(senderId, localPeerId);
+
+            // Also check originalSenderId from payload if present
+            if (!isFromSelf && data.originalSenderId) {
+              const originalSender = normalizePeerId(data.originalSenderId);
+              isFromSelf = peerIdsEqual(originalSender, localPeerId);
+            }
+
+            if (isFromSelf) {
+              useMeshNetworkLogger.debug('Ignored loopback message from self', {
+                headerSender: senderId,
+                originalSender: data.originalSenderId,
+                localPeerId: localPeerId
+              });
               return;
             }
 
@@ -919,11 +932,12 @@ export function useMeshNetwork() {
           };
 
           try {
-            // CRITICAL FIX: Include recipient for relay delivery
+            // CRITICAL FIX: Include recipient and originalSenderId for relay delivery
             const payload = JSON.stringify({
               type: "file_start",
               metadata: fileMetadata,
               recipient: recipientId.replace(/\s/g, "").toUpperCase(),
+              originalSenderId: meshNetworkRef.current!.getLocalPeerId(),
             });
             await meshNetworkRef.current.sendMessage(recipientId, payload);
 
@@ -1091,12 +1105,13 @@ export function useMeshNetwork() {
           throw new Error(rateLimitResult.reason);
         }
 
-        // CRITICAL FIX: Include recipient in payload for relay delivery
+        // CRITICAL FIX: Include recipient and originalSenderId for proper relay handling
         const payload = JSON.stringify({
           text: content,
           timestamp: Date.now(),
           groupId,
           recipient: normalizedRecipientId, // Required for relay.isMessageForSelf()
+          originalSenderId: localPeerId, // Required to prevent loopback and ensure proper attribution
         });
         console.log('[useMeshNetwork] Sending payload:', payload);
         console.log('[useMeshNetwork] Calling meshNetwork.sendMessage...');
@@ -1261,7 +1276,7 @@ export function useMeshNetwork() {
     ) => {
       if (!meshNetworkRef.current)
         throw new Error("Mesh network not initialized");
-      // CRITICAL FIX: Include recipient for relay delivery
+      // CRITICAL FIX: Include recipient and originalSenderId for relay delivery
       const normalizedRecipientId = recipientId.replace(/\s/g, "").toUpperCase();
       const payload = JSON.stringify({
         targetMessageId,
@@ -1269,6 +1284,7 @@ export function useMeshNetwork() {
         groupId,
         timestamp: Date.now(),
         recipient: normalizedRecipientId,
+        originalSenderId: meshNetworkRef.current.getLocalPeerId(),
       });
       await meshNetworkRef.current.sendMessage(
         recipientId,

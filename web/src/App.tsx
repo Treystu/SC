@@ -1123,13 +1123,21 @@ function App() {
   // Merge stored conversations with contact details
   // Check both connected mesh peers AND discovered peers in room for online status
   const isOnline = (peerId: string) => {
-    // Check if peer is in connected mesh
-    const isConnectedMesh = peers.some((p) => p.id === peerId);
-    // Check if peer is discovered in room (discoveredPeers is string[])
-    // Compare using prefix matching since peer IDs may be truncated
-    const isDiscoveredInRoom = discoveredPeers.some((dpId) => 
-      dpId === peerId || dpId.startsWith(peerId) || peerId.startsWith(dpId.substring(0, 8))
-    );
+    // Normalize peer ID for consistent comparison
+    const normalizedPeerId = peerId.replace(/\s/g, "").toUpperCase();
+
+    // Check if peer is in connected mesh (exact match)
+    const isConnectedMesh = peers.some((p) => {
+      const normalizedConnectedPeerId = p.id.replace(/\s/g, "").toUpperCase();
+      return normalizedConnectedPeerId === normalizedPeerId;
+    });
+
+    // Check if peer is discovered in room (exact match only)
+    const isDiscoveredInRoom = discoveredPeers.some((dpId) => {
+      const normalizedDiscoveredPeerId = dpId.replace(/\s/g, "").toUpperCase();
+      return normalizedDiscoveredPeerId === normalizedPeerId;
+    });
+
     return isConnectedMesh || isDiscoveredInRoom;
   };
 
@@ -1483,14 +1491,9 @@ function App() {
                             // Get the contactId from the conversation
                             const conv = storedConversations.find((c) => c.id === selectedConversation);
                             const contactId = conv?.contactId || selectedConversation;
-                            
-                            // Use the same isOnline logic as conversation list
-                            const isConnectedMesh = peers.some((p) => p.id === contactId);
-                            const isDiscoveredInRoom = discoveredPeers.some((dpId) => 
-                              dpId === contactId || dpId.startsWith(contactId) || contactId.startsWith(dpId.substring(0, 8))
-                            );
-                            
-                            return isConnectedMesh || isDiscoveredInRoom;
+
+                            // Use the same isOnline logic as conversation list (fixed for consistency)
+                            return isOnline(contactId);
                           })()}
                           messages={messages}
                           onSendMessage={handleSendMessage}

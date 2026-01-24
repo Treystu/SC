@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs ls:*)",
+      "Bash(wc:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(npm test:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm outdated:*)",
+      "Bash(npm audit:*)",
+      "Bash(npm run lint:*)",
+      "Bash(ls:*)",
+      "Bash(git checkout:*)",
+      "Bash(npx playwright test:*)",
+      "Bash(npm run test:unit:*)"
+    ]
+  }
+}
