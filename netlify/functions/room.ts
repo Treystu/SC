@@ -222,6 +222,25 @@ export const handler: Handler = async (event, context) => {
           );
         }
 
+        // Fetch pending relayed DMs for this peer
+        const dmsCollection = db.collection("dms");
+        const pendingDms = await dmsCollection
+          .find({ to: peerId, read: false })
+          .sort({ timestamp: 1 }) // Oldest first for correct order
+          .limit(100)
+          .toArray();
+
+        if (pendingDms.length > 0) {
+          console.log(
+            `[${requestId}] Found ${pendingDms.length} pending relayed DMs for ${peerId}`,
+          );
+          // Mark DMs as read
+          await dmsCollection.updateMany(
+            { _id: { $in: pendingDms.map((d: any) => d._id) } },
+            { $set: { read: true } },
+          );
+        }
+
         // Fetch public messages
         const messageQuery: Record<string, any> = {};
         if (since) {
@@ -261,6 +280,11 @@ export const handler: Handler = async (event, context) => {
               id: m?._id?.toString(),
               _id: undefined,
             })),
+            dms: (pendingDms || []).map((d: any) => ({
+              ...d,
+              id: d?._id?.toString(),
+              _id: undefined,
+            })),
             peers: activePeers,
           }),
         };
@@ -272,9 +296,13 @@ export const handler: Handler = async (event, context) => {
         if (!content) throw new Error("Missing content");
 
         // Generate unique message ID if not provided
-        const finalMessageId = messageId || `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        
-        console.log(`[${requestId}] Processing message ${finalMessageId} from ${peerId}`);
+        const finalMessageId =
+          messageId ||
+          `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+        console.log(
+          `[${requestId}] Processing message ${finalMessageId} from ${peerId}`,
+        );
 
         // Insert message with timestamp and ID for tracking
         const result = await messagesCollection.insertOne({
@@ -286,16 +314,60 @@ export const handler: Handler = async (event, context) => {
         });
 
         if (result.acknowledged) {
-          console.log(`[${requestId}] Message ${finalMessageId} stored successfully`);
+          console.log(
+            `[${requestId}] Message ${finalMessageId} stored successfully`,
+          );
         }
 
         return {
           statusCode: 200,
           headers: CORS_HEADERS,
-          body: JSON.stringify({ 
-            success: true, 
+          body: JSON.stringify({
+            success: true,
             messageId: finalMessageId,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+          }),
+        };
+      }
+
+      case "dm": {
+        // Relay a direct/private message when P2P WebRTC fails
+        // The message content is already encrypted end-to-end by the client
+        let { to } = payload;
+        const { content, messageId } = payload;
+        if (!to || !content) throw new Error("Missing to or content for dm");
+        if (!peerId) throw new Error("Missing peerId");
+
+        // Normalize recipient ID
+        to = to.replace(/\s/g, "").toUpperCase();
+
+        const finalMessageId =
+          messageId ||
+          `dm_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+        console.log(
+          `[${requestId}] Relaying DM ${finalMessageId} from ${peerId} to ${to}`,
+        );
+
+        // Store in a separate "dms" collection for private messages
+        const dmsCollection = db.collection("dms");
+        await dmsCollection.insertOne({
+          id: finalMessageId,
+          from: peerId,
+          to: to,
+          content: content, // Already encrypted by client
+          timestamp: new Date(),
+          read: false,
+        });
+
+        return {
+          statusCode: 200,
+          headers: CORS_HEADERS,
+          body: JSON.stringify({
+            success: true,
+            messageId: finalMessageId,
+            timestamp: new Date().toISOString(),
+            relayed: true, // Indicate this was a relay delivery
           }),
         };
       }

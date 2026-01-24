@@ -28,14 +28,14 @@ import { useMeshNetworkLogger } from "../utils/unifiedLogger";
  */
 export interface MeshStatus {
   isConnected: boolean;
-  peerCount: number;           // Raw mesh connections (Silent Mesh)
-  meshNeighborCount: number;   // Same as peerCount - explicit mesh count
+  peerCount: number; // Raw mesh connections (Silent Mesh)
+  meshNeighborCount: number; // Same as peerCount - explicit mesh count
   localPeerId: string;
   connectionQuality: ConnectionQuality;
   initializationError?: string;
   joinError?: string | null;
   isSessionInvalidated?: boolean;
-  ledgerNodeCount?: number;    // Eternal Ledger known nodes
+  ledgerNodeCount?: number; // Eternal Ledger known nodes
 }
 
 export interface ReceivedMessage {
@@ -124,10 +124,17 @@ export function useMeshNetwork() {
 
     const initMeshNetwork = async () => {
       try {
-        console.log('[useMeshNetwork] ========== MESH NETWORK INITIALIZATION START ==========');
-        console.log('[useMeshNetwork] Step 1: Getting mesh network instance...');
+        console.log(
+          "[useMeshNetwork] ========== MESH NETWORK INITIALIZATION START ==========",
+        );
+        console.log(
+          "[useMeshNetwork] Step 1: Getting mesh network instance...",
+        );
         const network = await getMeshNetwork();
-        console.log('[useMeshNetwork] Step 2: Mesh network instance obtained:', !!network);
+        console.log(
+          "[useMeshNetwork] Step 2: Mesh network instance obtained:",
+          !!network,
+        );
 
         const db = getDatabase();
         connectionMonitorRef.current = new ConnectionMonitor();
@@ -136,12 +143,14 @@ export function useMeshNetwork() {
         // The Ledger persists across identity resets for mesh bootstrapping
         if (!silentMeshRef.current) {
           silentMeshRef.current = new SilentMeshManager();
-          console.log('[useMeshNetwork] Silent Mesh Manager initialized');
+          console.log("[useMeshNetwork] Silent Mesh Manager initialized");
         }
 
         // CRITICAL FIX: Register ALL callbacks BEFORE starting network and setting ref
         // This prevents race conditions where messages arrive before handlers are ready
-        console.log('[useMeshNetwork] Step 3: Registering message and peer callbacks...');
+        console.log(
+          "[useMeshNetwork] Step 3: Registering message and peer callbacks...",
+        );
 
         // Helper function to update peer status
         // SILENT MESH: Reports raw mesh connection count (not contact count)
@@ -158,8 +167,8 @@ export function useMeshNetwork() {
                       .map((b) => (b as number).toString(16).padStart(2, "0"))
                       .join("")
                   : undefined,
-                transportType: 'webrtc',
-                source: 'discovery',
+                transportType: "webrtc",
+                source: "discovery",
               });
             }
           }
@@ -194,16 +203,21 @@ export function useMeshNetwork() {
 
         // Register message callback FIRST - before any messages can arrive
         network.onMessage(async (message: Message) => {
-          console.log('[useMeshNetwork] ========== MESSAGE RECEIVED ==========');
-          console.log('[useMeshNetwork] Raw message header:', message.header);
-          console.log('[useMeshNetwork] Message type:', message.header.type);
-          
+          console.log(
+            "[useMeshNetwork] ========== MESSAGE RECEIVED ==========",
+          );
+          console.log("[useMeshNetwork] Raw message header:", message.header);
+          console.log("[useMeshNetwork] Message type:", message.header.type);
+
           try {
             const payload = new TextDecoder().decode(message.payload);
-            console.log('[useMeshNetwork] Decoded payload:', payload.substring(0, 200));
-            
+            console.log(
+              "[useMeshNetwork] Decoded payload:",
+              payload.substring(0, 200),
+            );
+
             const data = JSON.parse(payload);
-            console.log('[useMeshNetwork] Parsed data:', data);
+            console.log("[useMeshNetwork] Parsed data:", data);
 
             let contentText: string = "";
             try {
@@ -244,12 +258,16 @@ export function useMeshNetwork() {
             } catch (e) {
               contentText = "";
             }
-            
+
             // Extract sender ID from public key using utility function
             const senderId = extractPeerId(message.header.senderId);
             const localPeerId = normalizePeerId(network.getLocalPeerId());
 
-            useMeshNetworkLogger.debug('Message received', { senderId, localPeerId, equal: peerIdsEqual(senderId, localPeerId) });
+            useMeshNetworkLogger.debug("Message received", {
+              senderId,
+              localPeerId,
+              equal: peerIdsEqual(senderId, localPeerId),
+            });
 
             // CRITICAL FIX: Enhanced loopback prevention
             // Check both header senderId AND payload originalSenderId to prevent all loopbacks
@@ -262,10 +280,10 @@ export function useMeshNetwork() {
             }
 
             if (isFromSelf) {
-              useMeshNetworkLogger.debug('Ignored loopback message from self', {
+              useMeshNetworkLogger.debug("Ignored loopback message from self", {
                 headerSender: senderId,
                 originalSender: data.originalSenderId,
-                localPeerId: localPeerId
+                localPeerId: localPeerId,
               });
               return;
             }
@@ -273,20 +291,30 @@ export function useMeshNetwork() {
             // CRITICAL: Validate recipient BEFORE processing to avoid orphaned messages
             // Type guard: ensure recipient is a string if present
             if (!data.groupId) {
-              if (data.recipient !== undefined && data.recipient !== null && data.recipient !== '') {
-                if (typeof data.recipient !== 'string') {
-                  useMeshNetworkLogger.warn('Invalid recipient type, ignoring message', { recipient: data.recipient });
+              if (
+                data.recipient !== undefined &&
+                data.recipient !== null &&
+                data.recipient !== ""
+              ) {
+                if (typeof data.recipient !== "string") {
+                  useMeshNetworkLogger.warn(
+                    "Invalid recipient type, ignoring message",
+                    { recipient: data.recipient },
+                  );
                   return;
                 }
 
                 const normalizedRecipient = normalizePeerId(data.recipient);
                 // Check if this message is addressed to us
                 if (!peerIdsEqual(normalizedRecipient, localPeerId)) {
-                  useMeshNetworkLogger.debug('Ignoring relayed message not addressed to us', {
-                    recipient: normalizedRecipient,
-                    localId: localPeerId,
-                    from: senderId
-                  });
+                  useMeshNetworkLogger.debug(
+                    "Ignoring relayed message not addressed to us",
+                    {
+                      recipient: normalizedRecipient,
+                      localId: localPeerId,
+                      from: senderId,
+                    },
+                  );
                   return;
                 }
               }
@@ -295,7 +323,7 @@ export function useMeshNetwork() {
 
             const messageId =
               data.id || `${message.header.timestamp}-${senderId}`;
-            useMeshNetworkLogger.debug('Processing message', { messageId });
+            useMeshNetworkLogger.debug("Processing message", { messageId });
 
             if (seenMessageIdsRef.current.has(messageId)) {
               useMeshNetworkLogger.debug(
@@ -443,23 +471,28 @@ export function useMeshNetwork() {
 
                   // Show browser notification for existing conversation
                   const contact = await db.getContact(receivedMessage.from);
-                  const senderName = contact?.displayName || `Peer ${receivedMessage.from.slice(0, 8)}`;
+                  const senderName =
+                    contact?.displayName ||
+                    `Peer ${receivedMessage.from.slice(0, 8)}`;
                   notificationManager.showMessageNotification(
                     senderName,
                     receivedMessage.content,
-                    receivedMessage.from
+                    receivedMessage.from,
                   );
                 } else {
                   // NEW CONVERSATION from unknown sender - create with pending request status
                   const contact = await db.getContact(receivedMessage.from);
                   const isUnknown = !contact || !contact.verified;
 
-                  useMeshNetworkLogger.info('Creating NEW conversation from incoming message', {
-                    from: receivedMessage.from,
-                    isUnknown,
-                    hasContact: !!contact,
-                    contactVerified: contact?.verified
-                  });
+                  useMeshNetworkLogger.info(
+                    "Creating NEW conversation from incoming message",
+                    {
+                      from: receivedMessage.from,
+                      isUnknown,
+                      hasContact: !!contact,
+                      contactVerified: contact?.verified,
+                    },
+                  );
 
                   await db.saveConversation({
                     id: receivedMessage.from,
@@ -468,27 +501,35 @@ export function useMeshNetwork() {
                     unreadCount: 1,
                     createdAt: Date.now(),
                     lastMessageId: receivedMessage.id,
-                    metadata: isUnknown ? { requestStatus: 'pending', isRequest: true } : undefined
+                    metadata: isUnknown
+                      ? { requestStatus: "pending", isRequest: true }
+                      : undefined,
                   });
 
                   // CRITICAL: Notify UI to refresh conversation list
-                  useMeshNetworkLogger.debug('Notifying UI of new conversation');
+                  useMeshNetworkLogger.debug(
+                    "Notifying UI of new conversation",
+                  );
                   notifyConversationsUpdated();
 
                   // Show in-app toast notification for new message request
-                  const senderName = contact?.displayName || `Peer ${receivedMessage.from.slice(0, 8)}`;
-                  window.dispatchEvent(new CustomEvent('show-notification', {
-                    detail: {
-                      message: `New message request from ${senderName}`,
-                      type: 'info'
-                    }
-                  }));
+                  const senderName =
+                    contact?.displayName ||
+                    `Peer ${receivedMessage.from.slice(0, 8)}`;
+                  window.dispatchEvent(
+                    new CustomEvent("show-notification", {
+                      detail: {
+                        message: `New message request from ${senderName}`,
+                        type: "info",
+                      },
+                    }),
+                  );
 
                   // Show browser notification
                   notificationManager.showMessageNotification(
                     senderName,
                     receivedMessage.content,
-                    receivedMessage.from
+                    receivedMessage.from,
                   );
                 }
               }
@@ -501,9 +542,12 @@ export function useMeshNetwork() {
         });
 
         network.onPeerConnected(async (peerId: string) => {
-          console.log('[useMeshNetwork] ========== PEER CONNECTED ==========');
-          console.log('[useMeshNetwork] Peer ID:', peerId);
-          console.log('[useMeshNetwork] Total connected peers:', network.getConnectedPeers().length);
+          console.log("[useMeshNetwork] ========== PEER CONNECTED ==========");
+          console.log("[useMeshNetwork] Peer ID:", peerId);
+          console.log(
+            "[useMeshNetwork] Total connected peers:",
+            network.getConnectedPeers().length,
+          );
           useMeshNetworkLogger.info("Peer connected:", peerId);
           updatePeerStatus();
           retryQueuedMessages();
@@ -536,9 +580,14 @@ export function useMeshNetwork() {
         });
 
         network.onPeerDisconnected(async (peerId: string) => {
-          console.log('[useMeshNetwork] ========== PEER DISCONNECTED ==========');
-          console.log('[useMeshNetwork] Peer ID:', peerId);
-          console.log('[useMeshNetwork] Remaining connected peers:', network.getConnectedPeers().length);
+          console.log(
+            "[useMeshNetwork] ========== PEER DISCONNECTED ==========",
+          );
+          console.log("[useMeshNetwork] Peer ID:", peerId);
+          console.log(
+            "[useMeshNetwork] Remaining connected peers:",
+            network.getConnectedPeers().length,
+          );
           useMeshNetworkLogger.info("Peer disconnected:", peerId);
           updatePeerStatus();
           try {
@@ -576,22 +625,26 @@ export function useMeshNetwork() {
 
         // CRITICAL: Set ref and start network AFTER all callbacks are registered
         // This ensures no messages are lost during initialization
-        console.log('[useMeshNetwork] Step 4: All callbacks registered, setting ref and starting network...');
+        console.log(
+          "[useMeshNetwork] Step 4: All callbacks registered, setting ref and starting network...",
+        );
         meshNetworkRef.current = network;
 
         // Expose mesh network to window for E2E tests
-        if (typeof window !== 'undefined') {
+        if (typeof window !== "undefined") {
           (window as any).__meshNetwork = network;
         }
 
-        console.log('[useMeshNetwork] Step 5: Starting network...');
+        console.log("[useMeshNetwork] Step 5: Starting network...");
         await network.start();
-        console.log('[useMeshNetwork] Step 6: Network started successfully');
+        console.log("[useMeshNetwork] Step 6: Network started successfully");
 
         // Load persisted data
         try {
           const activePeers = await db.getActivePeers();
-          useMeshNetworkLogger.info(`Loaded ${activePeers.length} persisted peers`);
+          useMeshNetworkLogger.info(
+            `Loaded ${activePeers.length} persisted peers`,
+          );
           if (activePeers.length > 0) {
             useMeshNetworkLogger.debug(
               "Persisted peers available for reconnection:",
@@ -604,7 +657,9 @@ export function useMeshNetwork() {
 
         try {
           const routes = await db.getAllRoutes();
-          useMeshNetworkLogger.debug(`Loaded ${routes.length} persisted routes`);
+          useMeshNetworkLogger.debug(
+            `Loaded ${routes.length} persisted routes`,
+          );
         } catch (error) {
           useMeshNetworkLogger.error("Failed to load routes:", error);
         }
@@ -642,7 +697,10 @@ export function useMeshNetwork() {
         const initialConnectedPeers = network.getConnectedPeers();
         setPeers(initialConnectedPeers);
 
-        console.log('[useMeshNetwork] Step 7: Setting status with localPeerId:', localId);
+        console.log(
+          "[useMeshNetwork] Step 7: Setting status with localPeerId:",
+          localId,
+        );
         setStatus({
           isConnected: true,
           peerCount: initialConnectedPeers.length,
@@ -656,21 +714,33 @@ export function useMeshNetwork() {
           clearTimeout(identityRetryTimeout);
           identityRetryTimeout = null;
         }
-        console.log('[useMeshNetwork] ========== MESH NETWORK INITIALIZATION COMPLETE ==========');
-        console.log('[useMeshNetwork] Final check - meshNetworkRef.current:', !!meshNetworkRef.current);
-        console.log('[useMeshNetwork] Final check - localPeerId:', localId);
+        console.log(
+          "[useMeshNetwork] ========== MESH NETWORK INITIALIZATION COMPLETE ==========",
+        );
+        console.log(
+          "[useMeshNetwork] Final check - meshNetworkRef.current:",
+          !!meshNetworkRef.current,
+        );
+        console.log("[useMeshNetwork] Final check - localPeerId:", localId);
       } catch (error) {
         if ((error as Error).message === "NO_IDENTITY") {
           console.log(
-            '[useMeshNetwork] ========== MESH NETWORK INITIALIZATION WAITING (NO_IDENTITY) ==========',
+            "[useMeshNetwork] ========== MESH NETWORK INITIALIZATION WAITING (NO_IDENTITY) ==========",
           );
-          console.log('[useMeshNetwork] No identity found - user needs to complete onboarding');
-          console.log('[useMeshNetwork] No identity found - user needs to complete onboarding');
-          useMeshNetworkLogger.info("No identity found, waiting for onboarding.");
+          console.log(
+            "[useMeshNetwork] No identity found - user needs to complete onboarding",
+          );
+          console.log(
+            "[useMeshNetwork] No identity found - user needs to complete onboarding",
+          );
+          useMeshNetworkLogger.info(
+            "No identity found, waiting for onboarding.",
+          );
           setStatus((prev) => ({
             ...prev,
             isConnected: false,
-            initializationError: "Please complete onboarding to create your identity",
+            initializationError:
+              "Please complete onboarding to create your identity",
           }));
           if (!identityRetryTimeout) {
             identityRetryTimeout = setTimeout(() => {
@@ -681,12 +751,20 @@ export function useMeshNetwork() {
           return;
         }
 
-        console.error('[useMeshNetwork] ========== MESH NETWORK INITIALIZATION FAILED ==========');
-        console.error('[useMeshNetwork] Error:', error);
-        console.error('[useMeshNetwork] Error message:', (error as Error).message);
-        console.error('[useMeshNetwork] Error stack:', (error as Error).stack);
-        
-        console.error('[useMeshNetwork] Initialization failed with error:', error);
+        console.error(
+          "[useMeshNetwork] ========== MESH NETWORK INITIALIZATION FAILED ==========",
+        );
+        console.error("[useMeshNetwork] Error:", error);
+        console.error(
+          "[useMeshNetwork] Error message:",
+          (error as Error).message,
+        );
+        console.error("[useMeshNetwork] Error stack:", (error as Error).stack);
+
+        console.error(
+          "[useMeshNetwork] Initialization failed with error:",
+          error,
+        );
         useMeshNetworkLogger.error("Failed to initialize mesh network:", error);
         setStatus((prev) => ({
           ...prev,
@@ -743,107 +821,142 @@ export function useMeshNetwork() {
     }
 
     const run = (async () => {
-    console.log('[useMeshNetwork] ========== CONNECT TO PEER START ==========');
-    console.log('[useMeshNetwork] Target Peer ID:', peerId);
-    
-    const endMeasure = performanceMonitor.startMeasure("connectToPeer");
-    useMeshNetworkLogger.info(`connectToPeer called for ${peerId}`);
+      console.log(
+        "[useMeshNetwork] ========== CONNECT TO PEER START ==========",
+      );
+      console.log("[useMeshNetwork] Target Peer ID:", peerId);
 
-    if (!meshNetworkRef.current) {
-      console.error('[useMeshNetwork] CONNECT FAILED: Mesh network not initialized');
-      throw new Error("Mesh network not initialized");
-    }
-    
-    console.log('[useMeshNetwork] Mesh network ref exists:', !!meshNetworkRef.current);
-    console.log('[useMeshNetwork] Room client ref exists:', !!roomClientRef.current);
+      const endMeasure = performanceMonitor.startMeasure("connectToPeer");
+      useMeshNetworkLogger.info(`connectToPeer called for ${peerId}`);
 
-    // Normalize peer ID for consistent matching (all peer IDs are uppercase)
-    const normalizedPeerId = peerId.replace(/\s/g, "").toUpperCase();
-
-    // CRITICAL: Pending Request Gate
-    // Don't connect to peers whose connection request is still pending
-    // This ensures connections only happen after user explicitly approves
-    try {
-      const db = getDatabase();
-      const conversation = await db.getConversation(normalizedPeerId);
-      if (conversation?.metadata?.requestStatus === 'pending') {
-        console.log(`[useMeshNetwork] Skipping connection to ${normalizedPeerId} - request still pending approval`);
-        useMeshNetworkLogger.info(
-          `Connection to ${normalizedPeerId} blocked - waiting for user approval`,
+      if (!meshNetworkRef.current) {
+        console.error(
+          "[useMeshNetwork] CONNECT FAILED: Mesh network not initialized",
         );
-        return;
+        throw new Error("Mesh network not initialized");
       }
-    } catch (err) {
-      // If we can't check the conversation, proceed with caution
-      console.warn(`[useMeshNetwork] Could not check request status for ${normalizedPeerId}:`, err);
-    }
 
-    const alreadyConnected = Boolean(
-      meshNetworkRef.current &&
-        typeof meshNetworkRef.current.isConnectedToPeer === "function"
+      console.log(
+        "[useMeshNetwork] Mesh network ref exists:",
+        !!meshNetworkRef.current,
+      );
+      console.log(
+        "[useMeshNetwork] Room client ref exists:",
+        !!roomClientRef.current,
+      );
+
+      // Normalize peer ID for consistent matching (all peer IDs are uppercase)
+      const normalizedPeerId = peerId.replace(/\s/g, "").toUpperCase();
+
+      // CRITICAL: Pending Request Gate
+      // Don't connect to peers whose connection request is still pending
+      // This ensures connections only happen after user explicitly approves
+      try {
+        const db = getDatabase();
+        const conversation = await db.getConversation(normalizedPeerId);
+        if (conversation?.metadata?.requestStatus === "pending") {
+          console.log(
+            `[useMeshNetwork] Skipping connection to ${normalizedPeerId} - request still pending approval`,
+          );
+          useMeshNetworkLogger.info(
+            `Connection to ${normalizedPeerId} blocked - waiting for user approval`,
+          );
+          return;
+        }
+      } catch (err) {
+        // If we can't check the conversation, proceed with caution
+        console.warn(
+          `[useMeshNetwork] Could not check request status for ${normalizedPeerId}:`,
+          err,
+        );
+      }
+
+      const alreadyConnected = Boolean(
+        meshNetworkRef.current &&
+          typeof meshNetworkRef.current.isConnectedToPeer === "function"
           ? meshNetworkRef.current.isConnectedToPeer(normalizedPeerId)
           : meshNetworkRef.current.getConnectedPeers &&
-            meshNetworkRef.current
-              .getConnectedPeers()
-              .some((p: Peer) => p.id === normalizedPeerId),
-    );
-
-    console.log('[useMeshNetwork] Already connected:', alreadyConnected, 'to', normalizedPeerId);
-
-    if (alreadyConnected) {
-      try {
-        const connectedPeers = meshNetworkRef.current.getConnectedPeers?.() || [];
-        setPeers(connectedPeers);
-        setStatus((prev: MeshStatus) => ({
-          ...prev,
-          peerCount: connectedPeers.length,
-          isConnected: true,
-        }));
-      } catch (e) {
-        // no-op
-      }
-      console.log('[useMeshNetwork] Skipping - already connected to', peerId);
-      return;
-    }
-
-    try {
-      if (roomClientRef.current) {
-        console.log('[useMeshNetwork] Using Room Signaling for connection...');
-        useMeshNetworkLogger.info(
-          `Initiating connection to ${peerId} via Room Signaling...`,
-        );
-        
-        console.log('[useMeshNetwork] Creating manual connection (SDP offer)...');
-        const offerJson =
-          await meshNetworkRef.current.createManualConnection(peerId);
-        console.log('[useMeshNetwork] SDP offer created:', typeof offerJson, offerJson ? 'has content' : 'empty');
-        
-        // IMPORTANT: send the raw offer JSON string as returned by createManualConnection.
-        // The room signaling layer may re-serialize payloads; sending an object here can
-        // cause mismatches on the receiver side.
-        console.log('[useMeshNetwork] Sending SDP offer via Room to', peerId);
-        await roomClientRef.current.signal(peerId, "offer", offerJson);
-        console.log('[useMeshNetwork] SDP offer sent successfully via Room');
-      } else {
-        console.log('[useMeshNetwork] No room client, using direct Mesh connection...');
-        useMeshNetworkLogger.info(
-          `Initiating connection to ${peerId} via Mesh/Local...`,
-        );
-        await meshNetworkRef.current.connectToPeer(peerId);
-        console.log('[useMeshNetwork] Direct mesh connection initiated');
-      }
-      endMeasure({ success: true });
-      console.log('[useMeshNetwork] ========== CONNECTION INITIATED ==========');
-      useMeshNetworkLogger.info(
-        `Connection initiated to ${peerId}, waiting for peer to accept...`,
+              meshNetworkRef.current
+                .getConnectedPeers()
+                .some((p: Peer) => p.id === normalizedPeerId),
       );
-    } catch (error) {
-      console.error('[useMeshNetwork] ========== CONNECTION FAILED ==========');
-      console.error('[useMeshNetwork] Error:', error);
-      useMeshNetworkLogger.error(`Failed to connect to ${peerId}:`, error);
-      endMeasure({ success: false, error: (error as Error).message });
-      throw error;
-    }
+
+      console.log(
+        "[useMeshNetwork] Already connected:",
+        alreadyConnected,
+        "to",
+        normalizedPeerId,
+      );
+
+      if (alreadyConnected) {
+        try {
+          const connectedPeers =
+            meshNetworkRef.current.getConnectedPeers?.() || [];
+          setPeers(connectedPeers);
+          setStatus((prev: MeshStatus) => ({
+            ...prev,
+            peerCount: connectedPeers.length,
+            isConnected: true,
+          }));
+        } catch (e) {
+          // no-op
+        }
+        console.log("[useMeshNetwork] Skipping - already connected to", peerId);
+        return;
+      }
+
+      try {
+        if (roomClientRef.current) {
+          console.log(
+            "[useMeshNetwork] Using Room Signaling for connection...",
+          );
+          useMeshNetworkLogger.info(
+            `Initiating connection to ${peerId} via Room Signaling...`,
+          );
+
+          console.log(
+            "[useMeshNetwork] Creating manual connection (SDP offer)...",
+          );
+          const offerJson =
+            await meshNetworkRef.current.createManualConnection(peerId);
+          console.log(
+            "[useMeshNetwork] SDP offer created:",
+            typeof offerJson,
+            offerJson ? "has content" : "empty",
+          );
+
+          // IMPORTANT: send the raw offer JSON string as returned by createManualConnection.
+          // The room signaling layer may re-serialize payloads; sending an object here can
+          // cause mismatches on the receiver side.
+          console.log("[useMeshNetwork] Sending SDP offer via Room to", peerId);
+          await roomClientRef.current.signal(peerId, "offer", offerJson);
+          console.log("[useMeshNetwork] SDP offer sent successfully via Room");
+        } else {
+          console.log(
+            "[useMeshNetwork] No room client, using direct Mesh connection...",
+          );
+          useMeshNetworkLogger.info(
+            `Initiating connection to ${peerId} via Mesh/Local...`,
+          );
+          await meshNetworkRef.current.connectToPeer(peerId);
+          console.log("[useMeshNetwork] Direct mesh connection initiated");
+        }
+        endMeasure({ success: true });
+        console.log(
+          "[useMeshNetwork] ========== CONNECTION INITIATED ==========",
+        );
+        useMeshNetworkLogger.info(
+          `Connection initiated to ${peerId}, waiting for peer to accept...`,
+        );
+      } catch (error) {
+        console.error(
+          "[useMeshNetwork] ========== CONNECTION FAILED ==========",
+        );
+        console.error("[useMeshNetwork] Error:", error);
+        useMeshNetworkLogger.error(`Failed to connect to ${peerId}:`, error);
+        endMeasure({ success: false, error: (error as Error).message });
+        throw error;
+      }
     })();
 
     connectInFlightRef.current.set(peerId, run);
@@ -861,23 +974,37 @@ export function useMeshNetwork() {
       attachments?: File[],
       groupId?: string,
     ) => {
-      console.log('[useMeshNetwork] ========== SEND MESSAGE START ==========');
-      console.log('[useMeshNetwork] Recipient ID:', recipientId);
-      console.log('[useMeshNetwork] Content:', content.substring(0, 100));
-      console.log('[useMeshNetwork] Group ID:', groupId);
-      console.log('[useMeshNetwork] Has attachments:', attachments?.length || 0);
-      
+      console.log("[useMeshNetwork] ========== SEND MESSAGE START ==========");
+      console.log("[useMeshNetwork] Recipient ID:", recipientId);
+      console.log("[useMeshNetwork] Content:", content.substring(0, 100));
+      console.log("[useMeshNetwork] Group ID:", groupId);
+      console.log(
+        "[useMeshNetwork] Has attachments:",
+        attachments?.length || 0,
+      );
+
       const endMeasure = performanceMonitor.startMeasure("sendMessage");
       if (!meshNetworkRef.current) {
-        console.error('[useMeshNetwork] SEND FAILED: Mesh network not initialized');
+        console.error(
+          "[useMeshNetwork] SEND FAILED: Mesh network not initialized",
+        );
         throw new Error("Mesh network not initialized");
       }
-      
-      console.log('[useMeshNetwork] Mesh network ref exists:', !!meshNetworkRef.current);
-      console.log('[useMeshNetwork] Local peer ID:', meshNetworkRef.current.getLocalPeerId());
-      
+
+      console.log(
+        "[useMeshNetwork] Mesh network ref exists:",
+        !!meshNetworkRef.current,
+      );
+      console.log(
+        "[useMeshNetwork] Local peer ID:",
+        meshNetworkRef.current.getLocalPeerId(),
+      );
+
       const connectedPeers = meshNetworkRef.current.getConnectedPeers?.() || [];
-      console.log('[useMeshNetwork] Connected peers:', connectedPeers.map((p: Peer) => p.id));
+      console.log(
+        "[useMeshNetwork] Connected peers:",
+        connectedPeers.map((p: Peer) => p.id),
+      );
 
       useMeshNetworkLogger.info(
         `sendMessage to ${recipientId}: "${content.substring(0, 50)}${content.length > 50 ? "..." : ""}"`,
@@ -1070,7 +1197,9 @@ export function useMeshNetwork() {
       let finalStatus: "sent" | "queued" = "sent";
       try {
         // Normalize recipient ID for consistent matching (all peer IDs are uppercase)
-        const normalizedRecipientId = recipientId.replace(/\s/g, "").toUpperCase();
+        const normalizedRecipientId = recipientId
+          .replace(/\s/g, "")
+          .toUpperCase();
 
         const isConnected =
           meshNetworkRef.current &&
@@ -1084,7 +1213,12 @@ export function useMeshNetwork() {
                   .some((p: Peer) => p.id === normalizedRecipientId),
               );
 
-        console.log('[useMeshNetwork] isConnected to', normalizedRecipientId, ':', isConnected);
+        console.log(
+          "[useMeshNetwork] isConnected to",
+          normalizedRecipientId,
+          ":",
+          isConnected,
+        );
 
         if (!isConnected) {
           useMeshNetworkLogger.warn(
@@ -1106,17 +1240,44 @@ export function useMeshNetwork() {
         }
 
         // CRITICAL FIX: Include recipient and originalSenderId for proper relay handling
-        const payload = JSON.stringify({
+        const messagePayload = JSON.stringify({
           text: content,
           timestamp: Date.now(),
           groupId,
           recipient: normalizedRecipientId, // Required for relay.isMessageForSelf()
-          originalSenderId: localPeerId, // Required to prevent loopback and ensure proper attribution
+          originalSenderId: meshNetworkRef.current.getLocalPeerId(), // Required to prevent loopback and ensure proper attribution
         });
-        console.log('[useMeshNetwork] Sending payload:', payload);
-        console.log('[useMeshNetwork] Calling meshNetwork.sendMessage...');
-        await meshNetworkRef.current.sendMessage(recipientId, payload);
-        console.log('[useMeshNetwork] ========== MESSAGE SENT SUCCESSFULLY ==========');
+        console.log("[useMeshNetwork] Sending payload:", messagePayload);
+        console.log("[useMeshNetwork] Calling meshNetwork.sendMessage...");
+
+        try {
+          await meshNetworkRef.current.sendMessage(recipientId, messagePayload);
+          console.log(
+            "[useMeshNetwork] ========== MESSAGE SENT VIA P2P ==========",
+          );
+        } catch (p2pError) {
+          // P2P failed (likely NAT traversal issue) - try relay fallback
+          console.log(
+            "[useMeshNetwork] P2P send failed, attempting relay fallback...",
+            p2pError,
+          );
+
+          if (roomClientRef.current) {
+            // Use relay to deliver the message
+            // The message payload is already JSON - send it through the relay
+            await roomClientRef.current.dm(
+              normalizedRecipientId,
+              messagePayload,
+            );
+            console.log(
+              "[useMeshNetwork] ========== MESSAGE SENT VIA RELAY ==========",
+            );
+          } else {
+            // No room client available - re-throw to trigger offline queue
+            throw p2pError;
+          }
+        }
+
         endMeasure({ success: true });
       } catch (error) {
         useMeshNetworkLogger.error("Failed to send message to network:", error);
@@ -1277,7 +1438,9 @@ export function useMeshNetwork() {
       if (!meshNetworkRef.current)
         throw new Error("Mesh network not initialized");
       // CRITICAL FIX: Include recipient and originalSenderId for relay delivery
-      const normalizedRecipientId = recipientId.replace(/\s/g, "").toUpperCase();
+      const normalizedRecipientId = recipientId
+        .replace(/\s/g, "")
+        .toUpperCase();
       const payload = JSON.stringify({
         targetMessageId,
         emoji,
@@ -1423,13 +1586,16 @@ export function useMeshNetwork() {
         // Wire up WebRTC signaling to Room signalling path
         if (
           meshNetworkRef.current &&
-          typeof (meshNetworkRef.current as any).registerSignalingCallback === "function"
+          typeof (meshNetworkRef.current as any).registerSignalingCallback ===
+            "function"
         ) {
-          (meshNetworkRef.current as any).registerSignalingCallback(async (peerId: string, signal: any) => {
-            if (roomClientRef.current) {
-              await roomClientRef.current.signal(peerId, signal.type, signal);
-            }
-          });
+          (meshNetworkRef.current as any).registerSignalingCallback(
+            async (peerId: string, signal: any) => {
+              if (roomClientRef.current) {
+                await roomClientRef.current.signal(peerId, signal.type, signal);
+              }
+            },
+          );
         }
 
         const db = getDatabase();
@@ -1468,11 +1634,11 @@ export function useMeshNetwork() {
                     meshNetworkRef.current.getConnectedPeers
                   ? meshNetworkRef.current.getConnectedPeers().length
                   : 0;
-            
+
             const discoveredCount = discoveredPeers.length;
             const pendingConnections = discoveredCount - peerCount;
             const hasPendingConnections = pendingConnections > 0;
-            
+
             let nextDelay: number;
             if (hasPendingConnections) {
               nextDelay = 1000;
@@ -1484,21 +1650,21 @@ export function useMeshNetwork() {
               nextDelay = 30000;
             }
 
-            const { signals, messages, peers } =
+            const { signals, messages, dms, peers } =
               await roomClientRef.current.poll();
 
             if (peers && peers.length > 0) {
               const db = getDatabase();
-              
+
               const newPeerIds = peers
                 .filter((p) => p._id !== localPeerId)
                 .map((p) => p._id);
-              
+
               setDiscoveredPeers((prev) => {
                 const combined = new Set([...prev, ...newPeerIds]);
                 return Array.from(combined);
               });
-              
+
               for (const p of peers) {
                 if (p.metadata && p._id !== localPeerId) {
                   try {
@@ -1538,7 +1704,7 @@ export function useMeshNetwork() {
                         useMeshNetworkLogger.debug(
                           `[Room Bootstrap] Auto-connecting to discovered room peer: ${p._id}`,
                         );
-                        
+
                         const connectWithTimeout = async (
                           peerId: string,
                           timeoutMs: number = 15000,
@@ -1551,10 +1717,10 @@ export function useMeshNetwork() {
                           while (Date.now() - start < timeoutMs) {
                             const nowConnected = Boolean(
                               meshNetworkRef.current &&
-                                meshNetworkRef.current.getConnectedPeers &&
-                                meshNetworkRef.current
-                                  .getConnectedPeers()
-                                  .some((cp: Peer) => cp.id === peerId),
+                              meshNetworkRef.current.getConnectedPeers &&
+                              meshNetworkRef.current
+                                .getConnectedPeers()
+                                .some((cp: Peer) => cp.id === peerId),
                             );
 
                             if (nowConnected) return;
@@ -1565,7 +1731,7 @@ export function useMeshNetwork() {
                             `Connection timeout after ${timeoutMs}ms`,
                           );
                         };
-                        
+
                         connectWithTimeout(p._id, 15000)
                           .then(() => {
                             useMeshNetworkLogger.info(
@@ -1590,6 +1756,86 @@ export function useMeshNetwork() {
               }
             }
 
+            // Handle relayed DMs (private messages via relay fallback)
+            if (dms && dms.length > 0) {
+              console.log(
+                `[useMeshNetwork] ========== RELAYED DMs RECEIVED: ${dms.length} ==========`,
+              );
+
+              for (const dm of dms) {
+                try {
+                  // Parse the message content (it's a JSON payload)
+                  const parsedContent = JSON.parse(dm.content);
+                  const senderId = dm.from;
+
+                  console.log(
+                    `[useMeshNetwork] Processing relayed DM from ${senderId}:`,
+                    parsedContent.text?.substring(0, 50),
+                  );
+
+                  // Create message object for UI
+                  const receivedMessage: ReceivedMessage = {
+                    id: dm.id,
+                    from: senderId,
+                    to: localPeerId,
+                    conversationId: senderId,
+                    content: parsedContent.text || dm.content,
+                    timestamp: parsedContent.timestamp || Date.now(),
+                    type: MessageType.TEXT,
+                    status: "delivered",
+                  };
+
+                  // Add to messages state (with dedup)
+                  setMessages((prev: ReceivedMessage[]) => {
+                    if (prev.some((m) => m.id === dm.id)) return prev;
+                    return [...prev, receivedMessage];
+                  });
+
+                  // Persist to database
+                  const db = getDatabase();
+                  await db.saveMessage({
+                    id: receivedMessage.id,
+                    conversationId: senderId,
+                    content: receivedMessage.content,
+                    timestamp: receivedMessage.timestamp,
+                    senderId: senderId,
+                    recipientId: localPeerId,
+                    type: "text",
+                    status: "delivered",
+                  });
+
+                  // Update or create conversation
+                  const existingConv = await db.getConversation(senderId);
+                  if (existingConv) {
+                    await db.saveConversation({
+                      ...existingConv,
+                      lastMessageTimestamp: receivedMessage.timestamp,
+                      lastMessageId: receivedMessage.id,
+                      unreadCount: (existingConv.unreadCount || 0) + 1,
+                    });
+                  } else {
+                    await db.saveConversation({
+                      id: senderId,
+                      contactId: senderId,
+                      lastMessageTimestamp: receivedMessage.timestamp,
+                      lastMessageId: receivedMessage.id,
+                      unreadCount: 1,
+                      createdAt: Date.now(),
+                    });
+                  }
+
+                  useMeshNetworkLogger.info(
+                    `[Relay] Received DM from ${senderId}: "${parsedContent.text?.substring(0, 30)}..."`,
+                  );
+                } catch (dmError) {
+                  console.error(
+                    "[useMeshNetwork] Failed to process relayed DM:",
+                    dmError,
+                  );
+                }
+              }
+            }
+
             if (messages && messages.length > 0) {
               setRoomMessages((prev) => {
                 const newMsgs = messages.filter(
@@ -1601,34 +1847,42 @@ export function useMeshNetwork() {
             }
 
             if (signals && signals.length > 0) {
-              console.log('[useMeshNetwork] ========== SIGNALS RECEIVED ==========');
-              console.log('[useMeshNetwork] Signal count:', signals.length);
-              console.log('[useMeshNetwork] Signals:', JSON.stringify(signals, null, 2));
-              
+              console.log(
+                "[useMeshNetwork] ========== SIGNALS RECEIVED ==========",
+              );
+              console.log("[useMeshNetwork] Signal count:", signals.length);
+              console.log(
+                "[useMeshNetwork] Signals:",
+                JSON.stringify(signals, null, 2),
+              );
+
               useMeshNetworkLogger.info(
                 `Received ${signals.length} signals from Room`,
               );
               for (const sig of signals) {
-                console.log('[useMeshNetwork] Processing signal:', {
+                console.log("[useMeshNetwork] Processing signal:", {
                   type: sig.type,
                   from: sig.from,
-                  signalType: typeof sig.signal
+                  signalType: typeof sig.signal,
                 });
-                
+
                 try {
                   const signalData =
                     typeof sig.signal === "string"
                       ? JSON.parse(sig.signal)
                       : sig.signal;
-                  
-                  console.log('[useMeshNetwork] Parsed signal data:', {
+
+                  console.log("[useMeshNetwork] Parsed signal data:", {
                     type: signalData.type,
                     hasSdp: !!signalData.sdp,
-                    keys: Object.keys(signalData)
+                    keys: Object.keys(signalData),
                   });
 
                   if (sig.type === "offer" || signalData.type === "offer") {
-                    console.log('[useMeshNetwork] 📥 Processing OFFER from', sig.from);
+                    console.log(
+                      "[useMeshNetwork] 📥 Processing OFFER from",
+                      sig.from,
+                    );
                     // IMPORTANT: preserve the raw offer payload shape expected by MeshNetwork.
                     // If the room stored a string, use that string; otherwise re-stringify.
                     const rawOffer =
@@ -1636,14 +1890,24 @@ export function useMeshNetwork() {
                         ? sig.signal
                         : JSON.stringify(sig.signal);
 
-                    useMeshNetworkLogger.info(`📥 Received OFFER from ${sig.from}`);
+                    useMeshNetworkLogger.info(
+                      `📥 Received OFFER from ${sig.from}`,
+                    );
 
                     const answerJson =
-                      await meshNetworkRef.current!.acceptManualConnection(rawOffer);
+                      await meshNetworkRef.current!.acceptManualConnection(
+                        rawOffer,
+                      );
 
-                    useMeshNetworkLogger.info(`📤 Sending ANSWER to ${sig.from}`);
-                    await roomClientRef.current!.signal(sig.from, "answer", answerJson);
-                    console.log('[useMeshNetwork] ✅ Answer sent to', sig.from);
+                    useMeshNetworkLogger.info(
+                      `📤 Sending ANSWER to ${sig.from}`,
+                    );
+                    await roomClientRef.current!.signal(
+                      sig.from,
+                      "answer",
+                      answerJson,
+                    );
+                    console.log("[useMeshNetwork] ✅ Answer sent to", sig.from);
                     useMeshNetworkLogger.info(`Answer sent to ${sig.from}`);
 
                     // Refresh connected peers state (some WebRTC stacks connect immediately after answering)
@@ -1663,17 +1927,27 @@ export function useMeshNetwork() {
                     sig.type === "answer" ||
                     signalData.type === "answer"
                   ) {
-                    console.log('[useMeshNetwork] 📥 Processing ANSWER from', sig.from);
+                    console.log(
+                      "[useMeshNetwork] 📥 Processing ANSWER from",
+                      sig.from,
+                    );
                     // IMPORTANT: preserve the raw answer payload shape expected by MeshNetwork.
                     const rawAnswer =
                       typeof sig.signal === "string"
                         ? sig.signal
                         : JSON.stringify(sig.signal);
 
-                    useMeshNetworkLogger.info(`📥 Received ANSWER from ${sig.from}`);
+                    useMeshNetworkLogger.info(
+                      `📥 Received ANSWER from ${sig.from}`,
+                    );
 
-                    await meshNetworkRef.current!.finalizeManualConnection(rawAnswer);
-                    console.log('[useMeshNetwork] ✅ Connection finalized with', sig.from);
+                    await meshNetworkRef.current!.finalizeManualConnection(
+                      rawAnswer,
+                    );
+                    console.log(
+                      "[useMeshNetwork] ✅ Connection finalized with",
+                      sig.from,
+                    );
                     useMeshNetworkLogger.info(
                       `Connection finalized with ${sig.from}`,
                     );
@@ -1699,9 +1973,12 @@ export function useMeshNetwork() {
                     useMeshNetworkLogger.debug(
                       `📥 Received ICE candidate from ${sig.from}`,
                     );
-                    
-                    if (meshNetworkRef.current && 
-                        typeof (meshNetworkRef.current as any).handleIceCandidate === "function") {
+
+                    if (
+                      meshNetworkRef.current &&
+                      typeof (meshNetworkRef.current as any)
+                        .handleIceCandidate === "function"
+                    ) {
                       await (meshNetworkRef.current as any).handleIceCandidate(
                         sig.from,
                         signalData.candidate || signalData,
@@ -1727,9 +2004,14 @@ export function useMeshNetwork() {
         pollLoop();
       } catch (error) {
         // Extract meaningful error info for logging
-        const errorInfo = error instanceof Error 
-          ? { message: error.message, name: error.name, stack: error.stack?.split('\n').slice(0, 3).join('\n') }
-          : String(error);
+        const errorInfo =
+          error instanceof Error
+            ? {
+                message: error.message,
+                name: error.name,
+                stack: error.stack?.split("\n").slice(0, 3).join("\n"),
+              }
+            : String(error);
         useMeshNetworkLogger.error("Failed to join room:", errorInfo);
         setJoinError(error instanceof Error ? error.message : String(error));
         setIsJoinedToRoom(false);

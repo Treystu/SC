@@ -35,7 +35,8 @@ export class RoomClient {
         // In test environments, provide a safe fallback rather than throwing.
         if (process.env.NODE_ENV === "test") {
           if (action === "join") return { peers: [] };
-          if (action === "poll") return { signals: [], messages: [], peers: [] };
+          if (action === "poll")
+            return { signals: [], messages: [], peers: [] };
           return {};
         }
         throw new Error("fetch is not defined");
@@ -59,12 +60,13 @@ export class RoomClient {
     } catch (error) {
       const isNetworkError =
         error instanceof TypeError && error.message === "Failed to fetch";
-      
+
       // Extract meaningful error info for logging
-      const errorInfo = error instanceof Error 
-        ? { message: error.message, name: error.name, stack: error.stack }
-        : String(error);
-      
+      const errorInfo =
+        error instanceof Error
+          ? { message: error.message, name: error.name, stack: error.stack }
+          : String(error);
+
       if (isNetworkError) {
         console.warn(
           `RoomClient ${action} network error (offline or server down):`,
@@ -90,23 +92,51 @@ export class RoomClient {
     });
   }
 
-  async message(content: string): Promise<{ messageId: string; timestamp: string }> {
+  async message(
+    content: string,
+  ): Promise<{ messageId: string; timestamp: string }> {
     const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
-    const data = await this.request("message", { 
-      content, 
-      messageId 
+
+    const data = await this.request("message", {
+      content,
+      messageId,
     });
-    
+
     return {
       messageId: data.messageId || messageId,
-      timestamp: data.timestamp || new Date().toISOString()
+      timestamp: data.timestamp || new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Send a direct message via server relay (fallback when P2P WebRTC fails)
+   * The content should already be encrypted end-to-end by the caller
+   */
+  async dm(
+    to: string,
+    content: string,
+  ): Promise<{ messageId: string; timestamp: string; relayed: boolean }> {
+    const messageId = `dm_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    // Normalize recipient ID
+    const normalizedTo = to.replace(/\s/g, "").toUpperCase();
+
+    const data = await this.request("dm", {
+      to: normalizedTo,
+      content,
+      messageId,
+    });
+
+    return {
+      messageId: data.messageId || messageId,
+      timestamp: data.timestamp || new Date().toISOString(),
+      relayed: true,
     };
   }
 
   async poll(): Promise<{
     signals: RoomSignal[];
     messages: RoomMessage[];
+    dms: RoomMessage[]; // Relayed direct messages
     peers: RoomDisplayPeer[];
   }> {
     // Safe Polling: Always ask for the last 120 seconds of messages.
@@ -124,6 +154,7 @@ export class RoomClient {
     return {
       signals: data.signals || [],
       messages: data.messages || [],
+      dms: data.dms || [], // Relayed direct messages
       peers: data.peers || [],
     };
   }
