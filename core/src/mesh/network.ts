@@ -780,25 +780,65 @@ export class MeshNetwork {
    */
   private async ensureTransportConnection(peerId: string): Promise<void> {
     const normalizedPeerId = peerId.replace(/\s/g, "").toUpperCase();
-    const peer = this.routingTable.getPeer(normalizedPeerId);
+    console.log(`[MeshNetwork] 🔗 Ensuring transport connection to ${normalizedPeerId}`);
 
-    if (!peer || peer.state !== 'connected') {
-      return; // No routing entry or not marked as connected
-    }
-
-    // Check if transport connection exists
+    // Check if transport connection already exists
     let transportConnected = false;
     for (const transport of [this.webrtcTransport, this.mockTransport].filter(Boolean)) {
       if (transport && transport.getConnectionState && transport.getConnectionState(normalizedPeerId) === 'connected') {
         transportConnected = true;
+        console.log(`[MeshNetwork] ✅ Transport connection already exists for ${normalizedPeerId}`);
         break;
       }
     }
 
-    // If routing table says connected but transport isn't, establish transport connection
-    if (!transportConnected && this.mockTransport) {
-      console.log(`[MeshNetwork] 🔧 Syncing transport connection for ${normalizedPeerId}`);
-      this.mockTransport.forceConnect(normalizedPeerId);
+    // If no transport connection, establish one
+    if (!transportConnected) {
+      console.log(`[MeshNetwork] 🔧 Establishing transport connection for ${normalizedPeerId}`);
+
+      // Try using the TransportManager to establish connection
+      try {
+        await this.transportManager.connect(normalizedPeerId, "webrtc");
+        console.log(`[MeshNetwork] ✅ Transport connection established for ${normalizedPeerId}`);
+
+        // Update routing table to reflect connection
+        const existingPeer = this.routingTable.getPeer(normalizedPeerId);
+        if (existingPeer) {
+          existingPeer.state = PeerState.CONNECTED;
+          existingPeer.lastSeen = Date.now();
+        } else {
+          // Add peer to routing table if not exists
+          this.routingTable.addPeer(createPeer(
+            normalizedPeerId,
+            new Uint8Array(), // Will be updated when available
+            "webrtc",
+          ));
+        }
+      } catch (err) {
+        console.warn(`[MeshNetwork] ⚠️ Transport connection failed for ${normalizedPeerId}:`, err);
+
+        // Fall back to MockTransport if available
+        if (this.mockTransport && this.mockTransport.forceConnect) {
+          this.mockTransport.forceConnect(normalizedPeerId);
+          console.log(`[MeshNetwork] ✅ MockTransport fallback connection established for ${normalizedPeerId}`);
+
+          // Update routing table
+          const existingPeer = this.routingTable.getPeer(normalizedPeerId);
+          if (existingPeer) {
+            existingPeer.state = PeerState.CONNECTED;
+            existingPeer.lastSeen = Date.now();
+          } else {
+            this.routingTable.addPeer(createPeer(
+              normalizedPeerId,
+              new Uint8Array(),
+              "webrtc",
+            ));
+          }
+        } else {
+          console.error(`[MeshNetwork] ❌ No transport available to establish connection to ${normalizedPeerId}`);
+          throw new Error(`No transport available to establish connection to ${normalizedPeerId}`);
+        }
+      }
     }
   }
 
@@ -904,6 +944,7 @@ export class MeshNetwork {
     recipientId: string,
     content: string,
     type: MessageType = MessageType.TEXT,
+    isRetry: boolean = false,
   ): Promise<void> {
     // Normalize recipient ID to uppercase for consistent matching
     const normalizedRecipientId = recipientId.replace(/\s/g, "").toUpperCase();
@@ -979,9 +1020,30 @@ export class MeshNetwork {
 
       if (connectedPeers.length === 0) {
         console.warn(
-          `[MeshNetwork] No connected peers! Using sneakernet storage for ${recipientId}.`,
+          `[MeshNetwork] ❌ CRITICAL: No connected peers for private messaging to ${recipientId}!`,
         );
-        
+
+        // ENHANCED: Attempt to establish connection to recipient before giving up
+        console.log(`[MeshNetwork] 🔄 Attempting direct connection to ${recipientId} before fallback...`);
+        try {
+          await this.connectToPeer(normalizedRecipientId);
+
+          // Re-check if connection was established
+          const updatedConnectedPeers = this.routingTable
+            .getAllPeers()
+            .filter((p) => p.state === "connected" && p.id !== this.localPeerId);
+
+          if (updatedConnectedPeers.length > 0 && !isRetry) {
+            console.log(`[MeshNetwork] ✅ Connection established! Retrying message send to ${recipientId}`);
+            // Retry message sending with newly established connection (prevent infinite recursion)
+            return this.sendMessage(recipientId, content, type, true);
+          }
+        } catch (connectError) {
+          console.error(`[MeshNetwork] ❌ Direct connection attempt failed:`, connectError);
+        }
+
+        console.warn(`[MeshNetwork] 📦 Falling back to sneakernet storage for ${recipientId}`);
+
         // SNEAKERNET: Store message for later delivery via any available peer
         try {
           await this.messageRelay.storeMessage(message, normalizedRecipientId);
