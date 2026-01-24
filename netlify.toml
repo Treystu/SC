@@ -5,8 +5,8 @@
 base = "."
 
 # Build command (executed in the base directory)
-# Reinstall to ensure correct platform-specific binaries (fixes rollup cache issues)
-command = "rm -rf node_modules web/node_modules core/node_modules && npm install && npm run build"
+# This runs "npm run build --workspaces" defined in root package.json
+command = "npm run build"
 
 # Publish directory (relative to the base directory)
 publish = "web/dist"
