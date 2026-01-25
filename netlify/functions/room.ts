@@ -223,9 +223,10 @@ export const handler: Handler = async (event, context) => {
         }
 
         // Fetch pending relayed DMs for this peer
+        // IMPORTANT: Exclude messages FROM this peer (loopback prevention)
         const dmsCollection = db.collection("dms");
         const pendingDms = await dmsCollection
-          .find({ to: peerId, read: false })
+          .find({ to: peerId, from: { $ne: peerId }, read: false })
           .sort({ timestamp: 1 }) // Oldest first for correct order
           .limit(100)
           .toArray();
@@ -348,6 +349,18 @@ export const handler: Handler = async (event, context) => {
         console.log(
           `[${requestId}] Relaying DM ${finalMessageId} from ${peerId} to ${to}`,
         );
+
+        // VALIDATION: Prevent self-sending (belt and suspenders)
+        if (peerId === to) {
+          console.warn(
+            `[${requestId}] Rejected self-send DM attempt: from=${peerId} to=${to}`,
+          );
+          return {
+            statusCode: 400,
+            headers: CORS_HEADERS,
+            body: JSON.stringify({ error: "Cannot send DM to yourself" }),
+          };
+        }
 
         // Store in a separate "dms" collection for private messages
         const dmsCollection = db.collection("dms");
