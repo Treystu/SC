@@ -1,5 +1,5 @@
 import { Handler } from "@netlify/functions";
-import { connectToDatabase } from "./utils/db";
+import { connectToDatabase, cleanupExpiredData } from "./utils/db";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -62,6 +62,9 @@ export const handler: Handler = async (event, context) => {
     console.log(`[${requestId}] Connecting to database...`);
     const db = await connectToDatabase();
     console.log(`[${requestId}] Database connected successfully`);
+
+    // Cleanup expired data periodically (in-memory adapter only)
+    cleanupExpiredData();
 
     const peersCollection = db.collection("peers");
     const signalsCollection = db.collection("signals");
