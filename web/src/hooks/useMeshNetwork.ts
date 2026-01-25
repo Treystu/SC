@@ -14,6 +14,11 @@ import {
   offlineQueue,
 } from "@sc/core";
 import { RoomClient } from "../utils/RoomClient";
+import {
+  extractMessageText,
+  parseMessagePayload,
+  isLoopbackMessage,
+} from "../utils/messageParser";
 import { useMeshNetworkLogger } from "../utils/unifiedLogger";
 
 /**
@@ -219,45 +224,8 @@ export function useMeshNetwork() {
             const data = JSON.parse(payload);
             console.log("[useMeshNetwork] Parsed data:", data);
 
-            let contentText: string = "";
-            try {
-              if (typeof data?.text === "string") {
-                // Common case: { text: "hello" }
-                // Also handle nested JSON string case: { text: "{\"text\":\"hello\"}" }
-                const raw = data.text;
-                try {
-                  const maybeObj = JSON.parse(raw);
-                  if (maybeObj && typeof maybeObj === "object") {
-                    if (typeof (maybeObj as any).text === "string") {
-                      contentText = (maybeObj as any).text;
-                    } else if (
-                      (maybeObj as any).text &&
-                      typeof (maybeObj as any).text === "object" &&
-                      typeof (maybeObj as any).text.text === "string"
-                    ) {
-                      contentText = (maybeObj as any).text.text;
-                    } else {
-                      contentText = raw;
-                    }
-                  } else {
-                    contentText = raw;
-                  }
-                } catch {
-                  contentText = raw;
-                }
-              } else if (data?.text && typeof data.text === "object") {
-                // Nested wrapper case: { text: { text: "hello", ... }, ... }
-                if (typeof (data.text as any).text === "string") {
-                  contentText = (data.text as any).text;
-                } else {
-                  contentText = JSON.stringify(data.text);
-                }
-              } else {
-                contentText = "";
-              }
-            } catch (e) {
-              contentText = "";
-            }
+            // Use unified message parser for consistent text extraction
+            const contentText = extractMessageText(data);
 
             // Extract sender ID from public key using utility function
             const senderId = extractPeerId(message.header.senderId);
@@ -1766,62 +1734,31 @@ export function useMeshNetwork() {
                 try {
                   const senderId = dm.from;
 
-                  // LOOPBACK PREVENTION: Skip messages from self
-                  // This prevents echoed messages when relay delivers our own messages back
-                  const normalizedSenderId = senderId
-                    ?.replace(/\s/g, "")
-                    .toUpperCase();
-                  const normalizedLocalId = localPeerId
-                    .replace(/\s/g, "")
-                    .toUpperCase();
-                  if (normalizedSenderId === normalizedLocalId) {
+                  // LOOPBACK PREVENTION: Skip messages from self using unified utility
+                  if (isLoopbackMessage(senderId, localPeerId)) {
                     console.log(
                       `[useMeshNetwork] Skipping loopback relayed DM from self: ${dm.id}`,
                     );
                     continue;
                   }
 
-                  // Parse the message content (it's a JSON payload)
-                  // Handle various content formats defensively
-                  let parsedContent: { text?: string; timestamp?: number } = {};
-                  let messageText = "";
-
-                  try {
-                    if (typeof dm.content === "string") {
-                      // Try to parse as JSON first
-                      parsedContent = JSON.parse(dm.content);
-                      // Extract text from parsed content
-                      if (typeof parsedContent.text === "string") {
-                        messageText = parsedContent.text;
-                      } else if (typeof parsedContent === "string") {
-                        messageText = parsedContent;
-                      } else {
-                        messageText = dm.content;
-                      }
-                    } else if (
-                      typeof dm.content === "object" &&
-                      dm.content !== null
-                    ) {
-                      parsedContent = dm.content as any;
-                      messageText =
-                        (parsedContent as any).text ||
-                        JSON.stringify(dm.content);
-                    }
-                  } catch {
-                    // If JSON parsing fails, use the raw content as the message
-                    messageText =
-                      typeof dm.content === "string"
-                        ? dm.content
-                        : JSON.stringify(dm.content);
-                    console.log(
-                      `[useMeshNetwork] DM content is not JSON, using raw: ${messageText.substring(0, 50)}`,
-                    );
-                  }
+                  // Parse message content using unified parser
+                  const parsed = parseMessagePayload(dm.content);
+                  const messageText = parsed.text;
+                  const messageTimestamp = parsed.timestamp || Date.now();
 
                   console.log(
                     `[useMeshNetwork] Processing relayed DM from ${senderId}:`,
                     messageText?.substring(0, 50),
                   );
+
+                  // Skip empty messages (likely metadata-only or malformed)
+                  if (!messageText) {
+                    console.warn(
+                      `[useMeshNetwork] Skipping relayed DM with empty content: ${dm.id}`,
+                    );
+                    continue;
+                  }
 
                   // Create message object for UI
                   const receivedMessage: ReceivedMessage = {
@@ -1830,7 +1767,7 @@ export function useMeshNetwork() {
                     to: localPeerId,
                     conversationId: senderId,
                     content: messageText,
-                    timestamp: parsedContent.timestamp || Date.now(),
+                    timestamp: messageTimestamp,
                     type: MessageType.TEXT,
                     status: "delivered",
                   };
@@ -1875,7 +1812,7 @@ export function useMeshNetwork() {
                   }
 
                   useMeshNetworkLogger.info(
-                    `[Relay] Received DM from ${senderId}: "${parsedContent.text?.substring(0, 30)}..."`,
+                    `[Relay] Received DM from ${senderId}: "${messageText?.substring(0, 30)}..."`,
                   );
                 } catch (dmError) {
                   console.error(
