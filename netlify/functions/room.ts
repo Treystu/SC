@@ -197,10 +197,11 @@ export const handler: Handler = async (event, context) => {
         // Quiet logging for poll to reduce noise, unless specific debug flag
         // console.log(`[${requestId}] polling for ${peerId}`);
 
-        // Update heartbeat
+        // Update heartbeat (with upsert to ensure presence persists)
         await peersCollection.updateOne(
           { _id: peerId },
           { $set: { lastSeen: new Date() } },
+          { upsert: true },
         );
 
         // Fetch unread signals

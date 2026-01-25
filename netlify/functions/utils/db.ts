@@ -37,6 +37,10 @@ class BlobsCollection {
       // Key: to/timestamp-random
       return `${doc.to}/${Date.now()}-${generateId()}`;
     }
+    if (this.name === "dms" && doc.to) {
+      // Key: to/timestamp-random (same strategy as signals for efficient recipient lookup)
+      return `${doc.to}/${Date.now()}-${generateId()}`;
+    }
     if (this.name === "messages" && doc.timestamp) {
       // Key: timestamp-random
       const ts = new Date(doc.timestamp).toISOString();
@@ -102,6 +106,11 @@ class BlobsCollection {
 
     // Signals query: { to: peerId, ... } -> use prefix "peerId/"
     if (this.name === "signals" && filter.to && typeof filter.to === "string") {
+      prefix = `${filter.to}/`;
+    }
+
+    // DMs query: { to: peerId, ... } -> use prefix "peerId/"
+    if (this.name === "dms" && filter.to && typeof filter.to === "string") {
       prefix = `${filter.to}/`;
     }
 
