@@ -11,18 +11,20 @@
  * 3. Eternal Ledger: Maintain persistent node history that survives identity resets
  */
 
-import { EternalLedger, KnownNode } from './ledger.js';
+import { EternalLedger, KnownNode } from "./ledger.js";
+import { NodeProfile } from "../relay/NodeProfiler.js";
 
 export interface MeshNeighbor {
   peerId: string;
   publicKey?: string;
-  transportType: 'webrtc' | 'ble' | 'local' | 'dht';
+  transportType: "webrtc" | "ble" | "local" | "dht";
   connectedAt: number;
   lastActivity: number;
-  connectionQuality: 'excellent' | 'good' | 'poor' | 'offline';
-  relayCapable: boolean;          // Can this peer relay messages?
-  bytesRelayed: number;           // How much data have we relayed through this peer?
-  source: 'discovery' | 'dht' | 'ledger' | 'manual';
+  connectionQuality: "excellent" | "good" | "poor" | "offline";
+  relayCapable: boolean; // Can this peer relay messages?
+  bytesRelayed: number; // How much data have we relayed through this peer?
+  source: "discovery" | "dht" | "ledger" | "manual";
+  profile?: NodeProfile; // Phase 2 reliability info
 }
 
 export interface PotentialSocialContact {
@@ -31,9 +33,9 @@ export interface PotentialSocialContact {
   publicKey?: string;
   discoveredAt: number;
   discoverySource: string;
-  hasMessaged: boolean;           // Have they sent us a message?
-  messageCount: number;           // How many messages have they sent?
-  promoted: boolean;              // Has user promoted this to a contact?
+  hasMessaged: boolean; // Have they sent us a message?
+  messageCount: number; // How many messages have they sent?
+  promoted: boolean; // Has user promoted this to a contact?
 }
 
 export interface SilentMeshStats {
@@ -50,7 +52,7 @@ export interface WateringHoleMessage {
   message: Uint8Array;
   storedAt: number;
   expiresAt: number;
-  gatewayIds: string[];           // Gateways where destination was last seen
+  gatewayIds: string[]; // Gateways where destination was last seen
   deliveryAttempts: number;
 }
 
@@ -74,7 +76,9 @@ export class SilentMeshManager {
   // Callbacks
   private onMeshNeighborConnectedCallback?: (neighbor: MeshNeighbor) => void;
   private onMeshNeighborDisconnectedCallback?: (peerId: string) => void;
-  private onPotentialContactDiscoveredCallback?: (contact: PotentialSocialContact) => void;
+  private onPotentialContactDiscoveredCallback?: (
+    contact: PotentialSocialContact,
+  ) => void;
 
   constructor(ledger?: EternalLedger) {
     this.ledger = ledger || new EternalLedger();
@@ -87,12 +91,13 @@ export class SilentMeshManager {
     peerId: string,
     options: {
       publicKey?: string;
-      transportType?: 'webrtc' | 'ble' | 'local' | 'dht';
-      source?: 'discovery' | 'dht' | 'ledger' | 'manual';
+      transportType?: "webrtc" | "ble" | "local" | "dht";
+      source?: "discovery" | "dht" | "ledger" | "manual";
       relayCapable?: boolean;
-    } = {}
+      profile?: NodeProfile;
+    } = {},
   ): Promise<MeshNeighbor> {
-    const normalizedId = peerId.replace(/\s/g, '').toUpperCase();
+    const normalizedId = peerId.replace(/\s/g, "").toUpperCase();
     const now = Date.now();
 
     // Check if already a neighbor
@@ -102,7 +107,8 @@ export class SilentMeshManager {
       // Update existing neighbor
       neighbor.lastActivity = now;
       if (options.publicKey) neighbor.publicKey = options.publicKey;
-      if (options.relayCapable !== undefined) neighbor.relayCapable = options.relayCapable;
+      if (options.relayCapable !== undefined)
+        neighbor.relayCapable = options.relayCapable;
     } else {
       // Enforce size limit
       if (this.meshNeighbors.size >= SilentMeshManager.MAX_MESH_NEIGHBORS) {
@@ -113,13 +119,14 @@ export class SilentMeshManager {
       neighbor = {
         peerId: normalizedId,
         publicKey: options.publicKey,
-        transportType: options.transportType || 'webrtc',
+        transportType: options.transportType || "webrtc",
         connectedAt: now,
         lastActivity: now,
-        connectionQuality: 'good',
+        connectionQuality: "good",
         relayCapable: options.relayCapable ?? true,
         bytesRelayed: 0,
-        source: options.source || 'discovery',
+        source: options.source || "discovery",
+        profile: options.profile,
       };
 
       this.meshNeighbors.set(normalizedId, neighbor);
@@ -128,9 +135,12 @@ export class SilentMeshManager {
       await this.ledger.recordNodeSighting(normalizedId, {
         publicKey: options.publicKey,
         connectionSuccessful: true,
+        profile: options.profile,
       });
 
-      console.log(`[SilentMesh] 🔗 Added mesh neighbor: ${normalizedId.substring(0, 8)}... (total: ${this.meshNeighbors.size})`);
+      console.log(
+        `[SilentMesh] 🔗 Added mesh neighbor: ${normalizedId.substring(0, 8)}... (total: ${this.meshNeighbors.size})`,
+      );
 
       // Notify callback (for logs/diagnostics, NOT for UI contact lists)
       this.onMeshNeighborConnectedCallback?.(neighbor);
@@ -143,12 +153,14 @@ export class SilentMeshManager {
    * Remove a mesh neighbor (disconnect)
    */
   removeMeshNeighbor(peerId: string): void {
-    const normalizedId = peerId.replace(/\s/g, '').toUpperCase();
+    const normalizedId = peerId.replace(/\s/g, "").toUpperCase();
     const neighbor = this.meshNeighbors.get(normalizedId);
 
     if (neighbor) {
       this.meshNeighbors.delete(normalizedId);
-      console.log(`[SilentMesh] 🔌 Removed mesh neighbor: ${normalizedId.substring(0, 8)}...`);
+      console.log(
+        `[SilentMesh] 🔌 Removed mesh neighbor: ${normalizedId.substring(0, 8)}...`,
+      );
       this.onMeshNeighborDisconnectedCallback?.(normalizedId);
     }
   }
@@ -171,15 +183,16 @@ export class SilentMeshManager {
    * Get active mesh neighbors (connected and responding)
    */
   getActiveMeshNeighbors(): MeshNeighbor[] {
-    return Array.from(this.meshNeighbors.values())
-      .filter(n => n.connectionQuality !== 'offline');
+    return Array.from(this.meshNeighbors.values()).filter(
+      (n) => n.connectionQuality !== "offline",
+    );
   }
 
   /**
    * Update mesh neighbor activity (on message received/sent)
    */
   updateNeighborActivity(peerId: string, bytesTransferred: number = 0): void {
-    const normalizedId = peerId.replace(/\s/g, '').toUpperCase();
+    const normalizedId = peerId.replace(/\s/g, "").toUpperCase();
     const neighbor = this.meshNeighbors.get(normalizedId);
 
     if (neighbor) {
@@ -191,18 +204,23 @@ export class SilentMeshManager {
   /**
    * Update mesh neighbor connection quality
    */
-  updateNeighborQuality(peerId: string, quality: 'excellent' | 'good' | 'poor' | 'offline'): void {
-    const normalizedId = peerId.replace(/\s/g, '').toUpperCase();
+  updateNeighborQuality(
+    peerId: string,
+    quality: "excellent" | "good" | "poor" | "offline",
+  ): void {
+    const normalizedId = peerId.replace(/\s/g, "").toUpperCase();
     const neighbor = this.meshNeighbors.get(normalizedId);
 
     if (neighbor) {
       neighbor.connectionQuality = quality;
 
       // Mark in ledger if connection failed
-      if (quality === 'offline') {
-        this.ledger.recordNodeSighting(normalizedId, {
-          connectionSuccessful: false,
-        }).catch(console.error);
+      if (quality === "offline") {
+        this.ledger
+          .recordNodeSighting(normalizedId, {
+            connectionSuccessful: false,
+          })
+          .catch(console.error);
       }
     }
   }
@@ -217,9 +235,9 @@ export class SilentMeshManager {
       displayName?: string;
       publicKey?: string;
       discoverySource?: string;
-    } = {}
+    } = {},
   ): Promise<PotentialSocialContact> {
-    const normalizedId = peerId.replace(/\s/g, '').toUpperCase();
+    const normalizedId = peerId.replace(/\s/g, "").toUpperCase();
 
     let contact = this.potentialContacts.get(normalizedId);
 
@@ -229,7 +247,9 @@ export class SilentMeshManager {
       if (options.publicKey) contact.publicKey = options.publicKey;
     } else {
       // Enforce size limit
-      if (this.potentialContacts.size >= SilentMeshManager.MAX_POTENTIAL_CONTACTS) {
+      if (
+        this.potentialContacts.size >= SilentMeshManager.MAX_POTENTIAL_CONTACTS
+      ) {
         this.pruneOldPotentialContacts();
       }
 
@@ -239,7 +259,7 @@ export class SilentMeshManager {
         displayName: options.displayName,
         publicKey: options.publicKey,
         discoveredAt: Date.now(),
-        discoverySource: options.discoverySource || 'mesh',
+        discoverySource: options.discoverySource || "mesh",
         hasMessaged: false,
         messageCount: 0,
         promoted: false,
@@ -247,7 +267,9 @@ export class SilentMeshManager {
 
       this.potentialContacts.set(normalizedId, contact);
 
-      console.log(`[SilentMesh] 👤 Recorded potential contact: ${normalizedId.substring(0, 8)}...`);
+      console.log(
+        `[SilentMesh] 👤 Recorded potential contact: ${normalizedId.substring(0, 8)}...`,
+      );
 
       // Notify callback
       this.onPotentialContactDiscoveredCallback?.(contact);
@@ -261,7 +283,7 @@ export class SilentMeshManager {
    * This still does NOT create a UI contact automatically
    */
   recordIncomingMessage(peerId: string): void {
-    const normalizedId = peerId.replace(/\s/g, '').toUpperCase();
+    const normalizedId = peerId.replace(/\s/g, "").toUpperCase();
     const contact = this.potentialContacts.get(normalizedId);
 
     if (contact) {
@@ -270,7 +292,7 @@ export class SilentMeshManager {
     } else {
       // Create potential contact record
       this.recordPotentialContact(normalizedId, {
-        discoverySource: 'incoming_message',
+        discoverySource: "incoming_message",
       }).catch(console.error);
     }
   }
@@ -280,12 +302,14 @@ export class SilentMeshManager {
    * Called when user explicitly adds them or accepts their message
    */
   markAsPromoted(peerId: string): void {
-    const normalizedId = peerId.replace(/\s/g, '').toUpperCase();
+    const normalizedId = peerId.replace(/\s/g, "").toUpperCase();
     const contact = this.potentialContacts.get(normalizedId);
 
     if (contact) {
       contact.promoted = true;
-      console.log(`[SilentMesh] ⬆️ Promoted to contact: ${normalizedId.substring(0, 8)}...`);
+      console.log(
+        `[SilentMesh] ⬆️ Promoted to contact: ${normalizedId.substring(0, 8)}...`,
+      );
     }
   }
 
@@ -294,8 +318,9 @@ export class SilentMeshManager {
    * These are "message requests" in the UI
    */
   getPendingMessageRequests(): PotentialSocialContact[] {
-    return Array.from(this.potentialContacts.values())
-      .filter(c => c.hasMessaged && !c.promoted);
+    return Array.from(this.potentialContacts.values()).filter(
+      (c) => c.hasMessaged && !c.promoted,
+    );
   }
 
   /**
@@ -316,16 +341,23 @@ export class SilentMeshManager {
     messageId: string,
     destinationPeerId: string,
     message: Uint8Array,
-    gatewayIds: string[] = []
+    gatewayIds: string[] = [],
   ): Promise<void> {
     // Enforce size limit
-    if (this.wateringHoleQueue.size >= SilentMeshManager.MAX_WATERING_HOLE_MESSAGES) {
+    if (
+      this.wateringHoleQueue.size >=
+      SilentMeshManager.MAX_WATERING_HOLE_MESSAGES
+    ) {
       this.pruneExpiredWateringHoleMessages();
 
       // If still over limit, remove oldest
-      if (this.wateringHoleQueue.size >= SilentMeshManager.MAX_WATERING_HOLE_MESSAGES) {
-        const oldest = Array.from(this.wateringHoleQueue.entries())
-          .sort((a, b) => a[1].storedAt - b[1].storedAt)[0];
+      if (
+        this.wateringHoleQueue.size >=
+        SilentMeshManager.MAX_WATERING_HOLE_MESSAGES
+      ) {
+        const oldest = Array.from(this.wateringHoleQueue.entries()).sort(
+          (a, b) => a[1].storedAt - b[1].storedAt,
+        )[0];
         if (oldest) {
           this.wateringHoleQueue.delete(oldest[0]);
         }
@@ -333,7 +365,9 @@ export class SilentMeshManager {
     }
 
     const now = Date.now();
-    const normalizedDestination = destinationPeerId.replace(/\s/g, '').toUpperCase();
+    const normalizedDestination = destinationPeerId
+      .replace(/\s/g, "")
+      .toUpperCase();
 
     // Get gateways from ledger if not provided
     if (gatewayIds.length === 0) {
@@ -353,15 +387,19 @@ export class SilentMeshManager {
       deliveryAttempts: 0,
     });
 
-    console.log(`[SilentMesh] 💧 Stored watering hole message for ${normalizedDestination.substring(0, 8)}... (gateways: ${gatewayIds.length})`);
+    console.log(
+      `[SilentMesh] 💧 Stored watering hole message for ${normalizedDestination.substring(0, 8)}... (gateways: ${gatewayIds.length})`,
+    );
   }
 
   /**
    * Check for watering hole messages when a peer connects
    * Returns messages that should be attempted for delivery through this peer
    */
-  async checkWateringHoleDelivery(connectedPeerId: string): Promise<WateringHoleMessage[]> {
-    const normalizedPeerId = connectedPeerId.replace(/\s/g, '').toUpperCase();
+  async checkWateringHoleDelivery(
+    connectedPeerId: string,
+  ): Promise<WateringHoleMessage[]> {
+    const normalizedPeerId = connectedPeerId.replace(/\s/g, "").toUpperCase();
     const messagesToDeliver: WateringHoleMessage[] = [];
     const now = Date.now();
 
@@ -385,7 +423,9 @@ export class SilentMeshManager {
     }
 
     if (messagesToDeliver.length > 0) {
-      console.log(`[SilentMesh] 💧 Found ${messagesToDeliver.length} watering hole messages for delivery via ${normalizedPeerId.substring(0, 8)}...`);
+      console.log(
+        `[SilentMesh] 💧 Found ${messagesToDeliver.length} watering hole messages for delivery via ${normalizedPeerId.substring(0, 8)}...`,
+      );
     }
 
     return messagesToDeliver;
@@ -396,7 +436,9 @@ export class SilentMeshManager {
    */
   markWateringHoleDelivered(messageId: string): void {
     this.wateringHoleQueue.delete(messageId);
-    console.log(`[SilentMesh] ✅ Watering hole message delivered: ${messageId}`);
+    console.log(
+      `[SilentMesh] ✅ Watering hole message delivered: ${messageId}`,
+    );
   }
 
   /**
@@ -423,9 +465,9 @@ export class SilentMeshManager {
    * Returns recently active nodes from the ledger for quick reconnection
    */
   async getLightPingTargets(limit: number = 20): Promise<KnownNode[]> {
-    return this.ledger.getRecentlyActiveNodes(24 * 60 * 60 * 1000).then(
-      nodes => nodes.slice(0, limit)
-    );
+    return this.ledger
+      .getRecentlyActiveNodes(24 * 60 * 60 * 1000)
+      .then((nodes) => nodes.slice(0, limit));
   }
 
   /**
@@ -440,16 +482,18 @@ export class SilentMeshManager {
    */
   async performLightPing(
     connectCallback: (peerId: string) => Promise<boolean>,
-    maxParallel: number = 5
+    maxParallel: number = 5,
   ): Promise<{ attempted: number; successful: number; nodes: string[] }> {
     const targets = await this.getLightPingTargets(20);
 
     if (targets.length === 0) {
-      console.log('[SilentMesh] 📡 Light Ping: No known nodes in ledger');
+      console.log("[SilentMesh] 📡 Light Ping: No known nodes in ledger");
       return { attempted: 0, successful: 0, nodes: [] };
     }
 
-    console.log(`[SilentMesh] 📡 Light Ping: Attempting to reach ${targets.length} known nodes...`);
+    console.log(
+      `[SilentMesh] 📡 Light Ping: Attempting to reach ${targets.length} known nodes...`,
+    );
 
     const results = {
       attempted: 0,
@@ -461,7 +505,7 @@ export class SilentMeshManager {
     for (let i = 0; i < targets.length; i += maxParallel) {
       const batch = targets.slice(i, i + maxParallel);
 
-      const batchResults = await Promise.allSettled(
+      await Promise.allSettled(
         batch.map(async (node) => {
           results.attempted++;
 
@@ -478,7 +522,9 @@ export class SilentMeshManager {
                 connectionSuccessful: true,
               });
 
-              console.log(`[SilentMesh] 📡 Light Ping SUCCESS: ${node.nodeId.substring(0, 8)}...`);
+              console.log(
+                `[SilentMesh] 📡 Light Ping SUCCESS: ${node.nodeId.substring(0, 8)}...`,
+              );
             } else {
               // Update ledger with failed connection
               await this.ledger.recordNodeSighting(node.nodeId, {
@@ -488,7 +534,10 @@ export class SilentMeshManager {
 
             return success;
           } catch (error) {
-            console.warn(`[SilentMesh] 📡 Light Ping FAILED: ${node.nodeId.substring(0, 8)}...`, error);
+            console.warn(
+              `[SilentMesh] 📡 Light Ping FAILED: ${node.nodeId.substring(0, 8)}...`,
+              error,
+            );
 
             // Update ledger with failed connection
             await this.ledger.recordNodeSighting(node.nodeId, {
@@ -497,16 +546,18 @@ export class SilentMeshManager {
 
             return false;
           }
-        })
+        }),
       );
 
       // Small delay between batches to avoid flooding
       if (i + maxParallel < targets.length) {
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
     }
 
-    console.log(`[SilentMesh] 📡 Light Ping complete: ${results.successful}/${results.attempted} nodes responded`);
+    console.log(
+      `[SilentMesh] 📡 Light Ping complete: ${results.successful}/${results.attempted} nodes responded`,
+    );
 
     return results;
   }
@@ -525,11 +576,11 @@ export class SilentMeshManager {
    * Throttles discovery assertiveness based on power state and network conditions
    */
   getDiscoveryConfig(): {
-    pollInterval: number;      // How often to poll for peers (ms)
+    pollInterval: number; // How often to poll for peers (ms)
     maxParallelConnections: number;
     enableAggressiveDiscovery: boolean;
     lightPingEnabled: boolean;
-    lightPingInterval: number;  // How often to run Light Ping (ms)
+    lightPingInterval: number; // How often to run Light Ping (ms)
   } {
     // Detect power profile
     const isBattery = this.detectBatteryMode();
@@ -538,32 +589,32 @@ export class SilentMeshManager {
     if (isLowPower) {
       // Low Power Mode: Minimal activity
       return {
-        pollInterval: 60000,        // 1 minute
+        pollInterval: 60000, // 1 minute
         maxParallelConnections: 2,
         enableAggressiveDiscovery: false,
         lightPingEnabled: true,
-        lightPingInterval: 300000,  // 5 minutes
+        lightPingInterval: 300000, // 5 minutes
       };
     }
 
     if (isBattery) {
       // Battery Mode: Conservative
       return {
-        pollInterval: 30000,        // 30 seconds
+        pollInterval: 30000, // 30 seconds
         maxParallelConnections: 3,
         enableAggressiveDiscovery: false,
         lightPingEnabled: true,
-        lightPingInterval: 120000,  // 2 minutes
+        lightPingInterval: 120000, // 2 minutes
       };
     }
 
     // Plugged In: Aggressive
     return {
-      pollInterval: 5000,           // 5 seconds
+      pollInterval: 5000, // 5 seconds
       maxParallelConnections: 10,
       enableAggressiveDiscovery: true,
       lightPingEnabled: true,
-      lightPingInterval: 60000,     // 1 minute
+      lightPingInterval: 60000, // 1 minute
     };
   }
 
@@ -572,7 +623,7 @@ export class SilentMeshManager {
    */
   private detectBatteryMode(): boolean {
     // Check for Battery API (browser)
-    if (typeof navigator !== 'undefined' && 'getBattery' in navigator) {
+    if (typeof navigator !== "undefined" && "getBattery" in navigator) {
       // Note: Battery API is async, so this is a best-effort sync check
       // In practice, you'd want to cache the battery status
       return false; // Default to plugged in if we can't determine
@@ -587,16 +638,18 @@ export class SilentMeshManager {
    */
   private detectLowPowerMode(): boolean {
     // Check for reduce motion preference (often correlates with low power mode)
-    if (typeof window !== 'undefined' && window.matchMedia) {
-      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    if (typeof window !== "undefined" && window.matchMedia) {
+      const reducedMotion = window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+      );
       if (reducedMotion.matches) {
         return true;
       }
     }
 
     // Check for memory pressure (if available)
-    if (typeof navigator !== 'undefined' && 'deviceMemory' in navigator) {
-      const memory = (navigator as any).deviceMemory;
+    if (typeof navigator !== "undefined" && "deviceMemory" in navigator) {
+      const memory = (navigator as { deviceMemory?: number }).deviceMemory;
       if (memory && memory < 2) {
         return true; // Low memory device, assume low power
       }
@@ -618,7 +671,7 @@ export class SilentMeshManager {
 
     for (const neighbor of this.meshNeighbors.values()) {
       totalRelayedBytes += neighbor.bytesRelayed;
-      if (neighbor.connectionQuality !== 'offline') {
+      if (neighbor.connectionQuality !== "offline") {
         activeConnections++;
       }
     }
@@ -642,7 +695,9 @@ export class SilentMeshManager {
     this.onMeshNeighborDisconnectedCallback = callback;
   }
 
-  onPotentialContactDiscovered(callback: (contact: PotentialSocialContact) => void): void {
+  onPotentialContactDiscovered(
+    callback: (contact: PotentialSocialContact) => void,
+  ): void {
     this.onPotentialContactDiscoveredCallback = callback;
   }
 
@@ -681,7 +736,7 @@ export class SilentMeshManager {
 
     // Sort by age and remove oldest
     const sortedToRemove = toRemove
-      .map(id => ({ id, contact: this.potentialContacts.get(id)! }))
+      .map((id) => ({ id, contact: this.potentialContacts.get(id)! }))
       .sort((a, b) => a.contact.discoveredAt - b.contact.discoveredAt)
       .slice(0, 100);
 
@@ -690,7 +745,9 @@ export class SilentMeshManager {
     }
 
     if (sortedToRemove.length > 0) {
-      console.log(`[SilentMesh] Pruned ${sortedToRemove.length} old potential contacts`);
+      console.log(
+        `[SilentMesh] Pruned ${sortedToRemove.length} old potential contacts`,
+      );
     }
   }
 
@@ -706,7 +763,9 @@ export class SilentMeshManager {
     }
 
     if (pruned > 0) {
-      console.log(`[SilentMesh] Pruned ${pruned} expired watering hole messages`);
+      console.log(
+        `[SilentMesh] Pruned ${pruned} expired watering hole messages`,
+      );
     }
   }
 
@@ -718,12 +777,20 @@ export class SilentMeshManager {
   }
 
   /**
+   * Get a peer's profile from the ledger
+   */
+  async getPeerProfile(peerId: string): Promise<NodeProfile | undefined> {
+    const node = await this.ledger.getNode(peerId);
+    return node?.profile;
+  }
+
+  /**
    * Reset mesh state (NOT the ledger - that persists)
    */
   reset(): void {
     this.meshNeighbors.clear();
     this.potentialContacts.clear();
     this.wateringHoleQueue.clear();
-    console.log('[SilentMesh] Mesh state reset (ledger preserved)');
+    console.log("[SilentMesh] Mesh state reset (ledger preserved)");
   }
 }

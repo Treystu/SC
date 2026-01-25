@@ -395,13 +395,9 @@ export {
   calculateMessageSize,
 } from "./storage/MessageStore.js";
 
-export {
-  MemoryMessageStore,
-} from "./storage/MemoryMessageStore.js";
+export { MemoryMessageStore } from "./storage/MemoryMessageStore.js";
 
-export {
-  IndexedDBMessageStore,
-} from "./storage/IndexedDBMessageStore.js";
+export { IndexedDBMessageStore } from "./storage/IndexedDBMessageStore.js";
 
 export {
   QuotaManager,
@@ -431,3 +427,8 @@ export * from "./geo/index.js";
 
 // Emergency Broadcasts (web-of-trust verified)
 export * from "./broadcast/index.js";
+
+// Relay & Profiling (Dynamic Node Profiling)
+export * from "./nat/NATDetector.js";
+export * from "./relay/NodeProfiler.js";
+export * from "./relay/P2PRelay.js";

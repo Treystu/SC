@@ -9,7 +9,12 @@
  */
 
 import type { GeoZone } from "./GeoZone.js";
-import { geoDistance, isOnPath, getDirection, LocationPrecision } from "./GeoZone.js";
+import {
+  geoDistance,
+  isOnPath,
+  getDirection,
+  LocationPrecision,
+} from "./GeoZone.js";
 
 /**
  * Information about a peer for routing decisions
@@ -34,7 +39,10 @@ export interface PeerGeoInfo {
   connectionQuality: number;
 
   /** Transport type */
-  transportType: 'webrtc' | 'bluetooth' | 'wifi-direct' | 'lora' | 'meshtastic';
+  transportType: "webrtc" | "bluetooth" | "wifi-direct" | "lora" | "meshtastic";
+
+  /** Reliability profile (Phase 2) */
+  profile?: any; // NodeProfile
 }
 
 /**
@@ -78,6 +86,8 @@ export interface PeerScore {
     loadScore: number;
     courierScore: number;
     transportScore: number;
+    reliabilityScore: number;
+    natScore: number;
   };
 
   /** Why this peer was scored this way */
@@ -152,14 +162,17 @@ export class GeoRouter {
    */
   calculateRoute(
     sourceZone: GeoZone | undefined,
-    destinationZone: GeoZone | undefined
+    destinationZone: GeoZone | undefined,
   ): GeoRoutingHint {
     // No destination = can't route geographically
-    if (!destinationZone || destinationZone.precision === LocationPrecision.NONE) {
+    if (
+      !destinationZone ||
+      destinationZone.precision === LocationPrecision.NONE
+    ) {
       return {
         sourceZone,
         destinationZone,
-        preferredDirection: 'any',
+        preferredDirection: "any",
         estimatedHops: 10, // Unknown, assume moderate
         estimatedDeliveryTime: 24 * 60 * 60 * 1000, // 24 hours
         isLocal: false,
@@ -173,7 +186,7 @@ export class GeoRouter {
       return {
         sourceZone: source,
         destinationZone,
-        preferredDirection: 'local',
+        preferredDirection: "local",
         estimatedHops: 1,
         estimatedDeliveryTime: 60 * 1000, // 1 minute
         isLocal: true,
@@ -181,7 +194,7 @@ export class GeoRouter {
     }
 
     // Calculate direction and distance
-    let direction = 'any';
+    let direction = "any";
     let distance = Infinity;
 
     if (source) {
@@ -212,7 +225,7 @@ export class GeoRouter {
    */
   scorePeerForMessage(
     peer: PeerGeoInfo,
-    destinationZone: GeoZone | undefined
+    destinationZone: GeoZone | undefined,
   ): PeerScore {
     const breakdown = {
       proximityScore: 0,
@@ -221,22 +234,27 @@ export class GeoRouter {
       loadScore: 0,
       courierScore: 0,
       transportScore: 0,
+      reliabilityScore: 0,
+      natScore: 0,
     };
 
-    let reason = '';
+    let reason = "";
 
     // If no destination zone, use neutral scoring
-    if (!destinationZone || destinationZone.precision === LocationPrecision.NONE) {
+    if (
+      !destinationZone ||
+      destinationZone.precision === LocationPrecision.NONE
+    ) {
       breakdown.proximityScore = 50;
-      reason = 'No destination zone, neutral scoring';
+      reason = "No destination zone, neutral scoring";
     } else if (!peer.geoZone) {
       // Peer has no zone info
       breakdown.proximityScore = 40;
-      reason = 'Peer zone unknown';
+      reason = "Peer zone unknown";
     } else if (!this.config.ownZone) {
       // We don't know our own zone
       breakdown.proximityScore = 50;
-      reason = 'Own zone unknown';
+      reason = "Own zone unknown";
     } else {
       // Full geographic scoring
       const ourDist = geoDistance(this.config.ownZone, destinationZone);
@@ -250,7 +268,7 @@ export class GeoRouter {
       } else if (peerDist === 0) {
         // Peer IS in destination zone!
         breakdown.proximityScore = 100;
-        reason = 'Peer is in destination zone!';
+        reason = "Peer is in destination zone!";
       } else {
         // Peer is further - penalize
         breakdown.proximityScore = Math.max(0, 50 - (peerDist - ourDist) / 100);
@@ -260,7 +278,7 @@ export class GeoRouter {
       // Direction score: peer on path = bonus
       if (isOnPath(peer.geoZone, this.config.ownZone, destinationZone)) {
         breakdown.directionScore = 100;
-        reason += ', on path';
+        reason += ", on path";
       } else {
         breakdown.directionScore = 30;
       }
@@ -276,18 +294,51 @@ export class GeoRouter {
     // Courier bonus
     if (peer.isCourier) {
       breakdown.courierScore = this.config.courierBonus;
-      reason += ', courier';
+      reason += ", courier";
     }
 
     // Transport score
     const transportScores: Record<string, number> = {
-      'webrtc': 80,       // Fast, reliable
-      'wifi-direct': 70,  // Good bandwidth
-      'bluetooth': 50,    // Limited bandwidth
-      'lora': 90,         // Long range
-      'meshtastic': 95,   // Long range + mesh
+      webrtc: 80, // Fast, reliable
+      "wifi-direct": 70, // Good bandwidth
+      bluetooth: 50, // Limited bandwidth
+      lora: 90, // Long range
+      meshtastic: 95, // Long range + mesh
     };
     breakdown.transportScore = transportScores[peer.transportType] || 50;
+
+    // Reliability score (Phase 4)
+    if (peer.profile) {
+      let relScore = 50; // Baseline
+
+      // Stability bonus (IP Uptime)
+      if (peer.profile.ipStability > 3600000) relScore += 20; // 1hr+
+      if (peer.profile.ipStability > 86400000) relScore += 10; // 24hr+
+
+      // Topology bonus
+      if (peer.profile.isWAN) relScore += 20;
+
+      // Resource penalty
+      if (peer.profile.resources && peer.profile.resources.load > 0.8)
+        relScore -= 30;
+
+      breakdown.reliabilityScore = Math.max(0, Math.min(100, relScore));
+    }
+
+    // NAT score (Phase 5)
+    if (peer.profile && peer.profile.natType) {
+      // Prefer nodes with 'open' or 'cone' NATs for reliable relaying
+      const nat = peer.profile.natType.toLowerCase();
+      if (nat.includes("open") || nat.includes("cone")) {
+        breakdown.natScore = 100;
+        reason += ", friendly NAT";
+      } else if (nat.includes("symmetric")) {
+        breakdown.natScore = 20; // Symmetric NAT is hard to traverse
+        reason += ", restrictive NAT";
+      } else {
+        breakdown.natScore = 50;
+      }
+    }
 
     // Calculate weighted total
     const total =
@@ -296,7 +347,9 @@ export class GeoRouter {
       breakdown.connectivityScore * this.config.connectivityWeight +
       breakdown.loadScore * this.config.loadWeight +
       breakdown.courierScore +
-      breakdown.transportScore * 0.1; // Small transport weight
+      breakdown.transportScore * 0.1 +
+      breakdown.reliabilityScore * 0.2 +
+      breakdown.natScore * 0.1; // 10% weight for NAT compatibility
 
     return {
       peerId: peer.peerId,
@@ -312,11 +365,11 @@ export class GeoRouter {
   selectRelayPeers(
     availablePeers: PeerGeoInfo[],
     destinationZone: GeoZone | undefined,
-    maxPeers: number = 3
+    maxPeers: number = 3,
   ): PeerScore[] {
     // Score all peers
-    const scores = availablePeers.map(peer =>
-      this.scorePeerForMessage(peer, destinationZone)
+    const scores = availablePeers.map((peer) =>
+      this.scorePeerForMessage(peer, destinationZone),
     );
 
     // Sort by score (highest first)
@@ -332,7 +385,7 @@ export class GeoRouter {
   isGoodRelay(
     peer: PeerGeoInfo,
     destinationZone: GeoZone | undefined,
-    minScore: number = 50
+    minScore: number = 50,
   ): boolean {
     const score = this.scorePeerForMessage(peer, destinationZone);
     return score.score >= minScore;
@@ -343,7 +396,7 @@ export class GeoRouter {
    */
   getRoutingStats(
     peers: PeerGeoInfo[],
-    destinationZone: GeoZone | undefined
+    destinationZone: GeoZone | undefined,
   ): {
     totalPeers: number;
     peersWithZone: number;
@@ -352,19 +405,22 @@ export class GeoRouter {
     averageScore: number;
     preferredDirection: string;
   } {
-    const scores = peers.map(p => this.scorePeerForMessage(p, destinationZone));
+    const scores = peers.map((p) =>
+      this.scorePeerForMessage(p, destinationZone),
+    );
 
-    const goodRelays = scores.filter(s => s.score >= 50).length;
-    const bestScore = Math.max(...scores.map(s => s.score), 0);
-    const averageScore = scores.length > 0
-      ? scores.reduce((sum, s) => sum + s.score, 0) / scores.length
-      : 0;
+    const goodRelays = scores.filter((s) => s.score >= 50).length;
+    const bestScore = Math.max(...scores.map((s) => s.score), 0);
+    const averageScore =
+      scores.length > 0
+        ? scores.reduce((sum, s) => sum + s.score, 0) / scores.length
+        : 0;
 
     const hint = this.calculateRoute(undefined, destinationZone);
 
     return {
       totalPeers: peers.length,
-      peersWithZone: peers.filter(p => p.geoZone).length,
+      peersWithZone: peers.filter((p) => p.geoZone).length,
       goodRelays,
       bestScore,
       averageScore: Math.round(averageScore),

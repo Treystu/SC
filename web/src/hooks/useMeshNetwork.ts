@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { MeshNetwork, Message, MessageType, Peer } from "@sc/core";
+import { SilentMeshManager } from "../../../core/src/mesh/silent-mesh";
 import { ConnectionMonitor, type ConnectionQuality } from "@sc/core";
-import { SilentMeshManager, EternalLedger } from "@sc/core";
 import { extractPeerId, normalizePeerId, peerIdsEqual } from "@sc/core";
 import { getDatabase } from "../storage/database";
 import { getMeshNetwork } from "../services/mesh-network-service";
@@ -17,9 +17,12 @@ import { RoomClient } from "../utils/RoomClient";
 import {
   extractMessageText,
   parseMessagePayload,
-  isLoopbackMessage,
 } from "../utils/messageParser";
 import { useMeshNetworkLogger } from "../utils/unifiedLogger";
+import {
+  NodeProfiler,
+  type NodeProfile,
+} from "../../../core/src/relay/NodeProfiler";
 
 /**
  * SILENT MESH STATUS
@@ -94,6 +97,9 @@ export function useMeshNetwork() {
 
   // SILENT MESH: Manager and Ledger for background mesh connectivity
   const silentMeshRef = useRef<SilentMeshManager | null>(null);
+
+  const [nodeProfile, setNodeProfile] = useState<NodeProfile | null>(null);
+  const profilerRef = useRef<NodeProfiler>(new NodeProfiler());
 
   useEffect(() => {
     if (!meshNetworkRef.current) return;
@@ -174,6 +180,7 @@ export function useMeshNetwork() {
                   : undefined,
                 transportType: "webrtc",
                 source: "discovery",
+                profile: (peer as any).profile || undefined,
               });
             }
           }
@@ -1568,6 +1575,11 @@ export function useMeshNetwork() {
 
         const db = getDatabase();
         const identity = await db.getPrimaryIdentity();
+
+        // Dynamic Node Profiling (Phase 2)
+        const profile = await profilerRef.current.profile(localPeerId);
+        setNodeProfile(profile);
+
         const metadata = {
           publicKey: identity
             ? Array.from(identity.publicKey)
@@ -1576,6 +1588,8 @@ export function useMeshNetwork() {
             : undefined,
           displayName: identity?.displayName || "Unknown User",
           userAgent: navigator.userAgent,
+          profile: profile, // Include reliability profile in discovery metadata
+          canRelay: true, // Default to participating (Phase 6 enforcement)
         };
 
         const peers = await roomClient.join(metadata);
@@ -1622,8 +1636,6 @@ export function useMeshNetwork() {
               await roomClientRef.current.poll();
 
             if (peers && peers.length > 0) {
-              const db = getDatabase();
-
               const newPeerIds = peers
                 .filter((p) => p._id !== localPeerId)
                 .map((p) => p._id);
@@ -1735,16 +1747,40 @@ export function useMeshNetwork() {
                   const senderId = dm.from;
 
                   // LOOPBACK PREVENTION: Skip messages from self using unified utility
-                  if (isLoopbackMessage(senderId, localPeerId)) {
+                  const normalizedSenderId = normalizePeerId(senderId);
+                  const normalizedLocalId = normalizePeerId(localPeerId);
+
+                  if (peerIdsEqual(normalizedSenderId, normalizedLocalId)) {
                     console.log(
-                      `[useMeshNetwork] Skipping loopback relayed DM from self: ${dm.id}`,
+                      `[useMeshNetwork] Skipping loopback relayed DM from self: ${dm.id} (Sender: ${senderId})`,
                     );
                     continue;
                   }
 
-                  // Parse message content using unified parser
+                  // Robust parsing: sometimes content is double-stringified
                   const parsed = parseMessagePayload(dm.content);
-                  const messageText = parsed.text;
+                  let messageText = parsed.text;
+
+                  // If parsing failed to extract text but content looks like JSON, try one more time
+                  if (
+                    !messageText &&
+                    typeof dm.content === "string" &&
+                    dm.content.includes("{")
+                  ) {
+                    try {
+                      const secondaryParse = parseMessagePayload(
+                        JSON.parse(dm.content),
+                      );
+                      messageText = secondaryParse.text;
+                    } catch (e) {
+                      // Not valid JSON after all
+                    }
+                  }
+
+                  // If still no text, use content as-is (last resort)
+                  if (!messageText && typeof dm.content === "string") {
+                    messageText = dm.content;
+                  }
                   const messageTimestamp = parsed.timestamp || Date.now();
 
                   console.log(
@@ -1772,9 +1808,26 @@ export function useMeshNetwork() {
                     status: "delivered",
                   };
 
-                  // Add to messages state (with dedup)
+                  // Add to messages state (with robust dedup)
                   setMessages((prev: ReceivedMessage[]) => {
+                    // Dedup by ID
                     if (prev.some((m) => m.id === dm.id)) return prev;
+
+                    // Content-based dedup for relay echoes (within 5s window)
+                    const isContentDuplicate = prev.some(
+                      (m) =>
+                        m.from === senderId &&
+                        m.content === messageText &&
+                        Math.abs(m.timestamp - messageTimestamp) < 5000,
+                    );
+
+                    if (isContentDuplicate) {
+                      console.log(
+                        `[useMeshNetwork] Skipping duplicate relayed content from ${senderId}: ${dm.id}`,
+                      );
+                      return prev;
+                    }
+
                     return [...prev, receivedMessage];
                   });
 
@@ -2070,7 +2123,15 @@ export function useMeshNetwork() {
     if (shouldSkipAutoJoin) return;
 
     if (status.isConnected && !isJoinedToRoom) {
-      const ROOM_URL = "/.netlify/functions/room";
+      // Use production signaling server in dev mode for cross-instance compatibility
+      // In production (on Netlify), use relative URL
+      const isDev =
+        typeof window !== "undefined" &&
+        window.location.hostname === "localhost";
+      const ROOM_URL = isDev
+        ? "https://sovcom.netlify.app/.netlify/functions/room"
+        : "/.netlify/functions/room";
+      console.log(`[useMeshNetwork] Auto-joining room: ${ROOM_URL}`);
       joinRoom(ROOM_URL).catch((err) => {
         useMeshNetworkLogger.error(
           "Failed to auto-join public room on init:",
@@ -2180,6 +2241,7 @@ export function useMeshNetwork() {
       identity,
       sendReaction,
       sendVoice,
+      nodeProfile,
     }),
     [
       status,
@@ -2207,6 +2269,7 @@ export function useMeshNetwork() {
       identity,
       sendReaction,
       sendVoice,
+      nodeProfile,
     ],
   );
 }

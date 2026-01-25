@@ -12,23 +12,27 @@
  * the identity-scoped database.
  */
 
+import { NodeProfile } from "../relay/NodeProfiler.js";
+
 export interface KnownNode {
-  nodeId: string;           // 16-char uppercase hex peer ID
-  lastKnownIP?: string;     // Last known IP address (for watering hole)
+  nodeId: string; // 16-char uppercase hex peer ID
+  lastKnownIP?: string; // Last known IP address (for watering hole)
   lastSeenTimestamp: number; // When we last saw this node
-  publicKey?: string;       // Base64 or hex-encoded public key
+  publicKey?: string; // Base64 or hex-encoded public key
   firstSeenTimestamp: number; // When we first discovered this node
-  gatewayId?: string;       // ID of the gateway/relay we reached them through
-  connectionCount: number;  // How many times we've connected
+  gatewayId?: string; // ID of the gateway/relay we reached them through
+  connectionCount: number; // How many times we've connected
   lastConnectionSuccess: boolean; // Was the last connection attempt successful
+  profile?: NodeProfile; // Dynamic reliability profile (Phase 2)
+  natType?: string; // NAT type (Phase 2/5)
 }
 
 export interface LedgerStats {
   totalNodes: number;
-  activeNodes: number;      // Seen in last 24 hours
-  staleNodes: number;       // Not seen in 7+ days
-  oldestNode: number;       // Timestamp of oldest node
-  newestNode: number;       // Timestamp of newest node
+  activeNodes: number; // Seen in last 24 hours
+  staleNodes: number; // Not seen in 7+ days
+  oldestNode: number; // Timestamp of oldest node
+  newestNode: number; // Timestamp of newest node
 }
 
 export interface LedgerPersistenceAdapter {
@@ -100,8 +104,8 @@ export class MemoryLedgerAdapter implements LedgerPersistenceAdapter {
  * Uses a separate database from identity-scoped storage
  */
 export class IndexedDBLedgerAdapter implements LedgerPersistenceAdapter {
-  private static readonly DB_NAME = 'sc-eternal-ledger';
-  private static readonly STORE_NAME = 'knownNodes';
+  private static readonly DB_NAME = "sc-eternal-ledger";
+  private static readonly STORE_NAME = "knownNodes";
   private static readonly VERSION = 1;
   private db: IDBDatabase | null = null;
   private initPromise: Promise<void> | null = null;
@@ -111,11 +115,14 @@ export class IndexedDBLedgerAdapter implements LedgerPersistenceAdapter {
     if (this.initPromise) return this.initPromise;
 
     this.initPromise = new Promise((resolve, reject) => {
-      const request = indexedDB.open(IndexedDBLedgerAdapter.DB_NAME, IndexedDBLedgerAdapter.VERSION);
+      const request = indexedDB.open(
+        IndexedDBLedgerAdapter.DB_NAME,
+        IndexedDBLedgerAdapter.VERSION,
+      );
 
       request.onerror = () => {
         this.initPromise = null;
-        reject(request.error || new Error('Failed to open ledger database'));
+        reject(request.error || new Error("Failed to open ledger database"));
       };
 
       request.onsuccess = () => {
@@ -134,10 +141,13 @@ export class IndexedDBLedgerAdapter implements LedgerPersistenceAdapter {
         const db = (event.target as IDBOpenDBRequest).result;
 
         if (!db.objectStoreNames.contains(IndexedDBLedgerAdapter.STORE_NAME)) {
-          const store = db.createObjectStore(IndexedDBLedgerAdapter.STORE_NAME, { keyPath: 'nodeId' });
-          store.createIndex('lastSeenTimestamp', 'lastSeenTimestamp');
-          store.createIndex('gatewayId', 'gatewayId');
-          store.createIndex('firstSeenTimestamp', 'firstSeenTimestamp');
+          const store = db.createObjectStore(
+            IndexedDBLedgerAdapter.STORE_NAME,
+            { keyPath: "nodeId" },
+          );
+          store.createIndex("lastSeenTimestamp", "lastSeenTimestamp");
+          store.createIndex("gatewayId", "gatewayId");
+          store.createIndex("firstSeenTimestamp", "firstSeenTimestamp");
         }
       };
     });
@@ -149,7 +159,10 @@ export class IndexedDBLedgerAdapter implements LedgerPersistenceAdapter {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([IndexedDBLedgerAdapter.STORE_NAME], 'readwrite');
+      const transaction = this.db!.transaction(
+        [IndexedDBLedgerAdapter.STORE_NAME],
+        "readwrite",
+      );
       const store = transaction.objectStore(IndexedDBLedgerAdapter.STORE_NAME);
 
       // Ensure nodeId is normalized
@@ -165,7 +178,10 @@ export class IndexedDBLedgerAdapter implements LedgerPersistenceAdapter {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([IndexedDBLedgerAdapter.STORE_NAME], 'readonly');
+      const transaction = this.db!.transaction(
+        [IndexedDBLedgerAdapter.STORE_NAME],
+        "readonly",
+      );
       const store = transaction.objectStore(IndexedDBLedgerAdapter.STORE_NAME);
       const request = store.get(nodeId.toUpperCase());
 
@@ -178,7 +194,10 @@ export class IndexedDBLedgerAdapter implements LedgerPersistenceAdapter {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([IndexedDBLedgerAdapter.STORE_NAME], 'readwrite');
+      const transaction = this.db!.transaction(
+        [IndexedDBLedgerAdapter.STORE_NAME],
+        "readwrite",
+      );
       const store = transaction.objectStore(IndexedDBLedgerAdapter.STORE_NAME);
       const request = store.delete(nodeId.toUpperCase());
 
@@ -191,7 +210,10 @@ export class IndexedDBLedgerAdapter implements LedgerPersistenceAdapter {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([IndexedDBLedgerAdapter.STORE_NAME], 'readonly');
+      const transaction = this.db!.transaction(
+        [IndexedDBLedgerAdapter.STORE_NAME],
+        "readonly",
+      );
       const store = transaction.objectStore(IndexedDBLedgerAdapter.STORE_NAME);
       const request = store.getAll();
 
@@ -210,9 +232,12 @@ export class IndexedDBLedgerAdapter implements LedgerPersistenceAdapter {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([IndexedDBLedgerAdapter.STORE_NAME], 'readonly');
+      const transaction = this.db!.transaction(
+        [IndexedDBLedgerAdapter.STORE_NAME],
+        "readonly",
+      );
       const store = transaction.objectStore(IndexedDBLedgerAdapter.STORE_NAME);
-      const index = store.index('gatewayId');
+      const index = store.index("gatewayId");
       const request = index.getAll(gatewayId);
 
       request.onsuccess = () => resolve(request.result || []);
@@ -241,7 +266,10 @@ export class IndexedDBLedgerAdapter implements LedgerPersistenceAdapter {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([IndexedDBLedgerAdapter.STORE_NAME], 'readonly');
+      const transaction = this.db!.transaction(
+        [IndexedDBLedgerAdapter.STORE_NAME],
+        "readonly",
+      );
       const store = transaction.objectStore(IndexedDBLedgerAdapter.STORE_NAME);
       const request = store.count();
 
@@ -254,7 +282,10 @@ export class IndexedDBLedgerAdapter implements LedgerPersistenceAdapter {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([IndexedDBLedgerAdapter.STORE_NAME], 'readwrite');
+      const transaction = this.db!.transaction(
+        [IndexedDBLedgerAdapter.STORE_NAME],
+        "readwrite",
+      );
       const store = transaction.objectStore(IndexedDBLedgerAdapter.STORE_NAME);
       const request = store.clear();
 
@@ -287,7 +318,7 @@ export class EternalLedger {
 
   constructor(persistence?: LedgerPersistenceAdapter) {
     // Use IndexedDB in browser, memory in Node.js
-    if (!persistence && typeof indexedDB !== 'undefined') {
+    if (!persistence && typeof indexedDB !== "undefined") {
       this.persistence = new IndexedDBLedgerAdapter();
     } else {
       this.persistence = persistence || new MemoryLedgerAdapter();
@@ -304,9 +335,11 @@ export class EternalLedger {
       ipAddress?: string;
       gatewayId?: string;
       connectionSuccessful?: boolean;
-    } = {}
+      profile?: NodeProfile;
+      natType?: string;
+    } = {},
   ): Promise<void> {
-    const normalizedId = nodeId.replace(/\s/g, '').toUpperCase();
+    const normalizedId = nodeId.replace(/\s/g, "").toUpperCase();
     const now = Date.now();
 
     // Get existing node or create new one
@@ -329,6 +362,12 @@ export class EternalLedger {
       if (options.connectionSuccessful !== undefined) {
         node.lastConnectionSuccess = options.connectionSuccessful;
       }
+      if (options.profile) {
+        node.profile = options.profile;
+      }
+      if (options.natType) {
+        node.natType = options.natType;
+      }
     } else {
       // Create new node entry
       node = {
@@ -340,6 +379,8 @@ export class EternalLedger {
         gatewayId: options.gatewayId,
         connectionCount: 1,
         lastConnectionSuccess: options.connectionSuccessful ?? false,
+        profile: options.profile,
+        natType: options.natType,
       };
     }
 
@@ -349,16 +390,18 @@ export class EternalLedger {
       await this.pruneOldestNodes(100); // Remove oldest 100 nodes
     }
 
-    await this.persistence.saveNode(normalizedId, node);
+    await this.persistence.saveNode(normalizedId, node as KnownNode);
 
-    console.log(`[EternalLedger] Recorded node sighting: ${normalizedId.substring(0, 8)}... (total: ${currentSize + 1})`);
+    console.log(
+      `[EternalLedger] Recorded node sighting: ${normalizedId.substring(0, 8)}... (total: ${currentSize + 1})`,
+    );
   }
 
   /**
    * Get a known node by ID
    */
   async getNode(nodeId: string): Promise<KnownNode | null> {
-    return this.persistence.getNode(nodeId.replace(/\s/g, '').toUpperCase());
+    return this.persistence.getNode(nodeId.replace(/\s/g, "").toUpperCase());
   }
 
   /**
@@ -379,7 +422,9 @@ export class EternalLedger {
   /**
    * Get recently active nodes (for Light Ping bootstrap)
    */
-  async getRecentlyActiveNodes(maxAge: number = EternalLedger.ACTIVE_THRESHOLD): Promise<KnownNode[]> {
+  async getRecentlyActiveNodes(
+    maxAge: number = EternalLedger.ACTIVE_THRESHOLD,
+  ): Promise<KnownNode[]> {
     const cutoff = Date.now() - maxAge;
     const allNodes = await this.persistence.getAllNodes();
     const activeNodes: KnownNode[] = [];
@@ -407,10 +452,12 @@ export class EternalLedger {
     // Sort by successful connections and recency
     nodes.sort((a, b) => {
       // Prioritize nodes with successful recent connections
-      const aScore = (a.lastConnectionSuccess ? 1 : 0) * a.connectionCount +
-                     (a.lastSeenTimestamp / 1000000000); // Add recency bonus
-      const bScore = (b.lastConnectionSuccess ? 1 : 0) * b.connectionCount +
-                     (b.lastSeenTimestamp / 1000000000);
+      const aScore =
+        (a.lastConnectionSuccess ? 1 : 0) * a.connectionCount +
+        a.lastSeenTimestamp / 1000000000; // Add recency bonus
+      const bScore =
+        (b.lastConnectionSuccess ? 1 : 0) * b.connectionCount +
+        b.lastSeenTimestamp / 1000000000;
       return bScore - aScore;
     });
 
@@ -430,7 +477,10 @@ export class EternalLedger {
    * Returns true if the node is new or the public key matches
    * Returns false if there's a mismatch (potential spoofing)
    */
-  async validateNodeIdentity(nodeId: string, publicKey: string): Promise<boolean> {
+  async validateNodeIdentity(
+    nodeId: string,
+    publicKey: string,
+  ): Promise<boolean> {
     const node = await this.persistence.getNode(nodeId);
 
     if (!node) {
@@ -498,8 +548,9 @@ export class EternalLedger {
    */
   private async pruneOldestNodes(count: number): Promise<void> {
     const allNodes = await this.persistence.getAllNodes();
-    const sortedNodes = Array.from(allNodes.entries())
-      .sort((a, b) => a[1].lastSeenTimestamp - b[1].lastSeenTimestamp);
+    const sortedNodes = Array.from(allNodes.entries()).sort(
+      (a, b) => a[1].lastSeenTimestamp - b[1].lastSeenTimestamp,
+    );
 
     for (let i = 0; i < Math.min(count, sortedNodes.length); i++) {
       await this.persistence.removeNode(sortedNodes[i][0]);
@@ -511,7 +562,8 @@ export class EternalLedger {
   /**
    * Start automatic pruning
    */
-  startAutoPrune(intervalMs: number = 60 * 60 * 1000): void { // Default: 1 hour
+  startAutoPrune(intervalMs: number = 60 * 60 * 1000): void {
+    // Default: 1 hour
     if (this.pruneInterval) {
       clearInterval(this.pruneInterval);
     }
@@ -524,7 +576,7 @@ export class EternalLedger {
     }, intervalMs);
 
     // Allow Node.js to exit
-    if (this.pruneInterval && typeof this.pruneInterval.unref === 'function') {
+    if (this.pruneInterval && typeof this.pruneInterval.unref === "function") {
       this.pruneInterval.unref();
     }
   }
@@ -545,6 +597,6 @@ export class EternalLedger {
    */
   async clearAll(): Promise<void> {
     await this.persistence.clear();
-    console.log('[EternalLedger] All data cleared');
+    console.log("[EternalLedger] All data cleared");
   }
 }

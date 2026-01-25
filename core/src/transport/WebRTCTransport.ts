@@ -20,6 +20,8 @@ import {
   SignalingData,
   transportRegistry,
 } from "./Transport.js";
+import { P2PRelay } from "../relay/P2PRelay.js";
+import { NodeProfile } from "../relay/NodeProfiler.js";
 
 /**
  * Check if WebRTC is available in the current environment.
@@ -61,6 +63,7 @@ interface PeerConnectionWrapper {
   batchBuffer: Uint8Array[];
   batchBufferLength: number;
   batchTimeoutId: NodeJS.Timeout | number | null;
+  profile?: NodeProfile;
 }
 
 /**
@@ -79,6 +82,7 @@ export class WebRTCTransport implements Transport {
     new Map();
   private pruneIntervalId: NodeJS.Timeout | null = null;
   private onSignalCallback?: (peerId: string, signal: any) => void;
+  private p2pRelay = new P2PRelay();
   private onTrackCallback?: (
     peerId: string,
     track: MediaStreamTrack,
@@ -163,8 +167,6 @@ export class WebRTCTransport implements Transport {
       if (state === "connected") {
         // Connection established - no additional action needed here
       } else if (
-
-
         state === "disconnected" ||
         state === "failed" ||
         state === "closed"
@@ -250,7 +252,9 @@ export class WebRTCTransport implements Transport {
     // This is a known WebRTC race condition - the channel may be open before
     // the ondatachannel event handler is called
     if (channel.readyState === "open") {
-      console.debug(`Data channel ${channel.label} already open for ${peerId}, triggering handler`);
+      console.debug(
+        `Data channel ${channel.label} already open for ${peerId}, triggering handler`,
+      );
       handleChannelOpen();
     }
 
@@ -280,6 +284,38 @@ export class WebRTCTransport implements Transport {
 
       wrapper.bytesReceived += payload.length;
       wrapper.lastSeen = Date.now();
+
+      // Check for Relay Packet Magic Byte (0x52 = 'R')
+      if (payload.length > 0 && payload[0] === 0x52) {
+        const decapsulated = P2PRelay.decapsulate(payload);
+        if (decapsulated) {
+          const { header, payload: originalPayload } = decapsulated;
+          const destId = header.destinationId.toUpperCase();
+          const localId = this.localPeerId.toUpperCase();
+
+          if (destId === localId) {
+            // Local delivery
+            const message: TransportMessage = {
+              from: header.sourceId,
+              to: localId,
+              payload: originalPayload,
+              timestamp: Date.now(),
+            };
+            this.events?.onMessage(message);
+          } else {
+            // Forwarding (Phase 3/5)
+            const nextPeerId = destId; // Direct hop for now
+            const nextWrapper = this.peers.get(nextPeerId);
+            if (nextWrapper && nextWrapper.state === "connected") {
+              this.send(nextPeerId, payload).catch(console.error);
+              console.log(
+                `[WebRTCTransport] Forwarded relayed packet from ${header.sourceId} to ${destId}`,
+              );
+            }
+          }
+          return;
+        }
+      }
 
       // Check for Batch Magic Byte (0xBB)
       if (payload.length > 0 && payload[0] === 0xbb) {
@@ -524,7 +560,10 @@ export class WebRTCTransport implements Transport {
           getState: () => wrapper.state,
           connection: wrapper.connection,
           createDataChannel: (config: any) => {
-            const channel = wrapper.connection.createDataChannel(config.label, config);
+            const channel = wrapper.connection.createDataChannel(
+              config.label,
+              config,
+            );
             // Wire up the data channel handlers so peer gets marked as connected
             this.setupDataChannel(normalizedId, channel);
             return channel;
@@ -585,7 +624,10 @@ export class WebRTCTransport implements Transport {
           getState: () => wrapper.state,
           connection: wrapper.connection,
           createDataChannel: (config: any) => {
-            const channel = wrapper.connection.createDataChannel(config.label, config);
+            const channel = wrapper.connection.createDataChannel(
+              config.label,
+              config,
+            );
             // Wire up the data channel handlers so peer gets marked as connected
             this.setupDataChannel(normalizedId, channel);
             return channel;
@@ -773,7 +815,9 @@ export class WebRTCTransport implements Transport {
   async send(peerId: TransportPeerId, payload: Uint8Array): Promise<void> {
     // Normalize peer ID for consistent lookup
     const normalizedPeerId = peerId.replace(/\s/g, "").toUpperCase();
-    console.log(`[WebRTCTransport] send() called for peer ${normalizedPeerId}, payload size: ${payload.length}`);
+    console.log(
+      `[WebRTCTransport] send() called for peer ${normalizedPeerId}, payload size: ${payload.length}`,
+    );
 
     if (!this.isRunning) {
       console.error(`[WebRTCTransport] Transport is not running!`);
@@ -782,17 +826,26 @@ export class WebRTCTransport implements Transport {
 
     const wrapper = this.peers.get(normalizedPeerId);
     if (!wrapper) {
-      console.error(`[WebRTCTransport] Peer ${normalizedPeerId} not found in peers map. Available peers: ${Array.from(this.peers.keys()).join(', ')}`);
+      console.error(
+        `[WebRTCTransport] Peer ${normalizedPeerId} not found in peers map. Available peers: ${Array.from(this.peers.keys()).join(", ")}`,
+      );
       throw new Error(`Peer ${normalizedPeerId} is not connected`);
     }
 
     const channel = wrapper.reliableChannel;
-    if (!channel || (channel.readyState !== "open" && channel.readyState !== "connecting")) {
-      console.error(`[WebRTCTransport] Data channel to ${peerId} not ready. State: ${channel?.readyState || 'no channel'}`);
+    if (
+      !channel ||
+      (channel.readyState !== "open" && channel.readyState !== "connecting")
+    ) {
+      console.error(
+        `[WebRTCTransport] Data channel to ${peerId} not ready. State: ${channel?.readyState || "no channel"}`,
+      );
       throw new Error(`Data channel to ${peerId} is not ready`);
     }
-    
-    console.log(`[WebRTCTransport] Data channel state: ${channel.readyState}, bufferedAmount: ${channel.bufferedAmount}`);
+
+    console.log(
+      `[WebRTCTransport] Data channel state: ${channel.readyState}, bufferedAmount: ${channel.bufferedAmount}`,
+    );
 
     // Batching Logic
     // We use Nagle-like algorithm: Buffer small messages, send if buffer full or timeout
