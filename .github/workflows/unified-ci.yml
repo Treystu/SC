@@ -357,13 +357,13 @@ jobs:
         run: npm ci
       
       - name: Download web build
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: web-build
           path: web/dist
       
       - name: Download core build
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: core-build
           path: core/dist
