@@ -3,6 +3,7 @@
   "version": "0.1.25",
   "description": "Decentralized mesh networking communication platform",
   "private": true,
+  "type": "commonjs",
   "workspaces": [
     "core",
     "web",
@@ -14,7 +15,7 @@
     "build:all": "./scripts/build-all.sh",
     "test": "npm run test --workspaces",
     "test:unit": "npm run test -w core",
-    "test:integration": "NODE_OPTIONS='--experimental-vm-modules --no-warnings' jest --config jest.integration.config.js",
+    "test:integration": "jest --config jest.integration.config.js",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:cross-platform": "playwright test tests/e2e/cross-platform",
