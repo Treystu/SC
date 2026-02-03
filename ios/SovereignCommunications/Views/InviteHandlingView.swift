@@ -141,14 +141,124 @@ struct InviteHandlingView: View {
             return
         }
         
-        // Process the invite
-        // TODO: Replace with actual invite processing from MeshNetworkManager
-        // For V1.0, this validates format and calls the callback
-        onAccept(inviteCode)
+        // Process the invite - parse payload and create contact/conversation
+        do {
+            try processInviteCode(inviteCode)
+            isProcessing = false
+            showSuccess = true
+        } catch let error as InviteError {
+            isProcessing = false
+            errorMessage = error.localizedDescription
+            showError = true
+        } catch {
+            isProcessing = false
+            errorMessage = "Failed to process invite: \(error.localizedDescription)"
+            showError = true
+        }
+    }
+    
+    /// Process an invite code - parse payload, create contact and conversation
+    private func processInviteCode(_ code: String) throws {
+        let context = CoreDataStack.shared.viewContext
         
-        // Mark as complete after callback
-        isProcessing = false
-        showSuccess = true
+        // Check if this is a stateless invite (contains a dot separator)
+        if code.contains(".") {
+            // Parse stateless invite: base64(payload).hex(signature)
+            let parts = code.split(separator: ".", maxSplits: 1)
+            guard parts.count == 2 else {
+                throw InviteError.invalidFormat
+            }
+            
+            let encodedPayload = String(parts[0])
+            
+            // Decode payload
+            guard let payloadData = Data(base64Encoded: encodedPayload),
+                  let payload = try? JSONSerialization.jsonObject(with: payloadData) as? [String: Any] else {
+                throw InviteError.invalidPayload
+            }
+            
+            // Extract invite data
+            guard let peerId = payload["pid"] as? String,
+                  let publicKeyHex = payload["pk"] as? String,
+                  !peerId.isEmpty else {
+                throw InviteError.missingPeerInfo
+            }
+            
+            let peerName = payload["n"] as? String
+            
+            // Check if contact already exists
+            let fetchRequest: NSFetchRequest<ContactEntity> = ContactEntity.fetchRequest()
+            fetchRequest.predicate = NSPredicate(format: "id == %@", peerId)
+            
+            if let existingContacts = try? context.fetch(fetchRequest), !existingContacts.isEmpty {
+                // Contact already exists, just create conversation if needed
+                try createConversation(for: existingContacts[0], in: context)
+            } else {
+                // Create new contact
+                let contact = ContactEntity(context: context)
+                contact.id = peerId
+                contact.publicKey = publicKeyHex
+                contact.displayName = peerName ?? "New Contact"
+                contact.lastSeen = Date()
+                contact.isVerified = true // Auto-verified through invite signature
+                contact.isFavorite = false
+                
+                // Create conversation for the contact
+                try createConversation(for: contact, in: context)
+            }
+            
+            // Save context
+            CoreDataStack.shared.save(context: context)
+            
+            // Call success callback
+            onAccept(code)
+            
+        } else {
+            // Legacy/local invite code - just call callback for now
+            // This handles the case where the code is a local reference
+            onAccept(code)
+        }
+    }
+    
+    /// Create a conversation for a contact if one doesn't exist
+    private func createConversation(for contact: ContactEntity, in context: NSManagedObjectContext) throws {
+        // Check if conversation already exists
+        let fetchRequest: NSFetchRequest<ConversationEntity> = ConversationEntity.fetchRequest()
+        fetchRequest.predicate = NSPredicate(format: "contactId == %@", contact.id)
+        
+        if let existingConversations = try? context.fetch(fetchRequest), !existingConversations.isEmpty {
+            // Conversation already exists, no need to create
+            return
+        }
+        
+        // Create new conversation
+        let conversation = ConversationEntity(context: context)
+        conversation.id = contact.id // Use peerId as conversation ID for 1:1 chats
+        conversation.contactId = contact.id
+        conversation.contact = contact
+        conversation.unreadCount = 0
+        conversation.isPinned = false
+        conversation.lastMessageTimestamp = Date()
+        
+        // Link conversation to contact
+        contact.conversation = conversation
+    }
+    
+    enum InviteError: Error, LocalizedError {
+        case invalidFormat
+        case invalidPayload
+        case missingPeerInfo
+        
+        var errorDescription: String? {
+            switch self {
+            case .invalidFormat:
+                return "Invalid invite code format"
+            case .invalidPayload:
+                return "Could not decode invite payload"
+            case .missingPeerInfo:
+                return "Missing peer information in invite"
+            }
+        }
     }
     
     private func isValidInviteCode(_ code: String) -> Bool {

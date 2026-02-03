@@ -633,20 +633,31 @@ function App() {
         });
 
         // Save initial conversation state if not exists
-        const db = getDatabase();
-        await db.saveConversation({
-          id: result.contact.peerId,
-          contactId: result.contact.peerId,
-          lastMessageTimestamp: Date.now(),
-          unreadCount: 0,
-          createdAt: Date.now(),
-        });
-        refreshConversations();
+        try {
+          const db = getDatabase();
+          await db.saveConversation({
+            id: result.contact.peerId,
+            contactId: result.contact.peerId,
+            lastMessageTimestamp: Date.now(),
+            unreadCount: 0,
+            createdAt: Date.now(),
+            metadata: {
+              displayName: pendingInviteData.inviterName || result.contact.name || "New Contact",
+              requestStatus: 'accepted'
+            },
+          });
+          refreshConversations();
+          // Set selected conversation AFTER successful creation
+          setSelectedConversation(result.contact.peerId);
+        } catch (error) {
+          console.error('Failed to create conversation:', error);
+          setToast({
+            message: `Failed to create conversation: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            type: 'error',
+          });
+        }
 
-        // 1. Valid invite -> Open UI immediately (Optimistic UI)
-        setSelectedConversation(result.contact.peerId);
-
-        // 2. Announce success
+        // Announce success
         announce.message(
           `Joined from invite! Added ${result.contact.name || pendingInviteData.inviterName || "new contact"}.`,
           "assertive",
@@ -821,20 +832,28 @@ function App() {
 
     // Create a conversation for the new contact
     const db = getDatabase();
-    await db.saveConversation({
-      id: finalPeerId,
-      contactId: finalPeerId,
-      lastMessageTimestamp: Date.now(),
-      unreadCount: 0,
-      createdAt: Date.now(),
-      metadata: {
-        displayName: finalName,
-      },
-    });
+    try {
+      await db.saveConversation({
+        id: finalPeerId,
+        contactId: finalPeerId,
+        lastMessageTimestamp: Date.now(),
+        unreadCount: 0,
+        createdAt: Date.now(),
+        metadata: {
+          displayName: finalName,
+        },
+      });
+      refreshConversations();
+    } catch (error) {
+      console.error('Failed to create conversation:', error);
+      setToast({
+        message: 'Failed to create conversation. Please try again.',
+        type: 'error',
+      });
+    }
 
     recentConversationNamesRef.current.set(finalPeerId, finalName);
 
-    refreshConversations();
     setSelectedConversation(finalPeerId);
   };
 
@@ -866,15 +885,26 @@ function App() {
 
       // Ensure conversation is created
       const db = getDatabase();
-      await db.saveConversation({
-        id: remotePeerId,
-        contactId: remotePeerId,
-        lastMessageTimestamp: Date.now(),
-        unreadCount: 0,
-        createdAt: Date.now(),
-      });
+      try {
+        await db.saveConversation({
+          id: remotePeerId,
+          contactId: remotePeerId,
+          lastMessageTimestamp: Date.now(),
+          unreadCount: 0,
+          createdAt: Date.now(),
+          metadata: {
+            displayName: name,
+          },
+        });
+        refreshConversations();
+      } catch (error) {
+        console.error('Failed to create conversation:', error);
+        setToast({
+          message: 'Failed to create conversation. Please try again.',
+          type: 'error',
+        });
+      }
 
-      refreshConversations();
       setSelectedConversation(remotePeerId);
       announce.message(`Connected to ${name}`, "polite");
     } catch (error: unknown) {

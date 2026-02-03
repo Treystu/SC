@@ -1,6 +1,11 @@
 package com.sovereign.communications.sharing
 
 import android.content.Context
+import com.sovereign.communications.SCApplication
+import com.sovereign.communications.data.dao.ConversationDao
+import com.sovereign.communications.data.dao.ContactDao
+import com.sovereign.communications.data.entity.ConversationEntity
+import com.sovereign.communications.data.entity.ContactEntity
 import com.sovereign.communications.identity.IdentityManager
 import com.sovereign.communications.sharing.models.Invite
 import com.sovereign.communications.sharing.models.SharePayload
@@ -23,6 +28,11 @@ class InviteManager(
 ) {
     private val invites = mutableMapOf<String, Invite>()
     private val random = SecureRandom().asKotlinRandom()
+    
+    // Database access for contact/conversation creation
+    private val app = context.applicationContext as SCApplication
+    private val conversationDao: ConversationDao = app.database.conversationDao()
+    private val contactDao: ContactDao = app.database.contactDao()
 
     private val _currentInvite = MutableStateFlow<Invite?>(null)
     val currentInvite: StateFlow<Invite?> = _currentInvite.asStateFlow()
@@ -118,6 +128,35 @@ class InviteManager(
 
         // Mark invite as used
         invites.remove(code)
+
+        // Create contact from invite
+        val contact = ContactEntity(
+            id = invite.inviterPeerId,
+            publicKey = invite.inviterPublicKey.joinToString(separator = "") { "%02x".format(it) },
+            displayName = invite.inviterName ?: "New Contact",
+            lastSeen = System.currentTimeMillis(),
+            createdAt = System.currentTimeMillis(),
+            fingerprint = invite.inviterPublicKey.take(8).joinToString(separator = "") { "%02x".format(it) },
+            verified = true,
+            blocked = false,
+            endpoints = emptyList()
+        )
+        
+        // Save contact to database
+        contactDao.insert(contact)
+        
+        // Create conversation for the contact
+        val conversation = ConversationEntity(
+            id = invite.inviterPeerId,
+            contactId = invite.inviterPeerId,
+            lastMessageTimestamp = System.currentTimeMillis(),
+            unreadCount = 0,
+            createdAt = System.currentTimeMillis(),
+            isPinned = false
+        )
+        
+        // Save conversation to database
+        conversationDao.insert(conversation)
 
         // Callback with invite details
         onSuccess(invite)
