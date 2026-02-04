@@ -4,7 +4,7 @@ module.exports = {
       '@babel/preset-env',
       {
         targets: { node: 'current' },
-        modules: false // Keep ESM for Jest experimental-vm-modules
+        modules: 'auto' // Convert ESM to CJS when running in Jest
       }
     ],
     [

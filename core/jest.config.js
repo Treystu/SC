@@ -64,8 +64,7 @@ module.exports = {
     ]
   },
   transformIgnorePatterns: [
-    '/node_modules/(?!(?:@sc|fflate)/)',
-    '/node_modules/@noble/',
+    '/node_modules/(?!(?:@sc|fflate|@noble/ciphers|@noble/curves|@noble/hashes)/)',
     '/dist/'
   ],
   injectGlobals: true,
