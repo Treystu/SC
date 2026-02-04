@@ -18,7 +18,7 @@
  * - Offline initiation: Can start session even when recipient is offline
  */
 
-import { ed25519, x25519 } from "@noble/curves/ed25519.js";
+import { x25519 } from "@noble/curves/ed25519.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { hkdf } from "@noble/hashes/hkdf.js";
 import {
@@ -177,6 +177,7 @@ export const DEFAULT_X3DH_CONFIG: X3DHConfig = {
 export class X3DHKeyManager {
   private config: X3DHConfig;
   private keyBundle: X3DHKeyBundle | null = null;
+  private otpLocks = new Set<number>();
 
   constructor(config: Partial<X3DHConfig> = {}) {
     this.config = { ...DEFAULT_X3DH_CONFIG, ...config };
@@ -211,7 +212,7 @@ export class X3DHKeyManager {
    */
   private generateSignedPrekey(
     identityKey: IdentityKeyPair,
-    id: number
+    id: number,
   ): SignedPrekey {
     const privateKey = randomBytes(32);
     const publicKey = x25519.getPublicKey(privateKey);
@@ -260,11 +261,11 @@ export class X3DHKeyManager {
       peerId,
       identityKey: new Uint8Array(this.keyBundle.identityKey.publicKey),
       signedPrekeyPublic: new Uint8Array(
-        this.keyBundle.signedPrekey.keyPair.publicKey
+        this.keyBundle.signedPrekey.keyPair.publicKey,
       ),
       signedPrekeyId: this.keyBundle.signedPrekey.id,
       signedPrekeySignature: new Uint8Array(
-        this.keyBundle.signedPrekey.signature
+        this.keyBundle.signedPrekey.signature,
       ),
       oneTimePrekeyPublics: availableOTPs,
       timestamp: Date.now(),
@@ -278,7 +279,7 @@ export class X3DHKeyManager {
     if (!this.keyBundle) return 0;
 
     const unusedCount = this.keyBundle.oneTimePrekeys.filter(
-      (otp) => !otp.used
+      (otp) => !otp.used,
     ).length;
 
     if (unusedCount >= this.config.minOneTimePrekeys) return 0;
@@ -288,7 +289,7 @@ export class X3DHKeyManager {
 
     for (let i = 0; i < needed; i++) {
       this.keyBundle.oneTimePrekeys.push(
-        this.generateOneTimePrekey(this.keyBundle.nextOTPId++)
+        this.generateOneTimePrekey(this.keyBundle.nextOTPId++),
       );
       generated++;
     }
@@ -317,7 +318,7 @@ export class X3DHKeyManager {
     // Generate new signed prekey
     this.keyBundle.signedPrekey = this.generateSignedPrekey(
       this.keyBundle.identityKey,
-      this.keyBundle.nextSPKId++
+      this.keyBundle.nextSPKId++,
     );
 
     return this.keyBundle.signedPrekey;
@@ -327,16 +328,21 @@ export class X3DHKeyManager {
    * Mark a one-time prekey as used
    */
   markOneTimePrekeyUsed(id: number): boolean {
-    if (!this.keyBundle) return false;
+    if (!this.keyBundle || this.otpLocks.has(id)) return false;
+    this.otpLocks.add(id);
 
-    const otp = this.keyBundle.oneTimePrekeys.find((o) => o.id === id);
-    if (otp && !otp.used) {
-      otp.used = true;
-      // Wipe private key after use
-      secureWipe(otp.keyPair.privateKey);
-      return true;
+    try {
+      const otp = this.keyBundle.oneTimePrekeys.find((o) => o.id === id);
+      if (otp && !otp.used) {
+        otp.used = true;
+        // Wipe private key after use
+        secureWipe(otp.keyPair.privateKey);
+        return true;
+      }
+      return false;
+    } finally {
+      this.otpLocks.delete(id);
     }
-    return false;
   }
 
   /**
@@ -393,10 +399,10 @@ export class X3DHKeyManager {
       signedPrekey: {
         keyPair: {
           publicKey: new Uint8Array(
-            this.keyBundle.signedPrekey.keyPair.publicKey
+            this.keyBundle.signedPrekey.keyPair.publicKey,
           ),
           privateKey: new Uint8Array(
-            this.keyBundle.signedPrekey.keyPair.privateKey
+            this.keyBundle.signedPrekey.keyPair.privateKey,
           ),
         },
         signature: new Uint8Array(this.keyBundle.signedPrekey.signature),
@@ -436,12 +442,21 @@ export class X3DHKeyManager {
 /**
  * Verify a prekey bundle's signature
  */
-export function verifyPrekeyBundle(bundle: PrekeyBundle): boolean {
+export function verifyPrekeyBundle(
+  bundle: PrekeyBundle,
+  maxAge: number = 24 * 60 * 60 * 1000, // Default 24 hours
+): boolean {
   try {
+    // Validate timestamp freshness
+    const age = Date.now() - bundle.timestamp;
+    if (age < 0 || age > maxAge) {
+      return false;
+    }
+
     return verifySignature(
       bundle.signedPrekeyPublic,
       bundle.signedPrekeySignature,
-      bundle.identityKey
+      bundle.identityKey,
     );
   } catch {
     return false;
@@ -462,7 +477,7 @@ export function verifyPrekeyBundle(bundle: PrekeyBundle): boolean {
 export function initiateX3DH(
   myIdentityKey: IdentityKeyPair,
   theirBundle: PrekeyBundle,
-  config: Partial<X3DHConfig> = {}
+  config: Partial<X3DHConfig> = {},
 ): X3DHInitResult {
   const fullConfig = { ...DEFAULT_X3DH_CONFIG, ...config };
 
@@ -477,16 +492,16 @@ export function initiateX3DH(
 
   // Convert Ed25519 identity keys to X25519
   const myX25519Private = convertEd25519PrivateKeyToX25519(
-    myIdentityKey.privateKey
+    myIdentityKey.privateKey,
   );
   const theirX25519Public = convertEd25519PublicKeyToX25519(
-    theirBundle.identityKey
+    theirBundle.identityKey,
   );
 
   // DH1 = DH(IKa_private, SPKb_public)
   const dh1 = x25519.getSharedSecret(
     myX25519Private,
-    theirBundle.signedPrekeyPublic
+    theirBundle.signedPrekeyPublic,
   );
 
   // DH2 = DH(EKa_private, IKb_public)
@@ -495,7 +510,7 @@ export function initiateX3DH(
   // DH3 = DH(EKa_private, SPKb_public)
   const dh3 = x25519.getSharedSecret(
     ephemeralPrivate,
-    theirBundle.signedPrekeyPublic
+    theirBundle.signedPrekeyPublic,
   );
 
   // DH4 = DH(EKa_private, OPKb_public) if available
@@ -503,8 +518,11 @@ export function initiateX3DH(
   let usedOneTimePrekeyId: number | undefined;
 
   if (theirBundle.oneTimePrekeyPublics.length > 0) {
-    // Use the first available one-time prekey
-    const otp = theirBundle.oneTimePrekeyPublics[0];
+    // Select a random one-time prekey from the bundle
+    const randomIndex = Math.floor(
+      Math.random() * theirBundle.oneTimePrekeyPublics.length,
+    );
+    const otp = theirBundle.oneTimePrekeyPublics[randomIndex];
     dh4 = x25519.getSharedSecret(ephemeralPrivate, otp.publicKey);
     usedOneTimePrekeyId = otp.id;
   }
@@ -552,28 +570,31 @@ export function completeX3DH(
   signedPrekeyPrivate: Uint8Array,
   oneTimePrekeyPrivate: Uint8Array | null,
   initialMessage: X3DHInitialMessage,
-  config: Partial<X3DHConfig> = {}
+  config: Partial<X3DHConfig> = {},
 ): { sharedSecret: Uint8Array; associatedData: Uint8Array } {
   const fullConfig = { ...DEFAULT_X3DH_CONFIG, ...config };
 
   // Convert Ed25519 identity keys to X25519
   const myX25519Private = convertEd25519PrivateKeyToX25519(
-    myIdentityKey.privateKey
+    myIdentityKey.privateKey,
   );
   const theirX25519Public = convertEd25519PublicKeyToX25519(
-    initialMessage.identityKey
+    initialMessage.identityKey,
   );
 
   // DH1 = DH(SPKb_private, IKa_public)
   const dh1 = x25519.getSharedSecret(signedPrekeyPrivate, theirX25519Public);
 
   // DH2 = DH(IKb_private, EKa_public)
-  const dh2 = x25519.getSharedSecret(myX25519Private, initialMessage.ephemeralKey);
+  const dh2 = x25519.getSharedSecret(
+    myX25519Private,
+    initialMessage.ephemeralKey,
+  );
 
   // DH3 = DH(SPKb_private, EKa_public)
   const dh3 = x25519.getSharedSecret(
     signedPrekeyPrivate,
-    initialMessage.ephemeralKey
+    initialMessage.ephemeralKey,
   );
 
   // DH4 = DH(OPKb_private, EKa_public) if one-time prekey was used
@@ -581,7 +602,7 @@ export function completeX3DH(
   if (oneTimePrekeyPrivate) {
     dh4 = x25519.getSharedSecret(
       oneTimePrekeyPrivate,
-      initialMessage.ephemeralKey
+      initialMessage.ephemeralKey,
     );
   }
 
@@ -618,7 +639,7 @@ export function createX3DHInitialMessage(
   myIdentityKey: IdentityKeyPair,
   ephemeralPublic: Uint8Array,
   usedSignedPrekeyId: number,
-  usedOneTimePrekeyId?: number
+  usedOneTimePrekeyId?: number,
 ): X3DHInitialMessage {
   return {
     identityKey: new Uint8Array(myIdentityKey.publicKey),
@@ -664,7 +685,7 @@ export function deserializePrekeyBundle(data: Uint8Array): PrekeyBundle {
       (otp: { id: number; publicKey: number[] }) => ({
         id: otp.id,
         publicKey: new Uint8Array(otp.publicKey),
-      })
+      }),
     ),
     timestamp: obj.timestamp,
   };
@@ -674,7 +695,7 @@ export function deserializePrekeyBundle(data: Uint8Array): PrekeyBundle {
  * Serialize X3DH initial message
  */
 export function serializeX3DHInitialMessage(
-  msg: X3DHInitialMessage
+  msg: X3DHInitialMessage,
 ): Uint8Array {
   const json = JSON.stringify({
     identityKey: Array.from(msg.identityKey),
@@ -689,7 +710,7 @@ export function serializeX3DHInitialMessage(
  * Deserialize X3DH initial message
  */
 export function deserializeX3DHInitialMessage(
-  data: Uint8Array
+  data: Uint8Array,
 ): X3DHInitialMessage {
   const json = new TextDecoder().decode(data);
   const obj = JSON.parse(json);

@@ -416,7 +416,16 @@ export function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
 }
 
 export function secureWipe(data: Uint8Array): void {
-  data.fill(0);
+  // Multiple passes with verification to prevent optimization
+  for (let pass = 0; pass < 3; pass++) {
+    for (let i = 0; i < data.length; i++) {
+      data[i] = 0;
+    }
+  }
+  // Verify the wipe
+  if (data.some((byte) => byte !== 0)) {
+    throw new Error("Secure wipe failed");
+  }
 }
 
 export function generateFingerprint(publicKey: Uint8Array): string {

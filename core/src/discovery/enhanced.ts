@@ -119,7 +119,7 @@ export class EnhancedPeerDiscovery {
     if (this.config.enableLocalDiscovery) {
       this.localScanHandle = setInterval(
         () => this.scanLocalNetwork(),
-        this.config.localScanInterval
+        this.config.localScanInterval,
       );
     }
   }
@@ -162,7 +162,7 @@ export class EnhancedPeerDiscovery {
 
     // 4. Check bootstrap nodes
     const bootstrapPeer = this.config.bootstrapPeers.find(
-      (p) => p.peerId === peerId
+      (p) => p.peerId === peerId,
     );
     if (bootstrapPeer) {
       return bootstrapPeer;
@@ -180,7 +180,7 @@ export class EnhancedPeerDiscovery {
       canRelay: boolean;
       canStore: boolean;
     }>,
-    limit: number = 10
+    limit: number = 10,
   ): Promise<DiscoveredPeer[]> {
     const results: DiscoveredPeer[] = [];
 
@@ -192,10 +192,8 @@ export class EnhancedPeerDiscovery {
       let matches = true;
       if (requirement.canSignal && !peer.capabilities.canSignal)
         matches = false;
-      if (requirement.canRelay && !peer.capabilities.canRelay)
-        matches = false;
-      if (requirement.canStore && !peer.capabilities.canStore)
-        matches = false;
+      if (requirement.canRelay && !peer.capabilities.canRelay) matches = false;
+      if (requirement.canStore && !peer.capabilities.canStore) matches = false;
 
       if (matches) {
         results.push(peer);
@@ -225,10 +223,15 @@ export class EnhancedPeerDiscovery {
         return val;
       }) as PeerRecord;
 
+      // Validate structure
+      if (!record.peerId || typeof record.peerId !== "string") return null;
+      if (!record.addresses || !Array.isArray(record.addresses)) return null;
+      if (typeof record.timestamp !== "number") return null;
+
       return {
         peerId: record.peerId,
         addresses: record.addresses,
-        capabilities: record.capabilities,
+        capabilities: record.capabilities || null,
         discoveryMethod: DiscoveryMethod.DHT,
         discoveredAt: Date.now(),
         lastVerified: record.timestamp,
@@ -259,10 +262,7 @@ export class EnhancedPeerDiscovery {
   /**
    * Add a manually discovered peer
    */
-  addManualPeer(
-    peerId: string,
-    addresses: PeerAddress[]
-  ): DiscoveredPeer {
+  addManualPeer(peerId: string, addresses: PeerAddress[]): DiscoveredPeer {
     const peer: DiscoveredPeer = {
       peerId,
       addresses,
@@ -313,7 +313,7 @@ export class EnhancedPeerDiscovery {
    */
   getCachedPeers(): DiscoveredPeer[] {
     return Array.from(this.cache.values()).filter(
-      (p) => !this.isCacheExpired(p)
+      (p) => !this.isCacheExpired(p),
     );
   }
 
