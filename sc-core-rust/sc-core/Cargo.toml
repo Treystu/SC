@@ -1,0 +1,41 @@
+[package]
+name = "sc-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lib]
+crate-type = ["lib", "cdylib"]
+
+[dependencies]
+# Workspace dependencies
+tokio = { workspace = true }
+async-trait = { workspace = true }
+libp2p = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+bincode = { workspace = true }
+cesride = { workspace = true }
+ed25519-dalek = { workspace = true }
+x25519-dalek = { workspace = true }
+sha2 = { workspace = true }
+blake3 = { workspace = true }
+sled = { workspace = true }
+uniffi = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+# Additional dependencies
+futures = "0.3"
+parking_lot = "0.12"
+once_cell = "1.19"
+
+[dev-dependencies]
+mockall = { workspace = true }
+tokio-test = "0.4"
+
+[build-dependencies]
+uniffi = { workspace = true, features = ["build"] }

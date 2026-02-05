@@ -203,3 +203,9 @@ mobile-bundle/
 
 # Auto Claude data directory
 .auto-claude/
+
+# Rust
+sc-core-rust/target/
+sc-core-rust/**/target/
+*.rs.bk
+Cargo.lock

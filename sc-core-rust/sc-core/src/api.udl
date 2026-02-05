@@ -1,0 +1,59 @@
+namespace sc_core {
+};
+
+// Environmental Conditions
+enum NetworkType {
+    "Wifi",
+    "Cellular",
+    "Ethernet",
+    "Unknown",
+};
+
+// Vitality State
+enum NodeState {
+    "Hub",      // High vitality - can relay and serve
+    "Active",   // Medium vitality - participates normally
+    "Leaf",     // Low vitality - minimal participation
+    "Sleeping", // Delegated listening mode
+};
+
+dictionary VitalityReport {
+    NodeState state;
+    f32 score;          // 0.0 to 1.0
+    f32 battery_level;
+    NetworkType network_type;
+    boolean is_roaming;
+};
+
+dictionary EnvironmentalReading {
+    f32 battery_level;
+    NetworkType network_type;
+};
+
+// Core Interface
+interface IronCore {
+    constructor();
+
+    // Lifecycle
+    void start();
+    void stop();
+
+    // Governor: Feed environmental data
+    void set_environmental_reading(EnvironmentalReading reading);
+
+    // Query current vitality
+    VitalityReport get_vitality_report();
+
+    // Symbiosis: Delegate listening
+    void register_push_token(string token);
+    void enable_delegated_listening(boolean enable);
+};
+
+// Callbacks for platform integration
+callback interface CoreDelegate {
+    // Called when a delegated wakeup is triggered
+    void on_wakeup_trigger(string reason);
+
+    // Called on vitality state changes
+    void on_vitality_changed(VitalityReport report);
+};
