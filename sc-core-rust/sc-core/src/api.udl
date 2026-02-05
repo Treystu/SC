@@ -1,0 +1,168 @@
+namespace sc_core {
+};
+
+// ============================================================================
+// GOVERNOR (Vitality Engine)
+// ============================================================================
+
+enum NetworkType {
+    "Wifi",
+    "Cellular",
+    "Ethernet",
+    "Unknown",
+};
+
+enum NodeState {
+    "Hub",      // High vitality - can relay and serve
+    "Active",   // Medium vitality - participates normally
+    "Leaf",     // Low vitality - minimal participation
+    "Sleeping", // Delegated listening mode
+};
+
+dictionary VitalityReport {
+    NodeState state;
+    f32 score;          // 0.0 to 1.0
+    f32 battery_level;
+    NetworkType network_type;
+    boolean is_roaming;
+};
+
+dictionary EnvironmentalReading {
+    f32 battery_level;
+    NetworkType network_type;
+};
+
+// ============================================================================
+// MESH NETWORKING
+// ============================================================================
+
+dictionary MeshParameters {
+    u32 mesh_n_low;
+    u32 mesh_n;
+    u32 mesh_n_high;
+    boolean enable_relay;
+    string dht_mode;  // "Server" or "Client"
+};
+
+dictionary PeerScore {
+    string peer_id;
+    f32 score;
+};
+
+// ============================================================================
+// SYMBIOSIS (Delegated Listening)
+// ============================================================================
+
+dictionary DelegationStatus {
+    boolean is_active;
+    u32 delegate_count;
+    sequence<string> delegate_ids;
+};
+
+// ============================================================================
+// IDENTITY & KERI
+// ============================================================================
+
+dictionary IdentityInfo {
+    string? identity_id;
+    string? public_key_hex;
+    boolean initialized;
+};
+
+dictionary SignatureResult {
+    bytes signature;
+    string public_key_hex;
+};
+
+// ============================================================================
+// PUSH NOTIFICATIONS
+// ============================================================================
+
+dictionary PushNotification {
+    string title;
+    string body;
+    string? data;
+    u64 timestamp;
+};
+
+// ============================================================================
+// MAIN INTERFACE
+// ============================================================================
+
+interface IronCore {
+    constructor();
+    [Name=with_storage]
+    constructor(string storage_path);
+
+    // Lifecycle
+    [Throws=IronCoreError]
+    void start();
+    void stop();
+    boolean is_running();
+
+    // Governor: Environmental monitoring
+    void set_environmental_reading(EnvironmentalReading reading);
+    VitalityReport get_vitality_report();
+
+    // Mesh: Networking
+    MeshParameters get_mesh_parameters();
+    sequence<PeerScore> get_peer_scores();
+    [Throws=IronCoreError]
+    void publish_message(bytes data);
+
+    // Symbiosis: Delegated listening
+    [Throws=IronCoreError]
+    void enable_delegated_listening(string push_token);
+    void disable_delegated_listening();
+    DelegationStatus get_delegation_status();
+
+    // Identity: Cryptography
+    [Throws=IronCoreError]
+    void initialize_identity();
+    IdentityInfo get_identity_info();
+    [Throws=IronCoreError]
+    SignatureResult sign_data(bytes data);
+    [Throws=IronCoreError]
+    boolean verify_signature(bytes data, bytes signature, string public_key_hex);
+
+    // Push Notifications
+    void register_push_token(string token);
+    void set_delegate(CoreDelegate? delegate);
+};
+
+// ============================================================================
+// CALLBACKS
+// ============================================================================
+
+callback interface CoreDelegate {
+    // Vitality changes
+    void on_vitality_changed(VitalityReport report);
+
+    // Mesh events
+    void on_peer_connected(string peer_id);
+    void on_peer_disconnected(string peer_id);
+    void on_message_received(string peer_id, bytes data);
+
+    // Symbiosis events
+    void on_wakeup_trigger(string reason);
+    void on_delegation_changed(DelegationStatus status);
+
+    // Push notifications
+    void on_push_notification(PushNotification notification);
+};
+
+// ============================================================================
+// ERROR HANDLING
+// ============================================================================
+
+[Error]
+enum IronCoreError {
+    "NotInitialized",
+    "AlreadyRunning",
+    "AlreadyDelegating",
+    "NoSuitableDelegates",
+    "StorageError",
+    "CryptoError",
+    "NetworkError",
+    "InvalidInput",
+};
