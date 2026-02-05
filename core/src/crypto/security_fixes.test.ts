@@ -4,7 +4,7 @@
 
 import { X3DHKeyManager, initiateX3DH, verifyPrekeyBundle } from "./x3dh";
 import { generateIdentity } from "./primitives";
-import { EnhancedPeerDiscovery, DiscoveryMethod } from "../discovery/enhanced";
+import { EnhancedPeerDiscovery } from "../discovery/enhanced";
 
 describe("X3DH and Discovery Security Fixes", () => {
   describe("Vulnerability 1: Replay Attack Protection", () => {
