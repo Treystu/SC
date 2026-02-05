@@ -208,4 +208,3 @@ mobile-bundle/
 sc-core-rust/target/
 sc-core-rust/**/target/
 *.rs.bk
-Cargo.lock

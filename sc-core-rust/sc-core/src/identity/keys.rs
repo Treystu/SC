@@ -2,6 +2,7 @@
 
 use ed25519_dalek::{Signer, Verifier, SigningKey, VerifyingKey, Signature as Ed25519Signature};
 use anyhow::Result;
+use zeroize::Zeroize;
 
 /// Key pair for signing and verification
 #[derive(Clone)]
@@ -13,10 +14,10 @@ impl KeyPair {
     /// Generate a new random key pair
     pub fn generate() -> Self {
         use rand::RngCore;
-        let mut csprng = rand::rngs::OsRng;
         let mut secret_key_bytes = [0u8; 32];
-        csprng.fill_bytes(&mut secret_key_bytes);
+        rand::rngs::OsRng.fill_bytes(&mut secret_key_bytes);
         let signing_key = SigningKey::from_bytes(&secret_key_bytes);
+        secret_key_bytes.zeroize();
         Self { signing_key }
     }
 
@@ -36,10 +37,10 @@ impl IdentityKeys {
     /// Generate new identity keys
     pub fn generate() -> Self {
         use rand::RngCore;
-        let mut csprng = rand::rngs::OsRng;
         let mut secret_key_bytes = [0u8; 32];
-        csprng.fill_bytes(&mut secret_key_bytes);
+        rand::rngs::OsRng.fill_bytes(&mut secret_key_bytes);
         let signing_key = SigningKey::from_bytes(&secret_key_bytes);
+        secret_key_bytes.zeroize();
         Self { signing_key }
     }
 
