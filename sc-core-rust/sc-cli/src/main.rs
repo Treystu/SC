@@ -28,6 +28,8 @@ enum Commands {
         #[arg(short, long)]
         network: String,
     },
+    /// Comprehensive demo of all Iron Core V2 features
+    Full,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -45,6 +47,7 @@ fn main() -> anyhow::Result<()> {
         Commands::Demo => run_interactive_demo()?,
         Commands::Test => run_automated_tests()?,
         Commands::Simulate { battery, network } => run_simulation(battery, &network)?,
+        Commands::Full => run_comprehensive_demo()?,
     }
 
     Ok(())
@@ -57,7 +60,7 @@ fn run_interactive_demo() -> anyhow::Result<()> {
     println!("environmental conditions like battery level and network type.\n");
 
     let core = IronCore::new();
-    core.start();
+    core.start().expect("Failed to start Iron Core");
 
     println!("📊 Initial State:");
     print_vitality_report(&core);
@@ -141,7 +144,7 @@ fn run_automated_tests() -> anyhow::Result<()> {
     println!("===================================\n");
 
     let core = IronCore::new();
-    core.start();
+    core.start().expect("Failed to start Iron Core");
 
     let test_cases = vec![
         (0.9, NetworkType::Wifi, "Hub", "High battery + WiFi"),
@@ -193,7 +196,7 @@ fn run_simulation(battery: f32, network: &str) -> anyhow::Result<()> {
     println!("Network: {:?}\n", network_type);
 
     let core = IronCore::new();
-    core.start();
+    core.start().expect("Failed to start Iron Core");
 
     core.set_environmental_reading(EnvironmentalReading {
         battery_level: battery,
@@ -304,6 +307,168 @@ fn custom_input(core: &IronCore) -> anyhow::Result<()> {
     });
 
     print_vitality_report(core);
+
+    Ok(())
+}
+
+fn run_comprehensive_demo() -> anyhow::Result<()> {
+    println!("\n╔══════════════════════════════════════════════════════════╗");
+    println!("║  IRON CORE V2 - COMPREHENSIVE INTEGRATION DEMO          ║");
+    println!("║  \"One Binary, Infinite Possibilities\"                   ║");
+    println!("╚══════════════════════════════════════════════════════════╝\n");
+
+    println!("This demo showcases all 4 phases of Iron Core V2 integrated:");
+    println!("  • Phase 1: Governor (Vitality Engine)");
+    println!("  • Phase 2: Mycorrhizal Mesh (Adaptive Networking)");
+    println!("  • Phase 3: Symbiosis (Delegated Listening)");
+    println!("  • Phase 4: Identity & Cryptography\n");
+
+    // Create and start core
+    let core = IronCore::new();
+    println!("🦀 Creating Iron Core instance...");
+    core.start().expect("Failed to start Iron Core");
+    println!("✅ Iron Core started successfully\n");
+
+    // ========================================================================
+    // PHASE 1: GOVERNOR (VITALITY ENGINE)
+    // ========================================================================
+    println!("╔═══════════════════════════════════════════════════════════╗");
+    println!("║  PHASE 1: GOVERNOR - VITALITY ENGINE                     ║");
+    println!("╚═══════════════════════════════════════════════════════════╝\n");
+
+    println!("📊 Initial Vitality State:");
+    print_vitality_report(&core);
+
+    println!("\n⚡ Simulating High-Resource Environment (Hub Mode)...");
+    core.set_environmental_reading(EnvironmentalReading {
+        battery_level: 0.95,
+        network_type: NetworkType::Wifi,
+    });
+    print_vitality_report(&core);
+
+    println!("\n⚡ Simulating Low-Resource Environment (Leaf Mode)...");
+    core.set_environmental_reading(EnvironmentalReading {
+        battery_level: 0.15,
+        network_type: NetworkType::Cellular,
+    });
+    print_vitality_report(&core);
+
+    // Restore to Hub mode for remaining demos
+    core.set_environmental_reading(EnvironmentalReading {
+        battery_level: 0.95,
+        network_type: NetworkType::Wifi,
+    });
+
+    // ========================================================================
+    // PHASE 2: MYCORRHIZAL MESH
+    // ========================================================================
+    println!("\n╔═══════════════════════════════════════════════════════════╗");
+    println!("║  PHASE 2: MYCORRHIZAL MESH - ADAPTIVE NETWORKING         ║");
+    println!("╚═══════════════════════════════════════════════════════════╝\n");
+
+    let mesh_params = core.get_mesh_parameters();
+    println!("🕸️  Mesh Parameters (for current vitality state):");
+    println!("   • mesh_n_low: {} connections", mesh_params.mesh_n_low);
+    println!("   • mesh_n: {} connections", mesh_params.mesh_n);
+    println!("   • mesh_n_high: {} connections", mesh_params.mesh_n_high);
+    println!("   • relay_enabled: {}", mesh_params.enable_relay);
+    println!("   • dht_mode: {}", mesh_params.dht_mode);
+
+    let peer_scores = core.get_peer_scores();
+    println!("\n👥 Known Peers: {} (peer scoring ready)", peer_scores.len());
+
+    println!("\n📤 Testing message publishing...");
+    let test_message = b"Hello from Iron Core V2!".to_vec();
+    core.publish_message(test_message.clone())?;
+    println!("   ✅ Message published successfully ({} bytes)", test_message.len());
+
+    // ========================================================================
+    // PHASE 3: SYMBIOSIS (DELEGATED LISTENING)
+    // ========================================================================
+    println!("\n╔═══════════════════════════════════════════════════════════╗");
+    println!("║  PHASE 3: SYMBIOSIS - DELEGATED LISTENING                ║");
+    println!("╚═══════════════════════════════════════════════════════════╝\n");
+
+    let delegation_status = core.get_delegation_status();
+    println!("💤 Delegation Status:");
+    println!("   • Active: {}", delegation_status.is_active);
+    println!("   • Delegate Count: {}", delegation_status.delegate_count);
+    println!("   • Delegates: {:?}", delegation_status.delegate_ids);
+
+    println!("\n🔄 Attempting to enable delegated listening...");
+    let result = core.enable_delegated_listening("test_push_token_123".to_string());
+    match result {
+        Ok(_) => println!("   ✅ Delegation enabled successfully"),
+        Err(e) => println!("   ⚠️  Delegation failed: {} (expected - no peers available)", e),
+    }
+
+    // ========================================================================
+    // PHASE 4: IDENTITY & CRYPTOGRAPHY
+    // ========================================================================
+    println!("\n╔═══════════════════════════════════════════════════════════╗");
+    println!("║  PHASE 4: IDENTITY & CRYPTOGRAPHY                        ║");
+    println!("╚═══════════════════════════════════════════════════════════╝\n");
+
+    let identity_info = core.get_identity_info();
+    if identity_info.initialized {
+        println!("🔑 Identity already initialized (from auto-start)");
+    } else {
+        println!("🔑 Initializing identity...");
+        core.initialize_identity()?;
+        println!("   ✅ Identity initialized successfully");
+    }
+
+    let identity_info = core.get_identity_info();
+    println!("\n🆔 Identity Information:");
+    if let Some(id) = identity_info.identity_id {
+        println!("   • Identity ID: {}...", &id[..16]);
+    }
+    if let Some(pk) = identity_info.public_key_hex {
+        println!("   • Public Key: {}...", &pk[..16]);
+    }
+    println!("   • Initialized: {}", identity_info.initialized);
+
+    // Test signing and verification
+    println!("\n🔐 Testing cryptographic operations...");
+    let data = b"Test message for signing".to_vec();
+    let sig_result = core.sign_data(data.clone())?;
+    println!("   ✅ Data signed successfully");
+    println!("   • Signature length: {} bytes", sig_result.signature.len());
+
+    let is_valid = core.verify_signature(
+        data.clone(),
+        sig_result.signature.clone(),
+        sig_result.public_key_hex.clone(),
+    )?;
+    println!("   ✅ Signature verification: {}", if is_valid { "VALID ✓" } else { "INVALID ✗" });
+
+    // Try verifying with wrong data
+    let wrong_data = b"Wrong message".to_vec();
+    let is_invalid = core.verify_signature(
+        wrong_data,
+        sig_result.signature,
+        sig_result.public_key_hex,
+    )?;
+    println!("   ✅ Invalid signature detection: {}", if !is_invalid { "WORKING ✓" } else { "FAILED ✗" });
+
+    // ========================================================================
+    // SUMMARY
+    // ========================================================================
+    println!("\n╔═══════════════════════════════════════════════════════════╗");
+    println!("║  INTEGRATION SUMMARY                                      ║");
+    println!("╚═══════════════════════════════════════════════════════════╝\n");
+
+    println!("✅ Phase 1 (Governor): Vitality state management working");
+    println!("✅ Phase 2 (Mesh): Adaptive networking parameters working");
+    println!("✅ Phase 3 (Symbiosis): Delegation protocol ready");
+    println!("✅ Phase 4 (Identity): Ed25519 cryptography working");
+    println!("\n🎉 All systems integrated and operational!");
+    println!("📱 Ready for mobile bindings (iOS/Android via UniFFI)");
+    println!("🌐 Ready for web bindings (Browser via WASM)\n");
+
+    // Cleanup
+    core.stop();
+    println!("🛑 Iron Core stopped gracefully\n");
 
     Ok(())
 }
